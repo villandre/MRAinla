@@ -5,4 +5,4 @@ pointsCoords <- pointsIndices/5
 
 spatialGrid <- SpatialPointsDataFrame(coords = pointsCoords, data = as.data.frame(pointsIndices))
 
-buildGrid(spatialGrid)
+foo <- buildGrid(spatialGrid)
