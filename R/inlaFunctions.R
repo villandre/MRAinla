@@ -52,8 +52,27 @@ setupVrecursionStep <- function(grid, v, baseVec1, baseVec2, K) {
     if(!sameGridSection(spaceTime1, spaceTime2, grid)) {
       return(0)
     }
-    V - baseVec1%*%K%*%baseVec2
+    v - baseVec1%*%K%*%baseVec2
   }
+}
+
+sameGridSection <- function(spaceTime1, spaceTime2, grid, timeBreaks) {
+  timeOrder <- order(c(spaceTime1$time, spaceTime2$time, timeBreaks))
+  if (abs(timeOrder[1]-timeOrder[2]) > 1) {
+    return(FALSE)
+  }
+  polyForPoints <- sapply(grid@polygons, FUN = function(aPolygon) {
+    pointsInPolyTest <- point.in.polygon(point.x = c(spaceTime1$coords[[1]], spaceTime2$coords[[1]]) , point.y = c(spaceTime1$coords[[2]], spaceTime2$coords[[2]]), pol.x = aPolygon@coords[ , 1], pol.y = aPolygon@coords[ , 2])
+    pointsInPolyTest <- replace(pointsInPolyTest, pointsInPolyTest > 1, 1)
+    if (pointsInPolyTest[[1]] != pointsInPolyTest[[2]]) {
+      return(FALSE)
+    }
+    TRUE
+  })
+  if (!all(polyForPoints)) {
+    return(FALSE)
+  }
+  TRUE
 }
 
 initVrecursion <- function(knots, covFct) {
@@ -72,7 +91,9 @@ setupFullrecursion <- function(gridList, knotsList, covFct) {
     currentValues <- initialVfun(spaceTime1, spaceTime2)
     lapply(seq_along(gridList), FUN = function(resIndex) {
       incrementedVfun <- setupVrecursionStep(grid = gridList[[resIndex]], v = currentValues$v, baseVec1 = currentValues$bList[[1]], baseVec2 = currentValue$bList[[2]], K = currentValue$K)
-      newB <- list(incrementedVfun(spaceTime1, knotsList))
+      newB <- list(incrementedVfun(spaceTime1, knotsList), incrementedVfun(spaceTime2, knotsList))
+      newV <- incrementedVfun(spaceTime1, spaceTime2)
+
     })
   }
 }
@@ -93,22 +114,27 @@ buildGrid <- function(spatialPointsGrid) {
 
     verticalFunction <- function(verticalIndex) {
       colIndex <- colIndices[verticalIndex]
+
       topLeftIndex <- match(data.frame(c(rowIndex, colIndex)), gridCoordAsList)
       topLeftCoord <- spatialPointsGrid@coords[topLeftIndex, ]
+
       topRight <- c(rowIndex, colIndices[verticalIndex+1])
       topRightIndex <- match(data.frame(topRight), gridCoordAsList)
       topRightCoord <- spatialPointsGrid@coords[topRightIndex, ]
 
       rowIndicesInColumn <- spatialPointsGrid@data[spatialPointsGrid@data[, 2] == topRight[[2]], 1]
-      rowIndices
+
       bottomHorizontalIndex <-  max(match(rowIndex, sort(rowIndicesInColumn)) + 1)
       bottomRowIndex <- rowIndicesInColumn[[bottomHorizontalIndex]]
+
       bottomRight <- c(bottomRowIndex, topRight[[2]])
       bottomRightIndex <- match(data.frame(bottomRight), gridCoordAsList)
       bottomRightCoord <- spatialPointsGrid@coords[bottomRightIndex, ]
+
       bottomLeft <- c(bottomRowIndex, colIndex)
       bottomLeftIndex <- match(data.frame(bottomLeft), gridCoordAsList)
       bottomLeftCoord <- spatialPointsGrid@coords[bottomLeftIndex, ]
+
       polygonMatrix <- rbind(topLeftCoord, topRightCoord, bottomRightCoord, bottomLeftCoord, topLeftCoord)
       Polygon(polygonMatrix, hole = FALSE)
     }
