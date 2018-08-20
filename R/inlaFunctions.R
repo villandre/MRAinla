@@ -170,24 +170,48 @@ mergeGridSections <- function(rasterMap, sectionIndex1, sectionIndex2) {
 
 # A 3D grid can be represented parsemoniously by a list of 3 vectors, one for each dimension. We assume length, width, and depth are all split into small pixels. Pixels can also be rectangles. A split translates into a change into one of the vectors. The object needs a range component to help associate pixels with spatiotemporal coordinates.
 
-createInitialGrid <- function(lonBreaks, latBreaks, timeBreaks, lonExtent, latExtent, timeExtent, lonLength = 1000, latLength = 1000, timeLength = 1000) {
-  mapply(breaks = c(lonBreaks, latBreaks, timeBreaks), extent = c(lonExtent, latExtent, timeExtent), numElements, FUN = function(breaks, extent, numElements) {
-    rightsideCoord <- seq(from = min(extent), to = max(extent), length.out = numElements)
-    pixelLabels <- as.numeric(cut(rightsideCoord, breaks = c(min(extent)-1, breaks, max(extent) + 1), ordered = TRUE))
-    gridObject <- list(labels = pixelLabels, extent = extent)
-    class(gridObject) <- "spacetimegrid"
-    gridObject
-  })
+gridConstructor <- function(lonBreaks, latBreaks, timeBreaks, lonExtent, latExtent, timeExtent) {
+  grids <- mapply(breaks = list(lonBreaks, latBreaks, timeBreaks), extent = list(lonExtent, latExtent, timeExtent), FUN = function(breaks, extent) {
+    list(breaks = breaks, extent = extent)
+  }, SIMPLIFY = FALSE)
+  names(grids) <- c("longitude", "latitude", "time")
+  class(grids) <- "Spacetimegrid"
+  grids
 }
 
 splitGridSection <- function(gridObject, dimension = c("lon", "lat", "time"), breakPos) {
-  dimLength <- length(gridObject[[dimension]]$label)
-  extentWidth <- (1:dimLength)*gridObject[[dimension]]$extent[[2]]/dimLength
-  breakCheck <- extentWidth > breakPos
-  firstTrue <-  match(TRUE, breakCheck)
-  affectedRegion <- gridObject[[dimension]]$labels[breakPos]
-  gridObject[[dimension]]$labels[(gridObject[[dimension]]$labels == affectedRegion) & breakCheck] <- max(gridObject[[dimension]]$labels) + 1
+  gridObject[[dimension]]$breaks <- sort(c(gridObject[[dimension]]$breaks, breakPos))
   gridObject
+}
+
+print.Spacetimegrid <- function(x) {
+  cat("Spacetime grid object \n")
+  cat("Longitude extent: ", x$longitude$extent , "\n")
+  cat("Latitude extent: ", x$latitude$extent, "\n")
+  cat("Time extent: ", x$time$extent, "\n \n")
+  cat("Grid dimensions: (", length(x$longitude$breaks) + 1, " ", length(x$latitude$breaks)+1, " ", length(x$time$breaks) + 1, ")\n")
+  cat("Note: This gives the number of regions, which may have different volumes.\n\n")
+  invisible(NULL)
+}
+
+# This function actually plots a slice from a Spacetimegrid object.
+
+plot.Spacetimegrid <- function(x, observationsAsPoints, knotsAsPoints) {
+  combinedSP <- NULL
+  plotColours <- NULL
+  if (!is.null(observationsAsPoints)) {
+    observSP <- SpatialPointsDataFrame(observationsAsPoints, data = data.frame(identity = rep("red", nrow(observationsAsPoints@coords))))
+    combinedSP <- observSP
+    plotColours <- combinedSP@data$identity
+  }
+  if (!is.null(knotsAsPoints)) {
+    knotSP <- SpatialPointsDataFrame(knotsAsPoints, data = data.frame(identity = rep("green", nrow(knotsAsPoints@coords))))
+    combinedSP <- bind(combinedSP, knotSP)
+    plotColours <- combinedSP@data$identity
+  }
+  plot(combinedSP, col = as.character(plotColours), xlab = "Longitude", ylab = "Latitude", xlim = x$longitude$extent, ylim = x$latitude$extent, cex = 0.8, pch = 18)
+  abline(v = c(x$longitude$extent[1], x$longitude$breaks, x$longitude$extent[2]), lty = 3, col = "blue4")
+  abline(h = c(x$latitude$extent[1], x$latitude$breaks, x$latitude$extent[2]), lty = 3, col = "blue4")
 }
 
 
