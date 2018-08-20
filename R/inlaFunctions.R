@@ -32,13 +32,13 @@ MRA_INLA <- function(spaceTimeList, spaceTimeCovFct, M, gridRasterList, numKnots
 
 }
 
-logLikFun <- function(spaceTimeList, meanValueList, sigmaErrorValue) {
+.logLikFun <- function(spaceTimeList, meanValueList, sigmaErrorValue) {
   sum(mapply(grid = spaceTimeList, meanValues = meanValueList, FUN = function(grid, meanValues) {
     sum(dnorm(x = grid@data, mean = meanValues, sd = sigmaErrorValue, log = TRUE))
   }))
 }
 
-logGMRFprior <- function(paraValuesList, SigmaValuesList) {
+.logGMRFprior <- function(paraValuesList, SigmaValuesList) {
   sum(mapply(paraValues = paraValuesList, varPar = SigmaValuesList, FUN = function(paraValues, varPar) {
     if (!is.matrix(varPar)) {
       varPar <- varPar*diag(length(paraValues))
@@ -47,128 +47,79 @@ logGMRFprior <- function(paraValuesList, SigmaValuesList) {
   }))
 }
 
-setupVrecursionStep <- function(grid, v, baseVec1, baseVec2, K) {
+.setupVrecursionStep <- function(spacetimegridObj, v, baseVec1, baseVec2, K) {
   function(spaceTime1, spaceTime2) {
-    if(!sameGridSection(spaceTime1, spaceTime2, grid)) {
+    if(!.sameGridSection(spaceTime1, spaceTime2, spacetimeGridObj)) {
       return(0)
     }
     v - baseVec1%*%K%*%baseVec2
   }
 }
 
-sameGridSection <- function(spaceTime1, spaceTime2, grid, timeBreaks) {
-  timeOrder <- order(c(spaceTime1$time, spaceTime2$time, timeBreaks))
-  if (abs(timeOrder[1]-timeOrder[2]) > 1) {
-    return(FALSE)
-  }
-  polyForPoints <- sapply(grid@polygons, FUN = function(aPolygon) {
-    pointsInPolyTest <- point.in.polygon(point.x = c(spaceTime1$coords[[1]], spaceTime2$coords[[1]]) , point.y = c(spaceTime1$coords[[2]], spaceTime2$coords[[2]]), pol.x = aPolygon@coords[ , 1], pol.y = aPolygon@coords[ , 2])
-    pointsInPolyTest <- replace(pointsInPolyTest, pointsInPolyTest > 1, 1)
-    if (pointsInPolyTest[[1]] != pointsInPolyTest[[2]]) {
-      return(FALSE)
-    }
-    TRUE
-  })
-  if (!all(polyForPoints)) {
-    return(FALSE)
-  }
-  TRUE
-}
-
-initVrecursion <- function(knots, covFct) {
+.initVrecursion <- function(knots, covFct) {
   function(spaceTime1, spaceTime2) {
     initBList <- list(covFct(spaceTime1, knots), covFct(spaceTime2, knots))
     initInvK <- covFct(knots, knots)
-    initK <- solve(initInvK)
+    initK <- Matrix::chol2inv(Matrix::chol(initInvK))
     initV <- covFct(spaceTime1, spaceTime2)
     list(v = initV, K = initK, bList = initBList)
   }
 }
 
-setupFullrecursion <- function(gridList, knotsList, covFct) {
+.setupFullrecursion <- function(gridList, knotsList, covFct) {
   initialVfun <- initVrecursion(knots = knotsList[[1]], covFct = covFct)
   function(spaceTime1, spaceTime2) {
     currentValues <- initialVfun(spaceTime1, spaceTime2)
     lapply(seq_along(gridList), FUN = function(resIndex) {
-      incrementedVfun <- setupVrecursionStep(grid = gridList[[resIndex]], v = currentValues$v, baseVec1 = currentValues$bList[[1]], baseVec2 = currentValue$bList[[2]], K = currentValue$K)
-      newB <- list(incrementedVfun(spaceTime1, knotsList), incrementedVfun(spaceTime2, knotsList))
+      incrementedVfun <- setupVrecursionStep(spacetimegridObj = gridList[[resIndex]], v = currentValues$v, baseVec1 = currentValues$bList[[1]], baseVec2 = currentValues$bList[[2]], K = currentValues$K)
       newV <- incrementedVfun(spaceTime1, spaceTime2)
-
+      newBs <- lapply(c(spaceTime1, spaceTime2), FUN = getBvec, knotPositions = knotsInRegion, vFun = incrementedVfun)
+      newK <- getKmat(knotPositions = knotsInRegion , vFun = incrementedVfun)
     })
   }
 }
 
-buildRectanglePolygon <- function(corner1, corner2) {
-  coords <- matrix(c(corner1[1], corner1[1], corner2[1], corner2[1], corner1[2], corner2[2], corner2[2], corner1[2]), nrow = 4, ncol = 2)
-  Polygon(coors, hole = FALSE)
-}
-
-# Alternatively, the grids could be represented as a RasterBrick object.
-
-buildGrid <- function(spatialPointsGrid) {
-  gridCoordAsList <- data.frame(t(spatialPointsGrid@data))
-  rowIndices <- sort(unique(spatialPointsGrid@data[ , 1]))
-
-  horizontalFunction <- function(horizontalIndex) {
-    rowIndex <- rowIndices[horizontalIndex]
-    subData <- spatialPointsGrid@data[spatialPointsGrid@data[ , 1] == rowIndex, ]
-    colIndices <- sort(subData[ , 2])
-
-    verticalFunction <- function(verticalIndex) {
-      colIndex <- colIndices[verticalIndex]
-
-      topLeftIndex <- match(data.frame(c(rowIndex, colIndex)), gridCoordAsList)
-      topLeftCoord <- spatialPointsGrid@coords[topLeftIndex, ]
-
-      topRight <- c(rowIndex, colIndices[verticalIndex+1])
-      topRightIndex <- match(data.frame(topRight), gridCoordAsList)
-      topRightCoord <- spatialPointsGrid@coords[topRightIndex, ]
-
-      rowIndicesInColumn <- spatialPointsGrid@data[spatialPointsGrid@data[, 2] == topRight[[2]], 1]
-
-      bottomHorizontalIndex <-  max(match(rowIndex, sort(rowIndicesInColumn)) + 1)
-      bottomRowIndex <- rowIndicesInColumn[[bottomHorizontalIndex]]
-
-      bottomRight <- c(bottomRowIndex, topRight[[2]])
-      bottomRightIndex <- match(data.frame(bottomRight), gridCoordAsList)
-      bottomRightCoord <- spatialPointsGrid@coords[bottomRightIndex, ]
-
-      bottomLeft <- c(bottomRowIndex, colIndex)
-      bottomLeftIndex <- match(data.frame(bottomLeft), gridCoordAsList)
-      bottomLeftCoord <- spatialPointsGrid@coords[bottomLeftIndex, ]
-
-      polygonMatrix <- rbind(topLeftCoord, topRightCoord, bottomRightCoord, bottomLeftCoord, topLeftCoord)
-      Polygon(polygonMatrix, hole = FALSE)
-    }
-    polygonsInRow <- lapply(1:(length(colIndices)-1), FUN = verticalFunction)
-    polygonsInRow
-  }
-
-  allPolygons <- lapply(1:(length(rowIndices) - 1), FUN = horizontalFunction)
-  SpatialPolygons(list(Polygons(do.call("c", allPolygons), ID = "ID")))
-}
-
-getPointsFromRaster2D <- function(rasterMap, rasterValue, nodeCoords) {
-  cellsInRegion <- which(raster::getValues(rasterMap) == rasterValue)
-  extentObject <- raster::extentFromCells(rasterMap, cells = cellsInRegion)
-  raster::intersect(nodeCoords, extentObject)
-}
-
-getPointsFromRasterSpatiotemp <- function(rasterBrick, rasterValuesVec, nodeCoordsList) {
-  lapply(seq_along(rasterValuesVec), FUN = function(timeIndex) {
-    getPointsFromRaster2D(subset(rasterBrick, timeIndex), rasterValue = rasterValuesVec[[timeIndex]], nodeCoords =  nodeCoordsList[[timeIndex]])
+.getBvec <- function(spaceTime, knotPositions, vFun) {
+  sapply(knotPositions, FUN = function(knotPos) {
+    vFun(spaceTimeCoord, knotPos)
   })
 }
 
-mergeGridSections <- function(rasterMap, sectionIndex1, sectionIndex2) {
-  values(rasterMap) <- replace(getValues(rasterMap), which(getValues(rasterMap) == max(c(sectionIndex1, sectionIndex2))), min(c(sectionIndex1, sectionIndex2)))
-  values(rasterMap)[which(getValues(rasterMap) > max(c(sectionIndex1, sectionIndex2))))] <- getValues(rasterMap)[which(getValues(rasterMap) > max(c(sectionIndex1, sectionIndex2))))] - 1
-  rasterMap
+.getKmat <- function(knotPositions, vFun) {
+  KmatrixFinal <- matrix(0, nrow(knotPositions), nrow(knotPositions))
+  # Handling the off diagonal elements
+  mapply(rowIndex = row(diag(nrow(knotPositions)))[lower.tri(diag(nrow(knotPositions)))], colIndex = col(diag(nrow(knotPositions)))[lower.tri(diag(nrow(knotPositions)))], FUN =function(rowIndex, colIndex) {
+    vFun(knotPositions[rowIndex], knotPositions[colIndex])
+    invisible(NULL)
+  }, SIMPLIFY = FALSE)
+  diag(KmatrixFinal) <- sapply(1:nrow(knotPositions), FUN = function(x) {
+    vFun(knotPositions[x], knotPositions[x])
+  })
 }
 
-# The raster bricks also have an associated matrix with M columns indicating the layer breakdown at each resolution, e.g. for M = 2, we have this matrix equal to cbind(c(1,1,1,1), c(1,1,2,2), c(1,2,3,4)) (for resolutions 0,1, and 2).
-
-# A 3D grid can be represented parsemoniously by a list of 3 vectors, one for each dimension. We assume length, width, and depth are all split into small pixels. Pixels can also be rectangles. A split translates into a change into one of the vectors. The object needs a range component to help associate pixels with spatiotemporal coordinates.
+#' Constructs an irregular grid on a specified spatiotemporal range.
+#'
+#' Constructing a spatiotemporal grid will be necessary prior to fitting the spatiotemporal MRA
+#' proposed by Villandre et al.
+#'
+#' @param lonBreaks vector indicating where the longitude boudaries are located
+#' @param latBreaks vector indicating where the latitude boudaries are located
+#' @param timeBreaks vector indicating where the temporal boudaries are located
+#' @param numKnots either the number of knots in all elements of the grids, or a vector of size equal to
+#' the length of gridRasterList giving the number of knots for each resolution, or a list of vectors giving
+#' the number of knots in each region of the grid for each resolution
+#' @param hyperPriorFunList named list of functions with one argument specifying the hyperprior distributions
+#'
+#' @details A 3D irregular grid can be represented parsemoniously by a list of 3 vectors, one #' for each dimension. Under this scheme, spatiotemporal regions at a given resolution are
+#' like bricks. This is a constructor function.
+#'
+#' @return A Spacetimegrid object.
+#'
+#' @examples
+#' \dontrun{
+#' INPUT_AN_EXAMPLE()
+#' }
+#' @export
 
 gridConstructor <- function(lonBreaks, latBreaks, timeBreaks, lonExtent, latExtent, timeExtent) {
   grids <- mapply(breaks = list(lonBreaks, latBreaks, timeBreaks), extent = list(lonExtent, latExtent, timeExtent), FUN = function(breaks, extent) {
@@ -184,6 +135,22 @@ splitGridSection <- function(gridObject, dimension = c("lon", "lat", "time"), br
   gridObject
 }
 
+#' A custom print function for the Spacetimegrid class.
+#'
+#' Prints a Spacetimegrid object.
+#'
+#' @param x Spacetimegrid object
+#'
+#' @details
+#'
+#' @return Print function, doesn't return anything.
+#'
+#' @examples
+#' \dontrun{
+#' INPUT_AN_EXAMPLE()
+#' }
+#' @export
+
 print.Spacetimegrid <- function(x) {
   cat("Spacetime grid object \n")
   cat("Longitude extent: ", x$longitude$extent , "\n")
@@ -194,7 +161,25 @@ print.Spacetimegrid <- function(x) {
   invisible(NULL)
 }
 
-# This function actually plots a slice from a Spacetimegrid object.
+#' A custom plot function for the Spacetimegrid class.
+#'
+#' Plots the spatial grid within the Spacetimegrid object, plus, optionally, observations and knots.
+#'
+#' @param x Spacetimegrid object
+#' @param observationsAsPoints SpatialPoints or SpatialPointsDataFrame object containing the
+#' observations
+#' @param knotsAsPoints SpatialPoints or SpatialPointsDataFrame object containing the
+#' knots
+#'
+#' @details The function plots a 2D projection of the grid, flattening the dataset with respect to time.
+#'
+#' @return Plot function, doesn't return anything worthwhile.
+#'
+#' @examples
+#' \dontrun{
+#' INPUT_AN_EXAMPLE()
+#' }
+#' @export
 
 plot.Spacetimegrid <- function(x, observationsAsPoints, knotsAsPoints) {
   combinedSP <- NULL
@@ -214,5 +199,27 @@ plot.Spacetimegrid <- function(x, observationsAsPoints, knotsAsPoints) {
   abline(h = c(x$latitude$extent[1], x$latitude$breaks, x$latitude$extent[2]), lty = 3, col = "blue4")
 }
 
+# observations are coded as SpatialPointsDataFrame with 3D coordinates, longitude-latitude-time
 
+getPointsInRegion <- function(sptGrid, pointSpacetimeCoor, observations) {
+  mapply(c("longitude", "latitude", "time"), coorPos = 1:3, FUN = function(dimensionName, coorPos) {
+    upperPos <- match(TRUE, sptGrid[[dimensionName]]$breaks > pointSpacetimeCoor@coords[1, coorPos])
+    coorRange <- c(sptGrid[[dimensionName]]$breaks[upperPos - 1], sptGrid[[dimensionName]]$breaks[upperPos])
+    observations <<- observations[(observations@coords[ , coorPos] > coorRange[[1]]) & (observations@coords[ , coorPos] < coorRange[[2]])]
+    invisible(NULL)
+  }, SIMPLIFY = FALSE)
+  observations
+}
 
+.sameGridSection <- function(x, y, spacetimegridObj) {
+  sameSection <- TRUE
+  testResults <- mapply(c("longitude", "latitude", "time"), coorPos = 1:3, FUN = function(dimensionName, coorPos) {
+    xUpperPos <- match(TRUE, spacetimeGridObj[[dimensionName]]$breaks > x@coords[1, coorPos])
+    yUpperPos <- match(TRUE, spacetimeGridObj[[dimensionName]]$breaks > y@coords[1, coorPos])
+    identical(xUpperPos, yUpperPos)
+  })
+  if (!all(testResults)) {
+    sameSection <- FALSE
+  }
+  sameSection
+}
