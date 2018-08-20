@@ -103,6 +103,8 @@ buildRectanglePolygon <- function(corner1, corner2) {
   Polygon(coors, hole = FALSE)
 }
 
+# Alternatively, the grids could be represented as a RasterBrick object.
+
 buildGrid <- function(spatialPointsGrid) {
   gridCoordAsList <- data.frame(t(spatialPointsGrid@data))
   rowIndices <- sort(unique(spatialPointsGrid@data[ , 1]))
@@ -145,5 +147,48 @@ buildGrid <- function(spatialPointsGrid) {
   allPolygons <- lapply(1:(length(rowIndices) - 1), FUN = horizontalFunction)
   SpatialPolygons(list(Polygons(do.call("c", allPolygons), ID = "ID")))
 }
+
+getPointsFromRaster2D <- function(rasterMap, rasterValue, nodeCoords) {
+  cellsInRegion <- which(raster::getValues(rasterMap) == rasterValue)
+  extentObject <- raster::extentFromCells(rasterMap, cells = cellsInRegion)
+  raster::intersect(nodeCoords, extentObject)
+}
+
+getPointsFromRasterSpatiotemp <- function(rasterBrick, rasterValuesVec, nodeCoordsList) {
+  lapply(seq_along(rasterValuesVec), FUN = function(timeIndex) {
+    getPointsFromRaster2D(subset(rasterBrick, timeIndex), rasterValue = rasterValuesVec[[timeIndex]], nodeCoords =  nodeCoordsList[[timeIndex]])
+  })
+}
+
+mergeGridSections <- function(rasterMap, sectionIndex1, sectionIndex2) {
+  values(rasterMap) <- replace(getValues(rasterMap), which(getValues(rasterMap) == max(c(sectionIndex1, sectionIndex2))), min(c(sectionIndex1, sectionIndex2)))
+  values(rasterMap)[which(getValues(rasterMap) > max(c(sectionIndex1, sectionIndex2))))] <- getValues(rasterMap)[which(getValues(rasterMap) > max(c(sectionIndex1, sectionIndex2))))] - 1
+  rasterMap
+}
+
+# The raster bricks also have an associated matrix with M columns indicating the layer breakdown at each resolution, e.g. for M = 2, we have this matrix equal to cbind(c(1,1,1,1), c(1,1,2,2), c(1,2,3,4)) (for resolutions 0,1, and 2).
+
+# A 3D grid can be represented parsemoniously by a list of 3 vectors, one for each dimension. We assume length, width, and depth are all split into small pixels. Pixels can also be rectangles. A split translates into a change into one of the vectors. The object needs a range component to help associate pixels with spatiotemporal coordinates.
+
+createInitialGrid <- function(lonBreaks, latBreaks, timeBreaks, lonExtent, latExtent, timeExtent, lonLength = 1000, latLength = 1000, timeLength = 1000) {
+  mapply(breaks = c(lonBreaks, latBreaks, timeBreaks), extent = c(lonExtent, latExtent, timeExtent), numElements, FUN = function(breaks, extent, numElements) {
+    rightsideCoord <- seq(from = min(extent), to = max(extent), length.out = numElements)
+    pixelLabels <- as.numeric(cut(rightsideCoord, breaks = c(min(extent)-1, breaks, max(extent) + 1), ordered = TRUE))
+    gridObject <- list(labels = pixelLabels, extent = extent)
+    class(gridObject) <- "spacetimegrid"
+    gridObject
+  })
+}
+
+splitGridSection <- function(gridObject, dimension = c("lon", "lat", "time"), breakPos) {
+  dimLength <- length(gridObject[[dimension]]$label)
+  extentWidth <- (1:dimLength)*gridObject[[dimension]]$extent[[2]]/dimLength
+  breakCheck <- extentWidth > breakPos
+  firstTrue <-  match(TRUE, breakCheck)
+  affectedRegion <- gridObject[[dimension]]$labels[breakPos]
+  gridObject[[dimension]]$labels[(gridObject[[dimension]]$labels == affectedRegion) & breakCheck] <- max(gridObject[[dimension]]$labels) + 1
+  gridObject
+}
+
 
 
