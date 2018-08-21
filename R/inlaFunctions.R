@@ -66,20 +66,31 @@ MRA_INLA <- function(spaceTimeList, spaceTimeCovFct, M, gridRasterList, numKnots
   }
 }
 
-.setupFullrecursion <- function(gridList, knotsList, covFct) {
+.createPriorFunction <- function(gridList, knotsList, covFct, resolution = length(gridList)) {
   initialVfun <- initVrecursion(knots = knotsList[[1]], covFct = covFct)
+  if (identical(resolution, 0)) {
+    return(initialVfun)
+  }
   function(spaceTime1, spaceTime2) {
     currentValues <- initialVfun(spaceTime1, spaceTime2)
-    lapply(seq_along(gridList), FUN = function(resIndex) {
-      incrementedVfun <- setupVrecursionStep(spacetimegridObj = gridList[[resIndex]], v = currentValues$v, baseVec1 = currentValues$bList[[1]], baseVec2 = currentValues$bList[[2]], K = currentValues$K)
+    lapply(1:resolution, FUN = function(resIndex) {
+      if (!.sameGridSection(spaceTime1, spaceTime2, gridList[[resIndex]])) {
+        currentValues <<- list(v = NULL, K = NULL, bList = NULL)
+        currentValues
+      }
+      knotsInRegion <- getPointsInRegion(gridList[[resIndex]], spaceTime1, knotsList[[resIndex+1]])
+      incrementedVfun <- .setupVrecursionStep(spacetimegridObj = gridList[[resIndex]], v = currentValues$v, baseVec1 = currentValues$bList[[1]], baseVec2 = currentValues$bList[[2]], K = currentValues$K)
       newV <- incrementedVfun(spaceTime1, spaceTime2)
-      newBs <- lapply(c(spaceTime1, spaceTime2), FUN = getBvec, knotPositions = knotsInRegion, vFun = incrementedVfun)
-      newK <- getKmat(knotPositions = knotsInRegion , vFun = incrementedVfun)
+      newBs <- lapply(c(spaceTime1, spaceTime2), FUN = .getBvec, knotPositions = knotsInRegion, vFun = incrementedVfun)
+      newK <- .getKmat(knotPositions = knotsInRegion , vFun = incrementedVfun)
+      currentValues <<- list(v = newV, K = newK, bList = newBs)
+      invisible(NULL)
     })
+    currentValues
   }
 }
 
-.getBvec <- function(spaceTime, knotPositions, vFun) {
+.getBvec <- function(spaceTimeCoord, knotPositions, vFun) {
   sapply(knotPositions, FUN = function(knotPos) {
     vFun(spaceTimeCoord, knotPos)
   })
@@ -128,11 +139,6 @@ gridConstructor <- function(lonBreaks, latBreaks, timeBreaks, lonExtent, latExte
   names(grids) <- c("longitude", "latitude", "time")
   class(grids) <- "Spacetimegrid"
   grids
-}
-
-splitGridSection <- function(gridObject, dimension = c("lon", "lat", "time"), breakPos) {
-  gridObject[[dimension]]$breaks <- sort(c(gridObject[[dimension]]$breaks, breakPos))
-  gridObject
 }
 
 #' A custom print function for the Spacetimegrid class.
@@ -200,15 +206,41 @@ plot.Spacetimegrid <- function(x, observationsAsPoints, knotsAsPoints) {
 }
 
 # observations are coded as SpatialPointsDataFrame with 3D coordinates, longitude-latitude-time
+# In each dimension, we have ranges defined [.,.), i.e. closed on the left, open on the right.
 
-getPointsInRegion <- function(sptGrid, pointSpacetimeCoor, observations) {
+.getPointsInRegion <- function(sptGrid, pointSpacetimeCoor, observations) {
+  observations <- NULL
   mapply(c("longitude", "latitude", "time"), coorPos = 1:3, FUN = function(dimensionName, coorPos) {
     upperPos <- match(TRUE, sptGrid[[dimensionName]]$breaks > pointSpacetimeCoor@coords[1, coorPos])
     coorRange <- c(sptGrid[[dimensionName]]$breaks[upperPos - 1], sptGrid[[dimensionName]]$breaks[upperPos])
-    observations <<- observations[(observations@coords[ , coorPos] > coorRange[[1]]) & (observations@coords[ , coorPos] < coorRange[[2]])]
+    observations <<- observations[(observations@coords[ , coorPos] >= coorRange[[1]]) & (observations@coords[ , coorPos] < coorRange[[2]])]
     invisible(NULL)
   }, SIMPLIFY = FALSE)
   observations
+}
+
+#' Add breaks in space-time grid.
+#'
+#' This function is used to refine a resolution grid.
+#'
+#' @param spacetimegridObj Spacetimegrid object
+#' @param dimension the name of the dimension where breaks will be added, either "longitude",
+#' "latitude", or "time"
+#' @param breaks vector indicating where the new breakpoints should be located.
+#'
+#' @details This function is meant to create an embedded resolution.
+#'
+#' @return A Spacetimegrid object with the new breaks.
+#'
+#' @examples
+#' \dontrun{
+#' INPUT_AN_EXAMPLE()
+#' }
+#' @export
+addBreaks <- function(spacetimegridObj, dimension = c("longitude", "latitude", "time"), breaks) {
+  dimension <- dimension[[1]]
+  spacetimegridObj[[dimension]]$breaks <- sort(c(spacetimegridObj[[dimension]]$breaks, breaks))
+  spacetimegridObj
 }
 
 .sameGridSection <- function(x, y, spacetimegridObj) {
