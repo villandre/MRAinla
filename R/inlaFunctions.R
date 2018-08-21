@@ -197,7 +197,7 @@ plot.Spacetimegrid <- function(x, observationsAsPoints, knotsAsPoints) {
   }
   if (!is.null(knotsAsPoints)) {
     knotSP <- SpatialPointsDataFrame(knotsAsPoints, data = data.frame(identity = rep("green", nrow(knotsAsPoints@coords))))
-    combinedSP <- bind(combinedSP, knotSP)
+    combinedSP <- raster::bind(combinedSP, knotSP)
     plotColours <- combinedSP@data$identity
   }
   plot(combinedSP, col = as.character(plotColours), xlab = "Longitude", ylab = "Latitude", xlim = x$longitude$extent, ylim = x$latitude$extent, cex = 0.8, pch = 18)
@@ -254,4 +254,16 @@ addBreaks <- function(spacetimegridObj, dimension = c("longitude", "latitude", "
     sameSection <- FALSE
   }
   sameSection
+}
+
+spacetimeListConvertToPoints <- function(valuesList, timeValues=NULL) {
+  if (is.null(timeValues)) {
+    timeValues <- seq_along(valuesList)
+  }
+  if (identical(class(valuesList), "SpatialPoints")) {
+    return(STF(sp = valuesList[[1]], time = timeValues))
+  }
+  valuesFrames <- lapply(valuesList, FUN = function(x) x@data)
+  dataReformat <- do.call("rbind", valuesFrames)
+  STFDF(valuesList[[1]], time = timeValues, data = dataReformat)
 }
