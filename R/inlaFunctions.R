@@ -49,10 +49,10 @@ MRA_INLA <- function(spaceTimeList, spaceTimeCovFct, M, gridRasterList, numKnots
 
 .setupVrecursionStep <- function(spacetimegridObj, v, baseVec1, baseVec2, K) {
   function(spaceTime1, spaceTime2) {
-    if(!.sameGridSection(spaceTime1, spaceTime2, spacetimeGridObj)) {
+    if(!.sameGridSection(spaceTime1, spaceTime2, spacetimegridObj)) {
       return(0)
     }
-    v - baseVec1%*%K%*%baseVec2
+    v - t(baseVec1)%*%K%*%baseVec2
   }
 }
 
@@ -76,9 +76,9 @@ MRA_INLA <- function(spaceTimeList, spaceTimeCovFct, M, gridRasterList, numKnots
     lapply(1:resolution, FUN = function(resIndex) {
       if (!.sameGridSection(spaceTime1, spaceTime2, gridList[[resIndex]])) {
         currentValues <<- list(v = NULL, K = NULL, bList = NULL)
-        currentValues
+        return(currentValues)
       }
-      knotsInRegion <- getPointsInRegion(gridList[[resIndex]], spaceTime1, knotsList[[resIndex+1]])
+      knotsInRegion <- .getPointsInRegion(gridList[[resIndex]], spaceTime1, knotsList[[resIndex+1]])
       incrementedVfun <- .setupVrecursionStep(spacetimegridObj = gridList[[resIndex]], v = currentValues$v, baseVec1 = currentValues$bList[[1]], baseVec2 = currentValues$bList[[2]], K = currentValues$K)
       newV <- incrementedVfun(spaceTime1, spaceTime2)
       newBs <- lapply(c(spaceTime1, spaceTime2), FUN = .getBvec, knotPositions = knotsInRegion, vFun = incrementedVfun)
@@ -91,8 +91,8 @@ MRA_INLA <- function(spaceTimeList, spaceTimeCovFct, M, gridRasterList, numKnots
 }
 
 .getBvec <- function(spaceTimeCoord, knotPositions, vFun) {
-  sapply(knotPositions, FUN = function(knotPos) {
-    vFun(spaceTimeCoord, knotPos)
+  sapply(1:nrow(knotPositions@sp@coords), FUN = function(knotIndex) {
+    vFun(spaceTimeCoord, knotPositions[knotIndex])
   })
 }
 
@@ -100,12 +100,14 @@ MRA_INLA <- function(spaceTimeList, spaceTimeCovFct, M, gridRasterList, numKnots
   KmatrixFinal <- matrix(0, nrow(knotPositions), nrow(knotPositions))
   # Handling the off diagonal elements
   mapply(rowIndex = row(diag(nrow(knotPositions)))[lower.tri(diag(nrow(knotPositions)))], colIndex = col(diag(nrow(knotPositions)))[lower.tri(diag(nrow(knotPositions)))], FUN =function(rowIndex, colIndex) {
-    vFun(knotPositions[rowIndex], knotPositions[colIndex])
+    KmatrixFinal[rowIndex, colIndex] <<- vFun(knotPositions[rowIndex], knotPositions[colIndex])
     invisible(NULL)
   }, SIMPLIFY = FALSE)
+  KmatrixFinal <- KmatrixFinal + t(KmatrixFinal)
   diag(KmatrixFinal) <- sapply(1:nrow(knotPositions), FUN = function(x) {
     vFun(knotPositions[x], knotPositions[x])
   })
+  KmatrixFinal
 }
 
 #' Constructs an irregular grid on a specified spatiotemporal range.
@@ -209,15 +211,25 @@ plot.Spacetimegrid <- function(x, observationsAsPoints, knotsAsPoints) {
 # observations are coded as SpatialPointsDataFrame with 3D coordinates, longitude-latitude-time
 # In each dimension, we have ranges defined [.,.), i.e. closed on the left, open on the right.
 
-.getPointsInRegion <- function(sptGrid, pointSpacetimeCoor, observations) {
-  observations <- NULL
-  mapply(c("longitude", "latitude", "time"), coorPos = 1:3, FUN = function(dimensionName, coorPos) {
-    upperPos <- match(TRUE, sptGrid[[dimensionName]]$breaks > pointSpacetimeCoor@coords[1, coorPos])
+.getPointsInRegion <- function(sptGrid, spacetimePoint, observations) {
+  lapply(c("longitude", "latitude", "time"), FUN = function(dimensionName) {
+    upperPos <- match(TRUE, sptGrid[[dimensionName]]$breaks > .getSpacetimeDim(spacetimePoint, dimension = dimensionName))
     coorRange <- c(sptGrid[[dimensionName]]$breaks[upperPos - 1], sptGrid[[dimensionName]]$breaks[upperPos])
-    observations <<- observations[(observations@coords[ , coorPos] >= coorRange[[1]]) & (observations@coords[ , coorPos] < coorRange[[2]])]
+    observations <<- observations[(.getSpacetimeDim(observations, dimension =  dimensionName) >= coorRange[[1]]) & (.getSpacetimeDim(observations, dimension =  dimensionName) < coorRange[[2]])]
     invisible(NULL)
-  }, SIMPLIFY = FALSE)
+  })
   observations
+}
+
+.getSpacetimeDim <- function(spacetimeObj, dimension = c("longitude", "latitude", "time")) {
+  dimension <- dimension[[1]]
+  if (dimension == "longitude") {
+    return(spacetimeObj@sp@coords[ , 1])
+  }
+  if (dimension == "latitude") {
+    return(spacetimeObj@sp@coords[ , 2])
+  }
+  return(index(spacetimeObj))
 }
 
 #' Add breaks in space-time grid.
@@ -245,14 +257,17 @@ addBreaks <- function(spacetimegridObj, dimension = c("longitude", "latitude", "
 }
 
 .sameGridSection <- function(x, y, spacetimegridObj) {
-  sameSection <- TRUE
-  testResults <- mapply(c("longitude", "latitude", "time"), coorPos = 1:3, FUN = function(dimensionName, coorPos) {
-    xUpperPos <- match(TRUE, spacetimeGridObj[[dimensionName]]$breaks > x@coords[1, coorPos])
-    yUpperPos <- match(TRUE, spacetimeGridObj[[dimensionName]]$breaks > y@coords[1, coorPos])
-    identical(xUpperPos, yUpperPos)
-  })
-  if (!all(testResults)) {
-    sameSection <- FALSE
+  sameSection <- FALSE
+  testResultTime <- identical(match(TRUE, spacetimegridObj[["time"]]$breaks > index(x)), match(TRUE, spacetimegridObj[["time"]]$breaks > index(y)))
+  if (testResultTime) {
+    testResultsSpace <- sapply(c("longitude", "latitude"), FUN = function(dimensionName) {
+      xUpperPos <- match(TRUE, spacetimegridObj[[dimensionName]]$breaks > .getSpacetimeDim(x, dimensionName))
+      yUpperPos <- match(TRUE, spacetimegridObj[[dimensionName]]$breaks > .getSpacetimeDim(y, dimensionName))
+      identical(xUpperPos, yUpperPos)
+    })
+    if (all(testResultsSpace)) {
+      sameSection <- TRUE
+    }
   }
   sameSection
 }
@@ -266,7 +281,7 @@ spacetimeListConvertToPoints <- function(valuesList, timeValues=NULL, regular = 
     dataReformat <- do.call("rbind", valuesFrames)
     return(spacetime::STFDF(valuesList[[1]], time = timeValues, data = dataReformat))
   }
-  allPoints <- do.call("raster::bind", valuesList)
+  allPoints <- do.call(what = raster::bind, valuesList)
   lengthVec <- sapply(valuesList, length)
   extendedTimeValues <- rep(timeValues, lengthVec)
 
