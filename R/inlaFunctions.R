@@ -67,7 +67,7 @@ MRA_INLA <- function(spaceTimeList, spaceTimeCovFct, M, gridRasterList, numKnots
 }
 
 .createPriorFunction <- function(gridList, knotsList, covFct, resolution = length(gridList)) {
-  initialVfun <- initVrecursion(knots = knotsList[[1]], covFct = covFct)
+  initialVfun <- .initVrecursion(knots = knotsList[[1]], covFct = covFct)
   if (identical(resolution, 0)) {
     return(initialVfun)
   }
@@ -161,7 +161,8 @@ print.Spacetimegrid <- function(x) {
   cat("Spacetime grid object \n")
   cat("Longitude extent: ", x$longitude$extent , "\n")
   cat("Latitude extent: ", x$latitude$extent, "\n")
-  cat("Time extent: ", x$time$extent, "\n \n")
+  cat("Time extent: ")
+  cat(paste(x$time$extent, collapse = " "), "\n \n")
   cat("Grid dimensions: (", length(x$longitude$breaks) + 1, " ", length(x$latitude$breaks)+1, " ", length(x$time$breaks) + 1, ")\n")
   cat("Note: This gives the number of regions, which may have different volumes.\n\n")
   invisible(NULL)
@@ -256,14 +257,21 @@ addBreaks <- function(spacetimegridObj, dimension = c("longitude", "latitude", "
   sameSection
 }
 
-spacetimeListConvertToPoints <- function(valuesList, timeValues=NULL) {
-  if (is.null(timeValues)) {
-    timeValues <- seq_along(valuesList)
+spacetimeListConvertToPoints <- function(valuesList, timeValues=NULL, regular = FALSE) {
+  if (regular) {
+    if (class(valuesList[[1]]) == "SpatialPoints") {
+      return(spacetime::STF(sp = valuesList[[1]], time = timeValues))
+    }
+    valuesFrames <- lapply(valuesList, FUN = function(x) x@data)
+    dataReformat <- do.call("rbind", valuesFrames)
+    return(spacetime::STFDF(valuesList[[1]], time = timeValues, data = dataReformat))
   }
-  if (identical(class(valuesList), "SpatialPoints")) {
-    return(STF(sp = valuesList[[1]], time = timeValues))
+  allPoints <- do.call("raster::bind", valuesList)
+  lengthVec <- sapply(valuesList, length)
+  extendedTimeValues <- rep(timeValues, lengthVec)
+
+  if (class(allPoints) == "SpatialPoints") {
+    return(spacetime::STI(sp = allPoints, time = extendedTimeValues))
   }
-  valuesFrames <- lapply(valuesList, FUN = function(x) x@data)
-  dataReformat <- do.call("rbind", valuesFrames)
-  STFDF(valuesList[[1]], time = timeValues, data = dataReformat)
+  spacetime::STIDF(sp = allPoints, time = extendedTimeValues, data = allPoint@data)
 }
