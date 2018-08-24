@@ -63,7 +63,7 @@ MRA_INLA <- function(spaceTimeList, spaceTimeCovFct, M, gridRasterList, numKnots
         return(list(v = 0, K = 0, bList = 0))
       }
       knotsInRegion <- .getPointsInRegion(gridList[[resIndex]], spaceTime1, knotsList[[resIndex+1]])
-      newVfun <- .setupVrecursionStep(spacetimegridObj = gridList[[resIndex]], vFun = currentVfun, bFun = currentBfun, Kmatrix = currentK)
+      newVfun <- .setupVrecursionStep(spacetimegridObj = gridList[[resIndex]], vFun = currentVfun, bFun = currentBfun, Kmatrix = currentKmat)
       newBfun <- function(spaceTime1) {
         .getBvec(spaceTimeCoord = spaceTime1, knotPositions = knotsInRegion, vFun = newVfun)
       }
