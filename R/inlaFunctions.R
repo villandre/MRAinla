@@ -50,32 +50,29 @@ MRA_INLA <- function(spaceTimeList, spaceTimeCovFct, M, gridRasterList, numKnots
 .createPriorFunction <- function(gridList, knotsList, covFct, resolution = length(gridList)) {
   function(spaceTime1, spaceTime2) {
     currentVfun <- covFct
-    currentKfun <- function() {
-      covFct(knotsList[[1]], knotsList[[1]])
-    }
     currentBfun <- function(spaceTime) {
       covFct(spaceTime, knotsList[[1]])
     }
-    initValues <- list(v = currentVfun(spaceTime1, spaceTime2), K = currentKfun(), bList = list(currentBfun(spaceTime1), currentBfun(spaceTime2)))
+    initValues <- list(v = currentVfun(spaceTime1, spaceTime2), K = covFct(knotsList[[1]], knotsList[[1]]), bList = list(currentBfun(spaceTime1), currentBfun(spaceTime2)))
     if (identical(resolution, 0)) {
       return(initValues)
     }
+    currentKmat <- initValues$K
     funForApply <- function(resIndex) {
       if (!.sameGridSection(spaceTime1, spaceTime2, gridList[[resIndex]])) {
         return(list(v = 0, K = 0, bList = 0))
       }
       knotsInRegion <- .getPointsInRegion(gridList[[resIndex]], spaceTime1, knotsList[[resIndex+1]])
-      newVfun <- .setupVrecursionStep(spacetimegridObj = gridList[[resIndex]], vFun = currentVfun, bFun = currentBfun, Kfun = currentKfun)
+      newVfun <- .setupVrecursionStep(spacetimegridObj = gridList[[resIndex]], vFun = currentVfun, bFun = currentBfun, Kmatrix = currentK)
       newBfun <- function(spaceTime1) {
         .getBvec(spaceTimeCoord = spaceTime1, knotPositions = knotsInRegion, vFun = newVfun)
       }
-      newKfun <- function() {
-        .getKmat(knotPositions = knotsInRegion, vFun = newVfun)
-      }
-      returnValues <- list(v = newVfun(spaceTime1,spaceTime2), K = newKfun(), bList = list(newBfun(spaceTime1), newBfun(spaceTime2)))
+      newKmat <- .getKmat(knotPositions = knotsInRegion, vFun = newVfun)
+
+      returnValues <- list(v = newVfun(spaceTime1,spaceTime2), K = newKmat, bList = list(newBfun(spaceTime1), newBfun(spaceTime2)))
       currentVfun <<- newVfun
       currentBfun <<- newBfun
-      currentKfun <<- newKfun
+      currentKmat <<- newKmat
       return(returnValues)
     }
     fittedValues <- lapply(1:resolution, FUN = funForApply)
@@ -83,12 +80,12 @@ MRA_INLA <- function(spaceTimeList, spaceTimeCovFct, M, gridRasterList, numKnots
   }
 }
 
-.setupVrecursionStep <- function(spacetimegridObj, vFun, bFun, Kfun) {
+.setupVrecursionStep <- function(spacetimegridObj, vFun, bFun, Kmatrix) {
   function(spaceTime1, spaceTime2) {
     if(!.sameGridSection(spaceTime1, spaceTime2, spacetimegridObj)) {
       return(0)
     }
-    vFun(spaceTime1, spaceTime2) - t(bFun(spaceTime1))%*%Kfun()%*%bFun(spaceTime2)
+    vFun(spaceTime1, spaceTime2) - t(bFun(spaceTime1))%*%Kmatrix%*%bFun(spaceTime2)
   }
 }
 
