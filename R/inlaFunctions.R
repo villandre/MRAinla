@@ -47,46 +47,52 @@ MRA_INLA <- function(spaceTimeList, spaceTimeCovFct, M, gridRasterList, numKnots
   }))
 }
 
-.setupVrecursionStep <- function(spacetimegridObj, v, baseVec1, baseVec2, K) {
+.setupVrecursionStep <- function(spacetimegridObj, vFun, bFun, Kfun) {
   function(spaceTime1, spaceTime2) {
     if(!.sameGridSection(spaceTime1, spaceTime2, spacetimegridObj)) {
       return(0)
     }
-    v - t(baseVec1)%*%K%*%baseVec2
+    vFun(spaceTime1, spaceTime2) - t(bFun(spaceTime1))%*%Kfun()%*%bFun(spaceTime2)
   }
 }
 
 .initVrecursion <- function(knots, covFct) {
   function(spaceTime1, spaceTime2) {
-    initBList <- list(covFct(spaceTime1, knots), covFct(spaceTime2, knots))
-    initInvK <- covFct(knots, knots)
-    initK <- Matrix::chol2inv(Matrix::chol(initInvK))
-    initV <- covFct(spaceTime1, spaceTime2)
-    list(v = initV, K = initK, bList = initBList)
+    bFun <- function(spaceTime) {
+      covFct(spaceTime, knots)
+    }
+    Kfun <- function()
+    {
+      Matrix::chol2inv(Matrix::chol(covFct(knots, knots)))
+    }
+    list(v = covFct(spaceTime1, spaceTime2), K = Kfun(), bValues = list(bFun(spaceTime1), bFun(spaceTime2)))
   }
 }
 
 .createPriorFunction <- function(gridList, knotsList, covFct, resolution = length(gridList)) {
-  initialVfun <- .initVrecursion(knots = knotsList[[1]], covFct = covFct)
-  if (identical(resolution, 0)) {
-    return(initialVfun)
-  }
   function(spaceTime1, spaceTime2) {
-    currentValues <- initialVfun(spaceTime1, spaceTime2)
-    lapply(1:resolution, FUN = function(resIndex) {
+    initFun <- .initVrecursion(knots = knotsList[[1]], covFct = covFct)
+    initValues <- initFun(spaceTime1, spaceTime2)
+    if (identical(resolution, 0)) {
+      return(initValues)
+    }
+    currentFun <- initFun
+    fittedValues <- lapply(1:resolution, FUN = function(resIndex) {
       if (!.sameGridSection(spaceTime1, spaceTime2, gridList[[resIndex]])) {
-        currentValues <<- list(v = NULL, K = NULL, bList = NULL)
-        return(currentValues)
+        return(list(v = 0, K = 0, bList = 0))
       }
       knotsInRegion <- .getPointsInRegion(gridList[[resIndex]], spaceTime1, knotsList[[resIndex+1]])
-      incrementedVfun <- .setupVrecursionStep(spacetimegridObj = gridList[[resIndex]], v = currentValues$v, baseVec1 = currentValues$bList[[1]], baseVec2 = currentValues$bList[[2]], K = currentValues$K)
-      newV <- incrementedVfun(spaceTime1, spaceTime2)
-      newBs <- lapply(c(spaceTime1, spaceTime2), FUN = .getBvec, knotPositions = knotsInRegion, vFun = incrementedVfun)
-      newK <- .getKmat(knotPositions = knotsInRegion , vFun = incrementedVfun)
-      currentValues <<- list(v = newV, K = newK, bList = newBs)
-      invisible(NULL)
+      newVfun <- .setupVrecursionStep(spacetimegridObj = gridList[[resIndex]], vFun = currentFun$vFun, bFun = currentFun$bFun, Kfun = currentFun$Kfun)
+      newBfun <- function(spaceTime1) {
+        newVfun(spaceTime1, knotsInRegion)
+      }
+      newKfun <- function() {
+        newVfun(knotsInRegion, knotsInRegion)
+      }
+      currentFun <<- list(vFun = newVfun, bFun = newBfun, Kfun = newKfun)
+      list(v = newVfun(spaceTime1,spaceTime2), bList = list(newBfun(spaceTime1),newBfun(spaceTime2)), K = newKfun())
     })
-    currentValues
+    c(list(initValues), fittedValues)
   }
 }
 
