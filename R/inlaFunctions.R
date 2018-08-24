@@ -47,6 +47,38 @@ MRA_INLA <- function(spaceTimeList, spaceTimeCovFct, M, gridRasterList, numKnots
   }))
 }
 
+.createPriorFunction <- function(gridList, knotsList, covFct, resolution = length(gridList)) {
+  function(spaceTime1, spaceTime2) {
+    currentVfun <- covFct
+    currentKfun <- function() {
+      covFct(knotsList[[1]], knotsList[[1]])
+    }
+    currentBfun <- function(spaceTime) {
+      covFct(spaceTime, knotsList[[1]])
+    }
+    initValues <- list(v = currentVfun(spaceTime1, spaceTime2), K = currentKfun(), bList = list(currentBfun(spaceTime1), currentBfun(spaceTime2)))
+    if (identical(resolution, 0)) {
+      return(initValues)
+    }
+    funForApply <- function(resIndex) {
+      if (!.sameGridSection(spaceTime1, spaceTime2, gridList[[resIndex]])) {
+        return(list(v = 0, K = 0, bList = 0))
+      }
+      knotsInRegion <- .getPointsInRegion(gridList[[resIndex]], spaceTime1, knotsList[[resIndex+1]])
+      currentVfun <<- .setupVrecursionStep(spacetimegridObj = gridList[[resIndex]], vFun = currentVfun, bFun = currentBfun, Kfun = currentKfun)
+      currentBfun <<- function(spaceTime1) {
+        newVfun(spaceTime1, knotsInRegion)
+      }
+      currentKfun <<- function() {
+        newVfun(knotsInRegion, knotsInRegion)
+      }
+      list(v = currentVfun(spaceTime1,spaceTime2), K = currentKfun(), bList = list(currentBfun(spaceTime1),currentBfun(spaceTime2)))
+    }
+    fittedValues <- lapply(1:resolution, FUN = funForApply)
+    c(list(initValues), fittedValues)
+  }
+}
+
 .setupVrecursionStep <- function(spacetimegridObj, vFun, bFun, Kfun) {
   function(spaceTime1, spaceTime2) {
     if(!.sameGridSection(spaceTime1, spaceTime2, spacetimegridObj)) {
@@ -56,7 +88,7 @@ MRA_INLA <- function(spaceTimeList, spaceTimeCovFct, M, gridRasterList, numKnots
   }
 }
 
-.initVrecursion <- function(knots, covFct) {
+.initVfun <- function(knots, covFct) {
   function(spaceTime1, spaceTime2) {
     bFun <- function(spaceTime) {
       covFct(spaceTime, knots)
@@ -69,52 +101,25 @@ MRA_INLA <- function(spaceTimeList, spaceTimeCovFct, M, gridRasterList, numKnots
   }
 }
 
-.createPriorFunction <- function(gridList, knotsList, covFct, resolution = length(gridList)) {
-  function(spaceTime1, spaceTime2) {
-    initFun <- .initVrecursion(knots = knotsList[[1]], covFct = covFct)
-    initValues <- initFun(spaceTime1, spaceTime2)
-    if (identical(resolution, 0)) {
-      return(initValues)
-    }
-    currentFun <- initFun
-    fittedValues <- lapply(1:resolution, FUN = function(resIndex) {
-      if (!.sameGridSection(spaceTime1, spaceTime2, gridList[[resIndex]])) {
-        return(list(v = 0, K = 0, bList = 0))
-      }
-      knotsInRegion <- .getPointsInRegion(gridList[[resIndex]], spaceTime1, knotsList[[resIndex+1]])
-      newVfun <- .setupVrecursionStep(spacetimegridObj = gridList[[resIndex]], vFun = currentFun$vFun, bFun = currentFun$bFun, Kfun = currentFun$Kfun)
-      newBfun <- function(spaceTime1) {
-        newVfun(spaceTime1, knotsInRegion)
-      }
-      newKfun <- function() {
-        newVfun(knotsInRegion, knotsInRegion)
-      }
-      currentFun <<- list(vFun = newVfun, bFun = newBfun, Kfun = newKfun)
-      list(v = newVfun(spaceTime1,spaceTime2), bList = list(newBfun(spaceTime1),newBfun(spaceTime2)), K = newKfun())
-    })
-    c(list(initValues), fittedValues)
-  }
-}
-
-.getBvec <- function(spaceTimeCoord, knotPositions, vFun) {
-  sapply(1:nrow(knotPositions@sp@coords), FUN = function(knotIndex) {
-    vFun(spaceTimeCoord, knotPositions[knotIndex])
-  })
-}
-
-.getKmat <- function(knotPositions, vFun) {
-  KmatrixFinal <- matrix(0, nrow(knotPositions), nrow(knotPositions))
-  # Handling the off diagonal elements
-  mapply(rowIndex = row(diag(nrow(knotPositions)))[lower.tri(diag(nrow(knotPositions)))], colIndex = col(diag(nrow(knotPositions)))[lower.tri(diag(nrow(knotPositions)))], FUN =function(rowIndex, colIndex) {
-    KmatrixFinal[rowIndex, colIndex] <<- vFun(knotPositions[rowIndex], knotPositions[colIndex])
-    invisible(NULL)
-  }, SIMPLIFY = FALSE)
-  KmatrixFinal <- KmatrixFinal + t(KmatrixFinal)
-  diag(KmatrixFinal) <- sapply(1:nrow(knotPositions), FUN = function(x) {
-    vFun(knotPositions[x], knotPositions[x])
-  })
-  KmatrixFinal
-}
+# .getBvec <- function(spaceTimeCoord, knotPositions, vFun) {
+#   sapply(1:nrow(knotPositions@sp@coords), FUN = function(knotIndex) {
+#     vFun(spaceTimeCoord, knotPositions[knotIndex])
+#   })
+# }
+#
+# .getKmat <- function(knotPositions, vFun) {
+#   KmatrixFinal <- matrix(0, nrow(knotPositions), nrow(knotPositions))
+#   # Handling the off diagonal elements
+#   mapply(rowIndex = row(diag(nrow(knotPositions)))[lower.tri(diag(nrow(knotPositions)))], colIndex = col(diag(nrow(knotPositions)))[lower.tri(diag(nrow(knotPositions)))], FUN =function(rowIndex, colIndex) {
+#     KmatrixFinal[rowIndex, colIndex] <<- vFun(knotPositions[rowIndex], knotPositions[colIndex])
+#     invisible(NULL)
+#   }, SIMPLIFY = FALSE)
+#   KmatrixFinal <- KmatrixFinal + t(KmatrixFinal)
+#   diag(KmatrixFinal) <- sapply(1:nrow(knotPositions), FUN = function(x) {
+#     vFun(knotPositions[x], knotPositions[x])
+#   })
+#   KmatrixFinal
+# }
 
 #' Constructs an irregular grid on a specified spatiotemporal range.
 #'
