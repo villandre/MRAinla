@@ -80,6 +80,33 @@ MRA_INLA <- function(spaceTimeList, spaceTimeCovFct, M, gridRasterList, numKnots
   }
 }
 
+.getKmatsAndLocalFunctions <- function(gridList, knotsList, covFct) {
+  currentKmat <- list(covFct(knotsList[[1]], knotsList[[1]]))
+  currentVfun <- covFct
+  currentBfun <- function(spaceTime1) {
+    .getBvec(spaceTimeCoord = spaceTime1, knotPositions = knotsList[[1]], vFun = currentVfun)
+  }
+  if (length(knotsList) == 1) {
+    return(currentKmat)
+  }
+  lapply(seq_along(gridList), FUN = function(index) {
+    lapply(spacetimegridObj$midpoints, FUN = function(spacetimeObj) {
+      knotsInRegion <- .getPointsInRegion(gridList[[index]], spacetimeObj, knotsList[[index+1]])
+      newVfun <- .setupVrecursionStep(spacetimegridObj = gridList[[resIndex]], vFun = currentVfun, bFun = currentBfun, Kmatrix = currentKmat)
+      newBfun <- function(spaceTime1) {
+        .getBvec(spaceTimeCoord = spaceTime1, knotPositions = knotsInRegion, vFun = newVfun)
+      }
+      newKmat <- .getKmat(knotPositions = knotsInRegion, vFun = newVfun)
+
+      returnValues <- list(vFun = newVfun, K = newKmat, bFun = newBfun, centralPoint = spacetimeObj)
+      currentVfun <<- newVfun
+      currentBfun <<- newBfun
+      currentKmat <<- newKmat
+      return(returnValues)
+    })
+  })
+}
+
 .setupVrecursionStep <- function(spacetimegridObj, vFun, bFun, Kmatrix) {
   function(spaceTime1, spaceTime2) {
     if(!.sameGridSection(spaceTime1, spaceTime2, spacetimegridObj)) {
@@ -122,6 +149,8 @@ MRA_INLA <- function(spaceTimeList, spaceTimeCovFct, M, gridRasterList, numKnots
   KmatrixFinal
 }
 
+.createBigB <- function()
+
 #' Constructs an irregular grid on a specified spatiotemporal range.
 #'
 #' Constructing a spatiotemporal grid will be necessary prior to fitting the spatiotemporal MRA
@@ -151,6 +180,7 @@ gridConstructor <- function(lonBreaks, latBreaks, timeBreaks, lonExtent, latExte
     list(breaks = breaks, extent = extent)
   }, SIMPLIFY = FALSE)
   names(grids) <- c("longitude", "latitude", "time")
+  grids$midpoints <- deriveMidpoints(grids)
   class(grids) <- "Spacetimegrid"
   grids
 }
@@ -282,6 +312,18 @@ addBreaks <- function(spacetimegridObj, dimension = c("longitude", "latitude", "
     }
   }
   sameSection
+}
+
+.deriveMidpoints <- function(partialGridObj) {
+  midpointsPerDim <- lapply(partialGridObj, FUN = function(dimension) {
+    extendedBreaks <- c(x$extent[[1]], x$breaks, x$extent[[2]])
+    (head(extendedBreaks, n = -1) + tail(extendedBreaks, n = -1))/2
+  })
+  names(midpointsPerDim) <- names(partialGridObj)
+  allCombinations <- expand.grid(seq_along(midpointsPerDim[[1]]), seq_along(midpointsPerDim[[2]]), seq_along(midpointsPerDim[[3]]))
+  allPoints <- apply(allCombinations, MARGIN = 1, FUN = function(coordTrio) {
+    ####### TO DO
+  })
 }
 
 spacetimeListConvertToPoints <- function(valuesList, timeValues=NULL, regular = FALSE) {
