@@ -80,30 +80,35 @@ MRA_INLA <- function(spaceTimeList, spaceTimeCovFct, M, gridRasterList, numKnots
   }
 }
 
+# The next function returns the K matrices, b and v functions for all zones of the pre-defined grids.
+
 .getKmatsAndLocalFunctions <- function(gridList, knotsList, covFct) {
-  currentKmat <- list(covFct(knotsList[[1]], knotsList[[1]]))
-  currentVfun <- covFct
-  currentBfun <- function(spaceTime1) {
-    .getBvec(spaceTimeCoord = spaceTime1, knotPositions = knotsList[[1]], vFun = currentVfun)
+  gridList <- c(list(gridConstructor(lonBreaks = NULL, latBreaks = NULL, timeBreaks = NULL, lonExtent = gridList[[1]]$longitude$extent, latExtent = gridList[[1]]$latitude$extent, timeExtent = gridList$time$extent)), gridList)
+  initKmat <- covFct(knotsList[[1]], knotsList[[1]])
+  initVfun <- covFct
+  initBfun <- function(spaceTime1) {
+    .getBvec(spaceTimeCoord = spaceTime1, knotPositions = knotsList[[1]], vFun = initVfun)
   }
+  initReturn <- list(vFun = initVfun, K = initKmat, bFun = initBfun, centralPoint = NULL)
+  currentReturn <- lapply(seq_along(knotsList), function(x) NULL)
+  currentReturns[[1]] <- initReturn
   if (length(knotsList) == 1) {
-    return(currentKmat)
+    return(initReturn)
   }
-  lapply(seq_along(gridList), FUN = function(index) {
-    lapply(spacetimegridObj$midpoints, FUN = function(spacetimeObj) {
-      knotsInRegion <- .getPointsInRegion(gridList[[index]], spacetimeObj, knotsList[[index+1]])
-      newVfun <- .setupVrecursionStep(spacetimegridObj = gridList[[resIndex]], vFun = currentVfun, bFun = currentBfun, Kmatrix = currentKmat)
+  lapply(tail(seq_along(gridList), n = -1), FUN = function(index) {
+
+    allReturnsOneRes <- lapply(1:Npoints(gridList[[index]]$midpoints), FUN = function(midpointIndex) {
+      newVfun <- .setupVrecursionStep(spacetimegridObj = gridList[[index-1]], vFun = currentVfun, bFun = currentBfun, Kmatrix = currentKmat)
+      knotsInRegion <- .getPointsInRegion(gridList[[index]], gridList[[index]]$midpoints[midpointIndex], knotsList[[index]])
       newBfun <- function(spaceTime1) {
         .getBvec(spaceTimeCoord = spaceTime1, knotPositions = knotsInRegion, vFun = newVfun)
       }
       newKmat <- .getKmat(knotPositions = knotsInRegion, vFun = newVfun)
 
-      returnValues <- list(vFun = newVfun, K = newKmat, bFun = newBfun, centralPoint = spacetimeObj)
-      currentVfun <<- newVfun
-      currentBfun <<- newBfun
-      currentKmat <<- newKmat
+      returnValues <- list(vFun = newVfun, K = newKmat, bFun = newBfun, centralPoint = gridList[[index]]$midpoints[midpointIndex])
       return(returnValues)
     })
+    currentReturns[[index+1]] <- allReturnsOneRes
   })
 }
 
@@ -149,13 +154,11 @@ MRA_INLA <- function(spaceTimeList, spaceTimeCovFct, M, gridRasterList, numKnots
   KmatrixFinal
 }
 
-.createBigB <- function()
-
-
 .getPointsInRegion <- function(sptGrid, spacetimePoint, observations) {
   lapply(c("longitude", "latitude", "time"), FUN = function(dimensionName) {
-    upperPos <- match(TRUE, sptGrid[[dimensionName]]$breaks > .getSpacetimeDim(spacetimePoint, dimension = dimensionName))
-    coorRange <- c(sptGrid[[dimensionName]]$breaks[upperPos - 1], sptGrid[[dimensionName]]$breaks[upperPos])
+    extendedBreaks <- c(sptGrid[[dimensionName]]$extent[[1]], sptGrid[[dimensionName]]$breaks, sptGrid[[dimensionName]]$extent[[2]])
+    upperPos <- match(TRUE, extendedBreaks > .getSpacetimeDim(spacetimePoint, dimension = dimensionName))
+    coorRange <- c(extendedBreaks[upperPos - 1], extendedBreaks[upperPos])
     observations <<- observations[(.getSpacetimeDim(observations, dimension =  dimensionName) >= coorRange[[1]]) & (.getSpacetimeDim(observations, dimension =  dimensionName) < coorRange[[2]])]
     invisible(NULL)
   })

@@ -132,6 +132,8 @@ plot.Spacetimegrid <- function(x, observationsAsPoints, knotsAsPoints) {
 addBreaks <- function(spacetimegridObj, dimension = c("longitude", "latitude", "time"), breaks) {
   dimension <- dimension[[1]]
   spacetimegridObj[[dimension]]$breaks <- sort(c(spacetimegridObj[[dimension]]$breaks, breaks))
+  newMidpoints <- .deriveMidpoints(spacetimegridObj)
+  spacetimegridObj$midpoints <- newMidpoints
   spacetimegridObj
 }
 
@@ -152,14 +154,71 @@ addBreaks <- function(spacetimegridObj, dimension = c("longitude", "latitude", "
 }
 
 .deriveMidpoints <- function(partialGridObj) {
-  midpointsPerDim <- lapply(partialGridObj, FUN = function(dimension) {
-    extendedBreaks <- c(x$extent[[1]], x$breaks, x$extent[[2]])
+  midpointsPerDim <- lapply(partialGridObj[c("longitude", "latitude", "time")], FUN = function(dimension) {
+    extendedBreaks <- c(dimension$extent[[1]], dimension$breaks, dimension$extent[[2]])
+    if ("POSIXct" %in% class(extendedBreaks)) {
+      return(as.POSIXct((as.numeric(head(extendedBreaks, n = -1)) + as.numeric(tail(extendedBreaks, n = -1)))/2, origin = "1970-01-01"))
+    }
     (head(extendedBreaks, n = -1) + tail(extendedBreaks, n = -1))/2
   })
-  names(midpointsPerDim) <- names(partialGridObj)
   allCombinations <- expand.grid(seq_along(midpointsPerDim[[1]]), seq_along(midpointsPerDim[[2]]), seq_along(midpointsPerDim[[3]]))
-  allPoints <- lapply(1:nrow(allCombinations), FUN = function(coordTrioIndex) {
-    spacetime::STI(sp = SpatialPoints(allCombinations[coorTrioIndex, 1:2]), time = allCombinations[coorTrioIndex, 3])
+  allPointsSpaceAndTime <- lapply(1:nrow(allCombinations), FUN = function(coordTrioIndex) {
+    aPoint <- sp::SpatialPoints(matrix(c(midpointsPerDim[[1]][allCombinations[coordTrioIndex, 1]], midpointsPerDim[[2]][allCombinations[coordTrioIndex, 2]]), nrow = 1, ncol = 2))
+    timeCoord <- midpointsPerDim[[3]][allCombinations[coordTrioIndex, 3]]
+  list(space = aPoint, time = timeCoord)
   })
-  do.call(what = raster::bind, allPoints)
+  pointsList <- lapply(allPointsSpaceAndTime, FUN = function(x) x$space)
+  if (length(pointsList) > 1) {
+    pointsMerged <- do.call(raster::bind, pointsList)
+  } else {
+    pointsMerged <- pointsList[[1]]
+  }
+  STI(sp = pointsMerged, time = do.call("c", lapply(allPointsSpaceAndTime, function(x) x$time)))
+}
+
+gridConstructorAlt <- function(spacetimegridObj = NULL, lonBreaks, latBreaks, timeBreaks, lonExtent, latExtent, timeExtent) {
+  if (is.null(spacetimeGridObj)) {
+    extendedBreakList <- list(longitude = c(min(lonBreaks), lonBreaks, max(lonBreaks)), latitude = c(min(latBreaks), latBreaks, max(latBreaks)), time = c(min(timeBreaks), timeBreaks, max(timeBreaks)))
+    allRanges <- lapply(extendedBreakList, FUN = function(breaks) {
+      cbind(head(extendedLon, n = -1), tail(extendedLon, n = -1))
+    })
+    names(allRanges) <- names(extendedBreakList)
+    numIntervals <- sapply(allRanges, nrow)
+    combinations <- expand.grid(1:numIntervals[[1]], 1:numIntervals[[2]], 1:numIntervals[[3]])
+    colnames(combinations) <- names(allRanges)
+    allBricks <- lapply(1:nrow(combinations), FUN = function(combIndex) {
+      combination <- combinations[combIndex,, drop = FALSE]
+      gridlayerObject <- list(lonExtent = allRanges$longitude[combIndex$longitude], latExtent = allRanges$latitude[combIndex$latitude], timeExtent = allRanges$time[combIndex$time])
+      class(gridlayerObject) <- "SpacetimegridLayer"
+      gridlayerObject
+    })
+    return(allBricks)
+  }
+  updatedGrid <- gridRecursion(spacetimegridObj, lonBreaks, latBreaks, timeBreaks)
+}
+
+gridRecursion <- function(spacetimegridObj, lonBreaks, latBreaks, timeBreaks) {
+  newBreaksList <- list(longitude = lonBreaks, latitude = latBreaks, time = timeBreaks)
+  if ("SpacetimegridLayer" %in% class(spacetimegridObj[[1]])) {
+    gridRecursion(spacetimegridObj, lonBreaks, latBreaks, timeBreaks)
+  }
+  ### ADD RECURSIVE COMPONENT ############
+  lapply(spacetimegridObj, function(spacetimeBrick) {
+    newBreaksForBrick <- lapply(names(newBreaksList), FUN = function(dimName) {
+      test1 <- newBreaksList[[dimName]] < max(get(spacetimeBrick, dimName))
+      test2 <- newBreaksList[[dimName]] > min(get(spacetimeBrick, dimName))
+      newBreaks <- NULL
+      if (any(test1 & test2)) {
+        breakToAddIndices <- which(test1 & test2)
+        newBreaks <- newBreaksList[breakToAddIndices]
+      }
+      newBreaks
+    })
+    names(newBreaksForBrick) <- names(newBreaksList)
+    if (all(is.null(sapply(newBreaksForBrick, function(x) x)))) {
+      return(spacetimeBrick)
+    }
+    newBricks <- splitBrick(lonBreaks = newBreaksForBrick$longitude, latBreaks = newBreaksForBrick$latitude, timeBreaks = newBreaksForBrick$time)
+    return(newBricks)
+  })
 }
