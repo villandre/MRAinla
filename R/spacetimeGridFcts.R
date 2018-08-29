@@ -219,7 +219,7 @@ addBreaks <- function(spacetimegridObj, dimension = c("longitude", "latitude", "
 
 spacetimebrickConstructor <- function(lonExtent, latExtent, timeExtent, parentBrick = NULL, observations = NULL) {
   if (is.null(parentBrick)) {
-    parentBrick <- .GlobalEnv
+    parentBrick <- emptyenv()
   }
   if (!is.null(observations)) {
     observations <- subset(observations, lonExtent = lonExtent, latExtent = latExtent, timeExtent = timeExtent)
@@ -229,7 +229,7 @@ spacetimebrickConstructor <- function(lonExtent, latExtent, timeExtent, parentBr
   assign(x = "knotPositions", value =  NULL, envir = brickEnvironment)
   assign(x = "observations", value = observations, envir = brickEnvironment)
   assign(x = "childBricks", value = NULL, envir = brickEnvironment)
-  if (!identical(parentBrick, .GlobalEnv)) {
+  if (!identical(parentBrick, emptyenv())) {
     childAddresses <- get(x = "childBricks", envir = parentBrick)
     incAddresses <- c(childAddresses, brickEnvironment)
     assign(x = "childBricks", value = incAddresses, envir = parentBrick)
@@ -272,7 +272,7 @@ SpacetimegridConstructor <- function(parentBrick = NULL, lonBreaks, latBreaks, t
 
 getTopEnvirAddress <- function(nestedEnvir) {
   parentEnvir <- parent.env(nestedEnvir)
-  if (identical(parentEnvir, .GlobalEnv)) {
+  if (identical(parentEnvir, emptyenv())) {
     return(nestedEnvir)
   }
   getTopEnvirAddress(parentEnvir)
@@ -309,4 +309,19 @@ addLayer <- function(spacetimegridObj, latBreaks, lonBreaks, timeBreaks) {
     return(lapply(spacetimebrickObj$childBricks, FUN = .tipAddresses))
   }
   spacetimebrickObj
+}
+
+.dive <- function(x, m) {
+  if (m == 0) {
+    return(x$childBricks)
+  }
+  lapply(x$childBricks, .dive, m = m-1)
+}
+
+getLayer <- function(rootEnvir, m = 0) {
+  if (m == 0) {
+    return(rootEnvir)
+  }
+  nestedResults <- .dive(x = rootEnvir, m = m-1)
+  unlist(nestedResults, recursive = TRUE)
 }
