@@ -44,7 +44,7 @@ SpacetimegridConstructor <- function(lonBreaks, latBreaks, timeBreaks, observati
     combination <- combinations[combIndex,, drop = FALSE]
     .spacetimebrickConstructor(lonExtent = allRanges$longitude[combination$longitude,], latExtent = allRanges$latitude[combination$latitude,], timeExtent = as.POSIXct(allRanges$time[combination$time,], origin = '1970-01-01'), parentBrick = parentBrick, observations = parentBrick$observations)
   })
-  topAddress <- getTopEnvirAddress(parentBrick)
+  topAddress <- .getTopEnvirAddress(parentBrick)
   class(topAddress) <- "Spacetimegrid"
   topAddress
 }
@@ -124,6 +124,33 @@ addLayer <- function(spacetimegridObj, latBreaks, lonBreaks, timeBreaks) {
   cat("Done. Beware of side-effects! \n")
 }
 
+#' Add breaks in space-time grid.
+#'
+#' This function is used to refine a resolution grid.
+#'
+#' @param spacetimegridObj Spacetimegrid object
+#' @param latBreaks vector indicating where the new latitude breakpoints should be located.
+#' @param lonBreaks vector indicating where the new longitude breakpoints should be located.
+#' @param timeBreaks vector indicating where the new time breakpoints should be located.
+#'
+#' @details This function creates an embedded resolution.
+#'
+#' @return A Spacetimegrid object with a new layer.
+#'
+#' @examples
+#' \dontrun{
+#' INPUT_AN_EXAMPLE()
+#' }
+#' @export
+
+getLayer <- function(spacetimeGridObj, m = 0) {
+  if (m == 0) {
+    return(spacetimeGridObj)
+  }
+  nestedResults <- .dive(x = spacetimeGridObj, m = m-1)
+  unlist(nestedResults, recursive = TRUE)
+}
+
 .sameGridSection <- function(x, y, m, spacetimegridObj) {
   if (m == 0) {
     return(TRUE)
@@ -163,12 +190,12 @@ addLayer <- function(spacetimegridObj, latBreaks, lonBreaks, timeBreaks) {
 
 
 
-getTopEnvirAddress <- function(nestedEnvir) {
+.getTopEnvirAddress <- function(nestedEnvir) {
   parentEnvir <- parent.env(nestedEnvir)
   if (identical(parentEnvir, emptyenv())) {
     return(nestedEnvir)
   }
-  getTopEnvirAddress(parentEnvir)
+  .getTopEnvirAddress(parentEnvir)
 }
 
 .getM <- function(spacetimegridObj) {
@@ -196,10 +223,52 @@ subset.STI <- function(x, latExtent, lonExtent, timeExtent) {
   lapply(x$childBricks, .dive, m = m-1)
 }
 
-getLayer <- function(rootEnvir, m = 0) {
-  if (m == 0) {
-    return(rootEnvir)
+#' Specify knots at each resolution.
+#'
+#' This function lets a user specify the knot positions at every resolution. If desired, it will automatically place an arbitrary number of equidistant knots in each section of the grid.
+#'
+#' @param spacetimegridObj Spacetimegrid object
+#' @param knotsList list of knot positions in spacetime format. If it has length 1, it will be assumed to be the same for all dimensions
+#' @param r scalar or vector indicating the number of knots in each section of the grid at each resolution. Ignored if knotsList is specified. If it is a scalar, it is assumed that the number of knots is the same for each section of the grid at every resolution.
+#'
+#' @details This function operates with side-effects! It modifies spacetimegridObj, specifying the knotPositions component of each Spacetimebrick object.
+#'
+#' @return Quietly, an object of class Spacetimegrid. Note that it directly modifies spacetimegridObj. In other words, it relies on side-effects.
+#'
+#' @examples
+#' \dontrun{
+#' INPUT_AN_EXAMPLE()
+#' }
+#' @export
+
+addKnots <- function(spacetimegridObj, knotsList = NULL, r = 10) {
+  if (("STI" %in% class(knotsList))) { # If knotsList is NULL, class(knotsList) will return "NULL" (the class of NULL if "NULL", not inexistent.)
+    knotsList <- replicate(.getM(spacetimegridObj)+1, expr = knotsList, simplify = FALSE) # In this situation, the knots are the same at every resolution. Might not be the best idea...
   }
-  nestedResults <- .dive(x = rootEnvir, m = m-1)
-  unlist(nestedResults, recursive = TRUE)
+  if (is.list(knotsList) & (length(knotsList) == 1)) {
+    knotsList <- replicate(.getM(spacetimegridObj)+1, expr = knotsList[[1]], simplify = FALSE)
+  }
+  .populateKnots(spacetimegridObj, knotsList, r = r)
+
+  spacetimegridObj
+}
+
+.populateKnots <- function(spacetimegridObj, knotsList, r, tuningPara = 0.1) {
+  if (is.null(knotsList)) {
+    currentR <- r[[1]]
+    lowerTime <- min(spacetimegridObj$dimensions$time)
+    upperTime <- floor(max(spacetimegridObj$dimensions$time)-1)
+    timeCoords <- rep(c(lowerTime, upperTime), length.out = currentR)
+    numLines <- ceiling(r/2)
+    baseLonCoords <- matrix(c(1-tuningPara, tuningPara, tuningPara, 1-tuningPara,2),2)%*%spacetimegridObj$dimensions$longitude
+    lonCoords <- rep(baseLonCoords, length.out = currentR)
+    latStepSize <- diff(spacetimegridObj$dimensions$latitude)
+    baseLatCoords <- seq(from = min(spacetimegridObj$dimensions$latitude)+latStepSize, to = max(spacetimegridObj$dimensions$latitude)-latStepSize, each = numLines, length.out = currentR)
+    knotsList <- list(STI(sp = SpatialPoints(cbind(lonCoords, latCoords), time = timeCoords)))
+  }
+  spacetimegridObj$knotPositions <- knotsList[[1]]
+  if (!is.null(spacetimegridObj$childBricks)) {
+    lapply(spacetimegridObj$childBricks, .populateKnots, knotsList = tail(knotsList, n = -1), r = tail(r, n = -1), tuningPara = tuningPara)
+  }
+  invisible()
 }

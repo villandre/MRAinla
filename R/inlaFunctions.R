@@ -28,14 +28,12 @@
 #' }
 #' @export
 
-MRA_INLA <- function(spaceTimeList, spaceTimeCovFct, M, gridRasterList, numKnots, hyperpriorFunList) {
-
+MRA_INLA <- function(data, covFct, spacetimegridObj, numKnots, hyperpriorFunList) {
+ # TO_DO
 }
 
-.logLikFun <- function(spaceTimeList, meanValueList, sigmaErrorValue) {
-  sum(mapply(grid = spaceTimeList, meanValues = meanValueList, FUN = function(grid, meanValues) {
-    sum(dnorm(x = grid@data, mean = meanValues, sd = sigmaErrorValue, log = TRUE))
-  }))
+.logLikFun <- function() {
+  # TO_DO
 }
 
 .logGMRFprior <- function(paraValuesList, SigmaValuesList) {
@@ -47,43 +45,42 @@ MRA_INLA <- function(spaceTimeList, spaceTimeCovFct, M, gridRasterList, numKnots
   }))
 }
 
-.createPriorFunction <- function(gridList, knotsList, covFct, resolution = length(gridList)) {
-  function(spaceTime1, spaceTime2) {
-    currentVfun <- covFct
-    currentBfun <- function(spaceTime) {
-      covFct(spaceTime, knotsList[[1]])
-    }
-    initValues <- list(v = currentVfun(spaceTime1, spaceTime2), K = covFct(knotsList[[1]], knotsList[[1]]), bList = list(currentBfun(spaceTime1), currentBfun(spaceTime2)))
-    if (identical(resolution, 0)) {
-      return(initValues)
-    }
-    currentKmat <- initValues$K
-    funForApply <- function(resIndex) {
-      if (!.sameGridSection(spaceTime1, spaceTime2, gridList[[resIndex]])) {
-        return(list(v = 0, K = 0, bList = 0))
-      }
-      knotsInRegion <- .getPointsInRegion(gridList[[resIndex]], spaceTime1, knotsList[[resIndex+1]])
-      newVfun <- .setupVrecursionStep(spacetimegridObj = gridList[[resIndex]], vFun = currentVfun, bFun = currentBfun, Kmatrix = currentKmat)
-      newBfun <- function(spaceTime1) {
-        .getBvec(spaceTimeCoord = spaceTime1, knotPositions = knotsInRegion, vFun = newVfun)
-      }
-      newKmat <- .getKmat(knotPositions = knotsInRegion, vFun = newVfun)
-
-      returnValues <- list(v = newVfun(spaceTime1,spaceTime2), K = newKmat, bList = list(newBfun(spaceTime1), newBfun(spaceTime2)))
-      currentVfun <<- newVfun
-      currentBfun <<- newBfun
-      currentKmat <<- newKmat
-      return(returnValues)
-    }
-    fittedValues <- lapply(1:resolution, FUN = funForApply)
-    c(list(initValues), fittedValues)
-  }
-}
+# .createPriorFunction <- function(gridList, knotsList, covFct, resolution = length(gridList)) {
+#   function(spaceTime1, spaceTime2) {
+#     currentVfun <- covFct
+#     currentBfun <- function(spaceTime) {
+#       covFct(spaceTime, knotsList[[1]])
+#     }
+#     initValues <- list(v = currentVfun(spaceTime1, spaceTime2), K = covFct(knotsList[[1]], knotsList[[1]]), bList = list(currentBfun(spaceTime1), currentBfun(spaceTime2)))
+#     if (identical(resolution, 0)) {
+#       return(initValues)
+#     }
+#     currentKmat <- initValues$K
+#     funForApply <- function(resIndex) {
+#       if (!.sameGridSection(spaceTime1, spaceTime2, gridList[[resIndex]])) {
+#         return(list(v = 0, K = 0, bList = 0))
+#       }
+#       knotsInRegion <- .getPointsInRegion(gridList[[resIndex]], spaceTime1, knotsList[[resIndex+1]])
+#       newVfun <- .setupVrecursionStep(spacetimegridObj = gridList[[resIndex]], vFun = currentVfun, bFun = currentBfun, Kmatrix = currentKmat)
+#       newBfun <- function(spaceTime1) {
+#         .getBvec(spaceTimeCoord = spaceTime1, knotPositions = knotsInRegion, vFun = newVfun)
+#       }
+#       newKmat <- .getKmat(knotPositions = knotsInRegion, vFun = newVfun)
+#
+#       returnValues <- list(v = newVfun(spaceTime1,spaceTime2), K = newKmat, bList = list(newBfun(spaceTime1), newBfun(spaceTime2)))
+#       currentVfun <<- newVfun
+#       currentBfun <<- newBfun
+#       currentKmat <<- newKmat
+#       return(returnValues)
+#     }
+#     fittedValues <- lapply(1:resolution, FUN = funForApply)
+#     c(list(initValues), fittedValues)
+#   }
+# }
 
 # The next function returns the K matrices, b and v functions for all zones of the pre-defined grids.
 
-.getKmatsAndLocalFunctions <- function(gridList, knotsList, covFct) {
-  gridList <- c(list(gridConstructor(lonBreaks = NULL, latBreaks = NULL, timeBreaks = NULL, lonExtent = gridList[[1]]$longitude$extent, latExtent = gridList[[1]]$latitude$extent, timeExtent = gridList$time$extent)), gridList)
+.getKmatsAndLocalFunctions <- function(spacetimegridObj, knotsList, covFct) {
   initKmat <- covFct(knotsList[[1]], knotsList[[1]])
   initVfun <- covFct
   initBfun <- function(spaceTime1) {
