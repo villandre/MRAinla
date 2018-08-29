@@ -125,21 +125,19 @@ addLayer <- function(spacetimegridObj, latBreaks, lonBreaks, timeBreaks) {
 }
 
 .sameGridSection <- function(x, y, m, spacetimegridObj) {
-  sameSection <- FALSE
   if (m == 0) {
     return(TRUE)
   }
-  if (testResultTime) {
-    testResultsSpace <- sapply(c("longitude", "latitude"), FUN = function(dimensionName) {
-      xUpperPos <- match(TRUE, spacetimegridObj[[dimensionName]]$breaks > .getSpacetimeDim(x, dimensionName))
-      yUpperPos <- match(TRUE, spacetimegridObj[[dimensionName]]$breaks > .getSpacetimeDim(y, dimensionName))
-      identical(xUpperPos, yUpperPos)
-    })
-    if (all(testResultsSpace)) {
-      sameSection <- TRUE
-    }
+  testResultTime <- identical(match(TRUE, spacetimegridObj$breaks[[m]][["time"]] > .getSpacetimeDim(x, "time")), match(TRUE, spacetimegridObj$breaks[[m]][["time"]] > .getSpacetimeDim(y, "time")))
+  if (!testResultTime) {
+    return(FALSE)
   }
-  sameSection
+  testResultsSpace <- sapply(c("longitude", "latitude"), FUN = function(dimensionName) {
+    xUpperPos <- match(TRUE, spacetimegridObj$breaks[[m]][[dimensionName]] > .getSpacetimeDim(x, dimensionName))
+    yUpperPos <- match(TRUE, spacetimegridObj$breaks[[m]][[dimensionName]] > .getSpacetimeDim(y, dimensionName))
+    identical(xUpperPos, yUpperPos)
+  })
+  all(testResultsSpace)
 }
 
 .spacetimebrickConstructor <- function(lonExtent, latExtent, timeExtent, parentBrick = NULL, observations = NULL) {
@@ -174,13 +172,7 @@ getTopEnvirAddress <- function(nestedEnvir) {
 }
 
 .getM <- function(spacetimegridObj) {
-  counter <- 0
-  currentAddress <- spacetimegridObj
-  while (!is.null(currentAddress$childBricks)) {
-    counter <- counter + 1
-    currentAddress <- currentAddress$childBricks[[1]]
-  }
-  counter
+  length(spacetimegridObj$breaks)
 }
 
 subset.STI <- function(x, latExtent, lonExtent, timeExtent) {
