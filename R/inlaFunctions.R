@@ -187,3 +187,18 @@ spacetimeListConvertToPoints <- function(valuesList, timeValues=NULL, regular = 
 Npoints <- function(spacetimeObj) {
   nrow(spacetimeObj@sp@coords)
 }
+
+# observations are coded as SpatialPointsDataFrame with 3D coordinates, longitude-latitude-time
+# In each dimension, we have ranges defined [.,.), i.e. closed on the left, open on the right.
+
+.getSpacetimeDim <- function(spacetimeObj, dimension = c("longitude", "latitude", "time")) {
+  dimension <- dimension[[1]]
+  if (dimension == "longitude") {
+    return(spacetimeObj@sp@coords[ , 1])
+  }
+  if (dimension == "latitude") {
+    return(spacetimeObj@sp@coords[ , 2])
+  }
+  return(index(spacetimeObj))
+}
+
