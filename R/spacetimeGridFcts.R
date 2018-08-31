@@ -253,22 +253,53 @@ addKnots <- function(spacetimegridObj, knotsList = NULL, r = 10) {
   spacetimegridObj
 }
 
-.populateKnots <- function(spacetimegridObj, knotsList, r, tuningPara = 0.1) {
-  if (is.null(knotsList)) {
+.populateKnots <- function(spacetimegridObj, knotsList, r, tuningPara = 0.1, dataCollectionFreq = "days") {
+  if (length(knotsList) == 0) {
     currentR <- r[[1]]
     lowerTime <- min(spacetimegridObj$dimensions$time)
-    upperTime <- floor(max(spacetimegridObj$dimensions$time)-1)
-    timeCoords <- rep(c(lowerTime, upperTime), length.out = currentR)
-    numLines <- ceiling(r/2)
-    baseLonCoords <- matrix(c(1-tuningPara, tuningPara, tuningPara, 1-tuningPara,2),2)%*%spacetimegridObj$dimensions$longitude
-    lonCoords <- rep(baseLonCoords, length.out = currentR)
-    latStepSize <- diff(spacetimegridObj$dimensions$latitude)
-    baseLatCoords <- seq(from = min(spacetimegridObj$dimensions$latitude)+latStepSize, to = max(spacetimegridObj$dimensions$latitude)-latStepSize, each = numLines, length.out = currentR)
-    knotsList <- list(STI(sp = SpatialPoints(cbind(lonCoords, latCoords), time = timeCoords)))
+    upperTime <- as.POSIXct(trunc(max(spacetimegridObj$dimensions$time), dataCollectionFreq))
+    if (upperTime < lowerTime) {
+      upperTime <- lowerTime ## The rightmost boundary for each dimension is not in the same grid section, hence the 1sec tilt.
+    }
+    timePoints <- rep(c(lowerTime, upperTime), each = ceiling(currentR/2))[1:currentR]
+
+    upperLeftCorner <- sapply(spacetimegridObj$dimensions[c("longitude", "latitude")], function(x) min(x) + diff(x)*tuningPara)
+    upperLeftCorner <- c(min(spacetimegridObj$dimensions$longitude) + diff(spacetimegridObj$dimensions$longitude)*tuningPara,
+                         max(spacetimegridObj$dimensions$latitude) - diff(spacetimegridObj$dimensions$latitude)*tuningPara)
+    widthHeightVec <- sapply(spacetimegridObj$dimensions[c("longitude", "latitude")], function(x) diff(x)*(1-2*tuningPara))
+    names(widthHeightVec) <- c("width", "height")
+    pointsObjects <- lapply(c(floor(currentR/2), ceiling(currentR/2)), .setPointsOnRectangle, upperLeftCoor = upperLeftCorner, width = widthHeightVec[["width"]], height = widthHeightVec[["height"]])
+    knotsList <- list(STI(sp = do.call(raster::bind, pointsObjects), time = timePoints))
   }
   spacetimegridObj$knotPositions <- knotsList[[1]]
   if (!is.null(spacetimegridObj$childBricks)) {
-    lapply(spacetimegridObj$childBricks, .populateKnots, knotsList = tail(knotsList, n = -1), r = tail(r, n = -1), tuningPara = tuningPara)
+    lapply(spacetimegridObj$childBricks, .populateKnots, knotsList = knotsList[-1], r = tail(r, n = -1), tuningPara = tuningPara)
   }
   invisible()
+}
+
+.setPointsOnRectangle <- function(numPoints, upperLeftCoor, width, height) {
+  returnCoord <- function(distFromOrigin, upperLeftCoor, width, height) {
+    upperRightCoor <- upperLeftCoor + c(width, 0)
+    lowerRightCoor <- upperRightCoor - c(0, height)
+    lowerLeftCoor <- upperLeftCoor - c(0, height)
+
+    if (distFromOrigin < width) {
+      return(upperLeftCoor + c(distFromOrigin,0))
+    }
+    if ((distFromOrigin >= width) & (distFromOrigin < width+height)) {
+      return(upperRightCoor - c(0, distFromOrigin-width))
+    }
+    if ((distFromOrigin >= width+height) & (distFromOrigin < 2*width+height)) {
+      return(lowerRightCoor - c(distFromOrigin-width-height, 0))
+    }
+    if ((distFromOrigin >= 2*width+height) & (distFromOrigin < 2*width+2*height)) {
+      return(lowerLeftCoor + c(0, distFromOrigin - 2*width-height))
+    }
+    stop("Error: distance from origin is out of bounds! \n")
+  }
+  perimeter <- 2*(width+height)
+  distBetweenPoints <- perimeter/(numPoints+1)
+  distances <- seq(from = distBetweenPoints/2, to = perimeter-distBetweenPoints/2, length.out = numPoints)
+  SpatialPoints(t(sapply(distances, returnCoord, upperLeftCoor = upperLeftCoor, width = width, height = height)))
 }
