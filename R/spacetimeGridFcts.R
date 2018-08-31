@@ -20,14 +20,14 @@
 #' }
 #' @export
 
-SpacetimegridConstructor <- function(lonBreaks, latBreaks, timeBreaks, observations = NULL, parentBrick = NULL) {
+.SpacetimegridConstructor <- function(lonBreaks, latBreaks, timeBreaks, observations = NULL, parentBrick = NULL) {
   breakList <- list(longitude = lonBreaks, latitude = latBreaks, time = timeBreaks)
   if (is.null(parentBrick)) { # Create a trivial brick which all generated bricks will refer to.
-    parentBrick <- .spacetimebrickConstructor(lonExtent = range(lonBreaks), latExtent = range(latBreaks), timeExtent = range(timeBreaks), observations = observations)
+    parentBrick <- .SpacetimebrickConstructor(lonExtent = range(lonBreaks), latExtent = range(latBreaks), timeExtent = range(timeBreaks), observations = observations)
     parentBrick$breaks <- list(breakList)
   }
   correctedBreakList <- lapply(c("longitude", "latitude", "time"), FUN = function(dimName) {
-    extent <- get(x = "dimensions", envir = parentBrick)[[dimName]]
+    extent <- parentBrick$dimensions[[dimName]]
     proposedBreaks <- breakList[[dimName]]
 
     keepBreakIndices <- (proposedBreaks < max(extent)) & (proposedBreaks > min(extent))
@@ -41,8 +41,8 @@ SpacetimegridConstructor <- function(lonBreaks, latBreaks, timeBreaks, observati
   combinations <- expand.grid(1:numIntervals[[1]], 1:numIntervals[[2]], 1:numIntervals[[3]])
   colnames(combinations) <- names(allRanges)
   lapply(1:nrow(combinations), FUN = function(combIndex) {
-    combination <- combinations[combIndex,, drop = FALSE]
-    .spacetimebrickConstructor(lonExtent = allRanges$longitude[combination$longitude,], latExtent = allRanges$latitude[combination$latitude,], timeExtent = as.POSIXct(allRanges$time[combination$time,], origin = '1970-01-01'), parentBrick = parentBrick, observations = parentBrick$observations)
+    combination <- combinations[combIndex, , drop = FALSE]
+    .SpacetimebrickConstructor(lonExtent = allRanges$longitude[combination$longitude,], latExtent = allRanges$latitude[combination$latitude,], timeExtent = as.POSIXct(allRanges$time[combination$time,], origin = '1970-01-01'), parentBrick = parentBrick, observations = parentBrick$observations)
   })
   topAddress <- .getTopEnvirAddress(parentBrick)
   class(topAddress) <- "Spacetimegrid"
@@ -98,7 +98,7 @@ plot.Spacetimegrid <- function(x, observationsAsPoints, knotsAsPoints) {
 #'
 #' This function is used to refine a resolution grid.
 #'
-#' @param spacetimegridObj Spacetimegrid object
+#' @param gridObj Spacetimegrid object
 #' @param latBreaks vector indicating where the new latitude breakpoints should be located.
 #' @param lonBreaks vector indicating where the new longitude breakpoints should be located.
 #' @param timeBreaks vector indicating where the new time breakpoints should be located.
@@ -113,22 +113,22 @@ plot.Spacetimegrid <- function(x, observationsAsPoints, knotsAsPoints) {
 #' }
 #' @export
 
-addLayer <- function(spacetimegridObj, latBreaks, lonBreaks, timeBreaks) {
-  newBreaks <- list(longitude = sort(c(tail(spacetimegridObj$breaks, n = 1)[[1]]$longitude, lonBreaks)), latitude = sort(c(tail(spacetimegridObj$breaks, n = 1)[[1]]$latitude, latBreaks)), time = sort(c(tail(spacetimegridObj$breaks, n = 1)[[1]]$time, timeBreaks)))
-  spacetimegridObj$breaks <- c(spacetimegridObj$breaks, list(newBreaks))
-  tipAddresses <- .tipAddresses(spacetimegridObj)
+.addLayer <- function(gridObj, latBreaks, lonBreaks, timeBreaks) {
+  newBreaks <- list(longitude = sort(c(tail(gridObj$breaks, n = 1)[[1]]$longitude, lonBreaks)), latitude = sort(c(tail(gridObj$breaks, n = 1)[[1]]$latitude, latBreaks)), time = sort(c(tail(gridObj$breaks, n = 1)[[1]]$time, timeBreaks)))
+  gridObj$breaks <- c(gridObj$breaks, list(newBreaks))
+  tipAddresses <- .tipAddresses(gridObj)
   lapply(tipAddresses, FUN = function(tipAddress) {
-    SpacetimegridConstructor(parentBrick = tipAddress, lonBreaks = lonBreaks, latBreaks = latBreaks, timeBreaks = timeBreaks)
+    .SpacetimegridConstructor(parentBrick = tipAddress, lonBreaks = lonBreaks, latBreaks = latBreaks, timeBreaks = timeBreaks)
     NULL
   })
-  cat("Done. Beware of side-effects! \n")
+  invisible()
 }
 
 #' Add breaks in space-time grid.
 #'
 #' This function is used to refine a resolution grid.
 #'
-#' @param spacetimegridObj Spacetimegrid object
+#' @param gridObj Spacetimegrid object
 #' @param latBreaks vector indicating where the new latitude breakpoints should be located.
 #' @param lonBreaks vector indicating where the new longitude breakpoints should be located.
 #' @param timeBreaks vector indicating where the new time breakpoints should be located.
@@ -151,38 +151,62 @@ getLayer <- function(spacetimeGridObj, m = 0) {
   unlist(nestedResults, recursive = TRUE)
 }
 
-.sameGridSection <- function(x, y, m, spacetimegridObj) {
-  if (m == 0) {
-    return(TRUE)
+# .sameGridSection <- function(x, y, brickObj) {
+#   testResultTime <- identical(match(TRUE, brickObj$breaks[[m]][["time"]] > .getSpacetimeDim(x, "time")), match(TRUE, brickObj$breaks[[m]][["time"]] > .getSpacetimeDim(y, "time")))
+#   if (!testResultTime) {
+#     return(FALSE)
+#   }
+#   testResultsSpace <- sapply(c("longitude", "latitude"), FUN = function(dimensionName) {
+#     xUpperPos <- match(TRUE, brickObj$breaks[[dimensionName]] > .getSpacetimeDim(x, dimensionName))
+#     yUpperPos <- match(TRUE, brickObj$breaks[[dimensionName]] > .getSpacetimeDim(y, dimensionName))
+#     identical(xUpperPos, yUpperPos)
+#   })
+#   all(testResultsSpace)
+# }
+
+.sameGridSection <- function(x, y, brickObj) {
+  result <- TRUE
+  if (!all(sapply(list(x,y), FUN = .coorWithinBrick, brickObj = brickObj))) {
+    result <- FALSE
   }
-  testResultTime <- identical(match(TRUE, spacetimegridObj$breaks[[m]][["time"]] > .getSpacetimeDim(x, "time")), match(TRUE, spacetimegridObj$breaks[[m]][["time"]] > .getSpacetimeDim(y, "time")))
-  if (!testResultTime) {
-    return(FALSE)
-  }
-  testResultsSpace <- sapply(c("longitude", "latitude"), FUN = function(dimensionName) {
-    xUpperPos <- match(TRUE, spacetimegridObj$breaks[[m]][[dimensionName]] > .getSpacetimeDim(x, dimensionName))
-    yUpperPos <- match(TRUE, spacetimegridObj$breaks[[m]][[dimensionName]] > .getSpacetimeDim(y, dimensionName))
-    identical(xUpperPos, yUpperPos)
-  })
-  all(testResultsSpace)
+  result
 }
 
-.spacetimebrickConstructor <- function(lonExtent, latExtent, timeExtent, parentBrick = NULL, observations = NULL) {
+.coorWithinBrick <- function(spacetimeObj, brickObj) {
+  timeTest <- (index(spacetimeObj)[[1]] >= min(brickObj$dimensions$time)) & (index(spacetimeObj)[[1]] < max(brickObj$dimensions$time))
+  if (!timeTest) {
+    return(FALSE)
+  }
+  dimNames <- c("longitude", "latitude")
+  coordVec <- spacetimeObj@sp@coords[1, ]
+  names(coordVec) <- dimNames
+  spaceTests <- sapply(dimNames, function(dimName) (coordVec[[dimName]] >= min(brickObj$dimensions[[dimName]])) & (coordVec[[dimName]] < max(brickObj$dimensions[[dimName]])))
+  if (!all(spaceTests)) {
+    return(FALSE)
+  }
+  TRUE
+}
+
+.SpacetimebrickConstructor <- function(lonExtent, latExtent, timeExtent, parentBrick = NULL, observations = NULL) {
   if (is.null(parentBrick)) {
     parentBrick <- emptyenv()
   }
   if (!is.null(observations)) {
-    observations <- subset(observations, lonExtent = lonExtent, latExtent = latExtent, timeExtent = timeExtent)
+    observationsInRegion <- subset(observations, lonExtent = lonExtent, latExtent = latExtent, timeExtent = timeExtent)
   }
   brickEnvironment <- new.env(parent = parentBrick)
-  assign(x = "dimensions", value = list(longitude = lonExtent, latitude = latExtent, time = timeExtent), envir = brickEnvironment)
-  assign(x = "knotPositions", value =  NULL, envir = brickEnvironment)
-  assign(x = "observations", value = observations, envir = brickEnvironment)
-  assign(x = "childBricks", value = NULL, envir = brickEnvironment)
+  brickEnvironment$dimensions <- list(longitude = lonExtent, latitude = latExtent, time = timeExtent)
+  brickEnvironment$observations <- observationsInRegion
+  brickEnvironment$knotPositions <- NULL
+  brickEnvironment$childBricks <- NULL
+  brickEnvironment$vFun <- NULL
+  brickEnvironment$bFun <- NULL
+  brickEnvironment$K <- NULL
+
   if (!identical(parentBrick, emptyenv())) {
-    childAddresses <- get(x = "childBricks", envir = parentBrick)
+    childAddresses <- parentBrick$childBricks
     incAddresses <- c(childAddresses, brickEnvironment)
-    assign(x = "childBricks", value = incAddresses, envir = parentBrick)
+    parentBrick$childBricks <- incAddresses
   }
   class(brickEnvironment) <- "Spacetimebrick"
   brickEnvironment
@@ -198,8 +222,8 @@ getLayer <- function(spacetimeGridObj, m = 0) {
   .getTopEnvirAddress(parentEnvir)
 }
 
-.getM <- function(spacetimegridObj) {
-  length(spacetimegridObj$breaks)
+.getM <- function(gridObj) {
+  length(gridObj$breaks)
 }
 
 subset.STI <- function(x, latExtent, lonExtent, timeExtent) {
@@ -227,13 +251,14 @@ subset.STI <- function(x, latExtent, lonExtent, timeExtent) {
 #'
 #' This function lets a user specify the knot positions at every resolution. If desired, it will automatically place an arbitrary number of equidistant knots in each section of the grid.
 #'
-#' @param spacetimegridObj Spacetimegrid object
+#' @param gridObj Spacetimegrid object
 #' @param knotsList list of knot positions in spacetime format. If it has length 1, it will be assumed to be the same for all dimensions
 #' @param r scalar or vector indicating the number of knots in each section of the grid at each resolution. Ignored if knotsList is specified. If it is a scalar, it is assumed that the number of knots is the same for each section of the grid at every resolution.
+#' @param tuningPara if knots are placed automatically, they will be placed on the edges of a rectangle within each section. That rectangle is obtained by scaling the edges of each section by a coefficient equal to (1-2*tuningPara).
 #'
-#' @details This function operates with side-effects! It modifies spacetimegridObj, specifying the knotPositions component of each Spacetimebrick object.
+#' @details This function operates with side-effects! It modifies gridObj, specifying the knotPositions component of each Spacetimebrick object. There might be advantages to having knots close to the edges, hence the automatic scaling scheme.
 #'
-#' @return Quietly, an object of class Spacetimegrid. Note that it directly modifies spacetimegridObj. In other words, it relies on side-effects.
+#' @return Nothing: it directly modifies gridObj. In other words, it relies on side-effects.
 #'
 #' @examples
 #' \dontrun{
@@ -241,39 +266,38 @@ subset.STI <- function(x, latExtent, lonExtent, timeExtent) {
 #' }
 #' @export
 
-addKnots <- function(spacetimegridObj, knotsList = NULL, r = 10) {
+.addKnots <- function(gridObj, knotsList = NULL, r = 10, tuningPara = 0.1) {
   if (("STI" %in% class(knotsList))) { # If knotsList is NULL, class(knotsList) will return "NULL" (the class of NULL if "NULL", not inexistent.)
-    knotsList <- replicate(.getM(spacetimegridObj)+1, expr = knotsList, simplify = FALSE) # In this situation, the knots are the same at every resolution. Might not be the best idea...
+    knotsList <- replicate(.getM(gridObj)+1, expr = knotsList, simplify = FALSE) # In this situation, the knots are the same at every resolution. Might not be the best idea...
   }
   if (is.list(knotsList) & (length(knotsList) == 1)) {
-    knotsList <- replicate(.getM(spacetimegridObj)+1, expr = knotsList[[1]], simplify = FALSE)
+    knotsList <- replicate(.getM(gridObj)+1, expr = knotsList[[1]], simplify = FALSE)
   }
-  .populateKnots(spacetimegridObj, knotsList, r = r)
-
-  spacetimegridObj
+  .populateKnots(gridObj, knotsList, r = r, tuningPara = tuningPara)
+  invisible()
 }
 
-.populateKnots <- function(spacetimegridObj, knotsList, r, tuningPara = 0.1, dataCollectionFreq = "days") {
+.populateKnots <- function(gridObj, knotsList, r, tuningPara = 0.1, dataCollectionFreq = "days") {
   if (length(knotsList) == 0) {
     currentR <- r[[1]]
-    lowerTime <- min(spacetimegridObj$dimensions$time)
-    upperTime <- as.POSIXct(trunc(max(spacetimegridObj$dimensions$time), dataCollectionFreq))
+    lowerTime <- min(gridObj$dimensions$time)
+    upperTime <- as.POSIXct(trunc(max(gridObj$dimensions$time), dataCollectionFreq))
     if (upperTime < lowerTime) {
       upperTime <- lowerTime ## The rightmost boundary for each dimension is not in the same grid section, hence the 1sec tilt.
     }
     timePoints <- rep(c(lowerTime, upperTime), each = ceiling(currentR/2))[1:currentR]
 
-    upperLeftCorner <- sapply(spacetimegridObj$dimensions[c("longitude", "latitude")], function(x) min(x) + diff(x)*tuningPara)
-    upperLeftCorner <- c(min(spacetimegridObj$dimensions$longitude) + diff(spacetimegridObj$dimensions$longitude)*tuningPara,
-                         max(spacetimegridObj$dimensions$latitude) - diff(spacetimegridObj$dimensions$latitude)*tuningPara)
-    widthHeightVec <- sapply(spacetimegridObj$dimensions[c("longitude", "latitude")], function(x) diff(x)*(1-2*tuningPara))
+    upperLeftCorner <- sapply(gridObj$dimensions[c("longitude", "latitude")], function(x) min(x) + diff(x)*tuningPara)
+    upperLeftCorner <- c(min(gridObj$dimensions$longitude) + diff(gridObj$dimensions$longitude)*tuningPara,
+                         max(gridObj$dimensions$latitude) - diff(gridObj$dimensions$latitude)*tuningPara)
+    widthHeightVec <- sapply(gridObj$dimensions[c("longitude", "latitude")], function(x) diff(x)*(1-2*tuningPara))
     names(widthHeightVec) <- c("width", "height")
     pointsObjects <- lapply(c(floor(currentR/2), ceiling(currentR/2)), .setPointsOnRectangle, upperLeftCoor = upperLeftCorner, width = widthHeightVec[["width"]], height = widthHeightVec[["height"]])
     knotsList <- list(STI(sp = do.call(raster::bind, pointsObjects), time = timePoints))
   }
-  spacetimegridObj$knotPositions <- knotsList[[1]]
-  if (!is.null(spacetimegridObj$childBricks)) {
-    lapply(spacetimegridObj$childBricks, .populateKnots, knotsList = knotsList[-1], r = tail(r, n = -1), tuningPara = tuningPara)
+  gridObj$knotPositions <- knotsList[[1]]
+  if (!is.null(gridObj$childBricks)) {
+    lapply(gridObj$childBricks, .populateKnots, knotsList = knotsList[-1], r = tail(r, n = -1), tuningPara = tuningPara)
   }
   invisible()
 }

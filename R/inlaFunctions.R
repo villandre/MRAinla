@@ -28,7 +28,7 @@
 #' }
 #' @export
 
-MRA_INLA <- function(data, covFct, spacetimegridObj, numKnots, hyperpriorFunList) {
+MRA_INLA <- function(data, covFct, gridObj, numKnots, hyperpriorFunList) {
  # TO_DO
 }
 
@@ -45,124 +45,79 @@ MRA_INLA <- function(data, covFct, spacetimegridObj, numKnots, hyperpriorFunList
   }))
 }
 
-# .createPriorFunction <- function(gridList, knotsList, covFct, resolution = length(gridList)) {
-#   function(spaceTime1, spaceTime2) {
-#     currentVfun <- covFct
-#     currentBfun <- function(spaceTime) {
-#       covFct(spaceTime, knotsList[[1]])
-#     }
-#     initValues <- list(v = currentVfun(spaceTime1, spaceTime2), K = covFct(knotsList[[1]], knotsList[[1]]), bList = list(currentBfun(spaceTime1), currentBfun(spaceTime2)))
-#     if (identical(resolution, 0)) {
-#       return(initValues)
-#     }
-#     currentKmat <- initValues$K
-#     funForApply <- function(resIndex) {
-#       if (!.sameGridSection(spaceTime1, spaceTime2, gridList[[resIndex]])) {
-#         return(list(v = 0, K = 0, bList = 0))
-#       }
-#       knotsInRegion <- .getPointsInRegion(gridList[[resIndex]], spaceTime1, knotsList[[resIndex+1]])
-#       newVfun <- .setupVrecursionStep(spacetimegridObj = gridList[[resIndex]], vFun = currentVfun, bFun = currentBfun, Kmatrix = currentKmat)
-#       newBfun <- function(spaceTime1) {
-#         .getBvec(spaceTimeCoord = spaceTime1, knotPositions = knotsInRegion, vFun = newVfun)
-#       }
-#       newKmat <- .getKmat(knotPositions = knotsInRegion, vFun = newVfun)
-#
-#       returnValues <- list(v = newVfun(spaceTime1,spaceTime2), K = newKmat, bList = list(newBfun(spaceTime1), newBfun(spaceTime2)))
-#       currentVfun <<- newVfun
-#       currentBfun <<- newBfun
-#       currentKmat <<- newKmat
-#       return(returnValues)
-#     }
-#     fittedValues <- lapply(1:resolution, FUN = funForApply)
-#     c(list(initValues), fittedValues)
-#   }
-# }
+setupGrid <- function(lonNewBreaksList, latNewBreaksList, timeNewBreaksList, observations = NULL, knotsList = NULL, r = rep(10, length(lonNewBreaksList)+1), covFct, ...) {
+  gridForMRA <- .SpacetimegridConstructor(parentBrick = NULL, lonBreaks = lonNewBreaksList[[1]], latBreaks = latNewBreaksList[[1]], timeBreaks = timeNewBreaksList[[1]], observations = observations)
+  if (length(lonNewBreaksList) == 1) {
+    return(gridForMRA)
+  }
+  lapply(seq_along(lonNewBreaksList)[-1], FUN = function(resolutionIndex) {
+    .addLayer(gridForMRA, latBreaks = latNewBreaksList[[resolutionIndex]], lonBreaks = lonNewBreaksList[[resolutionIndex]], timeBreaks = timeNewBreaksList[[resolutionIndex]])
+  })
+  .addKnots(gridForMRA, r = r, ...)
+  .getKmatsAndLocalFunctions(gridForMRA, covFct)
+  gridForMRA
+}
 
 # The next function returns the K matrices, b and v functions for all zones of the pre-defined grids.
 
-.getKmatsAndLocalFunctions <- function(spacetimegridObj, knotsList, covFct) {
-  initKmat <- covFct(knotsList[[1]], knotsList[[1]])
-  initVfun <- covFct
-  initBfun <- function(spaceTime1) {
-    .getBvec(spaceTimeCoord = spaceTime1, knotPositions = knotsList[[1]], vFun = initVfun)
-  }
-  initReturn <- list(vFun = initVfun, K = initKmat, bFun = initBfun, centralPoint = NULL)
-  currentReturn <- lapply(seq_along(knotsList), function(x) NULL)
-  currentReturns[[1]] <- initReturn
-  if (length(knotsList) == 1) {
-    return(initReturn)
-  }
-  lapply(tail(seq_along(gridList), n = -1), FUN = function(index) {
+.getKmatsAndLocalFunctions <- function(gridObj, covFct) {
+  gridObj$K <-  Matrix::chol2inv(Matrix::chol(covFct(gridObj$knotPositions, gridObj$knotPositions)))
+  gridObj$vFun <- covFct
+  gridObj$bFun <- .getBfun(gridObj)
 
-    allReturnsOneRes <- lapply(1:Npoints(gridList[[index]]$midpoints), FUN = function(midpointIndex) {
-      newVfun <- .setupVrecursionStep(spacetimegridObj = gridList[[index-1]], vFun = currentVfun, bFun = currentBfun, Kmatrix = currentKmat)
-      knotsInRegion <- .getPointsInRegion(gridList[[index]], gridList[[index]]$midpoints[midpointIndex], knotsList[[index]])
-      newBfun <- function(spaceTime1) {
-        .getBvec(spaceTimeCoord = spaceTime1, knotPositions = knotsInRegion, vFun = newVfun)
-      }
-      newKmat <- .getKmat(knotPositions = knotsInRegion, vFun = newVfun)
-
-      returnValues <- list(vFun = newVfun, K = newKmat, bFun = newBfun, centralPoint = gridList[[index]]$midpoints[midpointIndex])
-      return(returnValues)
-    })
-    currentReturns[[index+1]] <- allReturnsOneRes
-  })
+  if (!is.null(gridObj$childBricks)) {
+    lapply(gridObj$childBricks, FUN = .genBrickFcts)
+  }
+  invisible()
 }
 
-.setupVrecursionStep <- function(spacetimegridObj, vFun, bFun, Kmatrix) {
-  function(spaceTime1, spaceTime2) {
-    if(!.sameGridSection(spaceTime1, spaceTime2, spacetimegridObj)) {
+.genBrickFcts <- function(brickObj) {
+  .updateVfun(brickObj)
+  .getBfun(brickObj)
+  .getKmat(brickObj)
+  if (!is.null(brickObj$childBricks)) {
+    lapply(brickObj$childBricks, .genBrickFcts)
+  }
+  invisible()
+}
+
+.updateVfun <- function(brickObj) {
+  brickObj$vFun <- function(spacetime1, spacetime2) {
+    if(!.sameGridSection(spacetime1, spacetime2, parent.env(brickObj))) {
       return(0)
     }
-    vFun(spaceTime1, spaceTime2) - t(bFun(spaceTime1))%*%Kmatrix%*%bFun(spaceTime2)
+    parent.env(brickObj)$vFun(spacetime1, spacetime2) - t(parent.env(brickObj)$bFun(spacetime1))%*%parent.env(brickObj)$K%*%parent.env(brickObj)$bFun(spacetime2)
+  }
+  invisible()
+}
+
+.getBfun <- function(brickObj) {
+  brickObj$bFun <- function(spacetimeCoord) {
+    if (!.coorWithinBrick(spacetimeCoord, brickObj)) {
+      return(rep(0, Npoints(brickObj$knotPositions)))
+    }
+    sapply(1:Npoints(brickObj$knotPositions), FUN = function(knotIndex) {
+      brickObj$vFun(spacetimeCoord, brickObj$knotPositions[knotIndex])
+    })
   }
 }
 
-.initVfun <- function(knots, covFct) {
-  function(spaceTime1, spaceTime2) {
-    bFun <- function(spaceTime) {
-      covFct(spaceTime, knots)
-    }
-    Kfun <- function()
-    {
-      Matrix::chol2inv(Matrix::chol(covFct(knots, knots)))
-    }
-    list(v = covFct(spaceTime1, spaceTime2), K = Kfun(), bValues = list(bFun(spaceTime1), bFun(spaceTime2)))
-  }
-}
-
-.getBvec <- function(spaceTimeCoord, knotPositions, vFun) {
-  sapply(1:Npoints(knotPositions), FUN = function(knotIndex) {
-    vFun(spaceTimeCoord, knotPositions[knotIndex])
-  })
-}
-
-.getKmat <- function(knotPositions, vFun) {
-  KmatrixFinal <- matrix(0, nrow(knotPositions), nrow(knotPositions))
+.getKmat <- function(brickObj) {
+  numKnots <- Npoints(brickObj$knotPositions)
+  KmatrixFinal <- matrix(0, numKnots, numKnots)
   # Handling the off diagonal elements
-  mapply(rowIndex = row(diag(nrow(knotPositions)))[lower.tri(diag(nrow(knotPositions)))], colIndex = col(diag(nrow(knotPositions)))[lower.tri(diag(nrow(knotPositions)))], FUN =function(rowIndex, colIndex) {
-    KmatrixFinal[rowIndex, colIndex] <<- vFun(knotPositions[rowIndex], knotPositions[colIndex])
-    invisible(NULL)
+  diagMat <- diag(numKnots)
+  mapply(rowIndex = row(diagMat)[lower.tri(diagMat)], colIndex = col(diagMat)[lower.tri(diagMat)], FUN = function(rowIndex, colIndex) {
+    KmatrixFinal[rowIndex, colIndex] <<- brickObj$vFun(brickObj$knotPositions[rowIndex], brickObj$knotPositions[colIndex])
+    invisible()
   }, SIMPLIFY = FALSE)
   KmatrixFinal <- KmatrixFinal + t(KmatrixFinal)
-  diag(KmatrixFinal) <- sapply(1:nrow(knotPositions), FUN = function(x) {
-    vFun(knotPositions[x], knotPositions[x])
-  })
-  KmatrixFinal
+  diag(KmatrixFinal) <- sapply(1:numKnots, FUN = function(x) brickObj$vFun(brickObj$knotPositions[x], brickObj$knotPositions[x]))
+  brickObj$K <- KmatrixFinal
+  invisible()
 }
 
-.getPointsInRegion <- function(sptGrid, spacetimePoint, observations) {
-  lapply(c("longitude", "latitude", "time"), FUN = function(dimensionName) {
-    extendedBreaks <- c(sptGrid[[dimensionName]]$extent[[1]], sptGrid[[dimensionName]]$breaks, sptGrid[[dimensionName]]$extent[[2]])
-    upperPos <- match(TRUE, extendedBreaks > .getSpacetimeDim(spacetimePoint, dimension = dimensionName))
-    coorRange <- c(extendedBreaks[upperPos - 1], extendedBreaks[upperPos])
-    observations <<- observations[(.getSpacetimeDim(observations, dimension =  dimensionName) >= coorRange[[1]]) & (.getSpacetimeDim(observations, dimension =  dimensionName) < coorRange[[2]])]
-    invisible(NULL)
-  })
-  observations
-}
-
-spacetimeListConvertToPoints <- function(valuesList, timeValues=NULL, regular = FALSE) {
+spacetimeListConvertToPoints <- function(valuesList, timeValues = NULL, regular = FALSE) {
   if (regular) {
     if (class(valuesList[[1]]) == "SpatialPoints") {
       return(spacetime::STF(sp = valuesList[[1]], time = timeValues))
