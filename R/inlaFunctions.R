@@ -154,3 +154,66 @@ Npoints <- function(spacetimeObj) {
   return(index(spacetimeObj))
 }
 
+.computeWmats <- function(covFct, gridObj) {
+  gridObj$K <- Matrix::chol2inv(Matrix::chol(covFct(gridObj$knotPositions, gridObj$knotPositions)))
+  gridObj$W <- list(gridObj$K)
+  if (!is.null(gridObj$childBrick)) {
+    lapply(gridObj$childBricks, .computeWchildBrick, covFct = covFct)
+  }
+  invisible()
+}
+
+.computeWchildBrick <- function(brickObj, covFct) {
+  brickObj$W <- vector("list", brickObj$depth+1) # Depth is from 0 to M.
+  brickPointers <- .getAllParentAddresses(brickObj) # brickPointers includes the address of brickObj from depth 0 at position 1 to depth brickObj$depth at position brickObj$depth+1.
+  brickObj$W[[1]] <- covFct(brickObj$knotPositions, brickPointers[[1]]$knotPositions)
+
+  for (l in (seq_along(brickPointers))) {
+    brickPointer <- brickPointers[[l+1]]
+    covEvalation <- covFct(brickObj$knotPositions, brickPointer$knotPositions)
+    headWlist <- brickObj$W[1:l]
+    Kmatrices <- lapply(brickPointers[1:l], function(aPointer) aPointer$K)
+    tailWlist <- lapply(brickPointer$W[1:l], t)
+    secondTerm <- Reduce("+", mapply(x = headWlist, y = Kmatrices, z = tailWlist, FUN = function(x,y,z) x%*%y%*%z, SIMPLIFY = FALSE))
+    brickObj$W[[l+1]] <- covEvalation - secondTerm
+  }
+  brickObj$K <-  Matrix::chol2inv(Matrix::chol(tail(brickObj$W, n = 1)[[1]]))
+  if (!is.null(brickObj$childBricks)) {
+    lapply(brickObj$childBricks, .computeWchildBrick, covFct = covFct)
+  }
+  invisible()
+}
+
+.setDUtips <- function(gridObj) {
+  allTips <- .tipAddresses(gridObj)
+  transferW <- function(tipBrick) {
+    SigmaMat <- tail(tipBrick$W, n = 1)[[1]]
+    tipBrick$SigmaMat <- SigmaMat
+    tipBrick$d <- log(det(SigmaMat))
+    tipBrick$u <- t(tipBrick$observations)%*%Matrix::chol2inv(Matrix::chol(SigmaMat))%*%tipBrick$observations
+    tipBrick$KtildeInverse <- tipBrick$Kinverse + t(tipBrick$bMat)%*%tipBrick$Vinverse%*%tipBrick$bMat
+    invisible()
+  }
+  lapply(allTips, transferW)
+  invisible()
+}
+
+.setDUinside <- function(brickObj) {
+  if (!is.null(gridObj$childBricks)) {
+    if (is.null(gridObj$childBricks[[1]]$SigmaMat)) {
+      lapply(gridObj$childBricks, .setDUinside)
+    }
+    dSecondPart <- -log(det(brickObj$Kinverse)) + sapply(brickObj$childBricks, function(x) x$d)
+    dFirstPart <- log(det(brickObj$KtildeInverse))
+    brickObj$d <- dFirstPart + dSecondPart
+    uSecondPart <- sapply(brickObj$childBricks, function(x) x$u)
+    # uFirstPart <- t(brickObj$omega)%*%brickObj$Ktilde%*%brickObj$omega
+    uFirstPart <- .colSums(brickObj$omega * (brickObj$Ktilde %*% brickObj$omega), m = length(brickObj$omega), n = 1) # A faster way to compute quadratic forms.
+    gridObj$SigmaMat <- gridObj$bMat%*%gridObj$K%*%t(gridObj$bMat) + gridObj$V
+  }
+  invisible()
+}
+
+.getKtildeInverse <- function(brickObj) {
+  brickObj$Kinverse +
+}

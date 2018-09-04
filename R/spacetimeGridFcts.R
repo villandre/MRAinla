@@ -190,11 +190,17 @@ getLayer <- function(spacetimeGridObj, m = 0) {
 .SpacetimebrickConstructor <- function(lonExtent, latExtent, timeExtent, parentBrick = NULL, observations = NULL) {
   if (is.null(parentBrick)) {
     parentBrick <- emptyenv()
+    currentDepth <- 0
   }
+  else {
+    currentDepth <- parentBrick$depth + 1
+  }
+
   if (!is.null(observations)) {
     observationsInRegion <- subset(observations, lonExtent = lonExtent, latExtent = latExtent, timeExtent = timeExtent)
   }
   brickEnvironment <- new.env(parent = parentBrick)
+  brickEnvironment$depth <- currentDepth
   brickEnvironment$dimensions <- list(longitude = lonExtent, latitude = latExtent, time = timeExtent)
   brickEnvironment$observations <- observationsInRegion
   brickEnvironment$knotPositions <- NULL
@@ -202,6 +208,7 @@ getLayer <- function(spacetimeGridObj, m = 0) {
   brickEnvironment$vFun <- NULL
   brickEnvironment$bFun <- NULL
   brickEnvironment$K <- NULL
+  brickEnvironment$Wlist <- NULL
 
   if (!identical(parentBrick, emptyenv())) {
     childAddresses <- parentBrick$childBricks
@@ -326,4 +333,24 @@ subset.STI <- function(x, latExtent, lonExtent, timeExtent) {
   distBetweenPoints <- perimeter/(numPoints+1)
   distances <- seq(from = distBetweenPoints/2, to = perimeter-distBetweenPoints/2, length.out = numPoints)
   SpatialPoints(t(sapply(distances, returnCoord, upperLeftCoor = upperLeftCoor, width = width, height = height)))
+}
+
+.getAllParentAddresses <- function(brickObj) {
+
+  brickObjList <- vector("list", length = brickObj$depth + 1)
+  brickObjList[[brickObj$depth + 1]] <- brickObj
+
+  if (!(brickObj$depth == 0)) {
+    brickObjList <- .recurseParent(parent.env(brickObj, brickObjList))
+  }
+  brickObjList
+}
+
+.recurseParent <- function(currentBrick, brickObjList) {
+
+  brickObjList[[currentBrick$depth + 1]] <- currentBrick
+  if (!(currentBrick$depth == 0)) {
+    brickObjList <- .recurseParent(parent.env(currentBrick, brickObjList))
+  }
+  brickObjList
 }
