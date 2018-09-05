@@ -211,7 +211,7 @@ getLayer <- function(spacetimeGridObj, m = 0) {
   brickEnvironment$bFun <- NULL
   brickEnvironment$K <- NULL
   brickEnvironment$Kinverse <- NULL
-  brickEnvironment$Wlist <- NULL
+  brickEnvironment$W <- NULL
 
   if (!identical(parentBrick, emptyenv())) {
     childAddresses <- parentBrick$childBricks
@@ -342,7 +342,7 @@ subset.STI <- function(x, latExtent, lonExtent, timeExtent) {
   brickObjList[[brickObj$depth + 1]] <- brickObj
 
   if (!(brickObj$depth == 0)) {
-    brickObjList <- .recurseParent(parent.env(brickObj, brickObjList))
+    brickObjList <- .recurseParent(parent.env(brickObj), brickObjList)
   }
   brickObjList
 }
@@ -351,7 +351,7 @@ subset.STI <- function(x, latExtent, lonExtent, timeExtent) {
 
   brickObjList[[currentBrick$depth + 1]] <- currentBrick
   if (!(currentBrick$depth == 0)) {
-    brickObjList <- .recurseParent(parent.env(currentBrick, brickObjList))
+    brickObjList <- .recurseParent(parent.env(currentBrick), brickObjList)
   }
   brickObjList
 }

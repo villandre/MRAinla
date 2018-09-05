@@ -161,7 +161,7 @@ Npoints <- function(spacetimeObj) {
   gridObj$Kinverse <- covFct(gridObj$knotPositions, gridObj$knotPositions)
   gridObj$K <- Matrix::chol2inv(Matrix::chol(gridObj$Kinverse))
   gridObj$W <- list(gridObj$K)
-  if (!is.null(gridObj$childBrick)) {
+  if (!is.null(gridObj$childBricks)) {
     lapply(gridObj$childBricks, .computeWchildBrick, covFct = covFct)
   }
   invisible()
@@ -171,18 +171,25 @@ Npoints <- function(spacetimeObj) {
   brickObj$W <- vector("list", brickObj$depth+1) # Depth is from 0 to M.
   brickPointers <- .getAllParentAddresses(brickObj) # brickPointers includes the address of brickObj from depth 0 at position 1 to depth brickObj$depth at position brickObj$depth+1.
   brickObj$W[[1]] <- covFct(brickObj$knotPositions, brickPointers[[1]]$knotPositions)
+  m <- brickObj$depth
 
-  for (l in (seq_along(brickPointers))) {
+  for (l in 1:m) { # First element in brickPointers is the top brick, i.e. at resolution 0.
     brickPointer <- brickPointers[[l+1]]
-    covEvalation <- covFct(brickObj$knotPositions, brickPointer$knotPositions)
-    headWlist <- brickObj$W[1:l]
-    Kmatrices <- lapply(brickPointers[1:l], function(aPointer) aPointer$K)
-    tailWlist <- lapply(brickPointer$W[1:l], t)
+    covEvaluation <- covFct(brickObj$knotPositions, brickPointer$knotPositions)
+    # NOTE: THE MATRIX TRANSPOSITION ORDER IS NOT THE SAME AS IN THE PAPER, BUT IS NECESSARY TO ENSURE THAT MATRICES IN secondTerm ARE CONFORMABLE.
+    headWlist <- lapply(brickObj$W[(0:l-1)+1], t)
+    Kmatrices <- lapply(brickPointers[(0:l-1)+1], function(aPointer) aPointer$K)
+    tailWlist <- brickPointer$W[(0:l-1)+1]
+
     secondTerm <- Reduce("+", mapply(x = headWlist, y = Kmatrices, z = tailWlist, FUN = function(x,y,z) x%*%y%*%z, SIMPLIFY = FALSE))
-    brickObj$W[[l+1]] <- covEvalation - secondTerm
+    brickObj$W[[l+1]] <- covEvaluation - secondTerm
   }
   brickObj$Kinverse <- tail(brickObj$W, n = 1)[[1]]
-  brickObj$K <-  Matrix::chol2inv(Matrix::chol(brickObj$Kinverse))
+  Kmatrix <- tryCatch(expr = Matrix::chol2inv(Matrix::chol(brickObj$Kinverse)), error = function(e) e)
+  if (!("matrix" %in% class(Kmatrix))) { # We couldn't invert the matrix with the Cholesky decomposition...
+    Kmatrix <- solve(brickObj$Kinverse) # A slower solution...
+  }
+  brickObj$K <- Kmatrix
   if (!is.null(brickObj$childBricks)) {
     lapply(brickObj$childBricks, .computeWchildBrick, covFct = covFct)
   }
