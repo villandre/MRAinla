@@ -45,6 +45,7 @@
     .SpacetimebrickConstructor(lonExtent = allRanges$longitude[combination$longitude,], latExtent = allRanges$latitude[combination$latitude,], timeExtent = as.POSIXct(allRanges$time[combination$time,], origin = '1970-01-01'), parentBrick = parentBrick, observations = parentBrick$observations)
   })
   topAddress <- .getTopEnvirAddress(parentBrick)
+  topAddress$M <- 1
   class(topAddress) <- "Spacetimegrid"
   topAddress
 }
@@ -114,6 +115,7 @@ plot.Spacetimegrid <- function(x, observationsAsPoints, knotsAsPoints) {
 #' @export
 
 .addLayer <- function(gridObj, latBreaks, lonBreaks, timeBreaks) {
+  gridObj$M <- gridObj$M+1
   newBreaks <- list(longitude = sort(c(tail(gridObj$breaks, n = 1)[[1]]$longitude, lonBreaks)), latitude = sort(c(tail(gridObj$breaks, n = 1)[[1]]$latitude, latBreaks)), time = sort(c(tail(gridObj$breaks, n = 1)[[1]]$time, timeBreaks)))
   gridObj$breaks <- c(gridObj$breaks, list(newBreaks))
   tipAddresses <- .tipAddresses(gridObj)
@@ -208,6 +210,7 @@ getLayer <- function(spacetimeGridObj, m = 0) {
   brickEnvironment$vFun <- NULL
   brickEnvironment$bFun <- NULL
   brickEnvironment$K <- NULL
+  brickEnvironment$Kinverse <- NULL
   brickEnvironment$Wlist <- NULL
 
   if (!identical(parentBrick, emptyenv())) {
@@ -218,8 +221,6 @@ getLayer <- function(spacetimeGridObj, m = 0) {
   class(brickEnvironment) <- "Spacetimebrick"
   brickEnvironment
 }
-
-
 
 .getTopEnvirAddress <- function(nestedEnvir) {
   parentEnvir <- parent.env(nestedEnvir)

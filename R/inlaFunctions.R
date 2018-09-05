@@ -54,7 +54,10 @@ setupGrid <- function(lonNewBreaksList, latNewBreaksList, timeNewBreaksList, obs
     .addLayer(gridForMRA, latBreaks = latNewBreaksList[[resolutionIndex]], lonBreaks = lonNewBreaksList[[resolutionIndex]], timeBreaks = timeNewBreaksList[[resolutionIndex]])
   })
   .addKnots(gridForMRA, r = r, ...)
-  .getKmatsAndLocalFunctions(gridForMRA, covFct)
+  .computeWmats(gridObj = gridForMRA, covFct = covFct)
+  .setBtips(gridForMRA)
+  .setAtildeTips(gridForMRA)
+  .recurseA(gridForMRA)
   gridForMRA
 }
 
@@ -155,7 +158,8 @@ Npoints <- function(spacetimeObj) {
 }
 
 .computeWmats <- function(covFct, gridObj) {
-  gridObj$K <- Matrix::chol2inv(Matrix::chol(covFct(gridObj$knotPositions, gridObj$knotPositions)))
+  gridObj$Kinverse <- covFct(gridObj$knotPositions, gridObj$knotPositions)
+  gridObj$K <- Matrix::chol2inv(Matrix::chol(gridObj$Kinverse))
   gridObj$W <- list(gridObj$K)
   if (!is.null(gridObj$childBrick)) {
     lapply(gridObj$childBricks, .computeWchildBrick, covFct = covFct)
@@ -177,7 +181,8 @@ Npoints <- function(spacetimeObj) {
     secondTerm <- Reduce("+", mapply(x = headWlist, y = Kmatrices, z = tailWlist, FUN = function(x,y,z) x%*%y%*%z, SIMPLIFY = FALSE))
     brickObj$W[[l+1]] <- covEvalation - secondTerm
   }
-  brickObj$K <-  Matrix::chol2inv(Matrix::chol(tail(brickObj$W, n = 1)[[1]]))
+  brickObj$Kinverse <- tail(brickObj$W, n = 1)[[1]]
+  brickObj$K <-  Matrix::chol2inv(Matrix::chol(brickObj$Kinverse))
   if (!is.null(brickObj$childBricks)) {
     lapply(brickObj$childBricks, .computeWchildBrick, covFct = covFct)
   }
@@ -215,5 +220,38 @@ Npoints <- function(spacetimeObj) {
 }
 
 .getKtildeInverse <- function(brickObj) {
-  brickObj$Kinverse +
+  brickObj$Kinverse
+}
+
+.setBtips <- function(gridObj) {
+  allTips <- .tipAddresses(gridObj)
+  lapply(allTips, FUN = function(x) {
+    x$BmatList <- x$Wmat[1:(x$depth+1)]
+    invisible()
+  }) # The last element in Bmat will be NULL, since B^M_{j_1, ..., j_M} is undefined,
+  invisible()
+}
+
+.setAtildeTips <- function(gridObj) {
+  allTips <- .tipAddresses(gridObj)
+
+  lapply(allTips, FUN = function(x) {
+    x$Atildemm <- t(x$BmatList[[gridObj$M]]) %*% x$K %*% x$BmatList[[gridObj$M]] ## BmatList has length M+1, but element M+1 is NULL. gridDepth is equal to M, since there's a resolution 0. currentDepth in this situation is the second to last element, which was defined when .setBtips was called.
+    invisible()
+  }) # The last element in Bmat will be NULL, since B^M_{j_1, ..., j_M} is undefined,
+  invisible()
+}
+.recurseA <- function(brickObj) {
+  if (is.null(brickObj$childBricks)) {
+    return(NULL)
+  }
+
+  if (is.null(brickObj$childBricks[[1]]$Atildemm)) {
+    lapply(brickObj$childBricks, .recurseA)
+  }
+  AtildeMatrices <- lapply(brickObj$childBricks, function(x) x$Atildemm)
+  brickObj$Amm <- Reduce("+", AtildeMatrices)
+  brickObj$KtildeInverse <- brickObj$Kinverse + brickObj$Amm
+  brickObj$Atildemm <- brickObj$Amm - brickObj$Amm %*% brickObj$Ktilde %*% brickObj$Amm
+  invisible()
 }
