@@ -56,6 +56,7 @@ setupGrid <- function(lonNewBreaksList, latNewBreaksList, timeNewBreaksList, obs
   .addKnots(gridForMRA, r = r, ...)
   .computeWmats(gridObj = gridForMRA, covFct = covFct)
   .setBtips(gridForMRA)
+  .setSigmaTips(gridForMRA)
   .setAtildeTips(gridForMRA)
   .recurseA(gridForMRA)
   gridForMRA
@@ -242,11 +243,20 @@ Npoints <- function(spacetimeObj) {
   invisible()
 }
 
+.setSigmaTips <- function(gridObj) {
+  allTips <- .tipAddresses(gridObj)
+  lapply(allTips, FUN = function(x) {
+    x$Sigma <- x$WmatList[[gridObj$M+1]]
+    invisible()
+  }) # The last element in Bmat will be NULL, since B^M_{j_1, ..., j_M} is undefined,
+  invisible()
+}
+
 .setAtildeTips <- function(gridObj) {
   allTips <- .tipAddresses(gridObj)
-
   lapply(allTips, FUN = function(x) {
-    x$Atildemm <- t(x$BmatList[[gridObj$M]]) %*% x$K %*% x$BmatList[[gridObj$M]] ## BmatList has length M+1, but element M+1 is NULL. gridDepth is equal to M, since there's a resolution 0. currentDepth in this situation is the second to last element, which was defined when .setBtips was called.
+    inverseSigma <- Matrix::chol2inv(Matrix::chol(x$Sigma))
+    x$Atildemm <- t(x$BmatList[[gridObj$M]]) %*% inverseSigma %*% x$BmatList[[gridObj$M]] ## BmatList has length M+1, but element M+1 is NULL. gridDepth is equal to M, since there's a resolution 0. Element gridObj$M in this situation is the second to last element, which was defined when .setBtips was called.
     invisible()
   }) # The last element in Bmat will be NULL, since B^M_{j_1, ..., j_M} is undefined,
   invisible()
