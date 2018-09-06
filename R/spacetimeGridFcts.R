@@ -22,10 +22,15 @@
 
 .SpacetimegridConstructor <- function(lonBreaks, latBreaks, timeBreaks, observations = NULL, parentBrick = NULL) {
   breakList <- list(longitude = lonBreaks, latitude = latBreaks, time = timeBreaks)
+
+  gridCreationFlag <- FALSE
+
   if (is.null(parentBrick)) { # Create a trivial brick which all generated bricks will refer to.
+    gridCreationFlag <- TRUE
     parentBrick <- .SpacetimebrickConstructor(lonExtent = range(lonBreaks), latExtent = range(latBreaks), timeExtent = range(timeBreaks), observations = observations)
     parentBrick$breaks <- list(breakList)
   }
+
   correctedBreakList <- lapply(c("longitude", "latitude", "time"), FUN = function(dimName) {
     extent <- parentBrick$dimensions[[dimName]]
     proposedBreaks <- breakList[[dimName]]
@@ -44,10 +49,13 @@
     combination <- combinations[combIndex, , drop = FALSE]
     .SpacetimebrickConstructor(lonExtent = allRanges$longitude[combination$longitude,], latExtent = allRanges$latitude[combination$latitude,], timeExtent = as.POSIXct(allRanges$time[combination$time,], origin = '1970-01-01'), parentBrick = parentBrick, observations = parentBrick$observations)
   })
-  topAddress <- .getTopEnvirAddress(parentBrick)
-  topAddress$M <- 1
-  class(topAddress) <- "Spacetimegrid"
-  topAddress
+
+  if (gridCreationFlag) {
+    parentBrick$M <- 1
+    class(parentBrick) <- "Spacetimegrid"
+    return(parentBrick)
+  }
+  invisible()
 }
 
 #' A custom print function for the Spacetimegrid class.
@@ -243,7 +251,7 @@ subset.STI <- function(x, latExtent, lonExtent, timeExtent) {
 
 .tipAddresses <- function(spacetimebrickObj) {
   if (!is.null(spacetimebrickObj$childBricks)) {
-    return(lapply(spacetimebrickObj$childBricks, FUN = .tipAddresses))
+    return(unlist(lapply(spacetimebrickObj$childBricks, FUN = .tipAddresses)))
   }
   spacetimebrickObj
 }

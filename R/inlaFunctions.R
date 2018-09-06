@@ -177,15 +177,14 @@ Npoints <- function(spacetimeObj) {
   for (l in 1:m) { # First element in brickPointers is the top brick, i.e. at resolution 0.
     brickPointer <- brickPointers[[l+1]]
     covEvaluation <- covFct(brickObj$knotPositions, brickPointer$knotPositions)
-    # NOTE: THE MATRIX TRANSPOSITION ORDER IS NOT THE SAME AS IN THE PAPER, BUT IS NECESSARY TO ENSURE THAT MATRICES IN secondTerm ARE CONFORMABLE.
-    headWlist <- lapply(brickObj$WmatList[(0:l-1)+1], t)
+    headWlist <- brickObj$WmatList[(0:l-1)+1]
     Kmatrices <- lapply(brickPointers[(0:l-1)+1], function(aPointer) aPointer$K)
-    tailWlist <- brickPointer$WmatList[(0:l-1)+1]
+    tailWlist <- lapply(brickPointer$WmatList[(0:l-1)+1], t)
 
     secondTerm <- Reduce("+", mapply(x = headWlist, y = Kmatrices, z = tailWlist, FUN = function(x,y,z) x%*%y%*%z, SIMPLIFY = FALSE))
     brickObj$WmatList[[l+1]] <- covEvaluation - secondTerm
   }
-  if (brickObj$depth < .getTopEnvirAddress()$M) {
+  if (brickObj$depth < .getTopEnvirAddress(brickObj)$M) {
     brickObj$Kinverse <- tail(brickObj$WmatList, n = 1)[[1]]
     brickObj$K <- Matrix::chol2inv(Matrix::chol(brickObj$Kinverse))
     #   Kmatrix <- tryCatch(expr = Matrix::chol2inv(Matrix::chol(brickObj$Kinverse)), error = function(e) e)
@@ -254,11 +253,16 @@ Npoints <- function(spacetimeObj) {
 
 .setAtildeTips <- function(gridObj) {
   allTips <- .tipAddresses(gridObj)
-  lapply(allTips, FUN = function(x) {
-    inverseSigma <- Matrix::chol2inv(Matrix::chol(x$Sigma))
-    x$Atildemm <- t(x$BmatList[[gridObj$M]]) %*% inverseSigma %*% x$BmatList[[gridObj$M]] ## BmatList has length M+1, but element M+1 is NULL. gridDepth is equal to M, since there's a resolution 0. Element gridObj$M in this situation is the second to last element, which was defined when .setBtips was called.
+  modifyTip <- function(x) {
+    inverseSigma <- tryCatch(expr = Matrix::chol2inv(Matrix::chol(x$Sigma)), error = function(e) e)
+    if (!("matrix" %in% class(inverseSigma))) { # Why can we have non-positive-definite matrices? What does it mean? Is it a problem?
+      inverseSigma <- solve(x$Sigma)
+    }
+    x$Atilde_mminus1_mminus1 <- t(x$BmatList[[gridObj$M]]) %*% inverseSigma %*% x$BmatList[[gridObj$M]] ## BmatList has length M+1, but element M+1 is NULL. gridDepth is equal to M, since there's a resolution 0. Element gridObj$M in this situation is the second to last element, which was defined when .setBtips was called.
+    x$Atilde_mminus2_mminus2 <- t(x$BmatList[[gridObj$M-1]]) %*% inverseSigma %*% x$BmatList[[gridObj$M-1]]
     invisible()
-  }) # The last element in Bmat will be NULL, since B^M_{j_1, ..., j_M} is undefined,
+  }
+  lapply(allTips, FUN = modifyTip) # The last element in Bmat will be NULL, since B^M_{j_1, ..., j_M} is undefined,
   invisible()
 }
 .recurseA <- function(brickObj) {
@@ -269,9 +273,12 @@ Npoints <- function(spacetimeObj) {
   if (is.null(brickObj$childBricks[[1]]$Atildemm)) {
     lapply(brickObj$childBricks, .recurseA)
   }
-  AtildeMatrices <- lapply(brickObj$childBricks, function(x) x$Atildemm)
-  brickObj$Amm <- Reduce("+", AtildeMatrices)
+  AtildeMatrices <- lapply(brickObj$childBricks, function(x) x$Atilde_mminus2_mminus2)
+  firstPart <- Reduce("+", AtildeMatrices)
+  secondPart <- xxx
+
   brickObj$KtildeInverse <- brickObj$Kinverse + brickObj$Amm
-  brickObj$Atildemm <- brickObj$Amm - brickObj$Amm %*% brickObj$Ktilde %*% brickObj$Amm
+  brickObj$Ktilde <- solve(brickObj$KtildeInverse)
+  brickObj$Atilde_mminus1_mminus1 <- brickObj$A_mminus1_mminus1  - brickObj$A_mminus1_m %*% brickObj$Ktilde %*% brickObj$A_m_mminus1
   invisible()
 }
