@@ -157,10 +157,10 @@ Npoints <- function(spacetimeObj) {
   return(index(spacetimeObj))
 }
 
-.computeWmats <- function(covFct, gridObj) {
+.computeWmats <- function(gridObj, covFct) {
   gridObj$Kinverse <- covFct(gridObj$knotPositions, gridObj$knotPositions)
   gridObj$K <- Matrix::chol2inv(Matrix::chol(gridObj$Kinverse))
-  gridObj$W <- list(gridObj$K)
+  gridObj$WmatList <- list(gridObj$K)
   if (!is.null(gridObj$childBricks)) {
     lapply(gridObj$childBricks, .computeWchildBrick, covFct = covFct)
   }
@@ -168,72 +168,75 @@ Npoints <- function(spacetimeObj) {
 }
 
 .computeWchildBrick <- function(brickObj, covFct) {
-  brickObj$W <- vector("list", brickObj$depth+1) # Depth is from 0 to M.
-  brickPointers <- .getAllParentAddresses(brickObj) # brickPointers includes the address of brickObj from depth 0 at position 1 to depth brickObj$depth at position brickObj$depth+1.
-  brickObj$W[[1]] <- covFct(brickObj$knotPositions, brickPointers[[1]]$knotPositions)
+  brickObj$WmatList <- vector("list", brickObj$depth+1) # Depth is from 0 to M.
+  brickPointers <- .getAllParentAddresses(brickObj) # brickPointers includes the address of bricks from depth 0 (position 1) to depth brickObj$depth (position brickObj$depth+1).
+  brickObj$WmatList[[1]] <- covFct(brickObj$knotPositions, brickPointers[[1]]$knotPositions)
   m <- brickObj$depth
 
   for (l in 1:m) { # First element in brickPointers is the top brick, i.e. at resolution 0.
     brickPointer <- brickPointers[[l+1]]
     covEvaluation <- covFct(brickObj$knotPositions, brickPointer$knotPositions)
     # NOTE: THE MATRIX TRANSPOSITION ORDER IS NOT THE SAME AS IN THE PAPER, BUT IS NECESSARY TO ENSURE THAT MATRICES IN secondTerm ARE CONFORMABLE.
-    headWlist <- lapply(brickObj$W[(0:l-1)+1], t)
+    headWlist <- lapply(brickObj$WmatList[(0:l-1)+1], t)
     Kmatrices <- lapply(brickPointers[(0:l-1)+1], function(aPointer) aPointer$K)
-    tailWlist <- brickPointer$W[(0:l-1)+1]
+    tailWlist <- brickPointer$WmatList[(0:l-1)+1]
 
     secondTerm <- Reduce("+", mapply(x = headWlist, y = Kmatrices, z = tailWlist, FUN = function(x,y,z) x%*%y%*%z, SIMPLIFY = FALSE))
-    brickObj$W[[l+1]] <- covEvaluation - secondTerm
+    brickObj$WmatList[[l+1]] <- covEvaluation - secondTerm
   }
-  brickObj$Kinverse <- tail(brickObj$W, n = 1)[[1]]
-  Kmatrix <- tryCatch(expr = Matrix::chol2inv(Matrix::chol(brickObj$Kinverse)), error = function(e) e)
-  if (!("matrix" %in% class(Kmatrix))) { # We couldn't invert the matrix with the Cholesky decomposition...
-    Kmatrix <- solve(brickObj$Kinverse) # A slower solution...
+  if (brickObj$depth < .getTopEnvirAddress()$M) {
+    brickObj$Kinverse <- tail(brickObj$WmatList, n = 1)[[1]]
+    brickObj$K <- Matrix::chol2inv(Matrix::chol(brickObj$Kinverse))
+    #   Kmatrix <- tryCatch(expr = Matrix::chol2inv(Matrix::chol(brickObj$Kinverse)), error = function(e) e)
+    # if (!("matrix" %in% class(Kmatrix))) { # We couldn't invert the matrix with the Cholesky decomposition...
+    #   Kmatrix <- solve(brickObj$Kinverse) # A slower solution...
+    # }
+    # brickObj$K <- Kmatrix
   }
-  brickObj$K <- Kmatrix
   if (!is.null(brickObj$childBricks)) {
     lapply(brickObj$childBricks, .computeWchildBrick, covFct = covFct)
   }
   invisible()
 }
 
-.setDUtips <- function(gridObj) {
-  allTips <- .tipAddresses(gridObj)
-  transferW <- function(tipBrick) {
-    SigmaMat <- tail(tipBrick$W, n = 1)[[1]]
-    tipBrick$SigmaMat <- SigmaMat
-    tipBrick$d <- log(det(SigmaMat))
-    tipBrick$u <- t(tipBrick$observations)%*%Matrix::chol2inv(Matrix::chol(SigmaMat))%*%tipBrick$observations
-    tipBrick$KtildeInverse <- tipBrick$Kinverse + t(tipBrick$bMat)%*%tipBrick$Vinverse%*%tipBrick$bMat
-    invisible()
-  }
-  lapply(allTips, transferW)
-  invisible()
-}
+# .setDUtips <- function(gridObj) {
+#   allTips <- .tipAddresses(gridObj)
+#   transferW <- function(tipBrick) {
+#     SigmaMat <- tail(tipBrick$WmatList, n = 1)[[1]]
+#     tipBrick$SigmaMat <- SigmaMat
+#     tipBrick$d <- log(det(SigmaMat))
+#     tipBrick$u <- t(tipBrick$observations)%*%Matrix::chol2inv(Matrix::chol(SigmaMat))%*%tipBrick$observations
+#     tipBrick$KtildeInverse <- tipBrick$Kinverse + t(tipBrick$bMat)%*%tipBrick$Vinverse%*%tipBrick$bMat
+#     invisible()
+#   }
+#   lapply(allTips, transferW)
+#   invisible()
+# }
+#
+# .setDUinside <- function(brickObj) {
+#   if (!is.null(gridObj$childBricks)) {
+#     if (is.null(gridObj$childBricks[[1]]$SigmaMat)) {
+#       lapply(gridObj$childBricks, .setDUinside)
+#     }
+#     dSecondPart <- -log(det(brickObj$Kinverse)) + sapply(brickObj$childBricks, function(x) x$d)
+#     dFirstPart <- log(det(brickObj$KtildeInverse))
+#     brickObj$d <- dFirstPart + dSecondPart
+#     uSecondPart <- sapply(brickObj$childBricks, function(x) x$u)
+#     # uFirstPart <- t(brickObj$omega)%*%brickObj$Ktilde%*%brickObj$omega
+#     uFirstPart <- .colSums(brickObj$omega * (brickObj$Ktilde %*% brickObj$omega), m = length(brickObj$omega), n = 1) # A faster way to compute quadratic forms.
+#     gridObj$SigmaMat <- gridObj$bMat%*%gridObj$K%*%t(gridObj$bMat) + gridObj$V
+#   }
+#   invisible()
+# }
 
-.setDUinside <- function(brickObj) {
-  if (!is.null(gridObj$childBricks)) {
-    if (is.null(gridObj$childBricks[[1]]$SigmaMat)) {
-      lapply(gridObj$childBricks, .setDUinside)
-    }
-    dSecondPart <- -log(det(brickObj$Kinverse)) + sapply(brickObj$childBricks, function(x) x$d)
-    dFirstPart <- log(det(brickObj$KtildeInverse))
-    brickObj$d <- dFirstPart + dSecondPart
-    uSecondPart <- sapply(brickObj$childBricks, function(x) x$u)
-    # uFirstPart <- t(brickObj$omega)%*%brickObj$Ktilde%*%brickObj$omega
-    uFirstPart <- .colSums(brickObj$omega * (brickObj$Ktilde %*% brickObj$omega), m = length(brickObj$omega), n = 1) # A faster way to compute quadratic forms.
-    gridObj$SigmaMat <- gridObj$bMat%*%gridObj$K%*%t(gridObj$bMat) + gridObj$V
-  }
-  invisible()
-}
-
-.getKtildeInverse <- function(brickObj) {
-  brickObj$Kinverse
-}
+# .getKtildeInverse <- function(brickObj) {
+#   brickObj$Kinverse
+# }
 
 .setBtips <- function(gridObj) {
   allTips <- .tipAddresses(gridObj)
   lapply(allTips, FUN = function(x) {
-    x$BmatList <- x$Wmat[1:(x$depth+1)]
+    x$BmatList <- x$WmatList[1:(x$depth+1)]
     invisible()
   }) # The last element in Bmat will be NULL, since B^M_{j_1, ..., j_M} is undefined,
   invisible()
