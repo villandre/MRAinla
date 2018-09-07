@@ -253,32 +253,71 @@ Npoints <- function(spacetimeObj) {
 
 .setAtildeTips <- function(gridObj) {
   allTips <- .tipAddresses(gridObj)
+  convert <- .conv(gridObj$M)
+  m <- gridObj$M
+
   modifyTip <- function(x) {
+
     inverseSigma <- tryCatch(expr = Matrix::chol2inv(Matrix::chol(x$Sigma)), error = function(e) e)
     if (!("matrix" %in% class(inverseSigma))) { # Why can we have non-positive-definite matrices? What does it mean? Is it a problem?
       inverseSigma <- solve(x$Sigma)
     }
-    x$Atilde_mminus1_mminus1 <- t(x$BmatList[[gridObj$M]]) %*% inverseSigma %*% x$BmatList[[gridObj$M]] ## BmatList has length M+1, but element M+1 is NULL. gridDepth is equal to M, since there's a resolution 0. Element gridObj$M in this situation is the second to last element, which was defined when .setBtips was called.
-    x$Atilde_mminus2_mminus2 <- t(x$BmatList[[gridObj$M-1]]) %*% inverseSigma %*% x$BmatList[[gridObj$M-1]]
+    x$Atilde <- vector('list', x$depth+1) # First level of the hierarchy is for k in Atilde^{k,l}.
+    x$Atilde <- lapply(0:x$depth, function(k) vector('list', x$depth-k+1)) # Second level is for l in Atilde^{k,l}, same order as for k.
+    indexGrid <- expand.grid(k = 0:(m-1), l = 0:(m-1)) # We don't need A^{M,M}_{j_1, ..., j_M}
+    indexGrid <- subset(indexGrid, subset = k >= l)
+
+    for (i in 1:nrow(indexGrid)) {
+      indicesVec <- convert(indexGrid[i,"k"], indexGrid[i, "l"])
+    x$Atilde[[indicesVec[[1]]]][[indicesVec[[2]]]] <- t(x$BmatList[[indexGrid[i,"k"]+1]]) %*% inverseSigma %*% x$BmatList[[indexGrid[i,"l"]+1]] ## BmatList has length M+1, but element M+1 is NULL. gridDepth is equal to M, since there's a resolution 0. Element gridObj$M in this situation is the second to last element, which was defined when .setBtips was called.
+    }
     invisible()
   }
   lapply(allTips, FUN = modifyTip) # The last element in Bmat will be NULL, since B^M_{j_1, ..., j_M} is undefined,
   invisible()
 }
+
 .recurseA <- function(brickObj) {
   if (is.null(brickObj$childBricks)) {
     return(NULL)
   }
 
-  if (is.null(brickObj$childBricks[[1]]$Atildemm)) {
+  if (is.null(brickObj$childBricks[[1]]$Atilde)) {
     lapply(brickObj$childBricks, .recurseA)
   }
-  AtildeMatrices <- lapply(brickObj$childBricks, function(x) x$Atilde_mminus2_mminus2)
-  firstPart <- Reduce("+", AtildeMatrices)
-  secondPart <- xxx
 
-  brickObj$KtildeInverse <- brickObj$Kinverse + brickObj$Amm
+  m <- brickObj$depth
+  convert <- .conv(m)
+
+  indexGrid <- expand.grid(k = 0:m, l = 0:m)
+  indexGrid <- subset(indexGrid, subset = k >= l)
+
+  brickObj$A <- lapply(indexGrid$k, function(k) {
+    lapply(indexGrid$l, function(l) {
+      Reduce("+", lapply(brickObj$childBricks, function(x) {
+        convIndices <- .conv(x$depth)(k,l)
+        x$Atilde[[convIndices[[1]]]][[convIndices[[2]]]]
+      }))
+    })
+  })
+  indicesForA <- convert(m,m)
+  brickObj$KtildeInverse <- brickObj$Kinverse + brickObj$A[[indicesForA[[1]]]][[indicesForA[[2]]]]
   brickObj$Ktilde <- solve(brickObj$KtildeInverse)
-  brickObj$Atilde_mminus1_mminus1 <- brickObj$A_mminus1_mminus1  - brickObj$A_mminus1_m %*% brickObj$Ktilde %*% brickObj$A_m_mminus1
-  invisible()
+  brickObj$Atilde <- lapply(indexGrid$k, function(k) {
+    lapply(indexGrid$l, function(l) {
+      ### FIX INDICES WITH CONVERT ####
+
+      brickObj$A[[convert(k)]][[convert(l)]] + brickObj$A[[convert(k)]][[convert(m)]] %*% brickObj$Ktilde %*% brickObj$A[[convert(m)]][[convert(l)]]
+    })
+  })
 }
+
+# This function is used to correctly index the elements in $A and $Atilde. The goal is for the real order of the elements in memory to be transparent to the user, and for the k and l indices to be used, like in the paper.
+
+.conv <- function(depth) {
+  convert <- function(k,l) {
+    stopifnot(k >= l)
+    c(k = depth - k + 1, l = (k-l)+1)
+  }
+}
+
