@@ -292,24 +292,30 @@ Npoints <- function(spacetimeObj) {
   indexGrid <- expand.grid(k = 0:m, l = 0:m)
   indexGrid <- subset(indexGrid, subset = k >= l)
 
-  brickObj$A <- lapply(indexGrid$k, function(k) {
-    lapply(indexGrid$l, function(l) {
-      Reduce("+", lapply(brickObj$childBricks, function(x) {
-        convIndices <- .conv(x$depth)(k,l)
-        x$Atilde[[convIndices[[1]]]][[convIndices[[2]]]]
-      }))
-    })
-  })
-  indicesForA <- convert(m,m)
-  brickObj$KtildeInverse <- brickObj$Kinverse + brickObj$A[[indicesForA[[1]]]][[indicesForA[[2]]]]
-  brickObj$Ktilde <- solve(brickObj$KtildeInverse)
-  brickObj$Atilde <- lapply(indexGrid$k, function(k) {
-    lapply(indexGrid$l, function(l) {
-      ### FIX INDICES WITH CONVERT ####
+  convertChildren <- .conv(brickObj$childBricks[[1]]$depth) # convert should not be used here, since children are one level down in the hierarchy. They don't have the same depth as the parent node.
 
-      brickObj$A[[convert(k)]][[convert(l)]] + brickObj$A[[convert(k)]][[convert(m)]] %*% brickObj$Ktilde %*% brickObj$A[[convert(m)]][[convert(l)]]
-    })
+  Amatrices <- mapply(k = indexGrid$k, l = indexGrid$l, FUN = function(k,l) {
+    Reduce("+", lapply(brickObj$childBricks, function(x) {
+      convIndicesKL <- convertChildren(k,l)
+      x$Atilde[[convIndicesKL[[1]]]][[convIndicesKL[[2]]]]
+    }))
+  }, SIMPLIFY = FALSE)
+
+  brickObj$A <- .placeMatrices(matrixList = Amatrices, indexGrid = indexGrid, convertFct = convert)
+
+  indicesMM <- convert(m,m)
+  brickObj$KtildeInverse <- brickObj$Kinverse + brickObj$A[[indicesMM[[1]]]][[indicesMM[[2]]]]
+  brickObj$Ktilde <- solve(brickObj$KtildeInverse)
+
+  AtildeMatrices <- mapply(k = indexGrid$k, l = indexGrid$l, FUN = function(k, l) {
+    convertedKL <- convert(k, l)
+    convertedKM <- convert(k, m)
+    convertedML <- convert(m, l)
+    brickObj$A[[convertedKL[[1]]]][[convertedKL[[2]]]] + brickObj$A[[convertedKM[[1]]]][[convertedKM[[2]]]] %*% brickObj$Ktilde %*% brickObj$A[[convertedML[[1]]]][[convertedML[[2]]]]
   })
+
+  brickObj$Atilde <- .placeMatrices(matrixList = AtildeMatrices, indexGrid = indexGrid, convertFct = convert)
+  invisible()
 }
 
 # This function is used to correctly index the elements in $A and $Atilde. The goal is for the real order of the elements in memory to be transparent to the user, and for the k and l indices to be used, like in the paper.
@@ -317,7 +323,19 @@ Npoints <- function(spacetimeObj) {
 .conv <- function(depth) {
   convert <- function(k,l) {
     stopifnot(k >= l)
-    c(k = depth - k + 1, l = (k-l)+1)
+    c(depth - k + 1,(k-l)+1)
   }
 }
 
+.placeMatrices <- function(matrixList, indexGrid, convertFct) {
+  nestedLists <- lapply(sort(unique(indexGrid$k), decreasing = TRUE), function(k) { # The decreasing = TRUE is to account for the fact that in memory, an element with index k will be stored before an element with index k-1.
+    numLs <- sum(unique(indexGrid$l) <= k)
+    vector('list', numLs)
+  })
+
+  for (i in 1:nrow(indexGrid)) { # We are modifying in place. Would there be a way to simply change the depth of the object? Goal is for a depth-1 list to become a nested list.
+    convertedKL <- convertFct(indexGrid[i,1], indexGrid[i,2])
+    nestedLists[[convertedKL[[1]]]][[convertedKL[[2]]]] <- matrixList[[i]]
+  }
+  nestedLists
+}
