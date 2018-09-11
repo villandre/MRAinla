@@ -32,10 +32,6 @@ MRA_INLA <- function(data, covFct, gridObj, numKnots, hyperpriorFunList) {
  # TO_DO
 }
 
-.logLikFun <- function() {
-  # TO_DO
-}
-
 .logGMRFprior <- function(paraValuesList, SigmaValuesList) {
   sum(mapply(paraValues = paraValuesList, varPar = SigmaValuesList, FUN = function(paraValues, varPar) {
     if (!is.matrix(varPar)) {
@@ -54,11 +50,22 @@ setupGrid <- function(lonNewBreaksList, latNewBreaksList, timeNewBreaksList, obs
     .addLayer(gridForMRA, latBreaks = latNewBreaksList[[resolutionIndex]], lonBreaks = lonNewBreaksList[[resolutionIndex]], timeBreaks = timeNewBreaksList[[resolutionIndex]])
   })
   .addKnots(gridForMRA, r = r, ...)
+
   .computeWmats(gridObj = gridForMRA, covFct = covFct)
   .setBtips(gridForMRA)
   .setSigmaTips(gridForMRA)
   .setAtildeTips(gridForMRA)
   .recurseA(gridForMRA)
+  .setOmegaTildeTips(gridForMRA)
+  .recurseOmega(gridForMRA)
+
+  .setDtips(gridForMRA)
+  .recurseD(gridForMRA)
+
+  .setUtips(gridForMRA)
+  .recurseU(gridForMRA)
+
+  gridForMRA$logLik <- gridForMRA$d + gridForMRA$u
   gridForMRA
 }
 
@@ -246,6 +253,7 @@ Npoints <- function(spacetimeObj) {
   allTips <- .tipAddresses(gridObj)
   lapply(allTips, FUN = function(x) {
     x$Sigma <- x$WmatList[[gridObj$M+1]]
+    x$SigmaInverse <- solve(x$Sigma)
     invisible()
   }) # The last element in Bmat will be NULL, since B^M_{j_1, ..., j_M} is undefined,
   invisible()
@@ -258,10 +266,6 @@ Npoints <- function(spacetimeObj) {
 
   modifyTip <- function(x) {
 
-    inverseSigma <- tryCatch(expr = Matrix::chol2inv(Matrix::chol(x$Sigma)), error = function(e) e)
-    if (!("matrix" %in% class(inverseSigma))) { # Why can we have non-positive-definite matrices? What does it mean? Is it a problem?
-      inverseSigma <- solve(x$Sigma)
-    }
     x$Atilde <- vector('list', x$depth+1) # First level of the hierarchy is for k in Atilde^{k,l}.
     x$Atilde <- lapply(0:x$depth, function(k) vector('list', x$depth-k+1)) # Second level is for l in Atilde^{k,l}, same order as for k.
     indexGrid <- expand.grid(k = 0:(m-1), l = 0:(m-1)) # We don't need A^{M,M}_{j_1, ..., j_M}
@@ -269,7 +273,7 @@ Npoints <- function(spacetimeObj) {
 
     for (i in 1:nrow(indexGrid)) {
       indicesVec <- convert(indexGrid[i,"k"], indexGrid[i, "l"])
-    x$Atilde[[indicesVec[[1]]]][[indicesVec[[2]]]] <- t(x$BmatList[[indexGrid[i,"k"]+1]]) %*% inverseSigma %*% x$BmatList[[indexGrid[i,"l"]+1]] ## BmatList has length M+1, but element M+1 is NULL. gridDepth is equal to M, since there's a resolution 0. Element gridObj$M in this situation is the second to last element, which was defined when .setBtips was called.
+    x$Atilde[[indicesVec[[1]]]][[indicesVec[[2]]]] <- t(x$BmatList[[indexGrid[i,"k"]+1]]) %*% x$SigmaInverse %*% x$BmatList[[indexGrid[i,"l"]+1]] ## BmatList has length M+1, but element M+1 is NULL. gridDepth is equal to M, since there's a resolution 0. Element gridObj$M in this situation is the second to last element, which was defined when .setBtips was called.
     }
     invisible()
   }
@@ -322,7 +326,7 @@ Npoints <- function(spacetimeObj) {
 
 .conv <- function(depth) {
   convert <- function(k,l) {
-    stopifnot(k >= l)
+    # stopifnot(k >= l) # Problem here: Is this condition jsutified or not?
     c(depth - k + 1,(k-l)+1)
   }
 }
@@ -338,4 +342,118 @@ Npoints <- function(spacetimeObj) {
     nestedLists[[convertedKL[[1]]]][[convertedKL[[2]]]] <- matrixList[[i]]
   }
   nestedLists
+}
+
+.computeDtips <- function(gridObj) {
+  allTips <- .tipAddresses(gridObj)
+  convert <- .conv(gridObj$M)
+  m <- gridObj$M
+
+  modifyTip <- function(x) {
+    x$d <- log(det(x$Sigma))
+    invisible()
+  }
+  lapply(allTips, FUN = modifyTip)
+  invisible()
+}
+
+.recurseD <- function(brickObj) {
+  if (is.null(brickObj$childBricks)) {
+    return(invisible())
+  }
+
+  if (is.null(brickObj$childBricks[[1]]$d)) {
+    lapply(brickObj$childBricks, .computeD)
+  }
+
+  brickObj$d <- log(det(brickObj$KtildeInverse)) - log(det(brickObj$Kinverse)) + sum(vapply(brickObj$childBricks, FUN.VALUE = 'numeric', function(childBrick) childBrick$d))
+  invisible()
+}
+
+.setOmegaTildeTips <- function(gridObj) {
+  allTips <- .tipAddresses(gridObj)
+  convert <- .conv(gridObj$M)
+  m <- gridObj$M
+
+  modifyTip <- function(x) {
+    x$omegaTilde <- vector('list', x$depth+1) # First level of the hierarchy is for k in Atilde^{k,l}.
+    x$omegaTilde <- lapply(0:x$depth, function(k) vector('list', x$depth-k+1)) # Second level is for l in Atilde^{k,l}, same order as for k.
+    indexGrid <- expand.grid(k = 0:(m-1), l = 0:(m-1)) # We don't need A^{M,M}_{j_1, ..., j_M}
+    indexGrid <- subset(indexGrid, subset = k >= l)
+
+    for (i in 1:nrow(indexGrid)) {
+      indicesVec <- convert(indexGrid[i,"k"], indexGrid[i, "l"])
+      x$omegaTilde[[indicesVec[[1]]]][[indicesVec[[2]]]] <- t(x$BmatList[[indexGrid[i,"k"]+1]]) %*% x$SigmaInverse %*% x$observations ## BmatList has length M+1, but element M+1 is NULL. gridDepth is equal to M, since there's a resolution 0. Element gridObj$M in this situation is the second to last element, which was defined when .setBtips was called.
+    }
+    invisible()
+  }
+  lapply(allTips, FUN = modifyTip) # The last element in Bmat will be NULL, since B^M_{j_1, ..., j_M} is undefined,
+  invisible()
+}
+
+.recurseOmega <- function(brickObj) {
+  if (is.null(brickObj$childBricks)) {
+    return(NULL)
+  }
+
+  if (is.null(brickObj$childBricks[[1]]$Atilde)) {
+    lapply(brickObj$childBricks, .recurseA)
+  }
+
+  m <- brickObj$depth
+  convert <- .conv(m)
+
+  indexGrid <- expand.grid(k = 0:m, l = 0:m)
+  indexGrid <- subset(indexGrid, subset = k >= l)
+
+  convertChildren <- .conv(brickObj$childBricks[[1]]$depth) # convert should not be used here, since children are one level down in the hierarchy. They don't have the same depth as the parent node.
+
+  omegaMatrices <- mapply(k = indexGrid$k, l = indexGrid$l, FUN = function(k,l) {
+    Reduce("+", lapply(brickObj$childBricks, function(x) {
+      convIndicesKL <- convertChildren(k,l)
+      x$omegaTilde[[convIndicesKL[[1]]]][[convIndicesKL[[2]]]]
+    }))
+  }, SIMPLIFY = FALSE)
+
+  brickObj$omega <- .placeMatrices(matrixList = Amatrices, indexGrid = indexGrid, convertFct = convert)
+
+  omegaTildeMatrices <- mapply(k = indexGrid$k, l = indexGrid$l, FUN = function(k, l) {
+
+    convertedKM <- convert(k, m)
+
+    brickObj$omega[[convertOmega(k)]] + brickObj$A[[convertedKM[[1]]]][[convertedKM[[2]]]] %*% brickObj$Ktilde %*% brickObj$omega[[convertOmega(m)]]
+  })
+
+  brickObj$Atilde <- .placeMatrices(matrixList = AtildeMatrices, indexGrid = indexGrid, convertFct = convert)
+  invisible()
+}
+
+.computeUtips <- function(gridObj) {
+  allTips <- .tipAddresses(gridObj)
+  convert <- .conv(gridObj$M)
+  m <- gridObj$M
+
+  modifyTip <- function(x) {
+    x$u <- t(x$observations) %*% x$SigmaInverse %*% x$observations ## QUADRATIC FORM: MAY BE OPTIMIZED.
+    invisible()
+  }
+  lapply(allTips, FUN = modifyTip)
+  invisible()
+}
+
+.recurseU <- function(gridObj) {
+  if (is.null(brickObj$childBricks)) {
+    return(invisible())
+  }
+
+  if (is.null(brickObj$childBricks[[1]]$d)) {
+    lapply(brickObj$childBricks, .computeD)
+  }
+
+  brickObj$u <- -t(brickObj$omega[[convertOmega(brickObj$depth)]]) %*% brickObj$Ktilde %*% brickObj$omega[[convertOmega(brickObj$depth)]] + sum(vapply(brickObj$childBricks, FUN.VALUE = 'numeric', function(childBrick) childBrick$u)) ## QUADRATIC FORM, MIGHT BE POSSIBLE TO OPTIMIZE.
+  invisible()
+}
+
+logLik.Spacetimegrid <- function(gridObj) {
+  gridObj$logLik
 }
