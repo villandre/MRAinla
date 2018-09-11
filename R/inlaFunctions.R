@@ -453,7 +453,3 @@ Npoints <- function(spacetimeObj) {
   brickObj$u <- -t(brickObj$omega[[convertOmega(brickObj$depth)]]) %*% brickObj$Ktilde %*% brickObj$omega[[convertOmega(brickObj$depth)]] + sum(vapply(brickObj$childBricks, FUN.VALUE = 'numeric', function(childBrick) childBrick$u)) ## QUADRATIC FORM, MIGHT BE POSSIBLE TO OPTIMIZE.
   invisible()
 }
-
-logLik.Spacetimegrid <- function(gridObj) {
-  gridObj$logLik
-}

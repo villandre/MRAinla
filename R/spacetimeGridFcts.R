@@ -52,6 +52,7 @@
 
   if (gridCreationFlag) {
     parentBrick$M <- 1
+    parentBrick$logLik <- NULL
     class(parentBrick) <- "Spacetimegrid"
     return(parentBrick)
   }
@@ -215,11 +216,6 @@ getLayer <- function(spacetimeGridObj, m = 0) {
   brickEnvironment$observations <- observationsInRegion
   brickEnvironment$knotPositions <- NULL
   brickEnvironment$childBricks <- NULL
-  brickEnvironment$vFun <- NULL
-  brickEnvironment$bFun <- NULL
-  brickEnvironment$K <- NULL
-  brickEnvironment$Kinverse <- NULL
-  brickEnvironment$W <- NULL
 
   if (!identical(parentBrick, emptyenv())) {
     childAddresses <- parentBrick$childBricks
@@ -362,4 +358,8 @@ subset.STI <- function(x, latExtent, lonExtent, timeExtent) {
     brickObjList <- .recurseParent(parent.env(currentBrick), brickObjList)
   }
   brickObjList
+}
+
+logLik.Spacetimegrid <- function(gridObj) {
+  gridObj$logLik
 }
