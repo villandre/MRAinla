@@ -191,7 +191,7 @@ Npoints <- function(spacetimeObj) {
   invisible()
 }
 
-.setAtildeTips <- function(gridObj) {
+.setAtildeTips <- function(gridObj) { ##### POTENTIAL PROBLEM HERE
   allTips <- .tipAddresses(gridObj)
   convert <- .conv(gridObj$M)
   m <- gridObj$M
@@ -247,7 +247,7 @@ Npoints <- function(spacetimeObj) {
     convertedKL <- convert(k, l)
     convertedKM <- convert(k, m)
     convertedML <- convert(m, l)
-    brickObj$A[[convertedKL[[1]]]][[convertedKL[[2]]]] + brickObj$A[[convertedKM[[1]]]][[convertedKM[[2]]]] %*% brickObj$Ktilde %*% brickObj$A[[convertedML[[1]]]][[convertedML[[2]]]]
+    brickObj$A[[convertedKL[[1]]]][[convertedKL[[2]]]] - brickObj$A[[convertedKM[[1]]]][[convertedKM[[2]]]] %*% brickObj$Ktilde %*% brickObj$A[[convertedML[[1]]]][[convertedML[[2]]]]
   })
 
   brickObj$Atilde <- .placeMatrices(matrixList = AtildeMatrices, indexGrid = indexGrid, convertFct = convert)
@@ -255,10 +255,14 @@ Npoints <- function(spacetimeObj) {
 }
 
 # This function is used to correctly index the elements in $A and $Atilde. The goal is for the real order of the elements in memory to be transparent to the user, and for the k and l indices to be used, like in the paper.
+# Since A^{k,l} = t(A^{l,k}) and the same holds for \tilde{A}, we only need find the values of those matrices for k >= l.
 
 .conv <- function(depth) {
   convert <- function(k,l) {
-    # stopifnot(k >= l) # Problem here: Is this condition jsutified or not?
+    if (k < l) {
+      k <- l
+      l <- k
+    }
     c(depth - k + 1,(k-l)+1)
   }
 }
