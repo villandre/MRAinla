@@ -41,6 +41,31 @@ MRA_INLA <- function(data, covFct, gridObj, numKnots, hyperpriorFunList) {
   }))
 }
 
+#' Set up a multi-resolution spatiotemporal grid for MRA estimation
+#'
+#' The spatiotemporal grid has one layer per resolution (including one for resolution 0).
+#'
+#' @param lonNewBreaksList list of longitude breaks, one element per resolution, breaks are specified incrementally (see Details)
+#' @param latNewBreaksList list of latitude breaks, one element per resolution, breaks are specified incrementally (see Details)
+#' @param timeNewBreaksList list of time breaks, one element per resolution, breaks are specified incrementally (see Details)
+#' @param observations a Spacetime object giving the position and values of the observed data
+#' @param knotsList (optional) list of Spacetime objects giving knot positions at each resolution. If left empty, knots are placed automatically
+#' @param r (optional) If knots are placed automatically, a vector indicating the number of knots to create in each region
+#' @param covFct a function with two arguments, each of which a Spacetime object with one point
+#' @param ... Additional parameters for the automated knot placement scheme, see .populateKnots
+#'
+#' @details Since resolutions are nested, breaks should be specified incrementally, i.e. list(c(1, 2, 3, 4), c(1.5, 2.5, 3.5)) will create three grids, one for resolution 0 with no breaks, but coordinates ranging from 1 to 4, one for resolution 1 with additional breaks 2 and 3, and one for resolution 2 with additional breaks 1.5, 2.5, and 3.5.
+#' The knot placement scheme places knots close to the boundaries of each spacetime brick, with tuningPara (if specified) determining how close in terms of the proportion of the range knots should be placed to spatial boundaries. For time, knots are placed at the extremities, keeping in mind that regions are closed on the left and open on the right, e.g \[2008-01-01, 2009-02-03).
+#'
+#' @return A Spacetimegrid object.
+#'
+#' @examples
+#' \dontrun{
+#' INPUT_AN_EXAMPLE()
+#' }
+#' @export
+
+
 setupGrid <- function(lonNewBreaksList, latNewBreaksList, timeNewBreaksList, observations = NULL, knotsList = NULL, r = rep(10, length(lonNewBreaksList)+1), covFct, ...) {
   gridForMRA <- .SpacetimegridConstructor(parentBrick = NULL, lonBreaks = lonNewBreaksList[[1]], latBreaks = latNewBreaksList[[1]], timeBreaks = timeNewBreaksList[[1]], observations = observations)
   if (length(lonNewBreaksList) == 1) {
@@ -67,65 +92,6 @@ setupGrid <- function(lonNewBreaksList, latNewBreaksList, timeNewBreaksList, obs
 
   gridForMRA$logLik <- gridForMRA$d + gridForMRA$u
   gridForMRA
-}
-
-# The next function returns the K matrices, b and v functions for all zones of the pre-defined grids.
-
-.getKmatsAndLocalFunctions <- function(gridObj, covFct) {
-  gridObj$K <-  Matrix::chol2inv(Matrix::chol(covFct(gridObj$knotPositions, gridObj$knotPositions)))
-  gridObj$vFun <- covFct
-  gridObj$bFun <- .getBfun(gridObj)
-
-  if (!is.null(gridObj$childBricks)) {
-    lapply(gridObj$childBricks, FUN = .genBrickFcts)
-  }
-  invisible()
-}
-
-.genBrickFcts <- function(brickObj) {
-  .updateVfun(brickObj)
-  .getBfun(brickObj)
-  .getKmat(brickObj)
-  if (!is.null(brickObj$childBricks)) {
-    lapply(brickObj$childBricks, .genBrickFcts)
-  }
-  invisible()
-}
-
-.updateVfun <- function(brickObj) {
-  brickObj$vFun <- function(spacetime1, spacetime2) {
-    if(!.sameGridSection(spacetime1, spacetime2, parent.env(brickObj))) {
-      return(0)
-    }
-    parent.env(brickObj)$vFun(spacetime1, spacetime2) - t(parent.env(brickObj)$bFun(spacetime1))%*%parent.env(brickObj)$K%*%parent.env(brickObj)$bFun(spacetime2)
-  }
-  invisible()
-}
-
-.getBfun <- function(brickObj) {
-  brickObj$bFun <- function(spacetimeCoord) {
-    if (!.coorWithinBrick(spacetimeCoord, brickObj)) {
-      return(rep(0, Npoints(brickObj$knotPositions)))
-    }
-    sapply(1:Npoints(brickObj$knotPositions), FUN = function(knotIndex) {
-      brickObj$vFun(spacetimeCoord, brickObj$knotPositions[knotIndex])
-    })
-  }
-}
-
-.getKmat <- function(brickObj) {
-  numKnots <- Npoints(brickObj$knotPositions)
-  KmatrixFinal <- matrix(0, numKnots, numKnots)
-  # Handling the off diagonal elements
-  diagMat <- diag(numKnots)
-  mapply(rowIndex = row(diagMat)[lower.tri(diagMat)], colIndex = col(diagMat)[lower.tri(diagMat)], FUN = function(rowIndex, colIndex) {
-    KmatrixFinal[rowIndex, colIndex] <<- brickObj$vFun(brickObj$knotPositions[rowIndex], brickObj$knotPositions[colIndex])
-    invisible()
-  }, SIMPLIFY = FALSE)
-  KmatrixFinal <- KmatrixFinal + t(KmatrixFinal)
-  diag(KmatrixFinal) <- sapply(1:numKnots, FUN = function(x) brickObj$vFun(brickObj$knotPositions[x], brickObj$knotPositions[x]))
-  brickObj$K <- KmatrixFinal
-  invisible()
 }
 
 spacetimeListConvertToPoints <- function(valuesList, timeValues = NULL, regular = FALSE) {
@@ -205,40 +171,6 @@ Npoints <- function(spacetimeObj) {
   }
   invisible()
 }
-
-# .setDUtips <- function(gridObj) {
-#   allTips <- .tipAddresses(gridObj)
-#   transferW <- function(tipBrick) {
-#     SigmaMat <- tail(tipBrick$WmatList, n = 1)[[1]]
-#     tipBrick$SigmaMat <- SigmaMat
-#     tipBrick$d <- log(det(SigmaMat))
-#     tipBrick$u <- t(tipBrick$observations)%*%Matrix::chol2inv(Matrix::chol(SigmaMat))%*%tipBrick$observations
-#     tipBrick$KtildeInverse <- tipBrick$Kinverse + t(tipBrick$bMat)%*%tipBrick$Vinverse%*%tipBrick$bMat
-#     invisible()
-#   }
-#   lapply(allTips, transferW)
-#   invisible()
-# }
-#
-# .setDUinside <- function(brickObj) {
-#   if (!is.null(gridObj$childBricks)) {
-#     if (is.null(gridObj$childBricks[[1]]$SigmaMat)) {
-#       lapply(gridObj$childBricks, .setDUinside)
-#     }
-#     dSecondPart <- -log(det(brickObj$Kinverse)) + sapply(brickObj$childBricks, function(x) x$d)
-#     dFirstPart <- log(det(brickObj$KtildeInverse))
-#     brickObj$d <- dFirstPart + dSecondPart
-#     uSecondPart <- sapply(brickObj$childBricks, function(x) x$u)
-#     # uFirstPart <- t(brickObj$omega)%*%brickObj$Ktilde%*%brickObj$omega
-#     uFirstPart <- .colSums(brickObj$omega * (brickObj$Ktilde %*% brickObj$omega), m = length(brickObj$omega), n = 1) # A faster way to compute quadratic forms.
-#     gridObj$SigmaMat <- gridObj$bMat%*%gridObj$K%*%t(gridObj$bMat) + gridObj$V
-#   }
-#   invisible()
-# }
-
-# .getKtildeInverse <- function(brickObj) {
-#   brickObj$Kinverse
-# }
 
 .setBtips <- function(gridObj) {
   allTips <- .tipAddresses(gridObj)
