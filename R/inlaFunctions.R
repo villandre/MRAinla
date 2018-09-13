@@ -94,15 +94,7 @@ setupGrid <- function(lonNewBreaksList, latNewBreaksList, timeNewBreaksList, obs
   gridForMRA
 }
 
-spacetimeListConvertToPoints <- function(valuesList, timeValues = NULL, regular = FALSE) {
-  if (regular) {
-    if (class(valuesList[[1]]) == "SpatialPoints") {
-      return(spacetime::STF(sp = valuesList[[1]], time = timeValues))
-    }
-    valuesFrames <- lapply(valuesList, FUN = function(x) x@data)
-    dataReformat <- do.call("rbind", valuesFrames)
-    return(spacetime::STFDF(valuesList[[1]], time = timeValues, data = dataReformat))
-  }
+spacetimeListConvertToPoints <- function(valuesList, timeValues = NULL) {
   allPoints <- do.call(what = raster::bind, valuesList)
   lengthVec <- sapply(valuesList, length)
   extendedTimeValues <- rep(timeValues, lengthVec)
@@ -110,7 +102,7 @@ spacetimeListConvertToPoints <- function(valuesList, timeValues = NULL, regular 
   if (class(allPoints) == "SpatialPoints") {
     return(spacetime::STI(sp = allPoints, time = extendedTimeValues))
   }
-  spacetime::STIDF(sp = allPoints, time = extendedTimeValues, data = allPoint@data)
+  spacetime::STIDF(sp = SpatialPoints(allPoints@coords), time = extendedTimeValues, data = allPoints@data) # Having the sp argument being a SpatialPointsDataFrame object produces an error. Stripping it of its data component then re-specifying it fixes the issue.
 }
 
 Npoints <- function(spacetimeObj) {
@@ -164,11 +156,6 @@ Npoints <- function(spacetimeObj) {
   if (brickObj$depth < .getTopEnvirAddress(brickObj)$M) {
     brickObj$Kinverse <- tail(brickObj$WmatList, n = 1)[[1]]
     brickObj$K <- Matrix::chol2inv(Matrix::chol(brickObj$Kinverse))
-    #   Kmatrix <- tryCatch(expr = Matrix::chol2inv(Matrix::chol(brickObj$Kinverse)), error = function(e) e)
-    # if (!("matrix" %in% class(Kmatrix))) { # We couldn't invert the matrix with the Cholesky decomposition...
-    #   Kmatrix <- solve(brickObj$Kinverse) # A slower solution...
-    # }
-    # brickObj$K <- Kmatrix
   }
   if (!is.null(brickObj$childBricks)) {
     lapply(brickObj$childBricks, .computeWchildBrick, covFct = covFct)
@@ -195,9 +182,8 @@ Npoints <- function(spacetimeObj) {
   invisible()
 }
 
-.setAtildeTips <- function(gridObj) { ##### POTENTIAL PROBLEM HERE
+.setAtildeTips <- function(gridObj) {
   allTips <- .tipAddresses(gridObj)
-  convert <- .conv(gridObj$M)
   m <- gridObj$M
 
   modifyTip <- function(x) {
@@ -208,10 +194,10 @@ Npoints <- function(spacetimeObj) {
     indexGrid <- subset(indexGrid, subset = k >= l)
 
     for (i in 1:nrow(indexGrid)) {
-      k <- indexGrid[i, 1] + 1 # +1 because indices start at 1.
-      l <- indexGrid[i, 2] + 1
-      x$Atilde[[k]][[l]] <- t(x$BmatList[[k]]) %*% x$SigmaInverse %*% x$BmatList[[l]] ## BmatList has length M+1, but element M+1 is NULL. gridDepth is equal to M, since there's a resolution 0. Element gridObj$M in this situation is the second to last element, which was defined when .setBtips was called.
-      x$Atilde[[l]][[k]] <- t(x$Atilde[[k]][[l]])
+      k <- indexGrid[i, 1]
+      l <- indexGrid[i, 2]
+      x$Atilde[[k + 1]][[l + 1]] <- t(x$BmatList[[k + 1]]) %*% x$SigmaInverse %*% x$BmatList[[l + 1]] ## BmatList has length M+1, but element M+1 is NULL. gridDepth is equal to M, since there's a resolution 0. Element gridObj$M in this situation is the second to last element, which was defined when .setBtips was called.
+      x$Atilde[[l + 1]][[k + 1]] <- t(x$Atilde[[k + 1]][[l + 1]])
     }
     invisible()
   }
@@ -233,19 +219,21 @@ Npoints <- function(spacetimeObj) {
   indexGrid <- expand.grid(k = 0:m, l = 0:m)
   indexGrid <- subset(indexGrid, subset = k >= l)
 
-  Amatrices <- mapply(k = indexGrid$k+1, l = indexGrid$l+1, FUN = function(k,l) { # +1 to adjust indices for R.
+  Amatrices <- mapply(k = indexGrid$k, l = indexGrid$l, FUN = function(k,l) { # +1 to adjust indices for R.
     Reduce("+", lapply(brickObj$childBricks, function(x) {
-      x$Atilde[[k]][[l]]
+      x$Atilde[[k + 1]][[l + 1]]
     }))
   }, SIMPLIFY = FALSE)
+  brickObj$A <- .reformatList(matrixList = Amatrices, indexGrid = indexGrid)
 
-
-  brickObj$KtildeInverse <- brickObj$Kinverse + brickObj$A[[m+1]][[m+1]] # +1 to adjust indices for R.
+  brickObj$KtildeInverse <- brickObj$Kinverse + brickObj$A[[m + 1]][[m + 1]] # +1 to adjust indices for R.
   brickObj$Ktilde <- Matrix::chol2inv(chol(brickObj$KtildeInverse))
 
-  brickObj$Atilde <- mapply(k = indexGrid$k+1, l = indexGrid$l+1, FUN = function(k, l) {
-    brickObj$A[[k]][[l]] - brickObj$A[[k]][[m+1]] %*% brickObj$Ktilde %*% brickObj$A[[m+1]][[l]] # m+1 to adjust indices for R.
-  })
+  AtildeMatrices <- mapply(k = indexGrid$k, l = indexGrid$l, FUN = function(k, l) {
+    brickObj$A[[k + 1]][[l + 1]] - brickObj$A[[k + 1]][[m + 1]] %*% brickObj$Ktilde %*% brickObj$A[[m + 1]][[l + 1]] # m+1 to adjust indices for R.
+  }, SIMPLIFY = FALSE)
+  brickObj$Atilde <- .reformatList(matrixList = AtildeMatrices, indexGrid = indexGrid)
+
   invisible()
 }
 
@@ -283,7 +271,7 @@ Npoints <- function(spacetimeObj) {
 
     for (k in 0:(gridObj$M-1)) {
 
-      x$omegaTilde[[k+1]] <- t(x$BmatList[[k+1]]) %*% x$SigmaInverse %*% x$observations ## BmatList has length M+1, but element M+1 is NULL. gridDepth is equal to M, since there's a resolution 0. Element gridObj$M in this situation is the second to last element, which was defined when .setBtips was called.
+      x$omegaTilde[[k+1]] <- t(x$BmatList[[k+1]]) %*% x$SigmaInverse %*% x$observations@data[ , 1]
     }
     invisible()
   }
@@ -296,8 +284,8 @@ Npoints <- function(spacetimeObj) {
     return(NULL)
   }
 
-  if (is.null(brickObj$childBricks[[1]]$Atilde)) {
-    lapply(brickObj$childBricks, .recurseA)
+  if (is.null(brickObj$childBricks[[1]]$omegaTilde)) {
+    lapply(brickObj$childBricks, .recurseOmega)
   }
 
   m <- brickObj$depth
@@ -308,7 +296,7 @@ Npoints <- function(spacetimeObj) {
     }))
   }, SIMPLIFY = FALSE)
 
-  brickObj$Atilde <- lapply(0:m, FUN = function(k) {
+  brickObj$omegaTilde <- lapply(0:m, FUN = function(k) {
     brickObj$omega[[k+1]] - brickObj$A[[k+1]][[m+1]] %*% brickObj$Ktilde %*% brickObj$omega[[m+1]]
   })
   invisible()
@@ -319,7 +307,7 @@ Npoints <- function(spacetimeObj) {
   m <- gridObj$M
 
   modifyTip <- function(x) {
-    x$u <- t(x$observations) %*% x$SigmaInverse %*% x$observations ## QUADRATIC FORM: MAY BE OPTIMIZED.
+    x$u <- t(x$observations@data[ , 1]) %*% x$SigmaInverse %*% x$observations@data[ , 1] ## QUADRATIC FORM: MAY BE OPTIMIZED.
     invisible()
   }
   lapply(allTips, FUN = modifyTip)
@@ -337,4 +325,16 @@ Npoints <- function(spacetimeObj) {
 
   brickObj$u <- -t(brickObj$omega[[brickObj$depth+1]]) %*% brickObj$Ktilde %*% brickObj$omega[[brickObj$depth + 1]] + sum(vapply(brickObj$childBricks, FUN.VALUE = 'numeric', function(childBrick) childBrick$u)) ## QUADRATIC FORM, MIGHT BE POSSIBLE TO OPTIMIZE.
   invisible()
+}
+
+.reformatList <- function(matrixList, indexGrid) {
+  m <- max(indexGrid[ , 1])
+  newList <- replicate(m + 1, expr = vector('list', m + 1), simplify = FALSE)
+  for (i in seq_along(matrixList)) {
+    k <- indexGrid[i, 1]
+    l <- indexGrid[i, 2]
+    newList[[k + 1]][[l + 1]] <- matrixList[[i]]
+    newList[[l + 1]][[k + 1]] <- t(newList[[k + 1]][[l + 1]])
+  }
+  newList
 }
