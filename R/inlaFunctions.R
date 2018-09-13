@@ -147,14 +147,18 @@ Npoints <- function(spacetimeObj) {
   brickObj$WmatList[[1]] <- covFct(brickObj$knotPositions, brickPointers[[1]]$knotPositions)
   m <- brickObj$depth
 
-  for (l in 1:m) { # First element in brickPointers is the top brick, i.e. at resolution 0.
+  for (l in 0:m) { # First element in brickPointers is the top brick, i.e. at resolution 0.
     brickPointer <- brickPointers[[l+1]]
     covEvaluation <- covFct(brickObj$knotPositions, brickPointer$knotPositions)
-    headWlist <- brickObj$WmatList[(0:l-1)+1]
-    Kmatrices <- lapply(brickPointers[(0:l-1)+1], function(aPointer) aPointer$K)
-    tailWlist <- lapply(brickPointer$WmatList[(0:l-1)+1], t)
+    secondTerm <- 0
+    if (l > 0) {
+      headWlist <- brickObj$WmatList[(0:l-1) + 1]
+      Kmatrices <- lapply(brickPointers[(0:l-1) + 1], function(aPointer) aPointer$K)
+      tailWlist <- lapply(brickPointer$WmatList[(0:l-1) + 1], t)
 
-    secondTerm <- Reduce("+", mapply(x = headWlist, y = Kmatrices, z = tailWlist, FUN = function(x,y,z) x%*%y%*%z, SIMPLIFY = FALSE))
+      secondTerm <- Reduce("+", mapply(x = headWlist, y = Kmatrices, z = tailWlist, FUN = function(x,y,z) x %*% y %*% z, SIMPLIFY = FALSE))
+    }
+
     brickObj$WmatList[[l+1]] <- covEvaluation - secondTerm
   }
   if (brickObj$depth < .getTopEnvirAddress(brickObj)$M) {
