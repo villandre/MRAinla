@@ -203,13 +203,15 @@ Npoints <- function(spacetimeObj) {
   modifyTip <- function(x) {
 
     x$Atilde <- vector('list', x$depth+1) # First level of the hierarchy is for k in Atilde^{k,l}.
-    x$Atilde <- lapply(0:x$depth, function(k) vector('list', x$depth-k+1)) # Second level is for l in Atilde^{k,l}, same order as for k.
+    x$Atilde <- lapply(0:x$depth, function(k) vector('list', x$depth)) # Second level is for l in Atilde^{k,l}, same order as for k.
     indexGrid <- expand.grid(k = 0:(m-1), l = 0:(m-1)) # We don't need A^{M,M}_{j_1, ..., j_M}
     indexGrid <- subset(indexGrid, subset = k >= l)
 
     for (i in 1:nrow(indexGrid)) {
-      indicesVec <- convert(indexGrid[i,"k"], indexGrid[i, "l"])
-    x$Atilde[[indicesVec[[1]]]][[indicesVec[[2]]]] <- t(x$BmatList[[indexGrid[i,"k"]+1]]) %*% x$SigmaInverse %*% x$BmatList[[indexGrid[i,"l"]+1]] ## BmatList has length M+1, but element M+1 is NULL. gridDepth is equal to M, since there's a resolution 0. Element gridObj$M in this situation is the second to last element, which was defined when .setBtips was called.
+      k <- indexGrid[i, 1] + 1 # +1 because indices start at 1.
+      l <- indexGrid[i, 2] + 1
+      x$Atilde[[k]][[l]] <- t(x$BmatList[[k]]) %*% x$SigmaInverse %*% x$BmatList[[l]] ## BmatList has length M+1, but element M+1 is NULL. gridDepth is equal to M, since there's a resolution 0. Element gridObj$M in this situation is the second to last element, which was defined when .setBtips was called.
+      x$Atilde[[l]][[k]] <- t(x$Atilde[[k]][[l]])
     }
     invisible()
   }
@@ -227,67 +229,28 @@ Npoints <- function(spacetimeObj) {
   }
 
   m <- brickObj$depth
-  convert <- .conv(m)
 
   indexGrid <- expand.grid(k = 0:m, l = 0:m)
   indexGrid <- subset(indexGrid, subset = k >= l)
 
-  convertChildren <- .conv(brickObj$childBricks[[1]]$depth) # convert should not be used here, since children are one level down in the hierarchy. They don't have the same depth as the parent node.
-
-  Amatrices <- mapply(k = indexGrid$k, l = indexGrid$l, FUN = function(k,l) {
+  Amatrices <- mapply(k = indexGrid$k+1, l = indexGrid$l+1, FUN = function(k,l) { # +1 to adjust indices for R.
     Reduce("+", lapply(brickObj$childBricks, function(x) {
-      convIndicesKL <- convertChildren(k,l)
-      x$Atilde[[convIndicesKL[[1]]]][[convIndicesKL[[2]]]]
+      x$Atilde[[k]][[l]]
     }))
   }, SIMPLIFY = FALSE)
 
-  brickObj$A <- .placeMatrices(matrixList = Amatrices, indexGrid = indexGrid, convertFct = convert)
 
-  indicesMM <- convert(m,m)
-  brickObj$KtildeInverse <- brickObj$Kinverse + brickObj$A[[indicesMM[[1]]]][[indicesMM[[2]]]]
-  brickObj$Ktilde <- solve(brickObj$KtildeInverse)
+  brickObj$KtildeInverse <- brickObj$Kinverse + brickObj$A[[m+1]][[m+1]] # +1 to adjust indices for R.
+  brickObj$Ktilde <- Matrix::chol2inv(chol(brickObj$KtildeInverse))
 
-  AtildeMatrices <- mapply(k = indexGrid$k, l = indexGrid$l, FUN = function(k, l) {
-    convertedKL <- convert(k, l)
-    convertedKM <- convert(k, m)
-    convertedML <- convert(m, l)
-    brickObj$A[[convertedKL[[1]]]][[convertedKL[[2]]]] - brickObj$A[[convertedKM[[1]]]][[convertedKM[[2]]]] %*% brickObj$Ktilde %*% brickObj$A[[convertedML[[1]]]][[convertedML[[2]]]]
+  brickObj$Atilde <- mapply(k = indexGrid$k+1, l = indexGrid$l+1, FUN = function(k, l) {
+    brickObj$A[[k]][[l]] - brickObj$A[[k]][[m+1]] %*% brickObj$Ktilde %*% brickObj$A[[m+1]][[l]] # m+1 to adjust indices for R.
   })
-
-  brickObj$Atilde <- .placeMatrices(matrixList = AtildeMatrices, indexGrid = indexGrid, convertFct = convert)
   invisible()
-}
-
-# This function is used to correctly index the elements in $A and $Atilde. The goal is for the real order of the elements in memory to be transparent to the user, and for the k and l indices to be used, like in the paper.
-# Since A^{k,l} = t(A^{l,k}) and the same holds for \tilde{A}, we only need find the values of those matrices for k >= l.
-
-.conv <- function(depth) {
-  convert <- function(k,l) {
-    if (k < l) {
-      k <- l
-      l <- k
-    }
-    c(depth - k + 1,(k-l)+1)
-  }
-}
-
-.placeMatrices <- function(matrixList, indexGrid, convertFct) {
-  nestedLists <- lapply(sort(unique(indexGrid$k), decreasing = TRUE), function(k) { # The decreasing = TRUE is to account for the fact that in memory, an element with index k will be stored before an element with index k-1.
-    numLs <- sum(unique(indexGrid$l) <= k)
-    vector('list', numLs)
-  })
-
-  for (i in 1:nrow(indexGrid)) { # We are modifying in place. Would there be a way to simply change the depth of the object? Goal is for a depth-1 list to become a nested list.
-    convertedKL <- convertFct(indexGrid[i,1], indexGrid[i,2])
-    nestedLists[[convertedKL[[1]]]][[convertedKL[[2]]]] <- matrixList[[i]]
-  }
-  nestedLists
 }
 
 .computeDtips <- function(gridObj) {
   allTips <- .tipAddresses(gridObj)
-  convert <- .conv(gridObj$M)
-  m <- gridObj$M
 
   modifyTip <- function(x) {
     x$d <- log(det(x$Sigma))
@@ -312,18 +275,15 @@ Npoints <- function(spacetimeObj) {
 
 .setOmegaTildeTips <- function(gridObj) {
   allTips <- .tipAddresses(gridObj)
-  convert <- .conv(gridObj$M)
   m <- gridObj$M
 
   modifyTip <- function(x) {
-    x$omegaTilde <- vector('list', x$depth+1) # First level of the hierarchy is for k in Atilde^{k,l}.
-    x$omegaTilde <- lapply(0:x$depth, function(k) vector('list', x$depth-k+1)) # Second level is for l in Atilde^{k,l}, same order as for k.
-    indexGrid <- expand.grid(k = 0:(m-1), l = 0:(m-1)) # We don't need A^{M,M}_{j_1, ..., j_M}
-    indexGrid <- subset(indexGrid, subset = k >= l)
 
-    for (i in 1:nrow(indexGrid)) {
-      indicesVec <- convert(indexGrid[i,"k"], indexGrid[i, "l"])
-      x$omegaTilde[[indicesVec[[1]]]][[indicesVec[[2]]]] <- t(x$BmatList[[indexGrid[i,"k"]+1]]) %*% x$SigmaInverse %*% x$observations ## BmatList has length M+1, but element M+1 is NULL. gridDepth is equal to M, since there's a resolution 0. Element gridObj$M in this situation is the second to last element, which was defined when .setBtips was called.
+    x$omegaTilde <- replicate(n = x$depth+1, expr = vector('list', x$depth + 1), simplify = FALSE)
+
+    for (k in 0:(gridObj$M-1)) {
+
+      x$omegaTilde[[k+1]] <- t(x$BmatList[[k+1]]) %*% x$SigmaInverse %*% x$observations ## BmatList has length M+1, but element M+1 is NULL. gridDepth is equal to M, since there's a resolution 0. Element gridObj$M in this situation is the second to last element, which was defined when .setBtips was called.
     }
     invisible()
   }
@@ -341,36 +301,21 @@ Npoints <- function(spacetimeObj) {
   }
 
   m <- brickObj$depth
-  convert <- .conv(m)
 
-  indexGrid <- expand.grid(k = 0:m, l = 0:m)
-  indexGrid <- subset(indexGrid, subset = k >= l)
-
-  convertChildren <- .conv(brickObj$childBricks[[1]]$depth) # convert should not be used here, since children are one level down in the hierarchy. They don't have the same depth as the parent node.
-
-  omegaMatrices <- mapply(k = indexGrid$k, l = indexGrid$l, FUN = function(k,l) {
+  omegaMatrices <- lapply(0:m, FUN = function(k) {
     Reduce("+", lapply(brickObj$childBricks, function(x) {
-      convIndicesKL <- convertChildren(k,l)
-      x$omegaTilde[[convIndicesKL[[1]]]][[convIndicesKL[[2]]]]
+      x$omegaTilde[[k+1]]
     }))
   }, SIMPLIFY = FALSE)
 
-  brickObj$omega <- .placeMatrices(matrixList = Amatrices, indexGrid = indexGrid, convertFct = convert)
-
-  omegaTildeMatrices <- mapply(k = indexGrid$k, l = indexGrid$l, FUN = function(k, l) {
-
-    convertedKM <- convert(k, m)
-
-    brickObj$omega[[convertOmega(k)]] + brickObj$A[[convertedKM[[1]]]][[convertedKM[[2]]]] %*% brickObj$Ktilde %*% brickObj$omega[[convertOmega(m)]]
+  brickObj$Atilde <- lapply(0:m, FUN = function(k) {
+    brickObj$omega[[k+1]] - brickObj$A[[k+1]][[m+1]] %*% brickObj$Ktilde %*% brickObj$omega[[m+1]]
   })
-
-  brickObj$Atilde <- .placeMatrices(matrixList = AtildeMatrices, indexGrid = indexGrid, convertFct = convert)
   invisible()
 }
 
 .computeUtips <- function(gridObj) {
   allTips <- .tipAddresses(gridObj)
-  convert <- .conv(gridObj$M)
   m <- gridObj$M
 
   modifyTip <- function(x) {
@@ -390,6 +335,6 @@ Npoints <- function(spacetimeObj) {
     lapply(brickObj$childBricks, .computeD)
   }
 
-  brickObj$u <- -t(brickObj$omega[[convertOmega(brickObj$depth)]]) %*% brickObj$Ktilde %*% brickObj$omega[[convertOmega(brickObj$depth)]] + sum(vapply(brickObj$childBricks, FUN.VALUE = 'numeric', function(childBrick) childBrick$u)) ## QUADRATIC FORM, MIGHT BE POSSIBLE TO OPTIMIZE.
+  brickObj$u <- -t(brickObj$omega[[brickObj$depth+1]]) %*% brickObj$Ktilde %*% brickObj$omega[[brickObj$depth + 1]] + sum(vapply(brickObj$childBricks, FUN.VALUE = 'numeric', function(childBrick) childBrick$u)) ## QUADRATIC FORM, MIGHT BE POSSIBLE TO OPTIMIZE.
   invisible()
 }
