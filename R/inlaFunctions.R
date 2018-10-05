@@ -41,41 +41,7 @@ MRA_INLA <- function(data, covFct, gridObj, numKnots, hyperpriorFunList) {
   }))
 }
 
-#' Set up a multi-resolution spatiotemporal grid for MRA estimation
-#'
-#' The spatiotemporal grid has one layer per resolution (including one for resolution 0).
-#'
-#' @param lonNewBreaksList list of longitude breaks, one element per resolution, breaks are specified incrementally (see Details)
-#' @param latNewBreaksList list of latitude breaks, one element per resolution, breaks are specified incrementally (see Details)
-#' @param timeNewBreaksList list of time breaks, one element per resolution, breaks are specified incrementally (see Details)
-#' @param observations a Spacetime object giving the position and values of the observed data
-#' @param knotsList (optional) list of Spacetime objects giving knot positions at each resolution. If left empty, knots are placed automatically
-#' @param r (optional) If knots are placed automatically, a vector indicating the number of knots to create in each region
-#' @param covFct a function with two arguments, each of which a Spacetime object with one point
-#' @param ... Additional parameters for the automated knot placement scheme, see .populateKnots
-#'
-#' @details Since resolutions are nested, breaks should be specified incrementally, i.e. list(c(1, 2, 3, 4), c(1.5, 2.5, 3.5)) will create three grids, one for resolution 0 with no breaks, but coordinates ranging from 1 to 4, one for resolution 1 with additional breaks 2 and 3, and one for resolution 2 with additional breaks 1.5, 2.5, and 3.5.
-#' The knot placement scheme places knots close to the boundaries of each spacetime brick, with tuningPara (if specified) determining how close in terms of the proportion of the range knots should be placed to spatial boundaries. For time, knots are placed at the extremities, keeping in mind that regions are closed on the left and open on the right, e.g \[2008-01-01, 2009-02-03).
-#'
-#' @return A Spacetimegrid object.
-#'
-#' @examples
-#' \dontrun{
-#' INPUT_AN_EXAMPLE()
-#' }
-#' @export
-
-
-setupGrid <- function(lonNewBreaksList, latNewBreaksList, timeNewBreaksList, observations = NULL, knotsList = NULL, covFct, argsForRandomKnots = NULL) {
-  gridForMRA <- .SpacetimegridConstructor(parentBrick = NULL, lonBreaks = lonNewBreaksList[[1]], latBreaks = latNewBreaksList[[1]], timeBreaks = timeNewBreaksList[[1]], observations = observations)
-  if (length(lonNewBreaksList) == 1) {
-    return(gridForMRA)
-  }
-  lapply(seq_along(lonNewBreaksList)[-1], FUN = function(resolutionIndex) {
-    .addLayer(gridForMRA, latBreaks = latNewBreaksList[[resolutionIndex]], lonBreaks = lonNewBreaksList[[resolutionIndex]], timeBreaks = timeNewBreaksList[[resolutionIndex]])
-  })
-  .addKnots(gridForMRA, knotsList = knotsList, argsForRandomKnots = argsForRandomKnots)
-
+computeLogLik <- function(gridObj, covFct) {
   .computeWmats(gridObj = gridForMRA, covFct = covFct)
   .setBtips(gridForMRA)
   .setSigmaTips(gridForMRA)
