@@ -278,38 +278,24 @@ subset.STI <- function(x, latExtent, lonExtent, timeExtent) {
 #' }
 #' @export
 
-.addKnots <- function(gridObj, knotsList = NULL, r = 10, tuningPara = 0.1) {
+.addKnots <- function(gridObj, knotsList = NULL, numKnotsFun = NULL, seed = NULL) {
   if (("STI" %in% class(knotsList))) { # If knotsList is NULL, class(knotsList) will return "NULL" (the class of NULL if "NULL", not inexistent.)
     knotsList <- replicate(.getM(gridObj)+1, expr = knotsList, simplify = FALSE) # In this situation, the knots are the same at every resolution. Might not be the best idea...
   }
   if (is.list(knotsList) & (length(knotsList) == 1)) {
     knotsList <- replicate(.getM(gridObj)+1, expr = knotsList[[1]], simplify = FALSE)
   }
-  .populateKnots(gridObj, knotsList, r = r, tuningPara = tuningPara)
-  invisible()
+  if (!is.null(knotsList)) {
+    .populateKnots(gridObj, knotsList)
+    invisible()
+  }
+  .populateKnotsRandomGrid(gridObj = gridObj, numKnotsFun = numKnotsFun, seed = seed)
 }
 
-.populateKnots <- function(gridObj, knotsList, r, tuningPara = 0.1, dataCollectionFreq = "days") {
-  if (length(knotsList) == 0) {
-    currentR <- r[[1]]
-    lowerTime <- min(gridObj$dimensions$time)
-    upperTime <- as.POSIXct(trunc(max(gridObj$dimensions$time), dataCollectionFreq))
-    if (upperTime < lowerTime) {
-      upperTime <- lowerTime ## The rightmost boundary for each dimension is not in the same grid section, hence the 1sec tilt.
-    }
-    timePoints <- rep(c(lowerTime, upperTime), each = ceiling(currentR/2))[1:currentR]
-
-    upperLeftCorner <- sapply(gridObj$dimensions[c("longitude", "latitude")], function(x) min(x) + diff(x)*tuningPara)
-    upperLeftCorner <- c(min(gridObj$dimensions$longitude) + diff(gridObj$dimensions$longitude)*tuningPara,
-                         max(gridObj$dimensions$latitude) - diff(gridObj$dimensions$latitude)*tuningPara)
-    widthHeightVec <- sapply(gridObj$dimensions[c("longitude", "latitude")], function(x) diff(x)*(1-2*tuningPara))
-    names(widthHeightVec) <- c("width", "height")
-    pointsObjects <- lapply(c(floor(currentR/2), ceiling(currentR/2)), .setPointsOnRectangle, upperLeftCoor = upperLeftCorner, width = widthHeightVec[["width"]], height = widthHeightVec[["height"]])
-    knotsList <- list(STI(sp = do.call(raster::bind, pointsObjects), time = timePoints))
-  }
+.populateKnots <- function(gridObj, knotsList) {
   gridObj$knotPositions <- knotsList[[1]]
   if (!is.null(gridObj$childBricks)) {
-    lapply(gridObj$childBricks, .populateKnots, knotsList = knotsList[-1], r = tail(r, n = -1), tuningPara = tuningPara)
+    lapply(gridObj$childBricks, .populateKnots, knotsList = knotsList[-1])
   }
   invisible()
 }
@@ -362,4 +348,50 @@ subset.STI <- function(x, latExtent, lonExtent, timeExtent) {
 
 logLik.Spacetimegrid <- function(gridObj) {
   gridObj$logLik
+}
+
+# To make computations lighter, we assume that knot locations at the finest resolution match observations.
+# It's also important that no two knot locations match.
+# The number of knots should be highest at the finest resolution.
+# Knots are placed solely within regions where observations are found.
+# The basic scheme will place the knots randomly in the spatial coordinates, drawing the coordinates from a uniform distribution. Since time is discrete, the time coordinate of each knot will also be drawn at random, but from a discrete distribution.
+# The number of knots will be determined with a scaling constant, e.g. for M=3, (1/4, 1/2, 3/4, 1)*n. Any strictly positive function strictly increasing defined over 0 to M would be valid, with the additional condition that it takes value 1 at M, e.g. (1/M+1)*(x+1), sqrt((x+1)/(M+1)), log((x+1)/(M+1))+1, exp(theta(x - M))
+
+.populateKnotsRandomGrid <- function(gridObj, numKnotsFun, seed) {
+  set.seed(seed)
+  if (is.null(numKnotsFun)) {
+    numKnotsFun <- function(m) 1/(gridObj$M+1)*(m+1)
+  }
+  if (is.null(seed)) {
+    seed <- 42
+  }
+  if (gridObj$M == 0) {
+    gridObj$knotPositions <- gridObj$observations$sp@coords
+    invisible()
+  }
+  numKnots <- numKnotsFun(0)
+  randomizeKnotsInBrick(gridObj, numKnots)
+  lapply(gridObj$childBricks, .populateKnotsRandomBrick, numKnotsFun = numKnotsFun, M = gridObj$M)
+  invisible()
+}
+
+.populateKnotsRandomBrick <- function(brickObj, numKnotsFun, M) {
+  if (brickObj$depth == (M)) {
+    brickObj$knotPositions <- brickObj$observations@sp@coords
+  }
+  numKnots <- numKnotsFun(brickObj$depth)
+  randomizeKnotsInBrick(brickObj, numKnots)
+  if (!is.null(brickObj$childBricks)) {
+    lapply(brickObj$childBricks, .populateKnotsRandomBrick, numKnotsFun = numKnotsFun, M = M)
+  }
+  invisible()
+}
+
+randomizeKnotsInBrick <- function(brickObj, numKnots) {
+  brickKnotsLon <- runif(numKnots, brickObj$lon[1], brickObj$lon[2])
+  brickKnotsLat <- runif(numKnots, brickObj$lat[1], brickObj$lat[2])
+  brickKnotsTime <- sample(unique(brickObj$observations@time), numKnots, replace = TRUE)
+  knotPositions <- STI(sp = SpatialPoints(cbind(brickKnotsLon, brickKnotsLat)), time = brickKnotsTime)
+  brickObj$knotPositions <- knotPositions
+  invisible()
 }

@@ -338,3 +338,78 @@ Npoints <- function(spacetimeObj) {
   }
   newList
 }
+
+.computeSigmaTipsGeneral <- function(gridObj, covFct) {
+  allTips <- .tipAddresses(gridObj)
+  gridObj$Kinverse <- covFct(gridObj$knotPositions, gridObj$knotPositions)
+  gridObj$K <- Matrix::chol2inv(chol(gridObj$Kinverse))
+
+  lapply(gridObj$childBricks, FUN = .computeKmat, covFct)
+  .computeKmat <- function(currentAddress, covFct) {
+    # Bring knot positions to root level and start iterating.
+    covFct(currentAddress$knotPositions, gridObj$knotPositions)
+
+  }
+
+  lapply(tipObservations, FUN = iterateTipObservations)
+
+  iterateTipObservations <- function(tipAddress) {
+    Bmat <- covFct(tipAddress$observations, gridObj$knotPositions)
+
+  }
+  # v_M(S_M, S_M) = v_{M-1}(S_M, S_M) - B^{M-1}_{M} K_{M-1} B^{M-1}_{M}
+  # B^{M-1}_{M} = v_{M-1}(S_M, Q_{M-1})
+  #
+
+}
+
+.deriveKmats <- function(gridObj, covFct) {
+  gridObj$KmatInverse <- covFct(gridObj$knotPositions, gridObj$knotPositions)
+  gridObj$Kmat <- Matrix::chol2inv(chol(gridObj$KmatInverse))
+  if (!is.null(gridObj$childBricks)) {
+    lapply(gridObj$childBricks, FUN = .deriveKbrick, covFct = covFct)
+  }
+  invisible()
+}
+
+.deriveKbrick <- function(brickObj, covFct) {
+
+  parentAdresses <- .getAllParentAddresses(brickObj)
+
+  for (i in seq_along(parentAdresses)) {
+    basicMat <- covFct(brickObj$knotPositions)
+    bMat <-
+  }
+  covFct(brickObj$knotPositions, brickObj$knotPositions) -  t(bMat) %*% rootBrick$Kmat %*% bMat
+
+}
+
+.createVFun <- function(brickObj, spacetime1, spacetime2, covFct, vFunOneLevelDown) {
+  repeatFlag <- FALSE
+  if (identical(spacetime1, spacetime2) | is.null(spacetime2)) {
+    repeatFlag <- TRUE
+  }
+
+  if (brickObj$depth == 0) {
+    brickObj$Kinverse <- covFct(brickObj$knotPositions, brickObj$knotPositions)
+    brickObj$K <- Matrix::chol2inv(chol(brickObj$KmatInverse))
+    returnFun <- function(spacetime1, spacetime2) {
+      B1 <- covFct(spacetime1, brickObj$knotPositions)
+      B2 <- covFct(spacetime2, brickObj$knotPositions)
+      covFct(spacetime1, spacetime2) - t(B1) %*% brickObj$K %*% B2
+    }
+    function(spacetime1, spacetime2) {
+      vFunOneLevelDown(spacetime1, spacetime2) - vFunOneLevelDown(spacetime1, brickObj$knotPositions) %*% vFunOneLevelDown(brickObj$knotPositions) %*% vFunOneLevelDown(spacetime2, brickObj$knotPositions)
+    }
+  }
+
+  parentAdresses <- .getParentAddresses(brickObj)
+
+  updatedV <- vFun(spacetime1, spacetime2) - vFun(spacetime1, brickObj$knotPositions) %*% vFun(knotPositions) %*% vFun(spacetime2, brickObj$knotPositions)
+
+
+
+
+}
+
+
