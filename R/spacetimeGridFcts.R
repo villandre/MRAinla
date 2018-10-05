@@ -278,7 +278,7 @@ subset.STI <- function(x, latExtent, lonExtent, timeExtent) {
 #' }
 #' @export
 
-.addKnots <- function(gridObj, knotsList = NULL, numKnotsFun = NULL, seed = NULL) {
+.addKnots <- function(gridObj, knotsList, argsForRandomKnots) {
   if (("STI" %in% class(knotsList))) { # If knotsList is NULL, class(knotsList) will return "NULL" (the class of NULL if "NULL", not inexistent.)
     knotsList <- replicate(.getM(gridObj)+1, expr = knotsList, simplify = FALSE) # In this situation, the knots are the same at every resolution. Might not be the best idea...
   }
@@ -289,7 +289,9 @@ subset.STI <- function(x, latExtent, lonExtent, timeExtent) {
     .populateKnots(gridObj, knotsList)
     invisible()
   }
-  .populateKnotsRandomGrid(gridObj = gridObj, numKnotsFun = numKnotsFun, seed = seed)
+  argsForRandomKnots$gridObj <- gridObj
+  do.call(".populateKnotsRandomGrid", args = argsForRandomKnots)
+  invisible()
 }
 
 .populateKnots <- function(gridObj, knotsList) {
