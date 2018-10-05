@@ -289,6 +289,9 @@ subset.STI <- function(x, latExtent, lonExtent, timeExtent) {
     .populateKnots(gridObj, knotsList)
     invisible()
   }
+  if (is.null(argsForRandomKnots)) {
+    argsForRandomKnots <- list()
+  }
   argsForRandomKnots$gridObj <- gridObj
   do.call(".populateKnotsRandomGrid", args = argsForRandomKnots)
   invisible()
@@ -359,7 +362,7 @@ logLik.Spacetimegrid <- function(gridObj) {
 # The basic scheme will place the knots randomly in the spatial coordinates, drawing the coordinates from a uniform distribution. Since time is discrete, the time coordinate of each knot will also be drawn at random, but from a discrete distribution.
 # The number of knots will be determined with a scaling constant, e.g. for M=3, (1/4, 1/2, 3/4, 1)*n. Any strictly positive function strictly increasing defined over 0 to M would be valid, with the additional condition that it takes value 1 at M, e.g. (1/M+1)*(x+1), sqrt((x+1)/(M+1)), log((x+1)/(M+1))+1, exp(theta(x - M))
 
-.populateKnotsRandomGrid <- function(gridObj, numKnotsFun, seed) {
+.populateKnotsRandomGrid <- function(gridObj, numKnotsFun = NULL, seed = NULL) {
   set.seed(seed)
   if (is.null(numKnotsFun)) {
     numKnotsFun <- function(m) 1/(gridObj$M+1)*(m+1)
@@ -371,29 +374,34 @@ logLik.Spacetimegrid <- function(gridObj) {
     gridObj$knotPositions <- gridObj$observations$sp@coords
     invisible()
   }
-  numKnots <- numKnotsFun(0)
-  randomizeKnotsInBrick(gridObj, numKnots)
-  lapply(gridObj$childBricks, .populateKnotsRandomBrick, numKnotsFun = numKnotsFun, M = gridObj$M)
+  numKnots <- ceiling(numKnotsFun(0)*length(gridObj$observations))
+  if (numKnots > 0) {
+    randomizeKnotsInBrick(gridObj, numKnots)
+    lapply(gridObj$childBricks, .populateKnotsRandomBrick, numKnotsFun = numKnotsFun, M = gridObj$M)
+  }
   invisible()
 }
 
 .populateKnotsRandomBrick <- function(brickObj, numKnotsFun, M) {
-  if (brickObj$depth == (M)) {
+  if (brickObj$depth == M) {
     brickObj$knotPositions <- brickObj$observations@sp@coords
   }
-  numKnots <- numKnotsFun(brickObj$depth)
-  randomizeKnotsInBrick(brickObj, numKnots)
-  if (!is.null(brickObj$childBricks)) {
-    lapply(brickObj$childBricks, .populateKnotsRandomBrick, numKnotsFun = numKnotsFun, M = M)
+  numKnots <- ceiling(numKnotsFun(brickObj$depth)*length(brickObj$observations))
+  if (numKnots > 0) {
+    randomizeKnotsInBrick(brickObj, numKnots)
+    if (!is.null(brickObj$childBricks)) {
+      lapply(brickObj$childBricks, .populateKnotsRandomBrick, numKnotsFun = numKnotsFun, M = M)
+    }
   }
   invisible()
 }
 
 randomizeKnotsInBrick <- function(brickObj, numKnots) {
-  brickKnotsLon <- runif(numKnots, brickObj$lon[1], brickObj$lon[2])
-  brickKnotsLat <- runif(numKnots, brickObj$lat[1], brickObj$lat[2])
-  brickKnotsTime <- sample(unique(brickObj$observations@time), numKnots, replace = TRUE)
-  knotPositions <- STI(sp = SpatialPoints(cbind(brickKnotsLon, brickKnotsLat)), time = brickKnotsTime)
+  shortRunif <- function(n, bounds) runif(n, bounds[1], bounds[2])
+  brickKnotsLon <- shortRunif(numKnots, brickObj$dimensions$longitude)
+  brickKnotsLat <- shortRunif(numKnots, brickObj$dimensions$latitude)
+  brickKnotsTimeIndices <- sample(1:length(brickObj$observations@time), numKnots, replace = TRUE)
+  knotPositions <- STI(sp = SpatialPoints(cbind(brickKnotsLon, brickKnotsLat)), time = brickObj$observations@time[brickKnotsTimeIndices])
   brickObj$knotPositions <- knotPositions
   invisible()
 }

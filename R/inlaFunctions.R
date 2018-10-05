@@ -66,7 +66,7 @@ MRA_INLA <- function(data, covFct, gridObj, numKnots, hyperpriorFunList) {
 #' @export
 
 
-setupGrid <- function(lonNewBreaksList, latNewBreaksList, timeNewBreaksList, observations = NULL, knotsList = NULL, r = rep(10, length(lonNewBreaksList)+1), covFct, ...) {
+setupGrid <- function(lonNewBreaksList, latNewBreaksList, timeNewBreaksList, observations = NULL, knotsList = NULL, covFct, argsForRandomKnots = NULL) {
   gridForMRA <- .SpacetimegridConstructor(parentBrick = NULL, lonBreaks = lonNewBreaksList[[1]], latBreaks = latNewBreaksList[[1]], timeBreaks = timeNewBreaksList[[1]], observations = observations)
   if (length(lonNewBreaksList) == 1) {
     return(gridForMRA)
@@ -74,7 +74,7 @@ setupGrid <- function(lonNewBreaksList, latNewBreaksList, timeNewBreaksList, obs
   lapply(seq_along(lonNewBreaksList)[-1], FUN = function(resolutionIndex) {
     .addLayer(gridForMRA, latBreaks = latNewBreaksList[[resolutionIndex]], lonBreaks = lonNewBreaksList[[resolutionIndex]], timeBreaks = timeNewBreaksList[[resolutionIndex]])
   })
-  .addKnots(gridForMRA, r = r, ...)
+  .addKnots(gridForMRA, knotsList = knotsList, argsForRandomKnots = argsForRandomKnots)
 
   .computeWmats(gridObj = gridForMRA, covFct = covFct)
   .setBtips(gridForMRA)
