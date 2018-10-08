@@ -419,7 +419,8 @@ logLik.Spacetimegrid <- function(gridObj) {
 
 .populateKnotsRandomBrick <- function(brickObj, numKnotsFun, M) {
   if (brickObj$depth == M) {
-    brickObj$knotPositions <- brickObj$observations@sp@coords
+    brickObj$knotPositions <- STI(sp = brickObj$observations@sp, time = brickObj$observations@time, endTime = brickObj$observations@endTime)
+    return(invisible())
   }
   numKnots <- ceiling(numKnotsFun(brickObj$depth)*length(brickObj$observations))
   if (numKnots > 0) {

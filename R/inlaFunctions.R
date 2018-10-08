@@ -42,22 +42,22 @@ MRA_INLA <- function(data, covFct, gridObj, numKnots, hyperpriorFunList) {
 }
 
 computeLogLik <- function(gridObj, covFct) {
-  .computeWmats(gridObj = gridForMRA, covFct = covFct)
-  .setBtips(gridForMRA)
-  .setSigmaTips(gridForMRA)
-  .setAtildeTips(gridForMRA)
-  .recurseA(gridForMRA)
-  .setOmegaTildeTips(gridForMRA)
-  .recurseOmega(gridForMRA)
+  .computeWmats(gridObj = gridObj, covFct = covFct)
+  .setBtips(gridObj)
+  .setSigmaTips(gridObj)
+  .setAtildeTips(gridObj)
+  .recurseA(gridObj)
+  .setOmegaTildeTips(gridObj)
+  .recurseOmega(gridObj)
 
-  .setDtips(gridForMRA)
-  .recurseD(gridForMRA)
+  .computeUtips(gridObj)
+  .recurseU(gridObj)
 
-  .setUtips(gridForMRA)
-  .recurseU(gridForMRA)
+  .computeDtips(gridObj)
+  .recurseD(gridObj)
 
-  gridForMRA$logLik <- gridForMRA$d + gridForMRA$u
-  gridForMRA
+  gridObj$logLik <- gridObj$d + gridObj$u
+  invisible()
 }
 
 spacetimeListConvertToPoints <- function(valuesList, timeValues = NULL) {
@@ -150,13 +150,13 @@ Npoints <- function(spacetimeObj) {
 
 .setAtildeTips <- function(gridObj) {
   allTips <- .tipAddresses(gridObj)
-  m <- gridObj$M
+  M <- gridObj$M
 
   modifyTip <- function(x) {
 
     x$Atilde <- vector('list', x$depth+1) # First level of the hierarchy is for k in Atilde^{k,l}.
     x$Atilde <- lapply(0:x$depth, function(k) vector('list', x$depth)) # Second level is for l in Atilde^{k,l}, same order as for k.
-    indexGrid <- expand.grid(k = 0:(m-1), l = 0:(m-1)) # We don't need A^{M,M}_{j_1, ..., j_M}
+    indexGrid <- expand.grid(k = 0:(M-1), l = 0:(M-1)) # We don't need A^{M,M}_{j_1, ..., j_M}
     indexGrid <- subset(indexGrid, subset = k >= l)
 
     for (i in 1:nrow(indexGrid)) {
@@ -181,7 +181,6 @@ Npoints <- function(spacetimeObj) {
   }
 
   m <- brickObj$depth
-
   indexGrid <- expand.grid(k = 0:m, l = 0:m)
   indexGrid <- subset(indexGrid, subset = k >= l)
 
@@ -220,23 +219,20 @@ Npoints <- function(spacetimeObj) {
   }
 
   if (is.null(brickObj$childBricks[[1]]$d)) {
-    lapply(brickObj$childBricks, .computeD)
+    lapply(brickObj$childBricks, .recurseD)
   }
 
-  brickObj$d <- log(det(brickObj$KtildeInverse)) - log(det(brickObj$Kinverse)) + sum(vapply(brickObj$childBricks, FUN.VALUE = 'numeric', function(childBrick) childBrick$d))
+  brickObj$d <- log(det(brickObj$KtildeInverse)) - log(det(brickObj$Kinverse)) + sum(sapply(brickObj$childBricks, FUN = function(childBrick) childBrick$d))
   invisible()
 }
 
 .setOmegaTildeTips <- function(gridObj) {
   allTips <- .tipAddresses(gridObj)
-  m <- gridObj$M
 
   modifyTip <- function(x) {
-
     x$omegaTilde <- replicate(n = x$depth+1, expr = vector('list', x$depth + 1), simplify = FALSE)
 
     for (k in 0:(gridObj$M-1)) {
-
       x$omegaTilde[[k+1]] <- t(x$BmatList[[k+1]]) %*% x$SigmaInverse %*% x$observations@data[ , 1]
     }
     invisible()
@@ -260,7 +256,9 @@ Npoints <- function(spacetimeObj) {
     Reduce("+", lapply(brickObj$childBricks, function(x) {
       x$omegaTilde[[k+1]]
     }))
-  }, SIMPLIFY = FALSE)
+  })
+
+ brickObj$omega <- omegaMatrices
 
   brickObj$omegaTilde <- lapply(0:m, FUN = function(k) {
     brickObj$omega[[k+1]] - brickObj$A[[k+1]][[m+1]] %*% brickObj$Ktilde %*% brickObj$omega[[m+1]]
@@ -270,7 +268,6 @@ Npoints <- function(spacetimeObj) {
 
 .computeUtips <- function(gridObj) {
   allTips <- .tipAddresses(gridObj)
-  m <- gridObj$M
 
   modifyTip <- function(x) {
     x$u <- t(x$observations@data[ , 1]) %*% x$SigmaInverse %*% x$observations@data[ , 1] ## QUADRATIC FORM: MAY BE OPTIMIZED.
@@ -280,16 +277,16 @@ Npoints <- function(spacetimeObj) {
   invisible()
 }
 
-.recurseU <- function(gridObj) {
+.recurseU <- function(brickObj) {
   if (is.null(brickObj$childBricks)) {
     return(invisible())
   }
 
-  if (is.null(brickObj$childBricks[[1]]$d)) {
-    lapply(brickObj$childBricks, .computeD)
+  if (is.null(brickObj$childBricks[[1]]$u)) {
+    lapply(brickObj$childBricks, .recurseU)
   }
 
-  brickObj$u <- -t(brickObj$omega[[brickObj$depth+1]]) %*% brickObj$Ktilde %*% brickObj$omega[[brickObj$depth + 1]] + sum(vapply(brickObj$childBricks, FUN.VALUE = 'numeric', function(childBrick) childBrick$u)) ## QUADRATIC FORM, MIGHT BE POSSIBLE TO OPTIMIZE.
+  brickObj$u <- -t(brickObj$omega[[brickObj$depth+1]]) %*% brickObj$Ktilde %*% brickObj$omega[[brickObj$depth + 1]] + sum(sapply(brickObj$childBricks, FUN = function(childBrick) childBrick$u)) ## QUADRATIC FORM, MIGHT BE POSSIBLE TO OPTIMIZE.
   invisible()
 }
 
