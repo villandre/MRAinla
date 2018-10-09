@@ -5,7 +5,7 @@
 #' @param lonNewBreaksList list of longitude breaks, one element per resolution, breaks are specified incrementally (see Details)
 #' @param latNewBreaksList list of latitude breaks, one element per resolution, breaks are specified incrementally (see Details)
 #' @param timeNewBreaksList list of time breaks, one element per resolution, breaks are specified incrementally (see Details)
-#' @param observations a Spacetime object giving the position and values of the observed data
+#' @param observations a Spacetime object giving the position and values of the observed data and covariates. The first column is the response. Each additional column represents a covariate. Cannot include missing values (NAs) for now.
 #' @param knotsList (optional) list of Spacetime objects giving knot positions at each resolution. If left empty, knots are placed automatically
 #' @param r (optional) If knots are placed automatically, a vector indicating the number of knots to create in each region
 #' @param ... Additional parameters for the automated knot placement scheme, see .populateKnots
