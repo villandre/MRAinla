@@ -226,14 +226,28 @@ Npoints <- function(spacetimeObj) {
   invisible()
 }
 
-.setOmegaTildeTips <- function(gridObj) {
+.setOmegaTildeTips <- function(gridObj, fixedEffectVec) {
   allTips <- .tipAddresses(gridObj)
 
   modifyTip <- function(x) {
     x$omegaTilde <- replicate(n = x$depth+1, expr = vector('list', x$depth + 1), simplify = FALSE)
+    responseCol <- match("y", colnames(x$observations@data)) # Works if x$observations@data does not have colnames.
+    if (is.na(responseCol)) {
+      responseCol <- 1
+    }
+    covData <- cbind(1, x$observations@data[, -1]) # Adding a column of 1s for intercept. I'm assuming that intercept value will be first in fixedEffectVec. Removing the response column.
+    if (!is.null(names(fixedEffectVec)) & !is.null(colnames(x$observations@data))) {
+      matchingOrder <- match(colnames(x$observations@data), names(fixedEffectVec))
+      covData <- x$observations@data[ , matchingOrder]
+    }
+
+    rescaledObservations <- x$observations@data[ , responseCol]
+    if  (!is.null(fixedEffectVec)) {
+      rescaledObservations <- rescaledObservations - covData %*% fixedEffectVec
+    }
 
     for (k in 0:(gridObj$M-1)) {
-      x$omegaTilde[[k+1]] <- t(x$BmatList[[k+1]]) %*% x$SigmaInverse %*% x$observations@data[ , 1]
+      x$omegaTilde[[k+1]] <- t(x$BmatList[[k+1]]) %*% x$SigmaInverse %*% rescaledObservations
     }
     invisible()
   }
