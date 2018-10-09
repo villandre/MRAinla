@@ -56,7 +56,7 @@ computeLogLik <- function(gridObj, covFct) {
   .computeDtips(gridObj)
   .recurseD(gridObj)
 
-  gridObj$logLik <- gridObj$d + gridObj$u
+  gridObj$logLik <- -(gridObj$d + gridObj$u)/2
   invisible()
 }
 
@@ -142,7 +142,7 @@ Npoints <- function(spacetimeObj) {
   allTips <- .tipAddresses(gridObj)
   lapply(allTips, FUN = function(x) {
     x$Sigma <- x$WmatList[[gridObj$M+1]]
-    x$SigmaInverse <- solve(x$Sigma)
+    x$SigmaInverse <- Matrix::chol2inv(Matrix::chol(x$Sigma))
     invisible()
   }) # The last element in Bmat will be NULL, since B^M_{j_1, ..., j_M} is undefined,
   invisible()
@@ -270,7 +270,7 @@ Npoints <- function(spacetimeObj) {
   allTips <- .tipAddresses(gridObj)
 
   modifyTip <- function(x) {
-    x$u <- t(x$observations@data[ , 1]) %*% x$SigmaInverse %*% x$observations@data[ , 1] ## QUADRATIC FORM: MAY BE OPTIMIZED.
+    x$u <- t(x$observations@data[ , 1]) %*% x$SigmaInverse %*% as.matrix(x$observations@data[ , 1]) ## QUADRATIC FORM: MAY BE OPTIMIZED.
     invisible()
   }
   lapply(allTips, FUN = modifyTip)
