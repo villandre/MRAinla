@@ -263,12 +263,7 @@ Npoints <- function(spacetimeObj) {
   if  (!is.null(fixedEffectVec)) {
     rescaledObservations <- rescaledObservations - drop(covData %*% fixedEffectVec)
   }
-  strip(rescaledObservations)
-}
-
-strip <- function(x) {
-  names(x) <- NULL
-  x
+  unname(rescaledObservations)
 }
 
 .recurseOmega <- function(brickObj) {
