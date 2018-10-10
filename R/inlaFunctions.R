@@ -47,10 +47,10 @@ computeLogLik <- function(gridObj, covFct, fixedEffectParVec = NULL) {
   .setSigmaTips(gridObj)
   .setAtildeTips(gridObj)
   .recurseA(gridObj)
-  .setOmegaTildeTips(gridObj)
+  .setOmegaTildeTips(gridObj, fixedEffectVec = fixedEffectParVec)
   .recurseOmega(gridObj)
 
-  .computeUtips(gridObj)
+  .computeUtips(gridObj, fixedEffectVec = fixedEffectParVec)
   .recurseU(gridObj)
 
   .computeDtips(gridObj)
@@ -252,18 +252,23 @@ Npoints <- function(spacetimeObj) {
   if (is.na(responseCol)) {
     responseCol <- 1
   }
-  covData <- cbind(1, obsData[ , -responseCol]) # The additional column is for the intercept.
+  covData <- as.matrix(cbind(Placeholderz = 1, obsData[ , -responseCol, drop = FALSE])) # The additional column is for the intercept.
 
-  if (!is.null(names(fixedEffectVec)) & !is.null(colnames(x$observations@data))) {
+  if (!is.null(names(fixedEffectVec)) & !is.null(colnames(obsData))) {
     matchingOrder <- match(names(fixedEffectVec), colnames(covData))
     matchingOrder <- c(1, matchingOrder[!is.na(matchingOrder)]) # The NA appears because of the intercept term.
     covData <- covData[ , matchingOrder]
   }
   rescaledObservations <- obsData[ , responseCol]
   if  (!is.null(fixedEffectVec)) {
-    rescaledObservations <- rescaledObservations - covData %*% fixedEffectVec
+    rescaledObservations <- rescaledObservations - drop(covData %*% fixedEffectVec)
   }
-  return(rescaledObservations)
+  strip(rescaledObservations)
+}
+
+strip <- function(x) {
+  names(x) <- NULL
+  x
 }
 
 .recurseOmega <- function(brickObj) {
