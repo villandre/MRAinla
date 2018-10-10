@@ -226,25 +226,17 @@ Npoints <- function(spacetimeObj) {
   invisible()
 }
 
+# If elements of fixedEffectVec and the columns in "observations elements are named, the function will try to match them. The name of the intercept term does not matter.
+# If the names of the covariates don't match, an error is produced. If names are missing in either, it is assumed that the first term in fixedEffectVec is for the intercept, and that the order of the other terms matches that of the columns in observations@data (the response can be in any column, as long as the ordering of the covariate columns is the same as in fixedEffectVec).
+# If the response column in observations@data is not called "y", it is assumed that the first column is the response.
+
 .setOmegaTildeTips <- function(gridObj, fixedEffectVec) {
   allTips <- .tipAddresses(gridObj)
 
   modifyTip <- function(x) {
     x$omegaTilde <- replicate(n = x$depth+1, expr = vector('list', x$depth + 1), simplify = FALSE)
-    responseCol <- match("y", colnames(x$observations@data)) # Works if x$observations@data does not have colnames.
-    if (is.na(responseCol)) {
-      responseCol <- 1
-    }
-    covData <- cbind(1, x$observations@data[, -1]) # Adding a column of 1s for intercept. I'm assuming that intercept value will be first in fixedEffectVec. Removing the response column.
-    if (!is.null(names(fixedEffectVec)) & !is.null(colnames(x$observations@data))) {
-      matchingOrder <- match(colnames(x$observations@data), names(fixedEffectVec))
-      covData <- x$observations@data[ , matchingOrder]
-    }
 
-    rescaledObservations <- x$observations@data[ , responseCol]
-    if  (!is.null(fixedEffectVec)) {
-      rescaledObservations <- rescaledObservations - covData %*% fixedEffectVec
-    }
+    rescaledObservations <- .rescaleObservations(x$observations@data, fixedEffectVec)
 
     for (k in 0:(gridObj$M-1)) {
       x$omegaTilde[[k+1]] <- t(x$BmatList[[k+1]]) %*% x$SigmaInverse %*% rescaledObservations
@@ -253,6 +245,25 @@ Npoints <- function(spacetimeObj) {
   }
   lapply(allTips, FUN = modifyTip) # The last element in Bmat will be NULL, since B^M_{j_1, ..., j_M} is undefined,
   invisible()
+}
+
+.rescaleObservations <- function(obsData, fixedEffectVec) {
+  responseCol <- match("y", colnames(obsData)) # Will return NA if x$observations@data does not have colnames.
+  if (is.na(responseCol)) {
+    responseCol <- 1
+  }
+  covData <- cbind(1, obsData[ , -responseCol]) # The additional column is for the intercept.
+
+  if (!is.null(names(fixedEffectVec)) & !is.null(colnames(x$observations@data))) {
+    matchingOrder <- match(names(fixedEffectVec), colnames(covData))
+    matchingOrder <- c(1, matchingOrder[!is.na(matchingOrder)]) # The NA appears because of the intercept term.
+    covData <- covData[ , matchingOrder]
+  }
+  rescaledObservations <- obsData[ , responseCol]
+  if  (!is.null(fixedEffectVec)) {
+    rescaledObservations <- rescaledObservations - covData %*% fixedEffectVec
+  }
+  return(rescaledObservations)
 }
 
 .recurseOmega <- function(brickObj) {
@@ -280,11 +291,12 @@ Npoints <- function(spacetimeObj) {
   invisible()
 }
 
-.computeUtips <- function(gridObj) {
+.computeUtips <- function(gridObj, fixedEffectVec) {
   allTips <- .tipAddresses(gridObj)
 
   modifyTip <- function(x) {
-    x$u <- t(x$observations@data[ , 1]) %*% x$SigmaInverse %*% as.matrix(x$observations@data[ , 1]) ## QUADRATIC FORM: MAY BE OPTIMIZED.
+    rescaledObservations <- .rescaleObservations(x$observations@data, fixedEffectVec)
+    x$u <- t(rescaledObservations) %*% x$SigmaInverse %*% rescaledObservations ## QUADRATIC FORM: MAY BE OPTIMIZED.
     invisible()
   }
   lapply(allTips, FUN = modifyTip)
