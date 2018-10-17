@@ -29,7 +29,68 @@
 #' @export
 
 MRA_INLA <- function(data, covFct, gridObj, numKnots, hyperpriorFunList) {
- # TO_DO
+  psiFun <- function(psi) {
+    prod(sapply(seq_along(hyperpriorFunList), function(hyperIndex) hyperpriorFunList[hyperIndex](psi[hyperIndex])))
+  }
+  dataLikFun <- function(x, mean, variance) {
+    dnorm(x = x, mean = mean, sd = sqrt(variance))
+  }
+  MRAlikFunc <- function() #############################################
+  .makeMarginalPsiFun(psiPriorFun = psiFun, MRAlikFun = , dataLikFun = dataLikFun, y, covValues, MRAprecision)
+}
+
+.makeMarginalPsiFun <- function(psiPriorFun, MRAlikFun, dataLikFun, y, covValues, MRAprecision) {
+  ## We need to find mode of conditional
+  function(psi) {
+    modeAndCurvature <- .findModeAndCurvature(y = y, covValues = covValues, MEvar = psi$MEvar, MRAprecision = MRAprecision)
+    psiPriorFun(psi)*MRAlikFun(theta = modeAndCurvature$mode, hyperpara = psi)*dataLikFun(y, modeAndCurvature$mode, psi$MEvar)/mvnfast::dmvn(X = modeAndCurvature$mode, mu = modeAndCurvature$mode, sigma = modeAndCurvature$curvature, ncores = 1) # THE NUMBER OF CORES COULD BE CHANGED EVENTUALLY BUT LET'S SEE IF PERFORMANCE IN THIS STEP IS A REAL ISSUE BEFORE GOING MULTITHREADED.
+  }
+}
+
+.findModeAndCurvature <- function(y, covValues, startingValuesForTheta = rep(0, ncol(covValues) + 1 + nrow(covValues)), MEvar, MRAprecision) {
+  InvFisherMatrix <- Matrix::chol2inv(chol(.FisherInfo(covValues = covValues, MEvar = MEvar, MRAprecision = MRAprecision)))
+  shortScoreFun <- function(theta) {
+    fixed <- theta[1:(nrow(covValues)+1)]
+    ran <- theta[(nrow(covValues)+2):length(y)]
+    .scoreFun(y = y, fixedCoefs = fixed, MEvar = MEvar, covValues = covValues, ranEffects = ran, MRAprecision = MRAprecision)
+  }
+  modeValue <- .FisherScoringAlgo(invFisherInfo = InvFisherMatrix, scoreFun = shortScoreFun)
+  curvature <- .curvatureFun(covValues = covValues, MEvar = MEvar, MRAprecision = MRAprecision) # The curvature does not depend on the mode itself.
+  list(mode = modeValue, curvature = curvature)
+}
+
+.scoreFun <- function(y, fixedCoefs, MEvar, covValues, ranEffects, MRAprecision) {
+  meanFun <- function(covarVec, ranEffect) {
+    sum(fixedCoefs*c(1,covarVec)) + ranEffect
+  }
+  covValuesWithIntercept <- cbind(Intercept = 1, covValues)
+  lapplyInternal <- function(obsIndex) {
+    derivMean <- c(1, x, rep(1, length(y)))
+    (y[obsIndex] - meanFun(covValuesWithIntercept[obsIndex, ], ranEffects[obsIndex])) * derivMean
+  }
+  allDerivs <- lapply(seq_along(y), lapplyInternal)
+  -do.call('+', allDerivs)/MEvar + c(fixedCoefs, ranEffects) %*% MRAprecision
+}
+
+.FisherInfo <- function(covValues, MEvar, MRAprecision) {
+  derivVecs <- lapply(1:nrow(covValues), function(obsIndex) c(1, covValues[obsIndex, ], rep(1, nrow(covValues))))
+  derivMat <- do.call("cbind", derivVecs)
+  MEvar * t(derivMat) %*% derivMat + MRAprecision
+}
+
+.FisherScoringAlgo <- function(tol = 1e-5, startingVal = rep(0, nrow(invFisherInfo)), invFisherInfo, scoreFun) {
+  updatedVal <- startingVal + invFisherInfo %*% scoreFun(startingVal)
+  if (max(updatedVal - startingVal) > tol) {
+    updatedVal <- .FisherScoringAlgo(tol = tol, startingVal = updatedVal, invFisherInfo = invFisherInfo, scoreFun = scoreFun)
+  }
+  updatedVal
+}
+
+# In our situation, the curvature is constant, hence the absence of a position argument.
+
+.curvatureFun <- function(covValues, MEvar, MRAprecision) {
+  curvatures <- lapply(1:nrow(covValues), function(rowIndex) c(1, covValues[rowIndex, ], rep(1, nrow(covValues)))^2)
+  do.call("+", curvatures)/MEvar + t(rowSums(MRAprecision))
 }
 
 .logGMRFprior <- function(paraValuesList, SigmaValuesList) {
