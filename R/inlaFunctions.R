@@ -28,22 +28,35 @@
 #' }
 #' @export
 
-MRA_INLA <- function(data, covFct, gridObj, numKnots, hyperpriorFunList) {
-  psiFun <- function(psi) {
+MRA_INLA <- function(covarianceFct, gridObj, numKnots, hyperpriorFunList) {
+  hyperpriorNames <- names(hyperpriorFunList)
+  covarianceParas <- hyperpriorNames[!(hyperpriorNames == "MEvar")]
+
+  respAndCovValues <- gridObj$dataset@data
+  psiFun <- function(psi) { # Values of psi must be named! The element for the measurement error variance must be named "MEvar".
     prod(sapply(seq_along(hyperpriorFunList), function(hyperIndex) hyperpriorFunList[hyperIndex](psi[hyperIndex])))
   }
   dataLikFun <- function(x, mean, variance) {
     dnorm(x = x, mean = mean, sd = sqrt(variance))
   }
-  MRAlikFunc <- function() #############################################
-  .makeMarginalPsiFun(psiPriorFun = psiFun, MRAlikFun = , dataLikFun = dataLikFun, y, covValues, MRAprecision)
+  MRAlikFun <- function(gridObj, spacetimeTheta, hyperpara) {
+    covFct <- function(spacetime1, spacetime2) {
+      covarianceHyperValuesAsList <- as.list(hyperpara[covarianceParas])
+      do.call("covarianceFct", args = c(list(spacetime1 = spacetime1, spacetime2 = spacetime2), covarianceHyperValuesAsList))
+    }
+    .populateObservations(gridObj, spacetimeTheta) # Maybe computational gains could be obtained if the thetas could be directly assigned to the different regions.
+    computeLogLik(gridObj = gridObj, covFct = covarianceFct)
+  }
+  .makeMarginalPsiFun(gridObj, psiPriorFun = psiFun, MRAlikFun = MRAlikFun, dataLikFun = dataLikFun)
 }
 
-.makeMarginalPsiFun <- function(psiPriorFun, MRAlikFun, dataLikFun, y, covValues, MRAprecision) {
-  ## We need to find mode of conditional
+# MRAprecision will have to be coded as block diagonal to ensure tractability.
+
+.makeMarginalPsiFun <- function(gridObj, psiPriorFun, MRAlikFun, dataLikFun) {
   function(psi) {
-    modeAndCurvature <- .findModeAndCurvature(y = y, covValues = covValues, MEvar = psi$MEvar, MRAprecision = MRAprecision)
-    psiPriorFun(psi)*MRAlikFun(theta = modeAndCurvature$mode, hyperpara = psi)*dataLikFun(y, modeAndCurvature$mode, psi$MEvar)/mvnfast::dmvn(X = modeAndCurvature$mode, mu = modeAndCurvature$mode, sigma = modeAndCurvature$curvature, ncores = 1) # THE NUMBER OF CORES COULD BE CHANGED EVENTUALLY BUT LET'S SEE IF PERFORMANCE IN THIS STEP IS A REAL ISSUE BEFORE GOING MULTITHREADED.
+    MRAlikFun(gridObj = gridObj, spacetimeTheta = modeAndCurvature$mode, hyperpara = psi)
+    modeAndCurvature <- .findModeAndCurvature(y = spacetimeData@data[, 1], covValues = spacetimeData@data[, -1], MEvar = psi$MEvar, MRAprecision = gridObj$SigmaInverse) # The MRA precision matrix is assumed to be SigmaInverse for the spatiotemporal brick at M=0.
+    psiPriorFun(psi)*exp(gridObj$logLik)*dataLikFun(y, modeAndCurvature$mode, psi$MEvar)/mvnfast::dmvn(X = modeAndCurvature$mode, mu = modeAndCurvature$mode, sigma = modeAndCurvature$curvature, ncores = 1) # THE NUMBER OF CORES COULD BE CHANGED EVENTUALLY BUT LET'S SEE IF PERFORMANCE IN THIS STEP IS A REAL ISSUE BEFORE GOING MULTITHREADED. That'll probably result in a computational zero.
   }
 }
 
@@ -287,9 +300,9 @@ Npoints <- function(spacetimeObj) {
   invisible()
 }
 
-# If elements of fixedEffectVec and the columns in "observations elements are named, the function will try to match them. The name of the intercept term does not matter.
-# If the names of the covariates don't match, an error is produced. If names are missing in either, it is assumed that the first term in fixedEffectVec is for the intercept, and that the order of the other terms matches that of the columns in observations@data (the response can be in any column, as long as the ordering of the covariate columns is the same as in fixedEffectVec).
-# If the response column in observations@data is not called "y", it is assumed that the first column is the response.
+# If elements of fixedEffectVec and the columns in "dataset" element are named, the function will try to match them. The name of the intercept term does not matter.
+# If the names of the covariates don't match, an error is produced. If names are missing in either, it is assumed that the first term in fixedEffectVec is for the intercept, and that the order of the other terms matches that of the columns in dataset@data (the response can be in any column, as long as the ordering of the covariate columns is the same as in fixedEffectVec).
+# If the response column in dataset@data is not called "y", it is assumed that the first column is the response.
 
 .setOmegaTildeTips <- function(gridObj, fixedEffectVec) {
   allTips <- .tipAddresses(gridObj)
@@ -297,7 +310,7 @@ Npoints <- function(spacetimeObj) {
   modifyTip <- function(x) {
     x$omegaTilde <- replicate(n = x$depth+1, expr = vector('list', x$depth + 1), simplify = FALSE)
 
-    rescaledObservations <- .rescaleObservations(x$observations@data, fixedEffectVec)
+    rescaledObservations <- .rescaleObservations(gridObj@dataset@data[x$observations, ], fixedEffectVec)
 
     for (k in 0:(gridObj$M-1)) {
       x$omegaTilde[[k+1]] <- t(x$BmatList[[k+1]]) %*% x$SigmaInverse %*% rescaledObservations
@@ -309,7 +322,7 @@ Npoints <- function(spacetimeObj) {
 }
 
 .rescaleObservations <- function(obsData, fixedEffectVec) {
-  responseCol <- match("y", colnames(obsData)) # Will return NA if x$observations@data does not have colnames.
+  responseCol <- match("y", colnames(obsData)) # Will return NA if obsData does not have colnames.
   if (is.na(responseCol)) {
     responseCol <- 1
   }
@@ -356,7 +369,7 @@ Npoints <- function(spacetimeObj) {
   allTips <- .tipAddresses(gridObj)
 
   modifyTip <- function(x) {
-    rescaledObservations <- .rescaleObservations(x$observations@data, fixedEffectVec)
+    rescaledObservations <- .rescaleObservations(gridObj$dataset@data[x$observations, ], fixedEffectVec)
     x$u <- t(rescaledObservations) %*% x$SigmaInverse %*% rescaledObservations ## QUADRATIC FORM: MAY BE OPTIMIZED.
     invisible()
   }
