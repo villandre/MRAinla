@@ -29,8 +29,8 @@ setupGrid <- function(lonNewBreaksList, latNewBreaksList, timeNewBreaksList, dat
   lapply(seq_along(lonNewBreaksList)[-1], FUN = function(resolutionIndex) {
     .addLayer(gridForMRA, latBreaks = latNewBreaksList[[resolutionIndex]], lonBreaks = lonNewBreaksList[[resolutionIndex]], timeBreaks = timeNewBreaksList[[resolutionIndex]])
   })
-  .addKnots(gridForMRA, knotsList = knotsList, argsForRandomKnots = argsForRandomKnots)
   .populateObservations(gridObj = gridForMRA, dataset = dataset)
+  .addKnots(gridForMRA, knotsList = knotsList, argsForRandomKnots = argsForRandomKnots)
   gridForMRA
 }
 
@@ -261,17 +261,21 @@ getLayer <- function(spacetimeGridObj, m = 0) {
 # From a memory standpoint, it might make more sense not to copy the observations themselves in each spacetimeBrick, but rather their indices. We could store the dataset only in the top brick (resolution 0).
 
 .populateObservations <- function(gridObj, dataset) {
-  gridObj@dataset <- dataset
-  gridObj@observations <- 1:spacetime::length(dataset)
+  gridObj$dataset <- dataset
+  rownames(gridObj$dataset@data) <- as.character(1:spacetime:::length.STIDF(dataset))
+  gridObj$observations <- 1:spacetime:::length.STIDF(dataset)
   if (!is.null(gridObj$childBricks)) {
     lapply(gridObj$childBricks, .addObservations, dataset = dataset)
   }
   invisible()
 }
 
-.addObservations <- function(brickEnvironment, dataset) {
-  entriesInRegion <- subset(dataset, lonExtent = brickEnvironment$dimensions$longitude, latExtent = brickEnvironment$dimensions$latitude, timeExtent = brickEnvironment$dimensions$time)
-  brickEnvironment$observations <- as.numeric(rownames(entriesInRegion))
+.addObservations <- function(brickObj, dataset) {
+  entriesInRegion <- subset(dataset, lonExtent = brickObj$dimensions$longitude, latExtent = brickObj$dimensions$latitude, timeExtent = brickObj$dimensions$time)
+  brickObj$observations <- as.numeric(rownames(entriesInRegion@data))
+  if (!is.null(brickObj$childBricks)) {
+    lapply(brickObj$childBricks, .addObservations, dataset = dataset)
+  }
   invisible()
 }
 
@@ -336,7 +340,7 @@ subset.STI <- function(x, latExtent, lonExtent, timeExtent) {
   }
   if (!is.null(knotsList)) {
     .populateKnots(gridObj, knotsList)
-    invisible()
+    return(invisible())
   }
   if (is.null(argsForRandomKnots)) {
     argsForRandomKnots <- list()
@@ -420,7 +424,7 @@ logLik.Spacetimegrid <- function(gridObj) {
     seed <- 42
   }
   if (gridObj$M == 0) {
-    gridObj$knotPositions <- gridObj$dataset$sp@coords
+    gridObj$knotPositions <- gridObj$dataset@sp@coords
     invisible()
   }
   numKnots <- ceiling(numKnotsFun(0)*length(gridObj$dataset))
@@ -434,7 +438,7 @@ logLik.Spacetimegrid <- function(gridObj) {
 .populateKnotsRandomBrick <- function(brickObj, numKnotsFun, M) {
   gridAddress <- .getTopEnvirAddress(brickObj)
   if (brickObj$depth == M) {
-    brickObj$knotPositions <- STI(sp = gridAddress$dataset@sp[brickObj@observations], time = gridAddress$dataset@time[brickObj@observations], endTime = gridAddress$dataset@endTime[brickObj@observations])
+    brickObj$knotPositions <- STI(sp = gridAddress$dataset@sp[brickObj$observations], time = gridAddress$dataset@time[brickObj$observations], endTime = gridAddress$dataset@endTime[brickObj$observations])
     return(invisible())
   }
   numKnots <- ceiling(numKnotsFun(brickObj$depth)*length(brickObj$observations))
@@ -448,12 +452,12 @@ logLik.Spacetimegrid <- function(gridObj) {
 }
 
 randomizeKnotsInBrick <- function(brickObj, numKnots) {
-  gridAddress <- .getTopEnvirAddress()
+  gridAddress <- .getTopEnvirAddress(brickObj)
   shortRunif <- function(n, bounds) runif(n, bounds[1], bounds[2])
   brickKnotsLon <- shortRunif(numKnots, brickObj$dimensions$longitude)
   brickKnotsLat <- shortRunif(numKnots, brickObj$dimensions$latitude)
   brickKnotsTimeIndices <- sample(1:length(brickObj$observations), numKnots, replace = TRUE)
-  knotPositions <- STI(sp = SpatialPoints(cbind(brickKnotsLon, brickKnotsLat)), time = gridAddress$dataset@time[brickObj@observations][brickKnotsTimeIndices])
+  knotPositions <- STI(sp = SpatialPoints(cbind(brickKnotsLon, brickKnotsLat)), time = gridAddress$dataset@time[brickObj$observations][brickKnotsTimeIndices])
   brickObj$knotPositions <- knotPositions
   invisible()
 }

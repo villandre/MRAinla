@@ -310,7 +310,7 @@ Npoints <- function(spacetimeObj) {
   modifyTip <- function(x) {
     x$omegaTilde <- replicate(n = x$depth+1, expr = vector('list', x$depth + 1), simplify = FALSE)
 
-    rescaledObservations <- .rescaleObservations(gridObj@dataset@data[x$observations, ], fixedEffectVec)
+    rescaledObservations <- .rescaleObservations(gridObj$dataset@data[x$observations, ], fixedEffectVec)
 
     for (k in 0:(gridObj$M-1)) {
       x$omegaTilde[[k+1]] <- t(x$BmatList[[k+1]]) %*% x$SigmaInverse %*% rescaledObservations
@@ -400,4 +400,40 @@ Npoints <- function(spacetimeObj) {
     newList[[l + 1]][[k + 1]] <- t(newList[[k + 1]][[l + 1]])
   }
   newList
+}
+
+# Prediction functions
+
+predict.Spacetimegrid <- function(gridObj, spacetimeCoor) {
+  .computeBtildeTips(gridObj, spacetimeCoor)
+  .computeLtips(gridObj, spacetimeCoor)
+  .computeVtips(gridObj, spacetimeCoor)
+  meanVector <- .computeMeanDist(gridObj, spacetimeCoor)
+  covMatrix <- .computeCovMat(gridObj, spacetimeCoor)
+  list(predictions = meanVector, covMat = covMatrix)
+}
+
+.computeBtildeTips <- function(gridObj, locations) {
+  allTips <- .tipAddresses(gridObj)
+  # We'll fit Btilde^{l,k} in a list of lists
+
+  # First for l = M... We need the tail elements only. We need b_{j_1, ..., j_{M-1}}(predict locations).
+  lapply(allTips, .computeBtildeTipsInternal, locations = locations)
+}
+
+.computeBtildeInternal <- function(brickObj, locations) {
+  BtildeList <- vector(mode = 'list', length = gridObj$M)
+  BtildeList <- lapply(seq_along(BtildeList), function(index) vector(mode = 'list', length = index))
+  gridObj <- .getTopEnvirAddress(brickObj)
+  vZero <- gridObj$covFct(locations, gridObj$knotPositions)
+
+  updatedV <- vZero
+  pointedBrick <- gridObj
+
+  for (i in 1:(gridObj$M-1)) {
+    lapply(pointedBrick$childBricks, function(brickPointer) {
+
+    })
+    updatedV <- updatedV -
+  }
 }
