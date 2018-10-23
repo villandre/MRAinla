@@ -384,13 +384,16 @@ subset.STI <- function(x, latExtent, lonExtent, timeExtent) {
   SpatialPoints(t(sapply(distances, returnCoord, upperLeftCoor = upperLeftCoor, width = width, height = height)))
 }
 
-.getAllParentAddresses <- function(brickObj) {
+.getAllParentAddresses <- function(brickObj, flip = FALSE) {
 
   brickObjList <- vector("list", length = brickObj$depth + 1)
   brickObjList[[brickObj$depth + 1]] <- brickObj
 
   if (!(brickObj$depth == 0)) {
     brickObjList <- .recurseParent(parent.env(brickObj), brickObjList)
+  }
+  if (flip) {
+    brickObjList <- brickObjList[length(brickObjList):1]
   }
   brickObjList
 }

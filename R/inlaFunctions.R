@@ -116,6 +116,7 @@ MRA_INLA <- function(covarianceFct, gridObj, numKnots, hyperpriorFunList) {
 }
 
 computeLogLik <- function(gridObj, covFct, fixedEffectParVec = NULL) {
+  gridObj$covFct <- covFct
   .computeWmats(gridObj = gridObj, covFct = covFct)
   .setBtips(gridObj)
   .setSigmaTips(gridObj)
@@ -414,26 +415,45 @@ predict.Spacetimegrid <- function(gridObj, spacetimeCoor) {
 }
 
 .computeBtildeTips <- function(gridObj, locations) {
-  allTips <- .tipAddresses(gridObj)
-  # We'll fit Btilde^{l,k} in a list of lists
-
-  # First for l = M... We need the tail elements only. We need b_{j_1, ..., j_{M-1}}(predict locations).
-  lapply(allTips, .computeBtildeTipsInternal, locations = locations)
-}
-
-.computeBtildeInternal <- function(brickObj, locations) {
-  BtildeList <- vector(mode = 'list', length = gridObj$M)
-  BtildeList <- lapply(seq_along(BtildeList), function(index) vector(mode = 'list', length = index))
-  gridObj <- .getTopEnvirAddress(brickObj)
   vZero <- gridObj$covFct(locations, gridObj$knotPositions)
 
-  updatedV <- vZero
-  pointedBrick <- gridObj
-
-  for (i in 1:(gridObj$M-1)) {
-    lapply(pointedBrick$childBricks, function(brickPointer) {
-
-    })
-    updatedV <- updatedV -
-  }
+  lapply(gridObj$childBricks, .computeBtildeTipsInternal, parentMat = parentConfig, locations = locations)
 }
+
+.computeBtildeInternal <- function(brickObj, parentMat, locations) {
+  BtildeList <- vector(mode = 'list', length = gridObj$M)
+  BtildeList <- lapply(seq_along(BtildeList), function(index) vector(mode = 'list', length = index))
+
+
+}
+
+.computeBpred <- function(gridObj, locations) {
+  initiateBs <- function(brickObj) {
+    brickObj$bKnots <- vector('list', length = brickObj$depth)
+    brickObj$bKnots[[1]] <- gridObj$covFct(brickObj$knotPositions, gridObj$knotPositions)
+    if (!is.null(brickObj$childBricks)) {
+      lapply(brickObj$childBricks, childFun)
+    }
+    invisible()
+  }
+  lapply(gridObj$childBricks, initiateBs)
+
+  completeBknots <- function(brickObj) {
+    firstUnresolved <- match(TRUE, sapply(brickObj$bKnots, function(x) is.null(x)))
+    knots1 <- brickObj$knotPositions
+    brickList <- .getAllParentAddresses(brickObj = brickObj, flip = TRUE)
+    knots2 <- parent.env(brickObj)$knotPositions
+    currentV <- gridObj$covFct(knots1, knots2)
+    for (i in 1:(firstUnresolved-1)) {
+      currentV <- currentV + t(brickObj$bKnots[[i]]) %*% brickList[[i]]$Kmatrix %*% parent.env(brickObj)$bKnots[[i]]
+    }
+    brickObj$bKnots[[firstUnresolved]] <- currentV
+    if (!is.null(brickObj$childBricks)) {
+      lapply(brickObj$childBricks, completeBknots)
+    }
+    invisible()
+  }
+  lapply(gridObj$childBricks, completeBknots)
+}
+
+
