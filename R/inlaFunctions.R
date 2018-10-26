@@ -409,9 +409,11 @@ predict.Spacetimegrid <- function(gridObj, spacetimeCoor) {
   if (is.null(gridObj$logLik)) {
     stop("Perform likelihood evaluation first. \n")
   }
-  .computeLmatrices(gridObj, spacetimeCoor)
+  # .computeLmatrices(gridObj, spacetimeCoor)
+  .computeUpredictTips(gridObj, spacetimeCoor)
+  .computeVpredictTips(gridObj, spacetimeCoor)
   .computeBtildeTips(gridObj, spacetimeCoor)
-  .computeVtips(gridObj, spacetimeCoor)
+
   meanVector <- .computeMeanValues(gridObj, spacetimeCoor)
   varianceEst <- .computeVar(gridObj, spacetimeCoor)
   list(predictions = meanVector, variance = covMatrix)
@@ -427,7 +429,7 @@ predict.Spacetimegrid <- function(gridObj, spacetimeCoor) {
     lapply(seq_along(tipAddress$Btilde), function(index) tipAddress$Btilde <- vector('list', length = index)) # The index k can take values 0 to l-1.
 
     funForDefinition <- function(l,k) {
-      tipAddress$Btilde[[l+1]][[k+1]] <- tipAddress$bPred[[k+1]] - tipAddress$L %*% brickList[[l+1]]$SigmaInverse %*% brickList[[l+1]]$WmatList[[k+1]]
+      tipAddress$Btilde[[l+1]][[k+1]] <- tipAddress$bPred[[k+1]] - tipAddress$UpredList[[gridObj$M+1]] %*% brickList[[l+1]]$SigmaInverse %*% brickList[[l+1]]$WmatList[[k+1]]
       invisible()
     }
     lapply((gridObj$M-1):(gridObj$M-3), funForDefinition, l = gridObj$M)
@@ -514,23 +516,23 @@ predict.Spacetimegrid <- function(gridObj, spacetimeCoor) {
   lapply(allTips, recurseBpred)
 }
 
-.computeLmatrices <- function(gridObj, locations) {
-  allTips <- .tipAddresses(gridObj)
-  computeTipLevel <- function(tipAddress) {
-    subLocations <- subset(x = locations, latExtent = tipAddress$dimensions$latitude, lonExtent = tipAddress$dimensions$longitude, timeExtent = tipAddress$dimensions$time)
-    brickList <- .getAllParentAddresses(brickObj = brickObj, flip = TRUE)
-    currentV <- gridObj$covFct(subLocations, gridObj$knotPositions) - tipAddress$bPred[[1]] %*% gridObj$K %*% tipAddress$WmatList[[1]]
-    if (gridObj$M < 2) {
-      return(currentV)
-    }
-    for (i in 2:gridObj$M) {
-      currentV <- currentV - tipAddress$bPred[[i]] %*% brickList[[i]]$K %*% tipAddress$WmatList[[i]]
-    }
-    tipAddress$L <- currentV
-    invisible()
-  }
-  lapply(allTips, computeTipLevel)
-}
+# .computeLmatrices <- function(gridObj, locations) {
+#   allTips <- .tipAddresses(gridObj)
+#   computeTipLevel <- function(tipAddress) {
+#     subLocations <- subset(x = locations, latExtent = tipAddress$dimensions$latitude, lonExtent = tipAddress$dimensions$longitude, timeExtent = tipAddress$dimensions$time)
+#     brickList <- .getAllParentAddresses(brickObj = brickObj, flip = TRUE)
+#     currentV <- gridObj$covFct(subLocations, gridObj$knotPositions) - tipAddress$bPred[[1]] %*% gridObj$K %*% tipAddress$WmatList[[1]]
+#     if (gridObj$M < 2) {
+#       return(currentV)
+#     }
+#     for (i in 2:gridObj$M) {
+#       currentV <- currentV - tipAddress$bPred[[i]] %*% brickList[[i]]$K %*% tipAddress$WmatList[[i]]
+#     }
+#     tipAddress$L <- currentV
+#     invisible()
+#   }
+#   lapply(allTips, computeTipLevel)
+# }
 
 .computeMeanValues <- function(gridObj, locations) {
   allTips <- .tipAddresses(gridObj)
@@ -542,7 +544,7 @@ predict.Spacetimegrid <- function(gridObj, spacetimeCoor) {
       tipAddress$Btilde[[m+2]][[m+1]] %*% brickList[[m+1]]$Ktilde %*% brickList[[m+1]]$omega
     }
     firstTerm <- do.call('+', lapply(0:gridObj$M-1, computeSumTerm))
-    secondTerm <- tipAddress$Lmatrix %*% tipAddress$SigmaInverse %*% gridObj@dataset[tipAddress$observations, ]
+    secondTerm <- tipAddress$UpredList[[gridObj$M+1]] %*% tipAddress$SigmaInverse %*% gridObj@dataset[tipAddress$observations, ]
     predictionMean <- firstTerm + secondTerm
     names(predictionMean) <- rownames(subLocations@data)
     predictionMean
@@ -560,7 +562,7 @@ predict.Spacetimegrid <- function(gridObj, spacetimeCoor) {
       diag(tipAddress$Btilde[[m+2]][[m+1]])^2 * diag(brickList[[m+1]]$Ktilde)
     }
     firstTerm <- do.call('+', lapply(0:(gridObj$M-1), computeSumTermVar))
-    secondTerm <- tipAddress$Vmatrix - tipAddress$Lmatrix %*% tipAddress$SigmaInverse %*% t(tipAddress$Lmatrix)
+    secondTerm <- tipAddress$VpredMat - tipAddress$UpredList[[gridObj$M+1]] %*% tipAddress$SigmaInverse %*% t(tipAddress$UpredList[[gridObj$M+1]])
     variances <- firstTerm + secondTerm
     names(variances) <- rownames(subLocations@data)
     variances
@@ -569,6 +571,36 @@ predict.Spacetimegrid <- function(gridObj, spacetimeCoor) {
   predictVars[rownames(locations@data)]
 }
 
-.computeVtips <- function(gridObj, spacetimeCoor) {
-  ##TO_DO
+.computeUpredictTips <- function(gridObj, locations) {
+  allTips <- .tipAddresses(gridObj)
+  computeUlistTips <- function(tipAddress) {
+    subLocations <- subset(x = locations, latExtent = tipAddress$dimensions$latitude, lonExtent = tipAddress$dimensions$longitude, timeExtent = tipAddress$dimensions$time)
+    brickList <- .getAllParentAddresses(brickObj = tipAddress, flip = FALSE) # Lists parent nodes in order from root to itself (included).
+    tipAddress$UpredList <- vector('list', length = gridObj$M+1)
+    tipAddress$UpredList[[1]] <- gridObj$covFct(subLocations, gridObj$knotPositions)
+
+    for (l in 1:gridObj$M) {
+      firstTerm <- gridObj$covFct(subLocations, brickList[[l+1]]$knotPositions)
+      secondTermList <- lapply(0:(l-1), function(k) tipAddress$UpredList[[k+1]] %*% brickList[[k+1]]$K %*% brickList[[l+1]]$W[[k+1]])
+
+      tipAddress$UpredList[[l+1]] <- firstTerm - Reduce(f = '+', x = secondTermList)
+    }
+    invisible()
+  }
+  lapply(allTips, computeUlistTips)
+  invisible()
+}
+
+.computeVpredictTips <- function(gridObj, locations) {
+  allTips <- .tipAddresses(gridObj)
+  computeVpredictMat <- function(tipAddress) {
+    subLocations <- subset(x = locations, latExtent = tipAddress$dimensions$latitude, lonExtent = tipAddress$dimensions$longitude, timeExtent = tipAddress$dimensions$time)
+    brickList <- .getAllParentAddresses(brickObj = tipAddress, flip = FALSE) # Lists parent nodes in order from root to itself (included).
+    firstTerm <- gridObj$covFct(subLocations, subLocations)
+    secondTermList <- lapply(0:(gridObj$M-1), function(k) tipAddress$UpredList[[k+1]] %*% brickList[[k+1]]$K %*% t(tipAddress$UpredList[[k+1]]))
+    tipAddress$VpredMat <- firstTerm - Reduce('+', secondTermList)
+    invisible()
+  }
+  lapply(allTips, computeVpredictMat)
+  invisible()
 }
