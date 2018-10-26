@@ -143,3 +143,11 @@ Npoints <- function(spacetimeObj) {
   }
   return(index(spacetimeObj))
 }
+
+covFunctionBiMatern <- function(rangeParaSpace = 10, rangeParaTime = 10) {
+  function(spacetime1, spacetime2) {
+    euclidDist <- spDists(spacetime1@sp, spacetime2@sp)
+    timeDist <- outer(zoo::index(spacetime2@time), zoo::index(spacetime1@time), function(x, y) as.numeric(abs(difftime(x, y, units = "days"))))
+    fields::Exponential(euclidDist, range = 10)*t(fields::Exponential(timeDist, range = 10))
+  }
+}

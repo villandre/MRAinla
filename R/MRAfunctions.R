@@ -319,7 +319,7 @@ predict.Spacetimegrid <- function(gridObj, spacetimeCoor) {
     knots2 <- brickList[[level+1]]$knotPositions
     currentV <- gridObj$covFct(knots1, knots2)
     for (i in 1:level) {
-      currentV <- currentV - t(brickObj$bKnots[[i]]) %*% brickList[[i]]$K %*% parent.env(brickObj)$bKnots[[i]]
+      currentV <- currentV - brickObj$bKnots[[i]] %*% brickList[[i]]$K %*% t(parent.env(brickObj)$bKnots[[i]]) ### MOVED THE t(...) TO THE RIGHT SIDE OF K. This differs from the paper, but solves the problem with the matrix dimensions.
     }
     brickObj$bKnots[[level+1]] <- currentV
     if (!is.null(brickObj$childBricks)) {
@@ -342,24 +342,24 @@ predict.Spacetimegrid <- function(gridObj, spacetimeCoor) {
     tipAddress$bPred <- vector('list', length = gridObj$M)
     tipAddress$bPred[[1]] <- gridObj$covFct(subLocations, gridObj$knotPositions)
 
-    brickList <- .getAllParentAddresses(brickObj = tipAddress, flip = TRUE) ## Lists bricks from current tip (included) to root.
+    brickList <- .getAllParentAddresses(brickObj = tipAddress, flip = FALSE) ## Lists bricks from root to current tip (included).
 
-    recurseV <- function(locations1, locations2, level) {
-
-      currentV <- gridObj$covFct(locations1, locations2) - t(tipAddress$bPred[[1]]) %*% gridObj$K %*% brickList[[level]]$bKnots[[1]]
+    recurseBpred <- function(level) {
+      currentV <- gridObj$covFct(subLocations, brickList[[level+1]]$knotPositions) - tipAddress$bPred[[1]] %*% gridObj$K %*% t(brickList[[level+1]]$bKnots[[1]]) ### SAME ISSUE AS IN .computeBknots with the position of the t(...). ###
       if (level == 1) {
-        tipAddress$bPred[[2]] <- currentV
+        tipAddress$bPred[[level+1]] <- currentV
         return(invisible())
       }
 
-      for (i in 1:(level-1)) {
-        currentV <- currentV - t(tipAddress$bPred[[i+1]]) %*% brickList[[i+1]]$K %*% brickList[[level]]$bKnots[[i+1]]
+      for (i in 2:level) {
+        currentV <- currentV - t(tipAddress$bPred[[i]]) %*% brickList[[i]]$K %*% brickList[[level+1]]$bKnots[[i]]
       }
-      currentV
+      tipAddress$bPred[[level+1]] <- currentV
+      invisible()
     }
 
-    for (i in 2:(gridObj$M-1)) {
-      tipAddress$bPred[[i]] <- recurseV(subLocations, gridObj$dataset[brickList[[i-1]]$observations], level = i-1) - t(tipAddress$bPred[[i-1]]) %*% brickList[[i-1]]$K %*% brickList[[i]]$bKnots[[i-1]]
+    for (levelIndex in 1:gridObj$M) {
+      recurseBpred(levelIndex)
     }
     invisible()
   }
