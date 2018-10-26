@@ -168,38 +168,36 @@ Npoints <- function(spacetimeObj) {
   gridObj$Kinverse <- gridObj$covFct(gridObj$knotPositions, gridObj$knotPositions)
   gridObj$K <- Matrix::chol2inv(Matrix::chol(gridObj$Kinverse))
   gridObj$WmatList <- list(gridObj$K)
-  if (!is.null(gridObj$childBricks)) {
-    lapply(gridObj$childBricks, .computeWchildBrick, covFct = gridObj$covFct)
-  }
-  invisible()
-}
 
-.computeWchildBrick <- function(brickObj, covFct) {
-  brickObj$WmatList <- vector("list", brickObj$depth+1) # Depth is from 0 to M.
-  brickPointers <- .getAllParentAddresses(brickObj) # brickPointers includes the address of bricks from depth 0 (position 1) to depth brickObj$depth (position brickObj$depth+1).
-  brickObj$WmatList[[1]] <- covFct(brickObj$knotPositions, brickPointers[[1]]$knotPositions)
-  m <- brickObj$depth
+  .computeWchildBrick <- function(brickObj) {
+    brickObj$WmatList <- vector("list", brickObj$depth+1) # Depth is from 0 to M.
+    brickList <- .getAllParentAddresses(brickObj, flip = FALSE) # Lists parent nodes in order from root to itself (included).
+    brickObj$WmatList[[1]] <- gridObj$covFct(brickObj$knotPositions, brickList[[1]]$knotPositions)
+    m <- brickObj$depth
 
-  for (l in 0:m) { # First element in brickPointers is the top brick, i.e. at resolution 0.
-    brickPointer <- brickPointers[[l+1]]
-    covEvaluation <- covFct(brickObj$knotPositions, brickPointer$knotPositions)
-    secondTerm <- 0
-    if (l > 0) {
-      headWlist <- brickObj$WmatList[(0:l-1) + 1]
-      Kmatrices <- lapply(brickPointers[(0:l-1) + 1], function(aPointer) aPointer$K)
-      tailWlist <- lapply(brickPointer$WmatList[(0:l-1) + 1], t)
+    for (l in 1:m) { # First element in brickList is the top brick, i.e. at resolution 0.
+      firstTerm <- gridObj$covFct(brickObj$knotPositions, brickList[[l+1]]$knotPositions)
+      makeSumTerm <- function(k) {
+        brickObj$WmatList[[k+1]] %*% brickList[[k+1]]$K %*% t(brickList[[l+1]]$WmatList[[k+1]])
+      }
+      secondTerm <- Reduce("+", lapply(0:(l-1), makeSumTerm))
 
-      secondTerm <- Reduce("+", mapply(x = headWlist, y = Kmatrices, z = tailWlist, FUN = function(x,y,z) x %*% y %*% z, SIMPLIFY = FALSE))
+      brickObj$WmatList[[l+1]] <- firstTerm - secondTerm
     }
 
-    brickObj$WmatList[[l+1]] <- covEvaluation - secondTerm
+    if (brickObj$depth < gridObj$M) {
+      brickObj$Kinverse <- tail(brickObj$WmatList, n = 1)[[1]]
+      brickObj$K <- Matrix::chol2inv(Matrix::chol(brickObj$Kinverse))
+    }
+
+    if (!is.null(brickObj$childBricks)) {
+      lapply(brickObj$childBricks, .computeWchildBrick, covFct = covFct)
+    }
+    invisible()
   }
-  if (brickObj$depth < .getTopEnvirAddress(brickObj)$M) {
-    brickObj$Kinverse <- tail(brickObj$WmatList, n = 1)[[1]]
-    brickObj$K <- Matrix::chol2inv(Matrix::chol(brickObj$Kinverse))
-  }
-  if (!is.null(brickObj$childBricks)) {
-    lapply(brickObj$childBricks, .computeWchildBrick, covFct = covFct)
+
+  if (!is.null(gridObj$childBricks)) {
+    lapply(gridObj$childBricks, .computeWchildBrick, covFct = gridObj$covFct)
   }
   invisible()
 }
