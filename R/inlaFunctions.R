@@ -191,13 +191,13 @@ Npoints <- function(spacetimeObj) {
     }
 
     if (!is.null(brickObj$childBricks)) {
-      lapply(brickObj$childBricks, .computeWchildBrick, covFct = covFct)
+      lapply(brickObj$childBricks, .computeWchildBrick)
     }
     invisible()
   }
 
   if (!is.null(gridObj$childBricks)) {
-    lapply(gridObj$childBricks, .computeWchildBrick, covFct = gridObj$covFct)
+    lapply(gridObj$childBricks, .computeWchildBrick)
   }
   invisible()
 }
