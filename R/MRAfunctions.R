@@ -20,16 +20,17 @@ computeLogLik <- function(gridObj, covFct, fixedEffectParVec = NULL) {
 
 .computeWmats <- function(gridObj) {
   gridObj$Kinverse <- gridObj$covFct(gridObj$knotPositions, gridObj$knotPositions)
-  gridObj$K <- Matrix::chol2inv(Matrix::chol(gridObj$Kinverse))
-  gridObj$WmatList <- list(gridObj$K)
+  # gridObj$K <- Matrix::chol2inv(Matrix::chol(gridObj$Kinverse))
+  gridObj$K <- solve(gridObj$Kinverse)
+  gridObj$WmatList <- list(gridObj$Kinverse)
 
-  .computeWchildBrick <- function(brickObj) {
+  computeWchildBrick <- function(brickObj) {
     brickObj$WmatList <- vector("list", brickObj$depth+1) # Depth is from 0 to M.
     brickList <- .getAllParentAddresses(brickObj, flip = FALSE) # Lists parent nodes in order from root to itself (included).
-    brickObj$WmatList[[1]] <- gridObj$covFct(brickObj$knotPositions, brickList[[1]]$knotPositions)
+    brickObj$WmatList[[1]] <- gridObj$covFct(brickObj$knotPositions, gridObj$knotPositions)
     m <- brickObj$depth
 
-    for (l in 1:m) { # First element in brickList is the top brick, i.e. at resolution 0.
+    for (l in 1:m) {
       firstTerm <- gridObj$covFct(brickObj$knotPositions, brickList[[l+1]]$knotPositions)
       makeSumTerm <- function(k) {
         brickObj$WmatList[[k+1]] %*% brickList[[k+1]]$K %*% t(brickList[[l+1]]$WmatList[[k+1]])
@@ -39,19 +40,20 @@ computeLogLik <- function(gridObj, covFct, fixedEffectParVec = NULL) {
       brickObj$WmatList[[l+1]] <- firstTerm - secondTerm
     }
 
-    if (brickObj$depth < gridObj$M) {
-      brickObj$Kinverse <- tail(brickObj$WmatList, n = 1)[[1]]
-      brickObj$K <- Matrix::chol2inv(Matrix::chol(brickObj$Kinverse))
+    if (m < gridObj$M) {
+      brickObj$Kinverse <-brickObj$WmatList[[m+1]]
+      # brickObj$K <- Matrix::chol2inv(Matrix::chol(brickObj$Kinverse))
+      brickObj$K <- solve(brickObj$Kinverse)
     }
 
     if (!is.null(brickObj$childBricks)) {
-      lapply(brickObj$childBricks, .computeWchildBrick)
+      lapply(brickObj$childBricks, computeWchildBrick)
     }
     invisible()
   }
 
   if (!is.null(gridObj$childBricks)) {
-    lapply(gridObj$childBricks, .computeWchildBrick)
+    lapply(gridObj$childBricks, computeWchildBrick)
   }
   invisible()
 }
@@ -59,9 +61,9 @@ computeLogLik <- function(gridObj, covFct, fixedEffectParVec = NULL) {
 .setBtips <- function(gridObj) {
   allTips <- .tipAddresses(gridObj)
   lapply(allTips, FUN = function(x) {
-    x$BmatList <- x$WmatList[1:(x$depth+1)]
+    x$BmatList <- x$WmatList[1:gridObj$M]
     invisible()
-  }) # The last element in Bmat will be NULL, since B^M_{j_1, ..., j_M} is undefined,
+  })
   invisible()
 }
 
@@ -69,7 +71,8 @@ computeLogLik <- function(gridObj, covFct, fixedEffectParVec = NULL) {
   allTips <- .tipAddresses(gridObj)
   lapply(allTips, FUN = function(x) {
     x$Sigma <- x$WmatList[[gridObj$M+1]]
-    x$SigmaInverse <- Matrix::chol2inv(Matrix::chol(x$Sigma))
+    # x$SigmaInverse <- Matrix::chol2inv(Matrix::chol(x$Sigma))
+    x$SigmaInverse <- solve(x$Sigma)
     invisible()
   }) # The last element in Bmat will be NULL, since B^M_{j_1, ..., j_M} is undefined,
   invisible()
@@ -79,22 +82,24 @@ computeLogLik <- function(gridObj, covFct, fixedEffectParVec = NULL) {
   allTips <- .tipAddresses(gridObj)
   M <- gridObj$M
 
-  modifyTip <- function(x) {
+  indexGrid <- expand.grid(k = 0:(M-1), l = 0:(M-1)) # We don't need A^{M,M}_{j_1, ..., j_M}.
+  indexGrid <- subset(indexGrid, subset = k >= l)
 
-    x$Atilde <- vector('list', x$depth+1) # First level of the hierarchy is for k in Atilde^{k,l}.
-    x$Atilde <- lapply(0:x$depth, function(k) vector('list', x$depth)) # Second level is for l in Atilde^{k,l}, same order as for k.
-    indexGrid <- expand.grid(k = 0:(M-1), l = 0:(M-1)) # We don't need A^{M,M}_{j_1, ..., j_M}
-    indexGrid <- subset(indexGrid, subset = k >= l)
+  modifyTip <- function(tipAddress) {
+    tipAddress$Atilde <- vector('list', tipAddress$depth+1) # First level of the hierarchy is for k in Atilde^{k,l}.
+    tipAddress$Atilde <- lapply(0:tipAddress$depth, function(k) {
+      tipAddress$Atilde[[k+1]] <- vector('list', length = k+1) # Second level is for l in Atilde^{k,l}.
+    })
 
     for (i in 1:nrow(indexGrid)) {
       k <- indexGrid[i, 1]
       l <- indexGrid[i, 2]
-      x$Atilde[[k + 1]][[l + 1]] <- t(x$BmatList[[k + 1]]) %*% x$SigmaInverse %*% x$BmatList[[l + 1]] ## BmatList has length M+1, but element M+1 is NULL. gridDepth is equal to M, since there's a resolution 0. Element gridObj$M in this situation is the second to last element, which was defined when .setBtips was called.
-      x$Atilde[[l + 1]][[k + 1]] <- t(x$Atilde[[k + 1]][[l + 1]])
+      tipAddress$Atilde[[k + 1]][[l + 1]] <- t(tipAddress$BmatList[[k + 1]]) %*% tipAddress$SigmaInverse %*% tipAddress$BmatList[[l + 1]]
+      # tipAddress$Atilde[[l + 1]][[k + 1]] <- t(tipAddress$Atilde[[k + 1]][[l + 1]])
     }
     invisible()
   }
-  lapply(allTips, FUN = modifyTip) # The last element in Bmat will be NULL, since B^M_{j_1, ..., j_M} is undefined,
+  lapply(allTips, FUN = modifyTip)
   invisible()
 }
 
@@ -119,7 +124,8 @@ computeLogLik <- function(gridObj, covFct, fixedEffectParVec = NULL) {
   brickObj$A <- .reformatList(matrixList = Amatrices, indexGrid = indexGrid)
 
   brickObj$KtildeInverse <- brickObj$Kinverse + brickObj$A[[m + 1]][[m + 1]] # +1 to adjust indices for R.
-  brickObj$Ktilde <- Matrix::chol2inv(chol(brickObj$KtildeInverse))
+  # brickObj$Ktilde <- Matrix::chol2inv(chol(brickObj$KtildeInverse))
+  brickObj$Ktilde <- solve(brickObj$KtildeInverse)
 
   AtildeMatrices <- mapply(k = indexGrid$k, l = indexGrid$l, FUN = function(k, l) {
     brickObj$A[[k + 1]][[l + 1]] - brickObj$A[[k + 1]][[m + 1]] %*% brickObj$Ktilde %*% brickObj$A[[m + 1]][[l + 1]] # m+1 to adjust indices for R.
@@ -223,7 +229,7 @@ computeLogLik <- function(gridObj, covFct, fixedEffectParVec = NULL) {
 
   modifyTip <- function(x) {
     rescaledObservations <- .rescaleObservations(gridObj$dataset@data[x$observations, ], fixedEffectVec)
-    x$u <- t(rescaledObservations) %*% x$SigmaInverse %*% rescaledObservations ## QUADRATIC FORM: MAY BE OPTIMIZED.
+    x$u <- drop(t(rescaledObservations) %*% x$SigmaInverse %*% rescaledObservations) ## QUADRATIC FORM: MAY BE OPTIMIZED.
     invisible()
   }
   lapply(allTips, FUN = modifyTip)
@@ -257,21 +263,21 @@ computeLogLik <- function(gridObj, covFct, fixedEffectParVec = NULL) {
 
 # Prediction functions
 
-predict.Spacetimegrid <- function(gridObj, spacetimeCoor) {
+predict.Spacetimegrid <- function(gridObj, spacetimeCoor, cl = NULL) {
   if (is.null(gridObj$logLik)) {
     stop("Perform likelihood evaluation first. \n")
   }
   # .computeLmatrices(gridObj, spacetimeCoor)
-  .computeUpredictTips(gridObj, spacetimeCoor)
-  .computeVpredictTips(gridObj, spacetimeCoor)
-  .computeBtildeTips(gridObj, spacetimeCoor)
+  .computeUpredictTips(gridObj, spacetimeCoor, cl)
+  .computeVpredictTips(gridObj, spacetimeCoor, cl)
+  .computeBtildeTips(gridObj, spacetimeCoor, cl)
 
   meanVector <- .computeMeanValues(gridObj, spacetimeCoor)
   varianceEst <- .computeVar(gridObj, spacetimeCoor)
   list(predictions = meanVector, variance = varianceEst)
 }
 
-.computeBtildeTips <- function(gridObj, locations) {
+.computeBtildeTips <- function(gridObj, locations, cl) {
   .computeBknots(gridObj)
   .computeBpreds(gridObj, locations)
 
@@ -299,7 +305,12 @@ predict.Spacetimegrid <- function(gridObj, spacetimeCoor) {
     }
     invisible()
   }
-  lapply(allTips, .computeBtildeInternal)
+  if (is.null(cl)) {
+    lapply(allTips, .computeBtildeInternal)
+  } else {
+    parallel::parLapply(cl = cl, X = allTips, fun = .computeBtildeInternal)
+  }
+  invisible()
 }
 
 .computeBknots <- function(gridObj) {
@@ -423,7 +434,7 @@ predict.Spacetimegrid <- function(gridObj, spacetimeCoor) {
   predictVars[rownames(locations@data)]
 }
 
-.computeUpredictTips <- function(gridObj, locations) {
+.computeUpredictTips <- function(gridObj, locations, cl = NULL) {
   allTips <- .tipAddresses(gridObj)
   computeUlistTips <- function(tipAddress) {
     subLocations <- subset(x = locations, latExtent = tipAddress$dimensions$latitude, lonExtent = tipAddress$dimensions$longitude, timeExtent = tipAddress$dimensions$time)
@@ -439,11 +450,15 @@ predict.Spacetimegrid <- function(gridObj, spacetimeCoor) {
     }
     invisible()
   }
-  lapply(allTips, computeUlistTips)
+  if (is.null(cl)) {
+    lapply(allTips, computeUlistTips)
+  } else {
+    parallel::parLapply(cl = cl, X = allTips, fun = computeUlistTips)
+  }
   invisible()
 }
 
-.computeVpredictTips <- function(gridObj, locations) {
+.computeVpredictTips <- function(gridObj, locations, cl = NULL) {
   allTips <- .tipAddresses(gridObj)
   computeVpredictMat <- function(tipAddress) {
     subLocations <- subset(x = locations, latExtent = tipAddress$dimensions$latitude, lonExtent = tipAddress$dimensions$longitude, timeExtent = tipAddress$dimensions$time)
@@ -453,6 +468,10 @@ predict.Spacetimegrid <- function(gridObj, spacetimeCoor) {
     tipAddress$VpredMat <- firstTerm - Reduce('+', secondTermList)
     invisible()
   }
-  lapply(allTips, computeVpredictMat)
+  if (is.null(cl)) {
+    lapply(allTips, computeVpredictMat)
+  } else {
+    parallel::parLapply(cl = cl, X = allTips, fun = computeVpredictMat)
+  }
   invisible()
 }
