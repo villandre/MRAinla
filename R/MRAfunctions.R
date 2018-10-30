@@ -25,6 +25,12 @@ computeLogLik <- function(gridObj, covFct, fixedEffectParVec = NULL) {
   gridObj$WmatList <- list(gridObj$Kinverse)
 
   computeWchildBrick <- function(brickObj) {
+    if (is.null(brickObj$knotPositions)) {
+      brickObj$WmatList <- NULL
+      brickObj$Kinverse <- NULL
+      brickObj$K <- NULL
+      return(invisible())
+    }
     brickObj$WmatList <- vector("list", brickObj$depth+1) # Depth is from 0 to M.
     brickList <- .getAllParentAddresses(brickObj, flip = FALSE) # Lists parent nodes in order from root to itself (included).
     brickObj$WmatList[[1]] <- gridObj$covFct(brickObj$knotPositions, gridObj$knotPositions)
@@ -70,9 +76,11 @@ computeLogLik <- function(gridObj, covFct, fixedEffectParVec = NULL) {
 .setSigmaTips <- function(gridObj) {
   allTips <- .tipAddresses(gridObj)
   lapply(allTips, FUN = function(x) {
-    x$Sigma <- x$WmatList[[gridObj$M+1]]
-    # x$SigmaInverse <- Matrix::chol2inv(Matrix::chol(x$Sigma))
-    x$SigmaInverse <- solve(x$Sigma)
+    if (!is.null(x$WmatList)) {
+      x$Sigma <- x$WmatList[[gridObj$M+1]]
+      # x$SigmaInverse <- Matrix::chol2inv(Matrix::chol(x$Sigma))
+      x$SigmaInverse <- solve(x$Sigma)
+    }
     invisible()
   }) # The last element in Bmat will be NULL, since B^M_{j_1, ..., j_M} is undefined,
   invisible()
@@ -86,6 +94,10 @@ computeLogLik <- function(gridObj, covFct, fixedEffectParVec = NULL) {
   indexGrid <- subset(indexGrid, subset = k >= l)
 
   modifyTip <- function(tipAddress) {
+    if (is.null(tipAddress$knotPositions)) {
+      tipAddress$Atilde <- NULL
+      return(invisible())
+    }
     tipAddress$Atilde <- vector('list', tipAddress$depth+1) # First level of the hierarchy is for k in Atilde^{k,l}.
     tipAddress$Atilde <- lapply(0:tipAddress$depth, function(k) {
       tipAddress$Atilde[[k+1]] <- vector('list', length = k+1) # Second level is for l in Atilde^{k,l}.
@@ -112,14 +124,22 @@ computeLogLik <- function(gridObj, covFct, fixedEffectParVec = NULL) {
     lapply(brickObj$childBricks, .recurseA)
   }
 
+  if (is.null(brickObj$knotPositions)) {
+    brickObj$Atilde <- NULL
+    brickObj$Ktilde <- NULL
+    brickObj$KtildeInverse <- NULL
+    brickObj$A <- NULL
+    return(invisible())
+  }
+
   m <- brickObj$depth
   indexGrid <- expand.grid(k = 0:m, l = 0:m)
   indexGrid <- subset(indexGrid, subset = k >= l)
 
   Amatrices <- mapply(k = indexGrid$k, l = indexGrid$l, FUN = function(k,l) { # +1 to adjust indices for R.
-    Reduce("+", lapply(brickObj$childBricks, function(x) {
+    Reduce("+", Filter(f = function(x) !is.null(x), x = lapply(brickObj$childBricks, function(x) {
       x$Atilde[[k + 1]][[l + 1]]
-    }))
+    })))
   }, SIMPLIFY = FALSE)
   brickObj$A <- .reformatList(matrixList = Amatrices, indexGrid = indexGrid)
 
@@ -138,8 +158,12 @@ computeLogLik <- function(gridObj, covFct, fixedEffectParVec = NULL) {
 .computeDtips <- function(gridObj) {
   allTips <- .tipAddresses(gridObj)
 
-  modifyTip <- function(x) {
-    x$d <- log(det(x$Sigma))
+  modifyTip <- function(tipAddress) {
+    if (is.null(tipAddress$Sigma)) {
+      tipAddress$d <- NULL
+      return(invisible())
+    }
+    tipAddress$d <- log(det(tipAddress$Sigma))
     invisible()
   }
   lapply(allTips, FUN = modifyTip)
@@ -155,7 +179,7 @@ computeLogLik <- function(gridObj, covFct, fixedEffectParVec = NULL) {
     lapply(brickObj$childBricks, .recurseD)
   }
 
-  brickObj$d <- log(det(brickObj$KtildeInverse)) - log(det(brickObj$Kinverse)) + sum(sapply(brickObj$childBricks, FUN = function(childBrick) childBrick$d))
+  brickObj$d <- log(det(brickObj$KtildeInverse)) - log(det(brickObj$Kinverse)) + sum(do.call('c', Filter(f = function(x) !is.null(x), x = lapply(brickObj$childBricks, FUN = function(childBrick) childBrick$d))))
   invisible()
 }
 
@@ -166,13 +190,17 @@ computeLogLik <- function(gridObj, covFct, fixedEffectParVec = NULL) {
 .setOmegaTildeTips <- function(gridObj, fixedEffectVec) {
   allTips <- .tipAddresses(gridObj)
 
-  modifyTip <- function(x) {
-    x$omegaTilde <- replicate(n = x$depth+1, expr = vector('list', x$depth + 1), simplify = FALSE)
+  modifyTip <- function(tipAddress) {
+    if (is.null(tipAddress$knotPositions)) {
+      tipAddress$omegaTilde <- NULL
+      return(invisible())
+    }
+    tipAddress$omegaTilde <- replicate(n = tipAddress$depth+1, expr = vector('list', tipAddress$depth + 1), simplify = FALSE)
 
-    rescaledObservations <- .rescaleObservations(gridObj$dataset@data[x$observations, ], fixedEffectVec)
+    # rescaledObservations <- .rescaleObservations(gridObj$dataset@data[tipAddress$observations, ], fixedEffectVec)
 
     for (k in 0:(gridObj$M-1)) {
-      x$omegaTilde[[k+1]] <- t(x$BmatList[[k+1]]) %*% x$SigmaInverse %*% rescaledObservations
+      tipAddress$omegaTilde[[k+1]] <- t(tipAddress$BmatList[[k+1]]) %*% tipAddress$SigmaInverse %*% gridObj$dataset[tipAddress$observations]@data[ , "y"]
     }
     invisible()
   }
@@ -211,9 +239,9 @@ computeLogLik <- function(gridObj, covFct, fixedEffectParVec = NULL) {
   m <- brickObj$depth
 
   omegaMatrices <- lapply(0:m, FUN = function(k) {
-    Reduce("+", lapply(brickObj$childBricks, function(x) {
+    Reduce('+', Filter(f = function(x) !is.null(x), x = lapply(brickObj$childBricks, function(x) {
       x$omegaTilde[[k+1]]
-    }))
+    })))
   })
 
   brickObj$omega <- omegaMatrices
@@ -227,9 +255,13 @@ computeLogLik <- function(gridObj, covFct, fixedEffectParVec = NULL) {
 .computeUtips <- function(gridObj, fixedEffectVec) {
   allTips <- .tipAddresses(gridObj)
 
-  modifyTip <- function(x) {
-    rescaledObservations <- .rescaleObservations(gridObj$dataset@data[x$observations, ], fixedEffectVec)
-    x$u <- drop(t(rescaledObservations) %*% x$SigmaInverse %*% rescaledObservations) ## QUADRATIC FORM: MAY BE OPTIMIZED.
+  modifyTip <- function(tipAddress) {
+    # rescaledObservations <- .rescaleObservations(gridObj$dataset@data[tipAddress$observations, ], fixedEffectVec)
+    if (is.null(tipAddress$knotPositions)) {
+      tipAddress$u <- NULL
+      return(invisible())
+    }
+    tipAddress$u <- drop(t(gridObj$dataset[tipAddress$observations]@data[, "y"]) %*% tipAddress$SigmaInverse %*% gridObj$dataset[tipAddress$observations]@data[, "y"]) ## QUADRATIC FORM: MAY BE OPTIMIZED.
     invisible()
   }
   lapply(allTips, FUN = modifyTip)
@@ -245,7 +277,7 @@ computeLogLik <- function(gridObj, covFct, fixedEffectParVec = NULL) {
     lapply(brickObj$childBricks, .recurseU)
   }
 
-  brickObj$u <- -t(brickObj$omega[[brickObj$depth+1]]) %*% brickObj$Ktilde %*% brickObj$omega[[brickObj$depth + 1]] + sum(sapply(brickObj$childBricks, FUN = function(childBrick) childBrick$u)) ## QUADRATIC FORM, MIGHT BE POSSIBLE TO OPTIMIZE.
+  brickObj$u <- -t(brickObj$omega[[brickObj$depth+1]]) %*% brickObj$Ktilde %*% brickObj$omega[[brickObj$depth + 1]] + sum(do.call('c', Filter(f = function(x) !is.null(x), x = lapply(brickObj$childBricks, FUN = function(childBrick) childBrick$u)))) ## QUADRATIC FORM, MIGHT BE POSSIBLE TO OPTIMIZE.
   invisible()
 }
 

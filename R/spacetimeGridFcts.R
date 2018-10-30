@@ -439,6 +439,10 @@ logLik.Spacetimegrid <- function(gridObj) {
 }
 
 .populateKnotsRandomBrick <- function(brickObj, numKnotsFun, M) {
+  if (length(brickObj$observations) == 0) {
+    brickObj$knotPositions <- NULL
+    return(invisible())
+  }
   gridAddress <- .getTopEnvirAddress(brickObj)
   if (brickObj$depth == M) {
     brickObj$knotPositions <- STI(sp = gridAddress$dataset@sp[brickObj$observations], time = gridAddress$dataset@time[brickObj$observations], endTime = gridAddress$dataset@endTime[brickObj$observations])
