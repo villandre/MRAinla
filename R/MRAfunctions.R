@@ -283,6 +283,10 @@ predict.Spacetimegrid <- function(gridObj, spacetimeCoor, cl = NULL) {
 
   allTips <- .tipAddresses(gridObj)
   .computeBtildeInternal <- function(tipAddress) {
+    if (is.null(tipAddress$bPred)) {
+      tipAddress$Btilde <- NULL
+      return(invisible())
+    }
     brickList <- .getAllParentAddresses(brickObj = tipAddress, flip = FALSE) # Lists parent nodes in order from root to itself (included).
     lapply(seq_along(tipAddress$Btilde), function(index) tipAddress$Btilde <- vector('list', length = index)) # The index k can take values 0 to l-1.
 
@@ -326,8 +330,6 @@ predict.Spacetimegrid <- function(gridObj, spacetimeCoor, cl = NULL) {
 
   completeBknotsLevel <- function(brickObj, level) {
     knots1 <- brickObj$knotPositions
-    # brickList <- .getAllParentAddresses(brickObj = brickObj, flip = TRUE)
-    # knots2 <- parent.env(brickObj)$knotPositions
     brickList <- .getAllParentAddresses(brickObj = brickObj, flip = FALSE)
     knots2 <- brickList[[level+1]]$knotPositions
     currentV <- gridObj$covFct(knots1, knots2)
@@ -353,6 +355,10 @@ predict.Spacetimegrid <- function(gridObj, spacetimeCoor, cl = NULL) {
   recurseBpred <- function(tipAddress) {
     subLocations <- subset(x = locations, latExtent = tipAddress$dimensions$latitude, lonExtent = tipAddress$dimensions$longitude, timeExtent = tipAddress$dimensions$time)
     tipAddress$bPred <- vector('list', length = gridObj$M+1)
+    if (length(subLocations) == 0) {
+      tipAddress$bPred <- NULL
+      return(invisible())
+    }
     tipAddress$bPred[[1]] <- gridObj$covFct(subLocations, gridObj$knotPositions)
 
     brickList <- .getAllParentAddresses(brickObj = tipAddress, flip = FALSE) ## Lists bricks from root to current tip (included).
@@ -379,29 +385,14 @@ predict.Spacetimegrid <- function(gridObj, spacetimeCoor, cl = NULL) {
   lapply(allTips, recurseBpred)
 }
 
-# .computeLmatrices <- function(gridObj, locations) {
-#   allTips <- .tipAddresses(gridObj)
-#   computeTipLevel <- function(tipAddress) {
-#     subLocations <- subset(x = locations, latExtent = tipAddress$dimensions$latitude, lonExtent = tipAddress$dimensions$longitude, timeExtent = tipAddress$dimensions$time)
-#     brickList <- .getAllParentAddresses(brickObj = brickObj, flip = TRUE)
-#     currentV <- gridObj$covFct(subLocations, gridObj$knotPositions) - tipAddress$bPred[[1]] %*% gridObj$K %*% tipAddress$WmatList[[1]]
-#     if (gridObj$M < 2) {
-#       return(currentV)
-#     }
-#     for (i in 2:gridObj$M) {
-#       currentV <- currentV - tipAddress$bPred[[i]] %*% brickList[[i]]$K %*% tipAddress$WmatList[[i]]
-#     }
-#     tipAddress$L <- currentV
-#     invisible()
-#   }
-#   lapply(allTips, computeTipLevel)
-# }
-
 .computeMeanValues <- function(gridObj, locations) {
   allTips <- .tipAddresses(gridObj)
 
   predictMeanInTip <- function(tipAddress) {
     subLocations <- subset(x = locations, latExtent = tipAddress$dimensions$latitude, lonExtent = tipAddress$dimensions$longitude, timeExtent = tipAddress$dimensions$time)
+    if (length(subLocations) == 0) {
+      return(NULL)
+    }
     brickList <- .getAllParentAddresses(brickObj = tipAddress, flip = FALSE) # Lists parent nodes in order from root to itself (included).
     computeSumTerm <- function(m) {
       tipAddress$Btilde[[m+2]][[m+1]] %*% brickList[[m+1]]$Ktilde %*% brickList[[m+1]]$omega[[m+1]]
@@ -420,6 +411,9 @@ predict.Spacetimegrid <- function(gridObj, spacetimeCoor, cl = NULL) {
   allTips <- .tipAddresses(gridObj)
   variancesInTip <- function(tipAddress) {
     subLocations <- subset(x = locations, latExtent = tipAddress$dimensions$latitude, lonExtent = tipAddress$dimensions$longitude, timeExtent = tipAddress$dimensions$time)
+    if (length(subLocations) == 0) {
+      return(NULL)
+    }
     brickList <- .getAllParentAddresses(brickObj = tipAddress, flip = FALSE) # Lists parent nodes in order from root to itself (included).
     computeSumTermCov <- function(m) {
       tipAddress$Btilde[[m+2]][[m+1]] %*% brickList[[m+1]]$Ktilde %*% t(tipAddress$Btilde[[m+2]][[m+1]])
@@ -438,6 +432,10 @@ predict.Spacetimegrid <- function(gridObj, spacetimeCoor, cl = NULL) {
   allTips <- .tipAddresses(gridObj)
   computeUlistTips <- function(tipAddress) {
     subLocations <- subset(x = locations, latExtent = tipAddress$dimensions$latitude, lonExtent = tipAddress$dimensions$longitude, timeExtent = tipAddress$dimensions$time)
+    if (length(subLocations) == 0) {
+      tipAddress$UpredList <- NULL
+      return(invisible())
+    }
     brickList <- .getAllParentAddresses(brickObj = tipAddress, flip = FALSE) # Lists parent nodes in order from root to itself (included).
     tipAddress$UpredList <- vector('list', length = gridObj$M+1)
     tipAddress$UpredList[[1]] <- gridObj$covFct(subLocations, gridObj$knotPositions)
@@ -462,6 +460,10 @@ predict.Spacetimegrid <- function(gridObj, spacetimeCoor, cl = NULL) {
   allTips <- .tipAddresses(gridObj)
   computeVpredictMat <- function(tipAddress) {
     subLocations <- subset(x = locations, latExtent = tipAddress$dimensions$latitude, lonExtent = tipAddress$dimensions$longitude, timeExtent = tipAddress$dimensions$time)
+    if (length(subLocations) == 0) {
+      tipAddress$VpredMat <- NULL
+      return(invisible())
+    }
     brickList <- .getAllParentAddresses(brickObj = tipAddress, flip = FALSE) # Lists parent nodes in order from root to itself (included).
     firstTerm <- gridObj$covFct(subLocations, subLocations)
     secondTermList <- lapply(0:(gridObj$M-1), function(k) tipAddress$UpredList[[k+1]] %*% brickList[[k+1]]$K %*% t(tipAddress$UpredList[[k+1]]))
