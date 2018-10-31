@@ -86,8 +86,6 @@ setupGrid <- function(lonNewBreaksList, latNewBreaksList, timeNewBreaksList, dat
   })
 
   if (gridCreationFlag) {
-    parentBrick$M <- 1
-    parentBrick$logLik <- NULL
     class(parentBrick) <- "Spacetimegrid"
     return(parentBrick)
   }
@@ -233,7 +231,7 @@ getLayer <- function(spacetimeGridObj, m = 0) {
   TRUE
 }
 
-.SpacetimebrickConstructor <- function(lonExtent, latExtent, timeExtent, parentBrick = NULL) {
+.SpacetimebrickConstructor <- function(lonExtent, latExtent, timeExtent, parentBrick = NULL, dataset = NULL) {
   if (is.null(parentBrick)) {
     parentBrick <- emptyenv()
     currentDepth <- 0
@@ -254,7 +252,18 @@ getLayer <- function(spacetimeGridObj, m = 0) {
     incAddresses <- c(childAddresses, brickEnvironment)
     parentBrick$childBricks <- incAddresses
   }
-  class(brickEnvironment) <- "Spacetimebrick"
+
+  if (!is.null(dataset) & !identical(parentBrick, emptyenv())) {
+    brickEnvironment$observations <- as.numeric(rownames(subset(x = dataset, latExtent = brickEnvironment$dimensions$latitude, lonExtent = brickEnvironment$dimensions$longitude, timeExtent = brickEnvironment$dimensions$time)@data))
+  }
+
+  if (identical(parentBrick, emptyenv())) {
+    brickEnvironment$dataset <- dataset
+    brickEnvironment$observations <- 1:length(dataset)
+    class(brickEnvironment) <- "Spacetimegrid"
+  } else {
+    class(brickEnvironment) <- "Spacetimebrick"
+  }
   brickEnvironment
 }
 
@@ -288,7 +297,7 @@ getLayer <- function(spacetimeGridObj, m = 0) {
 }
 
 .getM <- function(gridObj) {
-  length(gridObj$breaks)
+  gridObj$M
 }
 
 subset.STI <- function(x, latExtent, lonExtent, timeExtent) {
@@ -331,7 +340,7 @@ subset.STI <- function(x, latExtent, lonExtent, timeExtent) {
 #' }
 #' @export
 
-.addKnots <- function(gridObj, knotsList, argsForRandomKnots) {
+.addKnots <- function(gridObj, knotsList = NULL, argsForRandomKnots) {
   if (("STI" %in% class(knotsList))) { # If knotsList is NULL, class(knotsList) will return "NULL" (the class of NULL if "NULL", not inexistent.)
     knotsList <- replicate(.getM(gridObj)+1, expr = knotsList, simplify = FALSE) # In this situation, the knots are the same at every resolution. Might not be the best idea...
   }
@@ -467,4 +476,44 @@ randomizeKnotsInBrick <- function(brickObj, numKnots) {
   knotPositions <- STI(sp = SpatialPoints(cbind(brickKnotsLon, brickKnotsLat)), time = gridAddress$dataset@time[brickObj$observations][brickKnotsTimeIndices])
   brickObj$knotPositions <- knotPositions
   invisible()
+}
+
+# medianGridGeneration will ensure that all regions have observations in them.
+
+medianGridGenerator <- function(M, observations, lonRange, latRange, timeRange, argsForRandomKnots, cutForTimeSplit = 200, cutForLatSplit = 200) {
+
+  gridObj <- .SpacetimebrickConstructor(lonExtent = lonRange, latExtent = latRange, timeExtent = timeRange, parentBrick = NULL, dataset = observations)
+  gridObj$M <- M
+
+  internalGridGeneration <- function(brickObj) {
+    subObservations <- gridObj$dataset[brickObj$observations]
+
+    lonBreaks <- c(brickObj$dimensions$longitude[[1]], median(subObservations@sp@coords[ , 1]) - 1e-15, brickObj$dimensions$longitude[[2]])
+    latBreaks <- brickObj$dimensions$latitude
+    if (length(subObservations) > cutForLatSplit) {
+      latBreaks <- c(brickObj$dimensions$latitude[[1]], median(subObservations@sp@coords[ , 2]) - 1e-15, brickObj$dimensions$latitude[[2]])
+    }
+    timeBreaks <- brickObj$dimensions$time
+    if (length(subObservations) > cutForTimeSplit) {
+      timeBreaks <- c(brickObj$dimensions$time[[1]], median(as.POSIXct(index(subObservations@time), origin = '1970-01-01')) - 1, brickObj$dimensions$time[[2]])
+    }
+    combinationNumbers <- expand.grid(1:(length(lonBreaks)-1), 1:(length(latBreaks)-1), 1:(length(timeBreaks)-1))
+    expandedBreaksList <- lapply(1:nrow(combinationNumbers), function(x) {
+      lonRange <- c(lonBreaks[combinationNumbers[x, 1]], lonBreaks[combinationNumbers[x, 1]+1])
+      latRange <- c(latBreaks[combinationNumbers[x, 2]], latBreaks[combinationNumbers[x, 2]+1])
+      timeRange <-  c(timeBreaks[combinationNumbers[x, 3]], timeBreaks[combinationNumbers[x, 3]+1])
+      list(longitude = lonRange, latitude = latRange, time = timeRange)
+    })
+
+    brickObj$childBricks <- lapply(expandedBreaksList, FUN = function(rangeList) {
+      .SpacetimebrickConstructor(lonExtent = rangeList$longitude, latExtent = rangeList$latitude, timeExtent = rangeList$time, parentBrick = brickObj, dataset = observations)
+    })
+    if (brickObj$depth+1 < M) {
+      lapply(brickObj$childBricks, FUN = internalGridGeneration)
+    }
+    invisible()
+  }
+  internalGridGeneration(gridObj)
+  .addKnots(gridObj, argsForRandomKnots = argsForRandomKnots)
+  gridObj
 }

@@ -464,7 +464,7 @@ predict.Spacetimegrid <- function(gridObj, spacetimeCoor, cl = NULL) {
   allTips <- .tipAddresses(gridObj)
   computeUlistTips <- function(tipAddress) {
     subLocations <- subset(x = locations, latExtent = tipAddress$dimensions$latitude, lonExtent = tipAddress$dimensions$longitude, timeExtent = tipAddress$dimensions$time)
-    if (length(subLocations) == 0) {
+    if ((length(subLocations) == 0) | is.null(tipAddress$knotPositions)) { # If knotPositions is NULL, no observations were found in the region.
       tipAddress$UpredList <- NULL
       return(invisible())
     }
@@ -492,7 +492,7 @@ predict.Spacetimegrid <- function(gridObj, spacetimeCoor, cl = NULL) {
   allTips <- .tipAddresses(gridObj)
   computeVpredictMat <- function(tipAddress) {
     subLocations <- subset(x = locations, latExtent = tipAddress$dimensions$latitude, lonExtent = tipAddress$dimensions$longitude, timeExtent = tipAddress$dimensions$time)
-    if (length(subLocations) == 0) {
+    if ((length(subLocations) == 0) | is.null(tipAddress$knotPositions)) {
       tipAddress$VpredMat <- NULL
       return(invisible())
     }
