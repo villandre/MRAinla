@@ -517,3 +517,18 @@ medianGridGenerator <- function(M, observations, lonRange, latRange, timeRange, 
   .addKnots(gridObj, argsForRandomKnots = argsForRandomKnots)
   gridObj
 }
+
+# Returns grid size in bytes
+
+grid.size <- function(gridObj) {
+  totalSize <- sum(sapply(ls(gridObj), function(x) object.size(get(x, envir = gridObj))))
+  internalFun <- function(brickObj) {
+    totalSize <<- totalSize + sum(sapply(ls(brickObj), function(x) object.size(get(x, envir = brickObj))))
+    if (!is.null(brickObj$childBricks)) {
+      lapply(brickObj$childBricks, internalFun)
+    }
+    invisible()
+  }
+  cat(totalSize, "bytes")
+  invisible(totalSize)
+}

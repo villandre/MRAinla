@@ -15,6 +15,7 @@ computeLogLik <- function(gridObj, covFct, fixedEffectParVec = NULL) {
   .recurseD(gridObj)
 
   gridObj$logLik <- drop(-(gridObj$d + gridObj$u)/2)
+  .clean(gridObj)
   invisible()
 }
 
@@ -163,7 +164,8 @@ computeLogLik <- function(gridObj, covFct, fixedEffectParVec = NULL) {
       tipAddress$d <- NULL
       return(invisible())
     }
-    tipAddress$d <- log(det(tipAddress$Sigma))
+    tipAddress$d <- determinant(tipAddress$Sigma, logarithm = TRUE)$modulus
+    attributes(tipAddress$d) <- NULL # I'm stripping the attributes of the object returned by determinant.
     invisible()
   }
   lapply(allTips, FUN = modifyTip)
@@ -178,8 +180,11 @@ computeLogLik <- function(gridObj, covFct, fixedEffectParVec = NULL) {
   if (is.null(brickObj$childBricks[[1]]$d)) {
     lapply(brickObj$childBricks, .recurseD)
   }
-
-  brickObj$d <- log(det(brickObj$KtildeInverse)) - log(det(brickObj$Kinverse)) + sum(do.call('c', Filter(f = function(x) !is.null(x), x = lapply(brickObj$childBricks, FUN = function(childBrick) childBrick$d))))
+  firstTerm <- determinant(brickObj$KtildeInverse, logarithm = TRUE)$modulus
+  secondTerm <- determinant(brickObj$Kinverse, logarithm = TRUE)$modulus
+  attributes(firstTerm) <- attributes(secondTerm) <- NULL
+  brickObj$d <- firstTerm - secondTerm + sum(do.call('c', Filter(f = function(x) !is.null(x), x = lapply(brickObj$childBricks, FUN = function(childBrick) childBrick$d))))
+  if (brickObj$d == Inf) browser()
   invisible()
 }
 
@@ -365,8 +370,9 @@ predict.Spacetimegrid <- function(gridObj, spacetimeCoor, cl = NULL) {
     brickList <- .getAllParentAddresses(brickObj = brickObj, flip = FALSE)
     knots2 <- brickList[[level+1]]$knotPositions
     currentV <- gridObj$covFct(knots1, knots2)
-    for (i in 1:level) {
-      currentV <- currentV - brickObj$bKnots[[i]] %*% brickList[[i]]$K %*% t(parent.env(brickObj)$bKnots[[i]]) ### MOVED THE t(...) TO THE RIGHT SIDE OF K. This differs from the paper, but solves the problem with the matrix dimensions.
+
+    for (i in 0:(level-1)) {
+      currentV <- currentV - brickObj$bKnots[[i+1]] %*% brickList[[i+1]]$K %*% t(brickList[[level+1]]$bKnots[[i+1]]) ### MOVED THE t(...) TO THE RIGHT SIDE OF K. This differs from the paper, but solves the problem with the matrix dimensions.
     }
     brickObj$bKnots[[level+1]] <- currentV
     if (!is.null(brickObj$childBricks)) {
@@ -427,11 +433,11 @@ predict.Spacetimegrid <- function(gridObj, spacetimeCoor, cl = NULL) {
     }
     brickList <- .getAllParentAddresses(brickObj = tipAddress, flip = FALSE) # Lists parent nodes in order from root to itself (included).
     computeSumTerm <- function(m) {
-      tipAddress$Btilde[[m+2]][[m+1]] %*% brickList[[m+1]]$Ktilde %*% brickList[[m+1]]$omega[[m+1]]
+      drop(tipAddress$Btilde[[m+2]][[m+1]] %*% brickList[[m+1]]$Ktilde %*% brickList[[m+1]]$omega[[m+1]])
     }
-    firstTerm <- do.call('+', lapply(0:(gridObj$M-1), computeSumTerm))
-    secondTerm <- tipAddress$UpredList[[gridObj$M+1]] %*% tipAddress$SigmaInverse %*% gridObj$dataset[tipAddress$observations]@data[ , 1]
-    predictionMean <- drop(firstTerm + secondTerm)
+    firstTerm <- Reduce('+', lapply(0:(gridObj$M-1), computeSumTerm))
+    secondTerm <- drop(tipAddress$UpredList[[gridObj$M+1]] %*% tipAddress$SigmaInverse %*% gridObj$dataset[tipAddress$observations]@data[ , 1])
+    predictionMean <- firstTerm + secondTerm
     names(predictionMean) <- rownames(subLocations@data)
     predictionMean
   }
@@ -450,7 +456,7 @@ predict.Spacetimegrid <- function(gridObj, spacetimeCoor, cl = NULL) {
     computeSumTermCov <- function(m) {
       tipAddress$Btilde[[m+2]][[m+1]] %*% brickList[[m+1]]$Ktilde %*% t(tipAddress$Btilde[[m+2]][[m+1]])
     }
-    firstTerm <- do.call('+', lapply(0:(gridObj$M-1), computeSumTermCov))
+    firstTerm <- Reduce('+', lapply(0:(gridObj$M-1), computeSumTermCov))
     secondTerm <- tipAddress$VpredMat - tipAddress$UpredList[[gridObj$M+1]] %*% tipAddress$SigmaInverse %*% t(tipAddress$UpredList[[gridObj$M+1]])
     covariances <- firstTerm + secondTerm
     rownames(covariances) <- colnames(covariances) <- rownames(subLocations@data)
@@ -464,7 +470,7 @@ predict.Spacetimegrid <- function(gridObj, spacetimeCoor, cl = NULL) {
   allTips <- .tipAddresses(gridObj)
   computeUlistTips <- function(tipAddress) {
     subLocations <- subset(x = locations, latExtent = tipAddress$dimensions$latitude, lonExtent = tipAddress$dimensions$longitude, timeExtent = tipAddress$dimensions$time)
-    if ((length(subLocations) == 0) | is.null(tipAddress$knotPositions)) { # If knotPositions is NULL, no observations were found in the region.
+    if (length(subLocations) == 0) {
       tipAddress$UpredList <- NULL
       return(invisible())
     }
@@ -492,7 +498,7 @@ predict.Spacetimegrid <- function(gridObj, spacetimeCoor, cl = NULL) {
   allTips <- .tipAddresses(gridObj)
   computeVpredictMat <- function(tipAddress) {
     subLocations <- subset(x = locations, latExtent = tipAddress$dimensions$latitude, lonExtent = tipAddress$dimensions$longitude, timeExtent = tipAddress$dimensions$time)
-    if ((length(subLocations) == 0) | is.null(tipAddress$knotPositions)) {
+    if (length(subLocations) == 0) {
       tipAddress$VpredMat <- NULL
       return(invisible())
     }
@@ -507,5 +513,18 @@ predict.Spacetimegrid <- function(gridObj, spacetimeCoor, cl = NULL) {
   } else {
     parallel::parLapply(cl = cl, X = allTips, fun = computeVpredictMat)
   }
+  invisible()
+}
+
+.clean <- function(gridObj) {
+  rm(list = setdiff(ls(gridObj), c("knotPositions", "observations", "covFct", "dimensions", "logLik", "depth", "M", "childBricks", "dataset", "WmatList", "K", "Ktilde", "Sigma", "SigmaInverse", "A", "omega")), envir = gridObj)
+  internalFun <- function(brickObj) {
+    rm(list = setdiff(ls(brickObj), c("knotPositions", "observations", "dimensions", "Ktilde", "depth", "childBricks", "WmatList", "K", "Sigma", "SigmaInverse", "A", "omega")), envir = brickObj)
+    if (!is.null(brickObj$childBricks)) {
+      lapply(brickObj$childBricks, internalFun)
+    }
+    invisible()
+  }
+  lapply(gridObj$childBricks, internalFun)
   invisible()
 }
