@@ -1,6 +1,6 @@
 Package: MRAinla
 Type: Package
-Title: Fits the MRA-INLA Approach of Villandre et al.
+Title: Fits the MRA-INLA approach of Villandre et al.
 Version: 0.1.0
 Author: Luc Villandre
 Maintainer: Luc Villandre <yourself@somewhere.net>

@@ -137,20 +137,22 @@ computeLogLik <- function(gridObj, covFct, fixedEffectParVec = NULL) {
   indexGrid <- expand.grid(k = 0:m, l = 0:m)
   indexGrid <- subset(indexGrid, subset = k >= l)
 
-  Amatrices <- mapply(k = indexGrid$k, l = indexGrid$l, FUN = function(k,l) { # +1 to adjust indices for R.
+  mapplyFunction <- function(k,l) { # +1 to adjust indices for R.
     Reduce("+", Filter(f = function(x) !is.null(x), x = lapply(brickObj$childBricks, function(x) {
       x$Atilde[[k + 1]][[l + 1]]
     })))
-  }, SIMPLIFY = FALSE)
+  }
+  Amatrices <- mapply(k = indexGrid$k, l = indexGrid$l, FUN = mapplyFunction, SIMPLIFY = FALSE)
   brickObj$A <- .reformatList(matrixList = Amatrices, indexGrid = indexGrid)
 
   brickObj$KtildeInverse <- brickObj$Kinverse + brickObj$A[[m + 1]][[m + 1]] # +1 to adjust indices for R.
   # brickObj$Ktilde <- Matrix::chol2inv(chol(brickObj$KtildeInverse))
   brickObj$Ktilde <- solve(brickObj$KtildeInverse)
-
-  AtildeMatrices <- mapply(k = indexGrid$k, l = indexGrid$l, FUN = function(k, l) {
+  mapplyFunction <- function(k, l) {
     brickObj$A[[k + 1]][[l + 1]] - brickObj$A[[k + 1]][[m + 1]] %*% brickObj$Ktilde %*% brickObj$A[[m + 1]][[l + 1]] # m+1 to adjust indices for R.
-  }, SIMPLIFY = FALSE)
+  }
+
+  AtildeMatrices <- mapply(k = indexGrid$k, l = indexGrid$l, FUN = mapplyFunction, SIMPLIFY = FALSE)
   brickObj$Atilde <- .reformatList(matrixList = AtildeMatrices, indexGrid = indexGrid)
 
   invisible()
