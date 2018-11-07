@@ -1,6 +1,6 @@
-computeLogLik <- function(gridObj, covFct, fixedEffectParVec = NULL) {
+computeLogLik <- function(gridObj, covFct, fixedEffectParVec = NULL, cl = NULL) {
   gridObj$covFct <- covFct
-  .computeWmats(gridObj)
+  .computeWmats(gridObj, cl)
   .setBtips(gridObj)
   .setSigmaTips(gridObj)
   .setAtildeTips(gridObj)
@@ -19,7 +19,7 @@ computeLogLik <- function(gridObj, covFct, fixedEffectParVec = NULL) {
   invisible()
 }
 
-.computeWmats <- function(gridObj) {
+.computeWmats <- function(gridObj, cl = NULL) {
   gridObj$Kinverse <- gridObj$covFct(gridObj$knotPositions, gridObj$knotPositions)
   # gridObj$K <- Matrix::chol2inv(Matrix::chol(gridObj$Kinverse))
   gridObj$K <- solve(gridObj$Kinverse)
@@ -56,11 +56,16 @@ computeLogLik <- function(gridObj, covFct, fixedEffectParVec = NULL) {
     if (!is.null(brickObj$childBricks)) {
       lapply(brickObj$childBricks, computeWchildBrick)
     }
-    invisible()
+    brickObj
   }
 
   if (!is.null(gridObj$childBricks)) {
-    lapply(gridObj$childBricks, computeWchildBrick)
+    if (is.null(cl)) {
+      lapply(gridObj$childBricks, computeWchildBrick)
+    } else {
+      newBricks <- parallel::parLapply(cl = cl, X = gridObj$childBricks, fun = computeWchildBrick)
+      gridObj$childBricks <- newBricks
+    }
   }
   invisible()
 }

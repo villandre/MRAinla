@@ -1,1 +1,3 @@
+useDynLib(MRAinla)         # Change me!
+importFrom(Rcpp, evalCpp)
 exportPattern("^[[:alpha:]]+")
