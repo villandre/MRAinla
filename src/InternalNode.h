@@ -14,16 +14,26 @@ public:
   bool IsSolved() {return _isSolved ;};
   bool CanSolve() ;
   void SetSolved(bool status) {_isSolved = status ;};
-  InternalNode(const vec &, const vec &, const uvec &, const mat &, const uvec &, const uint &) ;
+  InternalNode(dimtype & dims, uint & depth, TreeNode * parent, datasettype & dataset) {
+    _dimensions = dims;
+    _depth = depth ;
+    _parent = parent ;
+    deriveObsInNode(dataset) ;
+  }
 
-  InternalNode(): _isSolved(false) {
-    // TO_DO
-  };
+  InternalNode(dimtype & dims, uint & depth) {
+    _dimensions = dims;
+    _depth = depth ;
+    _parent = this ;
+  }
 
 protected:
 
    bool _isSolved ;
    std::vector<TreeNode *> _children ;
+   void genRandomKnots(datasettype & dataset) {
+     // _knotsCoor = std::make_tuple( , ) ; //TO_DO
+   }
 };
 
 #endif /* INTERMEDIATENODE_H */

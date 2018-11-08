@@ -13,37 +13,33 @@ protected:
   uint _M ;
   uint _numTips ;
   umat _edgeMatrix ;
-  vec _lonRange ;
-  vec _latRange ;
-  uvec _timeRange ;
+  dimtype _mapDimensions;
 
-  vec _responseValues ;
-  mat _obsSp ;
-  uvec _obsTime ;
-
-  std::vector<vec> _knotsSp ;
-  DateVector _knotsTime ;
+  datasettype _dataset ; // First element is response, second is spatial coordinates, last is time.
 
   gsl_rng * _randomNumGenerator ;
 
-  void AddEdgeRecursion(umat &, uint &, TreeNode *) ;
-  void BuildTree(const uint &, const uint &) ;
-  void createLevels(uint &, TreeNode *) ;
+  // void AddEdgeRecursion(umat &, uint &, TreeNode *) ;
+  void BuildTree(uint &) ;
+  void createLevels(TreeNode *, uint &) ;
+  void generateKnots() ;
 
 public:
-  AugTree(uint &, vec &, vec &, uvec &, vec &, mat &, uvec &, uint &, uint &) ;
+  AugTree(uint &, vec &, vec &, uvec &, vec &, mat &, uvec &, uint &) ;
 
   void InvalidateAll() ;
-  void BuildEdgeMatrix() ;
+  // void BuildEdgeMatrix() ;
 
   void NegateAllUpdateFlags() ;
 
   std::vector<TreeNode *> GetVertexVector() {return _vertexVector ;} ;
 
   void ComputeLoglik(const std::vector<mat> &, const std::vector<mat> &, const vec &) ;
+
   double GetLoglik() {return _logLik ;}
   gsl_rng * GetRandomNumGenerator() {return _randomNumGenerator ;}
-
+  datasettype GetDataset() {return _dataset;}
+  knotstype GetKnotsCoor() {return _knotsCoor;}
   uint GetNumTips() {return _numTips ;}
 
   void InvalidateAllSolutions() ;

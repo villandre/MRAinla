@@ -6,101 +6,92 @@
 using namespace Rcpp ;
 using namespace arma ;
 
-AugTree::AugTree(uint & M, vec & lonRange, vec & latRange, uvec & timeRange, vec & observations, mat & obsSp, uvec & obsTime, uint & minObsForLonSplit, uint & minObsForTimeSplit)
+AugTree::AugTree(uint & M, vec & lonRange, vec & latRange, uvec & timeRange, vec & observations, mat & obsSp, uvec & obsTime, uint & minObsForTimeSplit)
 {
   _M = M ;
-  _responseValues = observations ;
-  _obsSp = obsSp ;
-  _obsTime = obsTime ;
-  _lonRange = lonRange ;
-  _latRange = latRange ;
-  _timeRange = timeRange ;
+  _dataset = std::make_tuple(observations, obsSp, obsTime) ;
+  _mapDimensions = std::make_tuple(lonRange, latRange, timeRange) ;
 
-  BuildTree(minObsForLonSplit, minObsForTimeSplit) ;
+  BuildTree(minObsForTimeSplit) ;
 
 }
 
-void AugTree::BuildTree(const uint & minObsForLonSplit, const uint & minObsForTimeSplit)
+void AugTree::BuildTree(uint & minObsForTimeSplit)
 {
   _vertexVector.reserve(1) ;
 
   // We create the first internal node
+  uint depth = 0 ;
+  InternalNode * topNode = new InternalNode(_mapDimensions, depth) ;
 
-  InternalNode * topNode = new InternalNode(_lonRange, _latRange, _timeRange, _obsSp, _obsTime, 0) ;
-  topNode->SetParent(topNode) ; // The root node has itself as a parent
-
-
-
-  createLevels(1, topNode) ;
-  for (uint level = 1; level <= _M; level++) {
-
-
-    splitSizes
-
-    if (level == _M) {
-      TipNode * newNode = new TipNode() ;
-    } else {
-      IntermediateNode *
-    }
-    InternalNode * newNode = new TipNode() ;
-    _vertexVector.push_back(newNode) ;
-  }
-
-  // We add the internal nodes
-  for (uint i = 0 ; i < edgeMatrix.n_rows - _numTips + 1; i++) {
-    InternalNode * newNode = new InternalNode() ;
-    _vertexVector.push_back(newNode) ;
-  }
-  // We set the IDs (to facilitate exporting the phylogeny to R).
-  for (uint i = 0 ; i < _vertexVector.size(); i++) {
-    _vertexVector[i]->SetId(i) ;
-  }
-  // The vertices are all disjoint, the next loop defines their relationships
-  // The iterator follows columns.
-  for (umat::const_iterator iter = edgeMatrix.begin(); iter < edgeMatrix.end()-edgeMatrix.n_rows; iter++)
-  {
-    _vertexVector[*iter]->AddChild(_vertexVector[*(iter+edgeMatrix.n_rows)]) ;
-    _vertexVector[*(iter+edgeMatrix.n_rows)]->SetParent(_vertexVector[*iter]) ;
-  }
+  createLevels(topNode, minObsForTimeSplit) ;
 }
 
-void AugTree::createLevels(uint & depth, TreeNode * parent) {
+void AugTree::createLevels(TreeNode * parent, uint & numObsForTimeSplit) {
 
-  uvec obsForMedian(_responseValues.size()) ;
+  uvec obsForMedian(std::get<0>(_dataset).size()) ;
   obsForMedian = parent->GetObsInNode() ;
-  vec spMedians = median(_obsSp.rows(obsForMedian)) ;
-  uint timeMedian = median(_obsTime.elem(obsForMedian)) ;
-  std::tuple<vec,vec,uvec> dimensions(8) ;
+  vec spMedians = median(std::get<1>(_dataset).rows(obsForMedian)) ;
+  uint timeMedian = median(std::get<2>(_dataset).elem(obsForMedian)) ;
+  std::vector<dimtype> dimensionsForChildren ;
+  vec lonRange(2), latRange(2) ;
+  uvec timeRange(2) ;
 
-  for (uint i = 0 ; i < 8; i++) {
+  if (parent->GetObsInNode().size() < numObsForTimeSplit) {
+    for (uint i = 0; i < 2; i++) {
+      for (uint j = 0 ; j < 2; j++) {
+        lonRange.at(0) = std::get<0>(parent->GetDimensions()).at(i) ;
+        lonRange.at(1) = spMedians.at(0);
+        lonRange = sort(lonRange);
 
-    std::tuple<vec,vec,uvec> components(1) ;
-    vec longitudeRange(2), latitudeRange(2) ;
-    uvec timeRange(2) ;
-    size_t index ;
+        latRange.at(0) = std::get<1>(parent->GetDimensions()).at(j) ;
+        latRange.at(1) = spMedians.at(1);
+        latRange = sort(latRange);
 
-    std::bitset<3> combination(i) ;
+        dimensionsForChildren.push_back(std::make_tuple(lonRange, latRange, std::get<2>(parent->GetDimensions()))) ;
+      }
+    }
+  } else {
+    for (uint i = 0; i < 2; i++) {
+      for (uint j = 0; j < 2; j++) {
+        for(uint k = 0; k < 2; k++) {
+          lonRange.at(0) = std::get<0>(parent->GetDimensions()).at(i) ;
+          lonRange.at(1) = spMedians.at(0);
+          lonRange = sort(lonRange);
 
-    longitudeRange.at(0) = spMedians.at(0) ;
-    index = (combination[0]) ; // Typecasting to integer 0 or 1.
-    longitudeRange.at(1) = parent->GetLonRange().at(index) ;
-    longitudeRange = sort(longitudeRange) ;
+          latRange.at(0) = std::get<1>(parent->GetDimensions()).at(j) ;
+          latRange.at(1) = spMedians.at(1);
+          latRange = sort(latRange);
 
-    latitudeRange.at(0) = spMedians.at(1) ;
-    index = (combination[1]) ;
-    latitudeRange.at(1) = parent->GetLatRange().at(index) ;
-    latitudeRange = sort(latitudeRange) ;
+          timeRange.at(0) = std::get<2>(parent->GetDimensions()).at(k) ;
+          timeRange.at(1) = timeMedian;
+          timeRange = sort(timeRange);
 
-    timeRange.at(0) = timeMedian ;
-    index = (combination[1]) ;
-    latitudeRange.at(1) = parent->GetLatRange().at(index) ;
-    latitudeRange = sort(latitudeRange) ;
+          dimensionsForChildren.push_back(std::make_tuple(lonRange, latRange, timeRange)) ;
+        }
+      }
+    }
   }
 
+  uint incrementedDepth = parent->GetDepth()+1 ;
 
+  for (auto &&i : dimensionsForChildren) {
+    if (parent->GetDepth() < _M-1) {
+      InternalNode * newNode = new InternalNode(i, incrementedDepth, parent, _dataset) ;
+      _vertexVector.push_back(newNode) ;
+      parent->AddChild(newNode) ;
+    } else {
+      TipNode * newNode = new TipNode(i, incrementedDepth, parent, _dataset) ;
+      _vertexVector.push_back(newNode) ;
+      parent->AddChild(newNode) ;
+    }
+  }
 
-  if (depth < _M) {
-    createLevel(depth+1, )
+  if (incrementedDepth < _M) {
+    incrementedDepth = incrementedDepth + 1 ;
+    for (auto && i : parent->GetChildren()) {
+      createLevels(i, numObsForTimeSplit) ;
+    }
   }
 }
 
@@ -112,17 +103,10 @@ void AugTree::InvalidateAll() // Assumes that the tree starts fully solved.
   }
 }
 
-void AugTree::BuildEdgeMatrix(uint & M, vec & lonRange, vec & latRange, uvec & timeRange, mat & obsSp, uvec & obsTime, uint & cutForTimeSplit, uint & cutForLonSplit)
-{
-  for (uint i = 0; i == M; i++) {
-    double lonMedian = median(obsSp.col(0)) ;
-    double latMedian = median(obsSp.col(1)) ;
-    uint timeMedian = median(obsTime) ;
-
-  }
-
-
-}
+// void AugTree::BuildEdgeMatrix(uint & M, vec & lonRange, vec & latRange, uvec & timeRange, mat & obsSp, uvec & obsTime, uint & cutForTimeSplit, uint & cutForLonSplit)
+// {
+//   //TO_DO
+// }
 
 void AugTree::AddEdgeRecursion(umat & matToUpdate, uint & lineNum, TreeNode * currentVertex)
 {

@@ -13,10 +13,13 @@ public:
   bool CanSolve() {return true ;}
   void SetSolved(bool status) {}
 
-  TipNode()
-  {
-    // TO_DO
+  TipNode(dimtype & dims, uint & depth, TreeNode * parent, datasettype & dataset) {
+    _dimensions = dims;
+    _depth = depth ;
+    _parent = parent ;
+    deriveObsInNode(dataset) ;
   }
+
 
 protected:
   std::vector<std::vector<mat>> * _Umat ;
@@ -24,4 +27,7 @@ protected:
   std::vector<mat> _bPred ;
   std::vector<mat> _bKnots ;
   std::vector<std::vector<mat>> _Btilde ;
+  void genRandomKnots(datasettype & dataset) {
+    _knotsCoor = std::make_tuple(std::get<1>(dataset).rows(_obsInNode), std::get<2>(dataset).elem(_obsInNode)) ;
+  }
 };
