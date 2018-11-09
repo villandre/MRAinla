@@ -1,45 +1,43 @@
 #include "InternalNode.h"
+#include <gsl/gsl_randist.h>
 
-void InternalNode::InvalidateSolution()
-{
-  _isSolved = false ;
-
-  if (_parent != NULL)
-  { // Root has a NULL parent.
-    _parent->InvalidateSolution() ;
-  }
-}
+using namespace arma ;
+using namespace MRAinla ;
 
 bool InternalNode::CanSolve()
 {
-  std::vector<bool> childDefined(_children.size()) ;
-  childDefined.reserve(_children.size()) ;
-  for (auto & i : _children)
+  std::vector<bool> childDefined(m_children.size()) ;
+  childDefined.reserve(m_children.size()) ;
+  for (auto & i : m_children)
   {
     childDefined.push_back(i->IsSolved()) ;
   }
   return std::all_of(childDefined.begin(), childDefined.end(), [](bool v) { return v; });
 }
 
-void InternalNode::ComputeSolutions()
-{
-  // TO_DO
-}
-
-void InternalNode::ComputeSolution()
-{
-  // TO_DO
-}
-
 void InternalNode::RemoveChild(TreeNode * childToRemove)
 {
-  auto ChildIterPos = std::find(_children.begin(), _children.end(), childToRemove) ;
-  if (ChildIterPos == _children.end())
+  auto ChildIterPos = std::find(m_children.begin(), m_children.end(), childToRemove) ;
+  if (ChildIterPos == m_children.end())
   {
     cerr << "Warning: Trying to remove a child that was not found! \n" ;
   }
   else
   {
-    _children.erase(ChildIterPos) ;
+    m_children.erase(ChildIterPos) ;
+  }
+}
+
+void InternalNode::genRandomKnots(inputdata & dataset, uint & numKnots, const gsl_rng * RNG) {
+
+  mat knotsSp(numKnots, 2) ;
+  double minLon = (double) min(m_dimensions.longitude) ;
+  double maxLon = (double) max(m_dimensions.longitude) ;
+  double minLat = (double) min(m_dimensions.latitude) ;
+  double maxLat = (double) max(m_dimensions.latitude) ;
+
+  for (mat::iterator iter = knotsSp.begin() ; iter != std::prev(knotsSp.end()) ; std::advance(iter, 2)) {
+    (*iter) = gsl_ran_flat(RNG, minLon, maxLon) ;
+    (*std::next(iter)) = gsl_ran_flat(RNG, minLat, maxLat) ;
   }
 }

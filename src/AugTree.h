@@ -1,55 +1,57 @@
 #include "TreeNode.h"
 #include "helper.h"
 
-using namespace arma ;
-using namespace Rcpp ;
+#ifndef MYPROJECT_AUGTREE_H
+#define MYPROJECT_AUGTREE_H
+
+namespace MRAinla {
 
 class AugTree
 {
-protected:
-  double _logLik ;
-  std::vector<TreeNode *> _vertexVector ;
-
-  uint _M ;
-  uint _numTips ;
-  umat _edgeMatrix ;
-  dimtype _mapDimensions;
-
-  datasettype _dataset ; // First element is response, second is spatial coordinates, last is time.
-
-  gsl_rng * _randomNumGenerator ;
-
-  // void AddEdgeRecursion(umat &, uint &, TreeNode *) ;
-  void BuildTree(uint &) ;
-  void createLevels(TreeNode *, uint &) ;
-  void generateKnots() ;
-
 public:
-  AugTree(uint &, vec &, vec &, uvec &, vec &, mat &, uvec &, uint &) ;
+  AugTree(uint &, arma::vec &, arma::vec &, arma::uvec &, arma::vec &, arma::mat &, arma::uvec &, uint &) ;
 
   void InvalidateAll() ;
-  // void BuildEdgeMatrix() ;
-
   void NegateAllUpdateFlags() ;
 
-  std::vector<TreeNode *> GetVertexVector() {return _vertexVector ;} ;
+  std::vector<TreeNode *> GetVertexVector() {return m_vertexVector ;} ;
 
-  void ComputeLoglik(const std::vector<mat> &, const std::vector<mat> &, const vec &) ;
+  void ComputeLoglik(const std::vector<arma::mat> &, const std::vector<arma::mat> &, const arma::vec &) ;
 
-  double GetLoglik() {return _logLik ;}
-  gsl_rng * GetRandomNumGenerator() {return _randomNumGenerator ;}
-  datasettype GetDataset() {return _dataset;}
-  knotstype GetKnotsCoor() {return _knotsCoor;}
-  uint GetNumTips() {return _numTips ;}
+  double GetLoglik() {return m_logLik ;}
+  gsl_rng * GetRandomNumGenerator() {return m_randomNumGenerator ;}
+  inputdata GetDataset() {return m_dataset;}
+  uint GetNumTips() {return m_numTips ;}
 
   void InvalidateAllSolutions() ;
 
-  void SetLogLik(double logLik) {_logLik = logLik ;}
+  void SetLogLik(double logLik) {m_logLik = logLik ;}
 
-  void SetRNG(gsl_rng * myRNG) { _randomNumGenerator = myRNG ;}
+  void SetRNG(gsl_rng * myRNG) { m_randomNumGenerator = myRNG ;}
 
-  void ComputeLoglik(List &, List &, NumericVector &) ;
+  void ComputeLoglik(Rcpp::List &, Rcpp::List &, Rcpp::NumericVector &) ;
   void PrintSolutions(const uint &) ;
 
-  ~AugTree() {deallocate_container(_vertexVector) ;};
+  ~AugTree() {deallocate_container(m_vertexVector) ; gsl_rng_free(m_randomNumGenerator) ;};
+
+private:
+
+  std::vector<TreeNode *> m_vertexVector ;
+
+  double m_logLik{ 0 } ;
+  uint m_M{ 0 } ;
+  uint m_numTips{ 0 } ;
+
+  dimensions m_mapDimensions;
+
+  inputdata m_dataset ; // First element is response, second is spatial coordinates, last is time.
+  // Note that the generator's seed is determined by the system variable
+  // GSL_RNG_SEED and takes value 0 by default.
+  gsl_rng * m_randomNumGenerator{ gsl_rng_alloc(gsl_rng_taus) } ;
+
+  void BuildTree(uint &) ;
+  void createLevels(TreeNode *, uint &) ;
+  void generateKnots() ;
 };
+}
+#endif

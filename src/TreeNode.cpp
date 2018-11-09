@@ -1,11 +1,14 @@
 #include "TreeNode.h"
 
-void TreeNode::deriveObsInNode(datasettype & dataset) {
-  uvec lonCheck = (std::get<1>(dataset).col(0) > std::get<0>(_dimensions).at(0)) *
-    (std::get<1>(dataset).col(0) <= std::get<0>(_dimensions).at(1)) ; // Longitude check
-  uvec latCheck = (std::get<1>(dataset).col(1) > std::get<1>(_dimensions).at(0)) *
-    (std::get<1>(dataset).col(1) <= std::get<1>(_dimensions).at(1)) ; // Latitude check
-  uvec timeCheck = (std::get<2>(dataset) > std::get<2>(_dimensions).at(0)) *
-    (std::get<2>(dataset) <= std::get<2>(_dimensions).at(1)) ; // Time check
-  _obsInNode = find(lonCheck * latCheck * timeCheck) ;
+using namespace arma ;
+using namespace MRAinla ;
+
+void TreeNode::deriveObsInNode(inputdata & dataset) {
+  uvec lonCheck = (dataset.spatialCoords.col(0) > min(m_dimensions.longitude)) *
+    (dataset.spatialCoords.col(0) <= max(m_dimensions.longitude)) ; // Longitude check
+  uvec latCheck = (dataset.spatialCoords.col(1) > min(m_dimensions.latitude)) *
+    (dataset.spatialCoords.col(1) <= max(m_dimensions.latitude)) ; // Latitude check
+  uvec timeCheck = (dataset.timeCoords > min(m_dimensions.time)) *
+    (dataset.timeCoords <= max(m_dimensions.time)) ; // Time check
+  m_obsInNode = find(lonCheck * latCheck * timeCheck) ; // find is equivalent to which in R
 }
