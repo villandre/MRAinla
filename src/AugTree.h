@@ -11,9 +11,6 @@ class AugTree
 public:
   AugTree(uint &, arma::vec &, arma::vec &, arma::uvec &, arma::vec &, arma::mat &, arma::uvec &, uint &) ;
 
-  void InvalidateAll() ;
-  void NegateAllUpdateFlags() ;
-
   std::vector<TreeNode *> GetVertexVector() {return m_vertexVector ;} ;
 
   void ComputeLoglik(const std::vector<arma::mat> &, const std::vector<arma::mat> &, const arma::vec &) ;
@@ -23,14 +20,9 @@ public:
   inputdata GetDataset() {return m_dataset;}
   uint GetNumTips() {return m_numTips ;}
 
-  void InvalidateAllSolutions() ;
-
-  void SetLogLik(double logLik) {m_logLik = logLik ;}
-
   void SetRNG(gsl_rng * myRNG) { m_randomNumGenerator = myRNG ;}
 
   void ComputeLoglik(Rcpp::List &, Rcpp::List &, Rcpp::NumericVector &) ;
-  void PrintSolutions(const uint &) ;
 
   ~AugTree() {deallocate_container(m_vertexVector) ; gsl_rng_free(m_randomNumGenerator) ;};
 

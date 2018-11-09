@@ -12,9 +12,8 @@ public:
   std::vector<TreeNode *> GetChildren() {return m_children;};
   void RemoveChildren()  {m_children.clear() ;} ;
 
-  bool IsSolved() {return m_isSolved ;};
-  bool CanSolve() ;
-  void SetSolved(bool status)  {m_isSolved = status ;};
+  void genRandomKnots(inputdata &, uint &, const gsl_rng *) ;
+
   InternalNode(dimensions & dims, uint & depth, TreeNode * parent, inputdata & dataset) {
     m_dimensions = dims;
     m_depth = depth ;
@@ -22,17 +21,17 @@ public:
     deriveObsInNode(dataset) ;
   }
 
-  InternalNode(dimensions & dims, uint & depth) {
+  InternalNode(dimensions & dims, inputdata & dataset) {
     m_dimensions = dims;
-    m_depth = depth ;
+    m_depth = 0 ;
+    uint numObs = dataset.responseValues.size() ;
+    m_obsInNode = arma::regspace<arma::uvec>(0, numObs - 1) ;
     m_parent = this ;
   }
 
 protected:
 
-   bool m_isSolved ;
    std::vector<TreeNode *> m_children ;
-   void genRandomKnots(inputdata &, uint &, const gsl_rng *) ;
 };
 }
 #endif /* INTERMEDIATENODE_H */

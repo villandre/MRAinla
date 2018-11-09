@@ -1,3 +1,5 @@
+#include <math.h>
+
 #include "AugTree.h"
 #include "TipNode.h"
 #include "InternalNode.h"
@@ -21,10 +23,12 @@ void AugTree::BuildTree(uint & minObsForTimeSplit)
   m_vertexVector.reserve(1) ;
 
   // We create the first internal node
-  uint depth = 0 ;
-  InternalNode * topNode = new InternalNode(m_mapDimensions, depth) ;
+
+  InternalNode * topNode = new InternalNode(m_mapDimensions, m_dataset) ;
+  m_vertexVector.push_back(topNode) ;
 
   createLevels(topNode, minObsForTimeSplit) ;
+  generateKnots() ;
 }
 
 void AugTree::createLevels(TreeNode * parent, uint & numObsForTimeSplit) {
@@ -95,33 +99,14 @@ void AugTree::createLevels(TreeNode * parent, uint & numObsForTimeSplit) {
   }
 }
 
-void AugTree::InvalidateAll() // Assumes that the tree starts fully solved.
-{
-  for (auto & i : m_vertexVector)
-  {
-    i->SetSolved(false) ;
-  }
-}
-
 void AugTree::ComputeLoglik(const std::vector<mat> & withinClusTransProbs, const std::vector<mat> & betweenClusTransProbs, const vec & limProbs)
 {
 // TO_DO
 }
 
-void AugTree::NegateAllUpdateFlags()
-{
-  for (auto & i : m_vertexVector)
-  {
-    i->NegateFlag() ;
-  }
-}
+void AugTree::generateKnots() {
+  double expToRound = 19/60*m_vertexVector.at(0)->GetDepth()+1/20*m_dataset.responseValues.size() ;
 
-void AugTree::PrintSolutions(const uint & elementNum)
-{
-  // for (auto & i : m_vertexVector)
-  // {
-  //   cout << "This is node " << i->GetId() << ".";
-  //   cout << "Is my supporting branch within-cluster? " << i->GetWithinParentBranch() << ".\n";
-  //   i->GetDictionaryIterator(elementNum, m_numRateCats)->second.first.print("Solution from dictionary (could be rescaled):") ;
-  // }
+  // uint numKnotsToGen = (uint) std::ceil(expToRound) ;
+  // m_vertexVector.at(0)->genRandomKnots(m_dataset, numKnotsToGen, m_randomNumGenerator) ;
 }
