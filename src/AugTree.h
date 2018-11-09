@@ -9,7 +9,7 @@ namespace MRAinla {
 class AugTree
 {
 public:
-  AugTree(uint &, arma::vec &, arma::vec &, arma::uvec &, arma::vec &, arma::mat &, arma::uvec &, uint &) ;
+  AugTree(uint &, arma::vec &, arma::vec &, arma::uvec &, arma::vec &, arma::mat &, arma::uvec &, uint &, unsigned long int &) ;
 
   std::vector<TreeNode *> GetVertexVector() {return m_vertexVector ;} ;
 
@@ -39,11 +39,11 @@ private:
   inputdata m_dataset ; // First element is response, second is spatial coordinates, last is time.
   // Note that the generator's seed is determined by the system variable
   // GSL_RNG_SEED and takes value 0 by default.
-  gsl_rng * m_randomNumGenerator{ gsl_rng_alloc(gsl_rng_taus) } ;
+  gsl_rng * m_randomNumGenerator ;
 
   void BuildTree(uint &) ;
   void createLevels(TreeNode *, uint &) ;
-  void generateKnots() ;
+  void generateKnots(TreeNode *) ;
 };
 }
 #endif

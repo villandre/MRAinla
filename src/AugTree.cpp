@@ -9,11 +9,13 @@ using namespace Rcpp ;
 using namespace arma ;
 using namespace MRAinla ;
 
-AugTree::AugTree(uint & M, vec & lonRange, vec & latRange, uvec & timeRange, vec & observations, mat & obsSp, uvec & obsTime, uint & minObsForTimeSplit)
+AugTree::AugTree(uint & M, vec & lonRange, vec & latRange, uvec & timeRange, vec & observations, mat & obsSp, uvec & obsTime, uint & minObsForTimeSplit, unsigned long int & seed)
   : m_M(M)
 {
   m_dataset = inputdata(observations, obsSp, obsTime) ;
   m_mapDimensions = dimensions(lonRange, latRange, timeRange) ;
+  m_randomNumGenerator = gsl_rng_alloc(gsl_rng_taus) ;
+  gsl_rng_set(m_randomNumGenerator, seed) ;
 
   BuildTree(minObsForTimeSplit) ;
 }
@@ -28,7 +30,7 @@ void AugTree::BuildTree(uint & minObsForTimeSplit)
   m_vertexVector.push_back(topNode) ;
 
   createLevels(topNode, minObsForTimeSplit) ;
-  generateKnots() ;
+  generateKnots(topNode) ;
 }
 
 void AugTree::createLevels(TreeNode * parent, uint & numObsForTimeSplit) {
@@ -104,9 +106,13 @@ void AugTree::ComputeLoglik(const std::vector<mat> & withinClusTransProbs, const
 // TO_DO
 }
 
-void AugTree::generateKnots() {
-  double expToRound = 19/60*m_vertexVector.at(0)->GetDepth()+1/20*m_dataset.responseValues.size() ;
-
-  // uint numKnotsToGen = (uint) std::ceil(expToRound) ;
-  // m_vertexVector.at(0)->genRandomKnots(m_dataset, numKnotsToGen, m_randomNumGenerator) ;
+void AugTree::generateKnots(TreeNode * node) {
+  float expToRound = 19/60*node->GetDepth()+1/20*m_dataset.responseValues.size() ;
+  uint numKnotsToGen = uint (std::ceil(expToRound)) ;
+  node->genRandomKnots(m_dataset, numKnotsToGen, m_randomNumGenerator) ;
+  if (node->GetChildren().at(0) != NULL) {
+    for (auto &i : node->GetChildren()) {
+      generateKnots(i) ;
+    }
+  }
 }
