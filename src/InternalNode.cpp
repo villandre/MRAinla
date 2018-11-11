@@ -20,23 +20,25 @@ void InternalNode::RemoveChild(TreeNode * childToRemove)
 void InternalNode::genRandomKnots(inputdata & dataset, uint & numKnots, const gsl_rng * RNG) {
 
   mat knotsSp(numKnots, 2) ;
+  cout << "Number of knots: " << numKnots << "\n \n" ;
 
-  double minLon = (double) min(m_dimensions.longitude) ;
-  double maxLon = (double) max(m_dimensions.longitude) ;
+  double minLon = min(m_dimensions.longitude) ;
+  double maxLon = max(m_dimensions.longitude) ;
 
-  double minLat = (double) min(m_dimensions.latitude) ;
-  double maxLat = (double) max(m_dimensions.latitude) ;
-
+  double minLat = min(m_dimensions.latitude) ;
+  double maxLat = max(m_dimensions.latitude) ;
+  cout << "Generating coordinates for lon/lat... " ;
   for (mat::iterator iter = knotsSp.begin() ; iter != std::prev(knotsSp.end()) ; std::advance(iter, 2)) {
     (*iter) = gsl_ran_flat(RNG, minLon, maxLon) ;
     (*std::next(iter)) = gsl_ran_flat(RNG, minLat, maxLat) ;
   }
+  cout << "Done! \n \n" ;
 
   double minTime = (double) min(m_dimensions.time) ;
   uint timeRangeSize = range(m_dimensions.time) ;
   uvec time(numKnots) ;
-
+  cout << "Creating time... " ;
   time.imbue( [&]() { return gsl_rng_uniform_int(RNG, timeRangeSize) + minTime; } ) ;
-
+  cout << "Done! \n \n" ;
   m_knotsCoor = spatialcoor(knotsSp, time) ;
 }

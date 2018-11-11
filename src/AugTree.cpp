@@ -30,18 +30,25 @@ void AugTree::BuildTree(uint & minObsForTimeSplit)
   m_vertexVector.push_back(topNode) ;
 
   createLevels(topNode, minObsForTimeSplit) ;
+  cout << "We cleared createLevels! \n" ;
   generateKnots(topNode) ;
 }
 
 void AugTree::createLevels(TreeNode * parent, uint & numObsForTimeSplit) {
-
-  uvec obsForMedian(m_dataset.responseValues.size()) ;
+  uvec obsForMedian(m_dataset.responseValues.size(), fill::zeros) ;
   obsForMedian = parent->GetObsInNode() ;
-  vec spMedians = median(m_dataset.spatialCoords.rows(obsForMedian)) ;
-  uint timeMedian = median(m_dataset.timeCoords.elem(obsForMedian)) ;
+
+  if (obsForMedian.n_elem == 0) {
+    throw Rcpp::exception("Empty region.") ;
+  }
+  mat spMediansMat = median(m_dataset.spatialCoords.rows(obsForMedian), 0) ;
+  rowvec spMedians = spMediansMat.row(0) ;
+
+  uvec sortedTimes = sort(m_dataset.timeCoords.elem(obsForMedian)) ;
+  uint timeMedian = sortedTimes.at(std::ceil((obsForMedian.size()-1)/2));
+
   std::vector<dimensions> dimensionsForChildren ;
-  vec lonRange(2), latRange(2) ;
-  uvec timeRange(2) ;
+  vec lonRange(2, fill::zeros), latRange(2, fill::zeros) ;
 
   if (parent->GetObsInNode().size() < numObsForTimeSplit) {
     for (uint i = 0; i < 2; i++) {
@@ -58,6 +65,7 @@ void AugTree::createLevels(TreeNode * parent, uint & numObsForTimeSplit) {
       }
     }
   } else {
+    uvec timeRange(2, fill::zeros) ;
     for (uint i = 0; i < 2; i++) {
       for (uint j = 0; j < 2; j++) {
         for(uint k = 0; k < 2; k++) {
@@ -70,15 +78,14 @@ void AugTree::createLevels(TreeNode * parent, uint & numObsForTimeSplit) {
           latRange = sort(latRange);
 
           timeRange.at(0) = parent->GetDimensions().time.at(k) ;
-          timeRange.at(1) = timeMedian;
-          timeRange = sort(timeRange);
+          timeRange.at(1) = timeMedian ;
+          timeRange = sort(timeRange) ;
 
           dimensionsForChildren.push_back(dimensions(lonRange, latRange, timeRange)) ;
         }
       }
     }
   }
-
   uint incrementedDepth = parent->GetDepth()+1 ;
 
   for (auto &&i : dimensionsForChildren) {
@@ -92,7 +99,6 @@ void AugTree::createLevels(TreeNode * parent, uint & numObsForTimeSplit) {
       parent->AddChild(newNode) ;
     }
   }
-
   if (incrementedDepth < m_M) {
     incrementedDepth = incrementedDepth + 1 ;
     for (auto && i : parent->GetChildren()) {
@@ -107,12 +113,15 @@ void AugTree::ComputeLoglik(const std::vector<mat> & withinClusTransProbs, const
 }
 
 void AugTree::generateKnots(TreeNode * node) {
-  float expToRound = 19/60*node->GetDepth()+1/20*m_dataset.responseValues.size() ;
-  uint numKnotsToGen = uint (std::ceil(expToRound)) ;
+  cout << "Entering generate knots... \n \n" ;
+  double expToRound = (node->GetDepth()*19)/60 + 1/20 * m_dataset.responseValues.size() ; //// PROBLEME HERE!
+  cout << "expToRound: " << expToRound << "\n " ;
+  uint numKnotsToGen = std::ceil(expToRound) ;
   node->genRandomKnots(m_dataset, numKnotsToGen, m_randomNumGenerator) ;
   if (node->GetChildren().at(0) != NULL) {
     for (auto &i : node->GetChildren()) {
       generateKnots(i) ;
     }
   }
+  cout << "Leaving generateKnots... \n \n" ;
 }
