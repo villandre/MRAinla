@@ -19,7 +19,7 @@ void InternalNode::RemoveChild(TreeNode * childToRemove)
 
 void InternalNode::genRandomKnots(inputdata & dataset, uint & numKnots, const gsl_rng * RNG) {
 
-  mat knotsSp(numKnots, 2) ;
+  mat knotsSp(numKnots, 2, fill::zeros) ;
   cout << "Number of knots: " << numKnots << "\n \n" ;
 
   double minLon = min(m_dimensions.longitude) ;
@@ -28,9 +28,9 @@ void InternalNode::genRandomKnots(inputdata & dataset, uint & numKnots, const gs
   double minLat = min(m_dimensions.latitude) ;
   double maxLat = max(m_dimensions.latitude) ;
   cout << "Generating coordinates for lon/lat... " ;
-  for (mat::iterator iter = knotsSp.begin() ; iter != std::prev(knotsSp.end()) ; std::advance(iter, 2)) {
+  for (mat::iterator iter = knotsSp.begin() ; iter != (knotsSp.begin() + knotsSp.n_rows) ; iter++) {
     (*iter) = gsl_ran_flat(RNG, minLon, maxLon) ;
-    (*std::next(iter)) = gsl_ran_flat(RNG, minLat, maxLat) ;
+    *(iter + knotsSp.n_rows) = gsl_ran_flat(RNG, minLat, maxLat) ;
   }
   cout << "Done! \n \n" ;
 

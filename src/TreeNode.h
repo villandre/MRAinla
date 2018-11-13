@@ -5,12 +5,15 @@
 #include <vector>
 #include <cstdio>
 #include <cstdlib>
+#include <iostream>
 
 #include <assert.h>
 #include <gsl/gsl_rng.h>
 
 #include <RcppArmadillo.h>
 #include <RcppGSL.h>
+
+#include "helper.h"
 
 #ifndef TREENODE_H
 #define TREENODE_H
@@ -47,10 +50,16 @@ struct dimensions {
     uint firstCompare = (arma::size(f_lon) == arma::size(f_lat)) ;
     uint secondCompare = (arma::size(f_lat) == arma::size(f_time)) ;
     if ((firstCompare * secondCompare) == 0) {
-      fputs("Incompatible data specifications \n", stderr) ;
-      // exit(EXIT_FAILURE);
+      throw Rcpp::exception("Incompatible data specifications. \n") ;
     }
   } ;
+};
+
+struct SpatiotempCoor{
+  arma::vec sp = arma::vec(2, arma::fill::zeros) ;
+  uint time = 0 ;
+  SpatiotempCoor(arma::vec & sp, uint & time) : sp(sp), time(time) { } ;
+  SpatiotempCoor() { } ;
 };
 
 class TreeNode
@@ -60,6 +69,7 @@ public:
   virtual void RemoveChild(TreeNode *)=0;
   virtual std::vector<TreeNode *> GetChildren()=0;
   virtual void RemoveChildren()=0;
+  virtual uint GetM()=0;
 
   virtual void genRandomKnots(inputdata &, uint &, const gsl_rng *) = 0;
 
@@ -70,8 +80,23 @@ public:
   dimensions GetDimensions() {return m_dimensions;}
   uint GetDepth() {return m_depth ;}
   spatialcoor GetKnotsCoor() {return m_knotsCoor;}
+  arma::mat GetKmatrix() {return m_K ;}
+  std::vector<arma::mat> GetWlist() {return m_Wlist ;}
+  std::vector<arma::mat> GetBlist() {return m_Blist ;}
+  std::vector<std::vector<arma::mat>> GetAtildeList() {return m_AtildeList ;}
 
   ~ TreeNode() { } ;
+  void ComputeWmat() ;
+  arma::mat ComputeBaseKmat() ;
+  void SetKandInv(arma::mat & matrix) {
+    m_K = matrix ;
+    m_Kinverse = inv_sympd(matrix) ;
+  }
+  void SetSigma(arma::mat & SigmaMatrix) {
+    m_Sigma = SigmaMatrix ;
+    m_SigmaInverse = inv_sympd(SigmaMatrix) ;
+  }
+  void DeriveAtilde() ;
 
 protected:
 
@@ -83,14 +108,24 @@ protected:
 
   void deriveObsInNode(inputdata &) ;
 
-  std::vector<std::vector<arma::mat>> m_A ;
-  std::vector<std::vector<arma::mat>> m_W ;
+  std::vector<std::vector<arma::mat>> m_Alist ;
+  std::vector<std::vector<arma::mat>> m_AtildeList ;
+  std::vector<arma::mat> m_Wlist ;
   std::vector<arma::vec> m_omegaTilde ;
+  std::vector<arma::mat> m_Blist ;
   double m_u ;
   double m_d ;
 
   arma::mat m_K ;
   arma::mat m_Kinverse ;
+  arma::mat m_Sigma ;
+  arma::mat m_SigmaInverse ;
+
+  arma::vec m_covPara ;
+
+  double covFunction(const Spatiotemprange &) ;
+  std::vector<TreeNode *> getAncestors() ;
+  arma::mat computeCovMat(const spatialcoor &, const spatialcoor &) ;
 };
 }
 #endif /* TREENODE_H */

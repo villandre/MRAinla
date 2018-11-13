@@ -9,11 +9,11 @@ namespace MRAinla {
 class AugTree
 {
 public:
-  AugTree(uint &, arma::vec &, arma::vec &, arma::uvec &, arma::vec &, arma::mat &, arma::uvec &, uint &, unsigned long int &) ;
+  AugTree(uint &, arma::vec &, arma::vec &, arma::uvec &, arma::vec &, arma::mat &, arma::uvec &, uint &, unsigned long int &, double & covarianceParameter) ;
 
   std::vector<TreeNode *> GetVertexVector() {return m_vertexVector ;} ;
 
-  void ComputeLoglik(const std::vector<arma::mat> &, const std::vector<arma::mat> &, const arma::vec &) ;
+  void ComputeLoglik() ;
 
   double GetLoglik() {return m_logLik ;}
   gsl_rng * GetRandomNumGenerator() {return m_randomNumGenerator ;}
@@ -29,8 +29,10 @@ public:
 private:
 
   std::vector<TreeNode *> m_vertexVector ;
+  std::vector<TreeNode *> getLevelNodes(uint & level) ;
 
   double m_logLik{ 0 } ;
+
   uint m_M{ 0 } ;
   uint m_numTips{ 0 } ;
 
@@ -41,9 +43,26 @@ private:
   // GSL_RNG_SEED and takes value 0 by default.
   gsl_rng * m_randomNumGenerator ;
 
-  void BuildTree(uint &) ;
-  void createLevels(TreeNode *, uint &) ;
+  // Tree construction functions //
+  void BuildTree(uint &, double &) ;
+  void createLevels(TreeNode *, uint &, double &) ;
   void generateKnots(TreeNode *) ;
+
+  // Likelihood computations functions
+
+  void computeWmats() ;
+  void setBtips() ;
+  void setSigmaTips() ;
+  void setAtildeTips() ;
+  void recurseA() ;
+  void setOmegaTildeTips() ;
+  void recurseOmega() ;
+
+  void computeUtips() ;
+  void recurseU() ;
+
+  void computeDtips() ;
+  void recurseD() ;
 };
 }
 #endif
