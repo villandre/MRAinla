@@ -53,16 +53,12 @@ private:
   void computeWmats() ;
   void setBtips() ;
   void setSigmaTips() ;
-  void setAtildeTips() ;
-  void recurseA() ;
+  void deriveAtildeMatrices() ;
   void setOmegaTildeTips() ;
   void recurseOmega() ;
 
-  void computeUtips() ;
-  void recurseU() ;
-
-  void computeDtips() ;
-  void recurseD() ;
+  void computeU() ;
+  void computeD() ;
 };
 }
 #endif

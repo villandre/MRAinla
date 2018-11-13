@@ -15,6 +15,29 @@ public:
   } // An input node returns a null pointer when it is asked to provide the address of a child.
   void RemoveChildren() {}
   uint GetM() {return m_depth ;}
+  void SetAlist(const arma::mat &, const uint & uint1, const uint &) { assert(false) ;}
+  arma::mat GetAlist(const uint & i, const uint & j) {
+    throw Rcpp::exception("Trying to get A matrix at depth M.\n") ;
+    arma::mat aMat;
+    return aMat;
+  }
+  void SetKtilde(arma::mat & matrix) { assert(false) ;};
+  void SetKtildeInverse(arma::mat & matrix) {assert(false) ;};
+  arma::mat GetKtilde() {
+    throw Rcpp::exception("Trying to get Ktilde from tip node (depth M).") ;
+    return arma::mat(1,1,arma::fill::zeros) ; // This is for the compiler: the throw should prevent the program from getting there.
+  }
+  arma::mat GetKtildeInverse() {
+    throw Rcpp::exception("Trying to get KtildeInverse from tip node (depth M).") ;
+    return arma::mat(1,1,arma::fill::zeros) ;
+  }
+  void DeriveAtilde() {
+    for (uint k = 0; k < m_depth+1; k++) {
+      for (uint l = 0; l <= k; l++) {
+        m_AtildeList.at(k).at(l) = trans(m_Blist.at(k)) * m_SigmaInverse * m_Blist.at(l) ;
+      }
+    }
+  }
 
   void genRandomKnots(inputdata & dataset, uint & numKnots, const gsl_rng * RNG) {
     m_knotsCoor = spatialcoor(dataset.spatialCoords.rows(m_obsInNode),
@@ -22,11 +45,7 @@ public:
   }
 
   TipNode(dimensions & dims, uint & depth, TreeNode * parent, inputdata & dataset, double & covarianceParameter) {
-    m_dimensions = dims;
-    m_depth = depth ;
-    m_parent = parent ;
-    m_covPara = covarianceParameter ;
-    m_Wlist.resize(m_depth+1) ;
+    baseInitialise(dims, depth, parent, dataset, covarianceParameter) ;
     deriveObsInNode(dataset) ;
   }
 

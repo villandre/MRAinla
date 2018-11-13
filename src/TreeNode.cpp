@@ -87,16 +87,3 @@ mat TreeNode::computeCovMat(const spatialcoor & spTime1, const spatialcoor & spT
   }
   return symmatl(covMat) ;
 }
-
-void TreeNode::DeriveAtilde() {
-    m_AtildeList.resize(m_depth+1) ;
-    for (uint i = 0; i < m_Alist.size(); i++) {
-      m_AtildeList.at(i).resize(i+1) ;
-    }
-
-    for (uint k = 0; k < m_Alist.size(); k++) {
-      for (uint l = 0; l <= k; l++) {
-        m_AtildeList.at(k).at(l) = trans(m_Blist.at(k)) * m_SigmaInverse * m_Blist.at(l) ;
-      }
-    }
-}

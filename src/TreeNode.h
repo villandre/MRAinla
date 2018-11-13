@@ -70,6 +70,13 @@ public:
   virtual std::vector<TreeNode *> GetChildren()=0;
   virtual void RemoveChildren()=0;
   virtual uint GetM()=0;
+  virtual void SetAlist(const arma::mat &, const uint &, const uint &)=0;
+  virtual arma::mat GetAlist(const uint &, const uint &)=0;
+  virtual void SetKtilde(arma::mat &)=0;
+  virtual void SetKtildeInverse(arma::mat &)=0;
+  virtual arma::mat GetKtilde()=0;
+  virtual arma::mat GetKtildeInverse()=0;
+  virtual void DeriveAtilde()=0 ;
 
   virtual void genRandomKnots(inputdata &, uint &, const gsl_rng *) = 0;
 
@@ -81,9 +88,10 @@ public:
   uint GetDepth() {return m_depth ;}
   spatialcoor GetKnotsCoor() {return m_knotsCoor;}
   arma::mat GetKmatrix() {return m_K ;}
+  arma::mat GetKmatrixInverse() {return m_Kinverse ;}
   std::vector<arma::mat> GetWlist() {return m_Wlist ;}
   std::vector<arma::mat> GetBlist() {return m_Blist ;}
-  std::vector<std::vector<arma::mat>> GetAtildeList() {return m_AtildeList ;}
+  arma::mat GetAtildeList(uint & i, uint & j) {return m_AtildeList.at(i).at(j) ;}
 
   ~ TreeNode() { } ;
   void ComputeWmat() ;
@@ -96,7 +104,7 @@ public:
     m_Sigma = SigmaMatrix ;
     m_SigmaInverse = inv_sympd(SigmaMatrix) ;
   }
-  void DeriveAtilde() ;
+  void SetAtildeList(arma::mat & matrix, uint &i, uint &j) {m_AtildeList.at(i).at(j) = matrix ;}
 
 protected:
 
@@ -106,9 +114,8 @@ protected:
   dimensions m_dimensions ; // First dimension is longitude, second is latitude, last is time.
   spatialcoor m_knotsCoor ;  // First element is spatial coordinates (longitude, latitude), second is time.
 
-  void deriveObsInNode(inputdata &) ;
+  void deriveObsInNode(const inputdata &) ;
 
-  std::vector<std::vector<arma::mat>> m_Alist ;
   std::vector<std::vector<arma::mat>> m_AtildeList ;
   std::vector<arma::mat> m_Wlist ;
   std::vector<arma::vec> m_omegaTilde ;
@@ -126,6 +133,19 @@ protected:
   double covFunction(const Spatiotemprange &) ;
   std::vector<TreeNode *> getAncestors() ;
   arma::mat computeCovMat(const spatialcoor &, const spatialcoor &) ;
+  void baseInitialise(const dimensions & dims, const uint & depth, TreeNode * parent, const inputdata & dataset, const double & covarianceParameter) {
+    m_dimensions = dims;
+    m_depth = depth ;
+    m_parent = parent ;
+    m_covPara = covarianceParameter ;
+    m_Wlist.resize(m_depth+1) ;
+    m_AtildeList.resize(m_depth+1) ;
+    for (uint i = 0; i < m_AtildeList.size(); i++) {
+      m_AtildeList.at(i).resize(i+1) ;
+    }
+    m_Blist.resize(m_depth + 1) ;
+    m_omegaTilde.resize(m_depth + 1) ;
+  }
 };
 }
 #endif /* TREENODE_H */

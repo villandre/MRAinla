@@ -134,16 +134,12 @@ void AugTree::ComputeLoglik()
   computeWmats() ;
   setBtips() ;
   setSigmaTips() ;
-  setAtildeTips() ;
-  recurseA() ;
+  deriveAtildeMatrices() ;
   setOmegaTildeTips() ;
   recurseOmega() ;
 
-  computeUtips() ;
-  recurseU() ;
-
-  computeDtips() ;
-  recurseD() ;
+  computeU() ;
+  computeD() ;
 
   m_logLik <- (m_d + m_u)/2 ;
 }
@@ -179,14 +175,6 @@ void AugTree::setSigmaTips() {
   }
 }
 
-void AugTree::setAtildeTips() {
-  std::vector<TreeNode *> allTips = getLevelNodes(m_M) ;
-
-  for (auto & i : allTips) {
-    i->DeriveAtilde() ;
-  }
-}
-
 void AugTree::setBtips() {
   std::vector<TreeNode *> allTips = getLevelNodes(m_M) ;
   for (auto & i : allTips) {
@@ -197,25 +185,34 @@ void AugTree::setBtips() {
   }
 }
 
-void AugTree::recurseA() {
-  for (int level = m_M - 1 ; level >= 0 ; level--) {
+void AugTree::deriveAtildeMatrices() {
+  for (int level = m_M; level >= 0 ; level--) {
     uint levelRecast = (uint) level ;
     std::vector<TreeNode *> levelNodes = getLevelNodes(levelRecast) ;
-    mat containerMat ;
     for (auto & i : levelNodes) {
-      for (uint k = 0; k <= i->GetDepth() ; k++) {
-        for (uint l = 0; l <= k ; l++) {
-          containerMat.reshape(i->GetChildren().at(0)->GetAtildeList().at(k).at(l).n_rows,
-                               i->GetChildren().at(0)->GetAtildeList().at(k).at(l).n_cols) ;
-          containerMat.fill(0) ;
-          containerMat = std::accumulate(i->GetChildren().begin(), i->GetChildren().end(), containerMat,
-                                         [](std::vector<std::vector<mat>> a, std::vector<std::vector<mat>> b) {
-                                          return a.at(k).at(l) + b.at(k).at(l);
-                                          }) ;
-
-        }
-      }
-
+      i->DeriveAtilde() ;
     }
   }
+}
+
+void AugTree::setOmegaTildeTips() {
+//   allTips <- .tipAddresses(gridObj)
+//
+//   modifyTip <- function(tipAddress) {
+//     if (is.null(tipAddress$knotPositions)) {
+//       tipAddress$omegaTilde <- NULL
+//       return(invisible())
+//     }
+//     tipAddress$omegaTilde <- replicate(n = tipAddress$depth+1, expr = vector('list', tipAddress$depth + 1), simplify = FALSE)
+//
+// # rescaledObservations <- .rescaleObservations(gridObj$dataset@data[tipAddress$observations, ], fixedEffectVec)
+//
+//       for (k in 0:(gridObj$M-1)) {
+//         tipAddress$omegaTilde[[k+1]] <- t(tipAddress$BmatList[[k+1]]) %*% tipAddress$SigmaInverse %*% gridObj$dataset[tipAddress$observations]@data[ , "y"]
+//       }
+//       invisible()
+//   }
+//   lapply(allTips, FUN = modifyTip) # The last element in Bmat will be NULL, since B^M_{j_1, ..., j_M} is undefined,
+//     invisible()
+  std::vector<TreeNode *> allTips = getLevelNodes(m_M) ;
 }

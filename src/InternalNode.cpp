@@ -42,3 +42,30 @@ void InternalNode::genRandomKnots(inputdata & dataset, uint & numKnots, const gs
   cout << "Done! \n \n" ;
   m_knotsCoor = spatialcoor(knotsSp, time) ;
 }
+
+void InternalNode::DeriveAtilde() {
+  mat containerMat ;
+  for (uint k = 0; k <= m_depth ; k++) {
+    for (uint l = 0; l <= k ; l++) {
+      containerMat.reshape(m_children.at(0)->GetAtildeList(k, l).n_rows,
+                           m_children.at(0)->GetAtildeList(k, l).n_cols) ;
+      containerMat.fill(0) ;
+      containerMat = std::accumulate(m_children.begin(), m_children.end(), containerMat,
+                                     [&k, &l](mat a, TreeNode * b) {
+                                       return a + b->GetAtildeList(k, l);
+                                     }) ;
+      m_Alist.at(k).at(l) = containerMat ;
+    }
+  }
+  mat KtildeInverse = m_Kinverse + m_Alist.at(m_depth).at(m_depth) ;
+  m_KtildeInverse = KtildeInverse ;
+  mat Ktilde = symmatl(KtildeInverse) ;
+  m_Ktilde = Ktilde ;
+  for (uint k = 0; k <= m_depth ; k++) {
+    for (uint l = 0; l <= k ; l++) {
+      mat Atilde = m_Alist.at(k).at(l) - m_Alist.at(k).at(m_depth) * m_Ktilde *
+        m_Alist.at(m_depth).at(l) ;
+      m_AtildeList.at(k).at(l) = Atilde ;
+    }
+  }
+}
