@@ -7,8 +7,8 @@
 using namespace Rcpp;
 
 // setupGridCpp
-SEXP setupGridCpp(NumericVector responseValues, NumericMatrix spCoords, IntegerVector obsTime, uint M, NumericVector lonRange, NumericVector latRange, IntegerVector timeRange, uint randomSeed, uint cutForTimeSplit);
-RcppExport SEXP _MRAinla_setupGridCpp(SEXP responseValuesSEXP, SEXP spCoordsSEXP, SEXP obsTimeSEXP, SEXP MSEXP, SEXP lonRangeSEXP, SEXP latRangeSEXP, SEXP timeRangeSEXP, SEXP randomSeedSEXP, SEXP cutForTimeSplitSEXP) {
+SEXP setupGridCpp(NumericVector responseValues, NumericMatrix spCoords, IntegerVector obsTime, uint M, NumericVector lonRange, NumericVector latRange, IntegerVector timeRange, uint randomSeed, uint cutForTimeSplit, NumericVector covarianceParameter);
+RcppExport SEXP _MRAinla_setupGridCpp(SEXP responseValuesSEXP, SEXP spCoordsSEXP, SEXP obsTimeSEXP, SEXP MSEXP, SEXP lonRangeSEXP, SEXP latRangeSEXP, SEXP timeRangeSEXP, SEXP randomSeedSEXP, SEXP cutForTimeSplitSEXP, SEXP covarianceParameterSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -21,13 +21,14 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< IntegerVector >::type timeRange(timeRangeSEXP);
     Rcpp::traits::input_parameter< uint >::type randomSeed(randomSeedSEXP);
     Rcpp::traits::input_parameter< uint >::type cutForTimeSplit(cutForTimeSplitSEXP);
-    rcpp_result_gen = Rcpp::wrap(setupGridCpp(responseValues, spCoords, obsTime, M, lonRange, latRange, timeRange, randomSeed, cutForTimeSplit));
+    Rcpp::traits::input_parameter< NumericVector >::type covarianceParameter(covarianceParameterSEXP);
+    rcpp_result_gen = Rcpp::wrap(setupGridCpp(responseValues, spCoords, obsTime, M, lonRange, latRange, timeRange, randomSeed, cutForTimeSplit, covarianceParameter));
     return rcpp_result_gen;
 END_RCPP
 }
 
 static const R_CallMethodDef CallEntries[] = {
-    {"_MRAinla_setupGridCpp", (DL_FUNC) &_MRAinla_setupGridCpp, 9},
+    {"_MRAinla_setupGridCpp", (DL_FUNC) &_MRAinla_setupGridCpp, 10},
     {NULL, NULL, 0}
 };
 

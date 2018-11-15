@@ -18,33 +18,31 @@ public:
     }
     return currentAddress->GetDepth() ;
   }
-  void SetAlist(const arma::mat & matrix, const uint & k, const uint & l) {
-    m_Alist.at(k).at(l) = matrix ;
-  ;}
-  arma::mat GetAlist(const uint & i, const uint & j) {return m_Alist.at(i).at(j) ;}
-  void SetKtilde(arma::mat & matrix) { m_Ktilde = matrix ;};
-  void SetKtildeInverse(arma::mat & matrix) {m_KtildeInverse = matrix ;};
-  arma::mat GetKtilde() {return m_Ktilde ;}
-  arma::mat GetKtildeInverse() {return m_KtildeInverse ;}
   void DeriveAtilde() ;
+  void DeriveOmega(const inputdata &) ;
+  void DeriveU(const inputdata &) ;
+  void DeriveD() ;
 
   void genRandomKnots(inputdata &, uint &, const gsl_rng *) ;
 
-  InternalNode(dimensions & dims, uint & depth, TreeNode * parent, inputdata & dataset, double & covarianceParameter) {
-    baseInitialise(dims, depth, parent, dataset, covarianceParameter) ;
+  InternalNode(const dimensions & dims, const uint & depth, TreeNode * parent,
+               const inputdata & dataset, const arma::vec & covPars) {
+    baseInitialise(dims, depth, parent, dataset, covPars) ;
     deriveObsInNode(dataset) ;
   }
 
-  InternalNode(dimensions & dims, inputdata & dataset, double & covarianceParameter) {
-    baseInitialise(dims, 0, this, dataset, covarianceParameter) ;
+  InternalNode(const dimensions & dims, const inputdata & dataset, const arma::vec & covPars) {
+    baseInitialise(dims, 0, this, dataset, covPars) ;
     uint numObs = dataset.responseValues.size() ;
     m_obsInNode = arma::regspace<arma::uvec>(0, numObs - 1) ;
+    m_omega.resize(m_depth + 1) ;
   }
 
 protected:
 
   std::vector<TreeNode *> m_children ;
   std::vector<std::vector<arma::mat>> m_Alist ;
+  std::vector<arma::vec> m_omega ;
   arma::mat m_Ktilde ;
   arma::mat m_KtildeInverse ;
 };

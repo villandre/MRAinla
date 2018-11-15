@@ -1,6 +1,7 @@
-#include<cmath>
-
 #include<RcppArmadillo.h>
+
+#ifndef HELPER_H
+#define HELPER_H
 
 struct Spatiotemprange{
   double sp ;
@@ -10,18 +11,11 @@ struct Spatiotemprange{
   Spatiotemprange() { } ;
 };
 
-Spatiotemprange sptimeDistance(arma::vec spCoor1, unsigned int time1, arma::vec spCoor2, unsigned int time2) {
-  arma::vec diffVec = spCoor1 - spCoor2 ;
-  arma::vec scaledVec = arma::pow(diffVec, 2) ;
-  double sp = arma::sum(scaledVec) ;
-  sp = std::sqrt(sp) ;
-  unsigned int timeDiff = time2 - time1 ;
-  Spatiotemprange(sp, timeDiff) ;
-}
+// To prevent multiple definitions, I DECLARE the functions in the header only. I then define them
+// in the cpp file.
+Spatiotemprange sptimeDistance(arma::vec spCoor1, unsigned int time1, arma::vec spCoor2,
+                               unsigned int time2) ;
 
-template <typename T>
-void deallocate_container(T& c)
-{
-  for (typename T::iterator i = c.begin(); i != c.end(); ++i)
-    delete *i;
-};
+// template <typename T> void deallocate_container(T& c) ;
+
+#endif /* HELPER_H */

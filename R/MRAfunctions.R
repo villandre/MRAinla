@@ -207,12 +207,12 @@ computeLogLik <- function(gridObj, covFct, fixedEffectParVec = NULL, cl = NULL) 
       tipAddress$omegaTilde <- NULL
       return(invisible())
     }
-    tipAddress$omegaTilde <- replicate(n = tipAddress$depth+1, expr = vector('list', tipAddress$depth + 1), simplify = FALSE)
+    tipAddress$omegaTilde <- replicate(n = tipAddress$depth + 1, expr = vector('list', tipAddress$depth + 1), simplify = FALSE) ## Is this correct? omegaTilde will be a list of lists although it has only one index. The following loop might even overwrite this step.
 
     # rescaledObservations <- .rescaleObservations(gridObj$dataset@data[tipAddress$observations, ], fixedEffectVec)
 
-    for (k in 0:(gridObj$M-1)) {
-      tipAddress$omegaTilde[[k+1]] <- t(tipAddress$BmatList[[k+1]]) %*% tipAddress$SigmaInverse %*% gridObj$dataset[tipAddress$observations]@data[ , "y"]
+    for (k in 0:(gridObj$M - 1)) {
+      tipAddress$omegaTilde[[k + 1]] <- t(tipAddress$BmatList[[k + 1]]) %*% tipAddress$SigmaInverse %*% gridObj$dataset[tipAddress$observations]@data[ , "y"]
     }
     invisible()
   }

@@ -15,7 +15,10 @@ typedef unsigned int uint ;
 
 // [[Rcpp::export]]
 
-SEXP setupGridCpp(NumericVector responseValues, NumericMatrix spCoords, IntegerVector obsTime, uint M, NumericVector lonRange, NumericVector latRange, IntegerVector timeRange, uint randomSeed, uint cutForTimeSplit, NumericVector covarianceParameter)
+SEXP setupGridCpp(NumericVector responseValues, NumericMatrix spCoords, IntegerVector obsTime,
+                  uint M, NumericVector lonRange, NumericVector latRange,
+                  IntegerVector timeRange, uint randomSeed, uint cutForTimeSplit,
+                  NumericVector covarianceParameter)
 {
   vec lonR = as<vec>(lonRange) ;
   vec latR = as<vec>(latRange) ;

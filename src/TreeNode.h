@@ -9,6 +9,7 @@
 
 #include <assert.h>
 #include <gsl/gsl_rng.h>
+#include <gsl/gsl_sf_log.h>
 
 #include <RcppArmadillo.h>
 #include <RcppGSL.h>
@@ -70,13 +71,10 @@ public:
   virtual std::vector<TreeNode *> GetChildren()=0;
   virtual void RemoveChildren()=0;
   virtual uint GetM()=0;
-  virtual void SetAlist(const arma::mat &, const uint &, const uint &)=0;
-  virtual arma::mat GetAlist(const uint &, const uint &)=0;
-  virtual void SetKtilde(arma::mat &)=0;
-  virtual void SetKtildeInverse(arma::mat &)=0;
-  virtual arma::mat GetKtilde()=0;
-  virtual arma::mat GetKtildeInverse()=0;
   virtual void DeriveAtilde()=0 ;
+  virtual void DeriveOmega(const inputdata &)=0 ;
+  virtual void DeriveU(const inputdata &)=0 ;
+  virtual void DeriveD()=0 ;
 
   virtual void genRandomKnots(inputdata &, uint &, const gsl_rng *) = 0;
 
@@ -92,6 +90,9 @@ public:
   std::vector<arma::mat> GetWlist() {return m_Wlist ;}
   std::vector<arma::mat> GetBlist() {return m_Blist ;}
   arma::mat GetAtildeList(uint & i, uint & j) {return m_AtildeList.at(i).at(j) ;}
+  arma::mat GetOmegaTilde(uint & k) { return m_omegaTilde.at(k) ;}
+  double GetU() {return m_u ;}
+  double GetD() {return m_d ;}
 
   ~ TreeNode() { } ;
   void ComputeWmat() ;
@@ -133,11 +134,11 @@ protected:
   double covFunction(const Spatiotemprange &) ;
   std::vector<TreeNode *> getAncestors() ;
   arma::mat computeCovMat(const spatialcoor &, const spatialcoor &) ;
-  void baseInitialise(const dimensions & dims, const uint & depth, TreeNode * parent, const inputdata & dataset, const double & covarianceParameter) {
+  void baseInitialise(const dimensions & dims, const uint & depth, TreeNode * parent, const inputdata & dataset, const arma::vec & covPars) {
     m_dimensions = dims;
     m_depth = depth ;
     m_parent = parent ;
-    m_covPara = covarianceParameter ;
+    m_covPara = covPars ;
     m_Wlist.resize(m_depth+1) ;
     m_AtildeList.resize(m_depth+1) ;
     for (uint i = 0; i < m_AtildeList.size(); i++) {

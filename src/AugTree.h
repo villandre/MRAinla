@@ -1,5 +1,4 @@
 #include "TreeNode.h"
-#include "helper.h"
 
 #ifndef MYPROJECT_AUGTREE_H
 #define MYPROJECT_AUGTREE_H
@@ -9,7 +8,7 @@ namespace MRAinla {
 class AugTree
 {
 public:
-  AugTree(uint &, arma::vec &, arma::vec &, arma::uvec &, arma::vec &, arma::mat &, arma::uvec &, uint &, unsigned long int &, double & covarianceParameter) ;
+  AugTree(uint &, arma::vec &, arma::vec &, arma::uvec &, arma::vec &, arma::mat &, arma::uvec &, uint &, unsigned long int &, arma::vec & covPars) ;
 
   std::vector<TreeNode *> GetVertexVector() {return m_vertexVector ;} ;
 
@@ -24,7 +23,11 @@ public:
 
   void ComputeLoglik(Rcpp::List &, Rcpp::List &, Rcpp::NumericVector &) ;
 
-  ~AugTree() {deallocate_container(m_vertexVector) ; gsl_rng_free(m_randomNumGenerator) ;};
+  ~AugTree() {
+    for (auto i : m_vertexVector) {
+      delete i;
+    }
+    gsl_rng_free(m_randomNumGenerator) ;};
 
 private:
 
@@ -44,8 +47,8 @@ private:
   gsl_rng * m_randomNumGenerator ;
 
   // Tree construction functions //
-  void BuildTree(uint &, double &) ;
-  void createLevels(TreeNode *, uint &, double &) ;
+  void BuildTree(const uint &, const arma::vec &) ;
+  void createLevels(TreeNode *, const uint &, const arma::vec &) ;
   void generateKnots(TreeNode *) ;
 
   // Likelihood computations functions
@@ -54,8 +57,7 @@ private:
   void setBtips() ;
   void setSigmaTips() ;
   void deriveAtildeMatrices() ;
-  void setOmegaTildeTips() ;
-  void recurseOmega() ;
+  void computeOmegas() ;
 
   void computeU() ;
   void computeD() ;

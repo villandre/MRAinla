@@ -3,13 +3,12 @@
 #include "AugTree.h"
 #include "TipNode.h"
 #include "InternalNode.h"
-#include "TreeNode.h"
 
 using namespace Rcpp ;
 using namespace arma ;
 using namespace MRAinla ;
 
-AugTree::AugTree(uint & M, vec & lonRange, vec & latRange, uvec & timeRange, vec & observations, mat & obsSp, uvec & obsTime, uint & minObsForTimeSplit, unsigned long int & seed, vec & covarianceParameter)
+AugTree::AugTree(uint & M, vec & lonRange, vec & latRange, uvec & timeRange, vec & observations, mat & obsSp, uvec & obsTime, uint & minObsForTimeSplit, unsigned long int & seed, vec & covPars)
   : m_M(M)
 {
   m_dataset = inputdata(observations, obsSp, obsTime) ;
@@ -17,10 +16,10 @@ AugTree::AugTree(uint & M, vec & lonRange, vec & latRange, uvec & timeRange, vec
   m_randomNumGenerator = gsl_rng_alloc(gsl_rng_taus) ;
   gsl_rng_set(m_randomNumGenerator, seed) ;
 
-  BuildTree(minObsForTimeSplit, covarianceParameter) ;
+  BuildTree(minObsForTimeSplit, covPars) ;
 }
 
-void AugTree::BuildTree(uint & minObsForTimeSplit, vec & covPara)
+void AugTree::BuildTree(const uint & minObsForTimeSplit, const vec & covPara)
 {
   m_vertexVector.reserve(1) ;
 
@@ -34,7 +33,7 @@ void AugTree::BuildTree(uint & minObsForTimeSplit, vec & covPara)
   generateKnots(topNode) ;
 }
 
-void AugTree::createLevels(TreeNode * parent, uint & numObsForTimeSplit, vec & covPara) {
+void AugTree::createLevels(TreeNode * parent, const uint & numObsForTimeSplit, const vec & covPara) {
   uvec obsForMedian(m_dataset.responseValues.size(), fill::zeros) ;
   obsForMedian = parent->GetObsInNode() ;
 
@@ -135,13 +134,14 @@ void AugTree::ComputeLoglik()
   setBtips() ;
   setSigmaTips() ;
   deriveAtildeMatrices() ;
-  setOmegaTildeTips() ;
-  recurseOmega() ;
+  computeOmegas() ;
 
   computeU() ;
   computeD() ;
 
-  m_logLik <- (m_d + m_u)/2 ;
+  // The log-likelihood is a function of d and u computed at the root node, being at the
+  // head of m_vertexVector, since it's the first one we ever created.
+  m_logLik = (m_vertexVector.at(0)->GetD() + m_vertexVector.at(0)->GetU())/2 ;
 }
 
 void AugTree::computeWmats() {
@@ -195,24 +195,32 @@ void AugTree::deriveAtildeMatrices() {
   }
 }
 
-void AugTree::setOmegaTildeTips() {
-//   allTips <- .tipAddresses(gridObj)
-//
-//   modifyTip <- function(tipAddress) {
-//     if (is.null(tipAddress$knotPositions)) {
-//       tipAddress$omegaTilde <- NULL
-//       return(invisible())
-//     }
-//     tipAddress$omegaTilde <- replicate(n = tipAddress$depth+1, expr = vector('list', tipAddress$depth + 1), simplify = FALSE)
-//
-// # rescaledObservations <- .rescaleObservations(gridObj$dataset@data[tipAddress$observations, ], fixedEffectVec)
-//
-//       for (k in 0:(gridObj$M-1)) {
-//         tipAddress$omegaTilde[[k+1]] <- t(tipAddress$BmatList[[k+1]]) %*% tipAddress$SigmaInverse %*% gridObj$dataset[tipAddress$observations]@data[ , "y"]
-//       }
-//       invisible()
-//   }
-//   lapply(allTips, FUN = modifyTip) # The last element in Bmat will be NULL, since B^M_{j_1, ..., j_M} is undefined,
-//     invisible()
-  std::vector<TreeNode *> allTips = getLevelNodes(m_M) ;
+void AugTree::computeOmegas() {
+  for (int level = m_M; level >= 0 ; level--) {
+    uint levelRecast = (uint) level ;
+    std::vector<TreeNode *> levelNodes = getLevelNodes(levelRecast) ;
+    for (auto & i : levelNodes) {
+      i->DeriveOmega(m_dataset) ;
+    }
+  }
+}
+
+void AugTree::computeU() {
+  for (int level = m_M; level >= 0 ; level--) {
+    uint levelRecast = (uint) level ;
+    std::vector<TreeNode *> levelNodes = getLevelNodes(levelRecast) ;
+    for (auto & i : levelNodes) {
+      i->DeriveU(m_dataset) ;
+    }
+  }
+};
+
+void AugTree::computeD() {
+  for (int level = m_M; level >= 0 ; level--) {
+    uint levelRecast = (uint) level ;
+    std::vector<TreeNode *> levelNodes = getLevelNodes(levelRecast) ;
+    for (auto & i : levelNodes) {
+      i->DeriveD() ;
+    }
+  }
 }

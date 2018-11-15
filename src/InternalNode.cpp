@@ -69,3 +69,44 @@ void InternalNode::DeriveAtilde() {
     }
   }
 }
+
+void InternalNode::DeriveOmega(const inputdata & dataset) {
+
+  vec containerVec ;
+  for (uint k = 0; k <= m_depth ; k++) {
+    containerVec.resize(m_children.at(0)->GetOmegaTilde(k).size()) ;
+    containerVec.fill(0) ;
+    containerVec = std::accumulate(m_children.begin(), m_children.end(), containerVec,
+                                   [&k](vec a, TreeNode * b) {
+                                     return a + b->GetOmegaTilde(k);
+                                   }) ;
+    m_omega.at(k) = containerVec ;
+    m_omegaTilde.at(k) = m_omega.at(k) - m_Alist.at(k).at(m_depth) * m_Ktilde * m_omega.at(m_depth) ;
+  }
+}
+
+void InternalNode::DeriveU(const inputdata & dataset) {
+  mat firstTerm = -trans(m_omega.at(m_depth)) * m_Ktilde * m_omega.at(m_depth) ;
+  double secondTerm = 0 ;
+  secondTerm = std::accumulate(m_children.begin(), m_children.end(), secondTerm,
+                               [](double a, TreeNode * b) {
+                                 return a + b->GetU();
+                               }) ;
+  m_u = firstTerm.at(0,0) + secondTerm ;
+}
+
+void::InternalNode::DeriveD() {
+  double value = 0 ;
+  double sign = 0 ;
+  log_det(value, sign, m_KtildeInverse) ; // Function is supposed to update value and sign in place.
+  m_d = gsl_sf_log(sign) + value ;
+  log_det(value, sign, m_Kinverse) ;
+  m_d = m_d - (gsl_sf_log(sign) + value) ;
+  double thirdTerm = 0 ;
+  thirdTerm = std::accumulate(m_children.begin(), m_children.end(), thirdTerm,
+                               [](double a, TreeNode * b) {
+                                 return a + b->GetD();
+                               }) ;
+ m_d = m_d + thirdTerm ;
+}
+

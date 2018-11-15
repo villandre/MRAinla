@@ -1,9 +1,11 @@
+#include <gsl/gsl_sf_exp.h>
+
 #include "TreeNode.h"
 
 using namespace arma ;
 using namespace MRAinla ;
 
-void TreeNode::deriveObsInNode(inputdata & dataset) {
+void TreeNode::deriveObsInNode(const inputdata & dataset) {
   uvec lonCheck = (dataset.spatialCoords.col(0) > min(m_dimensions.longitude)) %
     (dataset.spatialCoords.col(0) <= max(m_dimensions.longitude)) ; // Longitude check
   uvec latCheck = (dataset.spatialCoords.col(1) > min(m_dimensions.latitude)) %
