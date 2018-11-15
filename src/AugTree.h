@@ -23,10 +23,8 @@ public:
 
   void ComputeLoglik(Rcpp::List &, Rcpp::List &, Rcpp::NumericVector &) ;
 
-  ~AugTree() {
-    for (auto i : m_vertexVector) {
-      delete i;
-    }
+  ~ AugTree() {
+    deallocate_container(m_vertexVector) ;
     gsl_rng_free(m_randomNumGenerator) ;};
 
 private:

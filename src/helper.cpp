@@ -11,8 +11,3 @@ Spatiotemprange sptimeDistance(arma::vec spCoor1, unsigned int time1, arma::vec 
   unsigned int timeDiff = time2 - time1 ;
   return Spatiotemprange(sp, timeDiff) ;
 };
-
-// template <typename T> void deallocate_container(T& c) {
-//   for (typename T::iterator i = c.begin(); i != c.end(); ++i)
-//     delete *i;
-// };

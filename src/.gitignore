@@ -5,3 +5,4 @@ RcppExports.o
 TreeNode.o
 AugTree.o
 RcppExports.R
+helper.o
