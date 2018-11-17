@@ -26,9 +26,21 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// logLikCpp
+List logLikCpp(SEXP treePointer);
+RcppExport SEXP _MRAinla_logLikCpp(SEXP treePointerSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< SEXP >::type treePointer(treePointerSEXP);
+    rcpp_result_gen = Rcpp::wrap(logLikCpp(treePointer));
+    return rcpp_result_gen;
+END_RCPP
+}
 
 static const R_CallMethodDef CallEntries[] = {
     {"_MRAinla_setupGridCpp", (DL_FUNC) &_MRAinla_setupGridCpp, 10},
+    {"_MRAinla_logLikCpp", (DL_FUNC) &_MRAinla_logLikCpp, 1},
     {NULL, NULL, 0}
 };
 

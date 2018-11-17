@@ -21,19 +21,22 @@ double TreeNode::covFunction(const Spatiotemprange & distance) {
   return gsl_sf_exp(spExp) * gsl_sf_exp(timeExp) ;
 };
 
-mat TreeNode::ComputeBaseKmat() {
+void TreeNode::ComputeBaseKmat() {
   mat covMatrix(m_knotsCoor.timeCoords.size(), m_knotsCoor.timeCoords.size(), fill::zeros) ;
   Spatiotemprange container ;
+
   for (uint rowIndex = 0 ; rowIndex < m_knotsCoor.timeCoords.size() ; rowIndex++) {
     for (uint colIndex = 0 ; colIndex <= rowIndex ; colIndex++) {
-       container = sptimeDistance(m_knotsCoor.spatialCoords.row(rowIndex),
-                                  m_knotsCoor.timeCoords.at(rowIndex),
-                                  m_knotsCoor.spatialCoords.row(colIndex),
-                                  m_knotsCoor.timeCoords.at(colIndex)) ;
+      vec space1 = conv_to<vec>::from(m_knotsCoor.spatialCoords.row(rowIndex)) ;
+      uint time1 = m_knotsCoor.timeCoords.at(rowIndex) ;
+      vec space2 = conv_to<vec>::from(m_knotsCoor.spatialCoords.row(colIndex)) ;
+      uint time2 = m_knotsCoor.timeCoords.at(colIndex) ;
+       container = sptimeDistance(space1, time1, space2, time2) ;
       covMatrix.at(rowIndex, colIndex) = covFunction(container) ;
     }
   }
-  return symmatl(covMatrix) ;
+  m_Kinverse = symmatl(covMatrix) ;
+  m_K = inv_sympd(covMatrix) ;
 }
 
 void TreeNode::ComputeWmat() {
@@ -55,7 +58,7 @@ void TreeNode::ComputeWmat() {
       m_Wlist.at(l) = firstMat - secondMat ;
     }
     if (m_depth < M) {
-      m_Kinverse = m_Wlist.at(m_depth+1) ;
+      m_Kinverse = m_Wlist.at(m_depth) ;
       m_K = inv_sympd(m_Kinverse) ; // The K matrix is some sort of covariance matrix, so it should always be symmetrical..
     }
   }
@@ -80,12 +83,14 @@ mat TreeNode::computeCovMat(const spatialcoor & spTime1, const spatialcoor & spT
   mat covMat(spTime1.timeCoords.size(), spTime2.timeCoords.size(), fill::zeros) ;
   for (uint rowIndex = 0; rowIndex < spTime1.timeCoords.size() ; rowIndex++) {
     for (uint colIndex = 0; colIndex < spTime2.timeCoords.size() ; colIndex++) {
-      Spatiotemprange rangeValue = sptimeDistance(spTime1.spatialCoords.row(rowIndex),
-                                                  spTime1.timeCoords.at(rowIndex),
-                                                  spTime2.spatialCoords.row(colIndex),
-                                                  spTime2.timeCoords.at(colIndex)) ;
+      vec space1 = conv_to<vec>::from(spTime1.spatialCoords.row(rowIndex)) ;
+      uint time1 = spTime1.timeCoords.at(rowIndex) ;
+      vec space2 = conv_to<vec>::from(spTime2.spatialCoords.row(colIndex)) ;
+      uint time2 = spTime2.timeCoords.at(colIndex) ;
+      Spatiotemprange rangeValue = sptimeDistance(space1, time1, space2, time2) ;
       covMat.at(rowIndex, colIndex) = covFunction(rangeValue) ;
     }
   }
-  return symmatl(covMat) ;
+
+  return covMat ;
 }

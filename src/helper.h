@@ -13,8 +13,8 @@ struct Spatiotemprange{
 
 // To prevent multiple definitions, I DECLARE the function in the header only. I then define them
 // in the cpp file.
-Spatiotemprange sptimeDistance(arma::vec spCoor1, unsigned int time1, arma::vec spCoor2,
-                               unsigned int time2) ;
+Spatiotemprange sptimeDistance(const arma::vec & spCoor1, const unsigned int & time1, const arma::vec & spCoor2,
+                               const unsigned int & time2) ;
 
 // Inlining the function solves the linking issue I encountered. As it turns out, templated functions
 // must be defined in the header. A simple declaration will lead to a linking error.

@@ -46,6 +46,9 @@ public:
     arma::log_det(val, sign, m_Sigma) ;
     m_d = gsl_sf_log(sign) + val ;
   }
+  void DeriveB() {
+    std::copy(m_Wlist.begin(), m_Wlist.end(), m_Blist.begin()) ;
+  }
 
   void genRandomKnots(inputdata & dataset, uint & numKnots, const gsl_rng * RNG) {
     m_knotsCoor = spatialcoor(dataset.spatialCoords.rows(m_obsInNode),

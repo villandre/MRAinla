@@ -29,7 +29,7 @@ void AugTree::BuildTree(const uint & minObsForTimeSplit, const vec & covPara)
   m_vertexVector.push_back(topNode) ;
 
   createLevels(topNode, minObsForTimeSplit, covPara) ;
-  cout << "We cleared createLevels! \n" ;
+
   generateKnots(topNode) ;
 }
 
@@ -108,52 +108,54 @@ void AugTree::createLevels(TreeNode * parent, const uint & numObsForTimeSplit, c
 }
 
 void AugTree::generateKnots(TreeNode * node) {
-  cout << "Entering generate knots... \n \n" ;
-
   float scaledRespSize =  0.05 ;
   float depthContribution = 19*node->GetDepth() ;
   depthContribution = depthContribution/60 ;
-  cout << "Depth contribution: " << depthContribution << "\n \n" ;
   float expToRound = depthContribution + scaledRespSize ; // Why is it that we have to store every term separately for expToRound to not evaluate to 0?
   float numKnots = expToRound * node->GetObsInNode().size() ;
 
   uint numKnotsToGen = uint (std::ceil(numKnots)) ;
-  cout << "Number of knots: " << numKnotsToGen << "\n \n" ;
   node->genRandomKnots(m_dataset, numKnotsToGen, m_randomNumGenerator) ;
   if (node->GetChildren().at(0) != NULL) {
     for (auto &i : node->GetChildren()) {
       generateKnots(i) ;
     }
   }
-  cout << "Leaving generateKnots... \n \n" ;
 }
 
 void AugTree::ComputeLoglik()
 {
+  cout << "Entering ComputeLoglik \n" ;
   computeWmats() ;
+  cout << "Entering setBtips \n" ;
   setBtips() ;
+  cout << "Entering setSigmaTips \n" ;
   setSigmaTips() ;
+  cout << "Entering deriveAtildeMatrices \n" ;
   deriveAtildeMatrices() ;
+  cout << "Entering computeOmegas \n" ;
   computeOmegas() ;
-
+  cout << "Entering computeU \n" ;
   computeU() ;
+  cout << "Entering computeD \n" ;
   computeD() ;
-
+  cout << "Finalising evaluation \n" ;
   // The log-likelihood is a function of d and u computed at the root node, being at the
   // head of m_vertexVector, since it's the first one we ever created.
   m_logLik = (m_vertexVector.at(0)->GetD() + m_vertexVector.at(0)->GetU())/2 ;
 }
 
 void AugTree::computeWmats() {
-  mat baseK = m_vertexVector.at(0)->ComputeBaseKmat() ;
-  m_vertexVector.at(0)->SetKandInv(baseK) ;
+  m_vertexVector.at(0)->ComputeBaseKmat() ;
   m_vertexVector.at(0)->ComputeWmat() ;
+
   for (uint level = 1; level < (m_M+1); level++) {
     std::vector<TreeNode *> levelNodes = getLevelNodes(level) ;
     for (auto & i : levelNodes) {
       i->ComputeWmat() ;
     }
   }
+
 }
 
 std::vector<TreeNode *> AugTree::getLevelNodes(uint & level) {
@@ -177,11 +179,8 @@ void AugTree::setSigmaTips() {
 
 void AugTree::setBtips() {
   std::vector<TreeNode *> allTips = getLevelNodes(m_M) ;
-  for (auto & i : allTips) {
-    i->GetBlist().resize(m_M) ;
-    auto startIter = i->GetWlist().begin() ;
-    auto copyIter = i->GetBlist().begin() ;
-    std::copy(startIter, startIter + m_M - 1, copyIter) ;
+  for (auto && i : allTips) {
+    i->DeriveB() ;
   }
 }
 
@@ -189,9 +188,11 @@ void AugTree::deriveAtildeMatrices() {
   for (int level = m_M; level >= 0 ; level--) {
     uint levelRecast = (uint) level ;
     std::vector<TreeNode *> levelNodes = getLevelNodes(levelRecast) ;
+    printf("Deriving Atilde for level %u. \n", level) ;
     for (auto & i : levelNodes) {
       i->DeriveAtilde() ;
     }
+    cout << "Done! \n" ;
   }
 }
 

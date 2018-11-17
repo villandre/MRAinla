@@ -75,6 +75,7 @@ public:
   virtual void DeriveOmega(const inputdata &)=0 ;
   virtual void DeriveU(const inputdata &)=0 ;
   virtual void DeriveD()=0 ;
+  virtual void DeriveB()=0 ;
 
   virtual void genRandomKnots(inputdata &, uint &, const gsl_rng *) = 0;
 
@@ -90,17 +91,14 @@ public:
   std::vector<arma::mat> GetWlist() {return m_Wlist ;}
   std::vector<arma::mat> GetBlist() {return m_Blist ;}
   arma::mat GetAtildeList(uint & i, uint & j) {return m_AtildeList.at(i).at(j) ;}
+  std::vector<std::vector<arma::mat>> GetAtildeList() {return m_AtildeList ;}
   arma::mat GetOmegaTilde(uint & k) { return m_omegaTilde.at(k) ;}
   double GetU() {return m_u ;}
   double GetD() {return m_d ;}
 
   ~ TreeNode() { } ;
   void ComputeWmat() ;
-  arma::mat ComputeBaseKmat() ;
-  void SetKandInv(arma::mat & matrix) {
-    m_K = matrix ;
-    m_Kinverse = inv_sympd(matrix) ;
-  }
+  void ComputeBaseKmat() ;
   void SetSigma(arma::mat & SigmaMatrix) {
     m_Sigma = SigmaMatrix ;
     m_SigmaInverse = inv_sympd(SigmaMatrix) ;

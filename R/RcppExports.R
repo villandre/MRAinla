@@ -5,3 +5,7 @@ setupGridCpp <- function(responseValues, spCoords, obsTime, M, lonRange, latRang
     .Call('_MRAinla_setupGridCpp', PACKAGE = 'MRAinla', responseValues, spCoords, obsTime, M, lonRange, latRange, timeRange, randomSeed, cutForTimeSplit, covarianceParameter)
 }
 
+logLikCpp <- function(treePointer) {
+    .Call('_MRAinla_logLikCpp', PACKAGE = 'MRAinla', treePointer)
+}
+

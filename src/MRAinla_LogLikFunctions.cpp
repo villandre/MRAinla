@@ -33,13 +33,24 @@ SEXP setupGridCpp(NumericVector responseValues, NumericMatrix spCoords, IntegerV
 
   XPtr<AugTree> p(MRAgrid, false) ; // Disabled automatic garbage collection.
 
-  return List::create(Named("logLik") = 1,
-                      Named("gridPointer") = p) ;
+  return List::create(Named("gridPointer") = p) ;
 }
-//
-// // [[Rcpp::export]]
-//
-// List logLikCpp(SEXP treePointer, uint brickDepth)
-// {
-//   // TO_DO
-// }
+
+// [[Rcpp::export]]
+
+List logLikCpp(SEXP treePointer)
+{
+  //omp_set_num_threads(numOpenMP) ;
+  double logLikVal = 0;
+  if (!(treePointer == NULL))
+  {
+    XPtr<AugTree> pointedTree(treePointer) ; // Becomes a regular pointer again.
+    pointedTree->ComputeLoglik() ;
+    double logLikVal = pointedTree->GetLoglik() ;
+  }
+  else
+  {
+    throw Rcpp::exception("Pointer to MRA grid is null." ) ;
+  }
+  return List::create(Named("logLik") = logLikVal, Named("gridPointer") = treePointer) ;
+}
