@@ -52,8 +52,6 @@ private:
   // Likelihood computations functions
 
   void computeWmats() ;
-  void setBtips() ;
-  void setSigmaTips() ;
   void deriveAtildeMatrices() ;
   void computeOmegas() ;
 

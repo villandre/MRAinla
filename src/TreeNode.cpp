@@ -39,11 +39,9 @@ void TreeNode::ComputeBaseKmat() {
   m_K = inv_sympd(covMatrix) ;
 }
 
-void TreeNode::ComputeWmat() {
+void TreeNode::baseComputeWmat() {
   uint M = GetM() ;
-  if (m_depth == 0) {
-    m_Wlist.at(0) = m_Kinverse ;
-  } else {
+  if (m_depth > 0) {
     std::vector<TreeNode *> brickList = getAncestors() ;
     m_Wlist.at(0) = computeCovMat(m_knotsCoor, brickList.at(0)->GetKnotsCoor()) ;
 
@@ -51,16 +49,14 @@ void TreeNode::ComputeWmat() {
       mat firstMat = computeCovMat(m_knotsCoor, brickList.at(l)->GetKnotsCoor()) ;
       mat secondMat(firstMat.n_rows, firstMat.n_cols, fill::zeros) ;
       for (uint k = 0; k < l ; k++) {
-        secondMat = secondMat + m_Wlist.at(k) *
+        secondMat += m_Wlist.at(k) *
           brickList.at(k)->GetKmatrix() *
           trans(brickList.at(l)->GetWlist().at(k)) ;
       }
       m_Wlist.at(l) = firstMat - secondMat ;
     }
-    if (m_depth < M) {
-      m_Kinverse = m_Wlist.at(m_depth) ;
-      m_K = inv_sympd(m_Kinverse) ; // The K matrix is some sort of covariance matrix, so it should always be symmetrical..
-    }
+  } else {
+    m_Wlist.at(0) = m_Kinverse ;
   }
 }
 

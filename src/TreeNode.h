@@ -75,35 +75,24 @@ public:
   virtual void DeriveOmega(const inputdata &)=0 ;
   virtual void DeriveU(const inputdata &)=0 ;
   virtual void DeriveD()=0 ;
-  virtual void DeriveB()=0 ;
+  virtual void ComputeWmat()=0 ;
 
   virtual void genRandomKnots(inputdata &, uint &, const gsl_rng *) = 0;
-
-  TreeNode * GetParent() {return m_parent ;}
-  void SetParent(TreeNode * vertexParentPoint) {m_parent = vertexParentPoint ;}
 
   arma::uvec GetObsInNode() {return m_obsInNode ;}
   dimensions GetDimensions() {return m_dimensions;}
   uint GetDepth() {return m_depth ;}
-  spatialcoor GetKnotsCoor() {return m_knotsCoor;}
-  arma::mat GetKmatrix() {return m_K ;}
-  arma::mat GetKmatrixInverse() {return m_Kinverse ;}
-  std::vector<arma::mat> GetWlist() {return m_Wlist ;}
-  std::vector<arma::mat> GetBlist() {return m_Blist ;}
+
   arma::mat GetAtildeList(uint & i, uint & j) {return m_AtildeList.at(i).at(j) ;}
-  std::vector<std::vector<arma::mat>> GetAtildeList() {return m_AtildeList ;}
   arma::mat GetOmegaTilde(uint & k) { return m_omegaTilde.at(k) ;}
+
   double GetU() {return m_u ;}
   double GetD() {return m_d ;}
 
   ~ TreeNode() { } ;
-  void ComputeWmat() ;
+
   void ComputeBaseKmat() ;
-  void SetSigma(arma::mat & SigmaMatrix) {
-    m_Sigma = SigmaMatrix ;
-    m_SigmaInverse = inv_sympd(SigmaMatrix) ;
-  }
-  void SetAtildeList(arma::mat & matrix, uint &i, uint &j) {m_AtildeList.at(i).at(j) = matrix ;}
+  // void SetAtildeList(arma::mat & matrix, uint &i, uint &j) {m_AtildeList.at(i).at(j) = matrix ;}
 
 protected:
 
@@ -115,17 +104,25 @@ protected:
 
   void deriveObsInNode(const inputdata &) ;
 
+  std::vector<std::vector<arma::mat>>& GetAtildeList() {return m_AtildeList ;}
+  void baseComputeWmat() ;
+  TreeNode * GetParent() {return m_parent ;}
+  void SetParent(TreeNode * vertexParentPoint) {m_parent = vertexParentPoint ;}
+
+  spatialcoor GetKnotsCoor() {return m_knotsCoor;}
+  arma::mat GetKmatrix() {return m_K ;}
+  arma::mat GetKmatrixInverse() {return m_Kinverse ;}
+  std::vector<arma::mat>& GetWlist() {return m_Wlist ;}
+
   std::vector<std::vector<arma::mat>> m_AtildeList ;
   std::vector<arma::mat> m_Wlist ;
   std::vector<arma::vec> m_omegaTilde ;
-  std::vector<arma::mat> m_Blist ;
   double m_u ;
   double m_d ;
 
   arma::mat m_K ;
   arma::mat m_Kinverse ;
-  arma::mat m_Sigma ;
-  arma::mat m_SigmaInverse ;
+  // arma::mat m_SigmaInverse ;
 
   arma::vec m_covPara ;
 
@@ -142,7 +139,6 @@ protected:
     for (uint i = 0; i < m_AtildeList.size(); i++) {
       m_AtildeList.at(i).resize(i+1) ;
     }
-    m_Blist.resize(m_depth + 1) ;
     m_omegaTilde.resize(m_depth + 1) ;
   }
 };

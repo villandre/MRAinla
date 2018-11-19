@@ -22,7 +22,7 @@ public:
   void DeriveOmega(const inputdata &) ;
   void DeriveU(const inputdata &) ;
   void DeriveD() ;
-  void DeriveB() {assert(false) ;}
+  void ComputeWmat() ;
 
   void genRandomKnots(inputdata &, uint &, const gsl_rng *) ;
 
@@ -30,6 +30,7 @@ public:
                const inputdata & dataset, const arma::vec & covPars) {
     baseInitialise(dims, depth, parent, dataset, covPars) ;
     deriveObsInNode(dataset) ;
+    m_omega.resize(m_depth + 1) ;
     m_Alist.resize(m_depth+1) ;
     for (uint i = 0; i < m_Alist.size(); i++) {
       m_Alist.at(i).resize(i+1) ;

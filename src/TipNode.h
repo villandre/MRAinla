@@ -19,19 +19,27 @@ public:
   uint GetM() {return m_depth ;}
 
   void DeriveAtilde() {
-    for (uint k = 0; k < m_depth+1; k++) {
+    for (uint k = 0; k < m_depth; k++) {
       for (uint l = 0; l <= k; l++) {
-        m_AtildeList.at(k).at(l) = trans(m_Blist.at(k)) * m_SigmaInverse * m_Blist.at(l) ;
+        m_AtildeList.at(k).at(l) = trans(GetB(k)) * m_SigmaInverse * GetB(l) ;
       }
     }
   }
 
   void DeriveOmega(const inputdata & dataset) {
+    std::cout << "Entering DeriveOmega in Tips \n";
     arma::vec subResponses = dataset.responseValues.elem(m_obsInNode) ;
-    std::transform(m_Blist.begin(), m_Blist.end(), m_omegaTilde.begin(),
-                   [this, subResponses] (arma::mat & Bmatrix) {
-                     arma::vec noTemp = arma::trans(Bmatrix) * m_SigmaInverse * subResponses ;
-                     return noTemp;}) ;
+
+    // std::transform(GetBlist().begin(), std::prev(GetBlist().end()), m_omegaTilde.begin(),
+    // [this, subResponses] (arma::mat & Bmatrix) {
+    //   std::cout << "Using B... " ;
+    //   arma::vec noTemp = arma::trans(Bmatrix) * m_SigmaInverse * subResponses ;
+    //   std::cout << "Done! \n" ;
+    //   return noTemp;}) ;
+    for (uint i = 0 ; i < m_depth; i++) {
+      m_omegaTilde.at(i) = arma::trans(GetB(i)) * m_SigmaInverse * subResponses ;
+    }
+    std::cout << "Leaving DeriveOmega in Tips \n" ;
   }
 
   void DeriveU(const inputdata & dataset) {
@@ -41,13 +49,16 @@ public:
   }
 
   void DeriveD() {
+    std::cout << "Entering DeriveD in tip \n" ;
     double val = 0;
     double sign = 0;
-    arma::log_det(val, sign, m_Sigma) ;
+    arma::log_det(val, sign, GetSigma()) ;
     m_d = gsl_sf_log(sign) + val ;
   }
-  void DeriveB() {
-    std::copy(m_Wlist.begin(), m_Wlist.end(), m_Blist.begin()) ;
+
+  void ComputeWmat() {
+    baseComputeWmat() ;
+    m_SigmaInverse = arma::inv_sympd(GetSigma()) ;
   }
 
   void genRandomKnots(inputdata & dataset, uint & numKnots, const gsl_rng * RNG) {
@@ -62,10 +73,27 @@ public:
   }
 
 protected:
+
+  arma::mat GetB(uint & l) {
+    if (l == m_depth) {
+      throw Rcpp::exception("Trying to get B^M(j_1, ..., j_M)... \n") ;
+    }
+    return m_Wlist.at(l) ;
+  }
+
+  std::vector<arma::mat> GetBlist() {
+    return m_Wlist ;
+  };
+
+  arma::mat GetSigma() {
+    return m_Wlist.at(m_depth) ;
+  }
+
   std::vector<std::vector<arma::mat>> * m_Umat ;
   std::vector<std::vector<arma::mat>> * m_Vmat ;
   std::vector<arma::mat> m_bPred ;
   std::vector<arma::mat> m_bKnots ;
   std::vector<std::vector<arma::mat>> m_Btilde ;
+  arma::mat m_SigmaInverse ;
 };
 }

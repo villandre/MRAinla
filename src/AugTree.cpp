@@ -127,10 +127,6 @@ void AugTree::ComputeLoglik()
 {
   cout << "Entering ComputeLoglik \n" ;
   computeWmats() ;
-  cout << "Entering setBtips \n" ;
-  setBtips() ;
-  cout << "Entering setSigmaTips \n" ;
-  setSigmaTips() ;
   cout << "Entering deriveAtildeMatrices \n" ;
   deriveAtildeMatrices() ;
   cout << "Entering computeOmegas \n" ;
@@ -166,22 +162,6 @@ std::vector<TreeNode *> AugTree::getLevelNodes(uint & level) {
     }
   }
   return nodesInLevel ;
-}
-
-void AugTree::setSigmaTips() {
-
-  std::vector<TreeNode *> allTips = getLevelNodes(m_M) ;
-
-  for (auto & i : allTips) {
-    i->SetSigma(i->GetWlist().at(m_M)) ;
-  }
-}
-
-void AugTree::setBtips() {
-  std::vector<TreeNode *> allTips = getLevelNodes(m_M) ;
-  for (auto && i : allTips) {
-    i->DeriveB() ;
-  }
 }
 
 void AugTree::deriveAtildeMatrices() {
