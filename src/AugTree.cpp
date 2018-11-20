@@ -138,7 +138,9 @@ void AugTree::ComputeLoglik()
   cout << "Finalising evaluation \n" ;
   // The log-likelihood is a function of d and u computed at the root node, being at the
   // head of m_vertexVector, since it's the first one we ever created.
-  m_logLik = (m_vertexVector.at(0)->GetD() + m_vertexVector.at(0)->GetU())/2 ;
+  double tempLogLik = (m_vertexVector.at(0)->GetD() + m_vertexVector.at(0)->GetU()) ;
+  tempLogLik = -tempLogLik/2 ;
+  m_logLik = tempLogLik ;
 }
 
 void AugTree::computeWmats() {
@@ -168,11 +170,10 @@ void AugTree::deriveAtildeMatrices() {
   for (int level = m_M; level >= 0 ; level--) {
     uint levelRecast = (uint) level ;
     std::vector<TreeNode *> levelNodes = getLevelNodes(levelRecast) ;
-    printf("Deriving Atilde for level %u. \n", level) ;
+
     for (auto & i : levelNodes) {
       i->DeriveAtilde() ;
     }
-    cout << "Done! \n" ;
   }
 }
 

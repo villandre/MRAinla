@@ -27,9 +27,7 @@ public:
   }
 
   void DeriveOmega(const inputdata & dataset) {
-    std::cout << "Entering DeriveOmega in Tips \n";
     arma::vec subResponses = dataset.responseValues.elem(m_obsInNode) ;
-
     // std::transform(GetBlist().begin(), std::prev(GetBlist().end()), m_omegaTilde.begin(),
     // [this, subResponses] (arma::mat & Bmatrix) {
     //   std::cout << "Using B... " ;
@@ -39,7 +37,6 @@ public:
     for (uint i = 0 ; i < m_depth; i++) {
       m_omegaTilde.at(i) = arma::trans(GetB(i)) * m_SigmaInverse * subResponses ;
     }
-    std::cout << "Leaving DeriveOmega in Tips \n" ;
   }
 
   void DeriveU(const inputdata & dataset) {
@@ -49,11 +46,13 @@ public:
   }
 
   void DeriveD() {
-    std::cout << "Entering DeriveD in tip \n" ;
     double val = 0;
     double sign = 0;
     arma::log_det(val, sign, GetSigma()) ;
-    m_d = gsl_sf_log(sign) + val ;
+    if (sign < 0) {
+      throw Rcpp::exception("Sigma is a covariance matrix: it cannot have a negative determinant. \n") ;
+    }
+    m_d = val ;
   }
 
   void ComputeWmat() {

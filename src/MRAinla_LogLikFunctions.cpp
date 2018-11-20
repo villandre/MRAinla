@@ -46,7 +46,7 @@ List logLikCpp(SEXP treePointer)
   {
     XPtr<AugTree> pointedTree(treePointer) ; // Becomes a regular pointer again.
     pointedTree->ComputeLoglik() ;
-    double logLikVal = pointedTree->GetLoglik() ;
+    logLikVal = pointedTree->GetLoglik() ;
   }
   else
   {
