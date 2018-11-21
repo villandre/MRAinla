@@ -6,6 +6,27 @@
 
 using namespace Rcpp;
 
+// start_profiler
+SEXP start_profiler(SEXP str);
+RcppExport SEXP _MRAinla_start_profiler(SEXP strSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< SEXP >::type str(strSEXP);
+    rcpp_result_gen = Rcpp::wrap(start_profiler(str));
+    return rcpp_result_gen;
+END_RCPP
+}
+// stop_profiler
+SEXP stop_profiler();
+RcppExport SEXP _MRAinla_stop_profiler() {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    rcpp_result_gen = Rcpp::wrap(stop_profiler());
+    return rcpp_result_gen;
+END_RCPP
+}
 // setupGridCpp
 SEXP setupGridCpp(NumericVector responseValues, NumericMatrix spCoords, IntegerVector obsTime, uint M, NumericVector lonRange, NumericVector latRange, IntegerVector timeRange, uint randomSeed, uint cutForTimeSplit, NumericVector covarianceParameter);
 RcppExport SEXP _MRAinla_setupGridCpp(SEXP responseValuesSEXP, SEXP spCoordsSEXP, SEXP obsTimeSEXP, SEXP MSEXP, SEXP lonRangeSEXP, SEXP latRangeSEXP, SEXP timeRangeSEXP, SEXP randomSeedSEXP, SEXP cutForTimeSplitSEXP, SEXP covarianceParameterSEXP) {
@@ -39,6 +60,8 @@ END_RCPP
 }
 
 static const R_CallMethodDef CallEntries[] = {
+    {"_MRAinla_start_profiler", (DL_FUNC) &_MRAinla_start_profiler, 1},
+    {"_MRAinla_stop_profiler", (DL_FUNC) &_MRAinla_stop_profiler, 0},
     {"_MRAinla_setupGridCpp", (DL_FUNC) &_MRAinla_setupGridCpp, 10},
     {"_MRAinla_logLikCpp", (DL_FUNC) &_MRAinla_logLikCpp, 1},
     {NULL, NULL, 0}

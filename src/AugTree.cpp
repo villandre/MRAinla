@@ -1,4 +1,5 @@
-#include <math.h>
+#include <cmath>
+#include <omp.h>
 
 #include "AugTree.h"
 #include "TipNode.h"
@@ -108,12 +109,13 @@ void AugTree::createLevels(TreeNode * parent, const uint & numObsForTimeSplit, c
 }
 
 void AugTree::generateKnots(TreeNode * node) {
-  float scaledRespSize =  0.05 ;
-  float depthContribution = 19*node->GetDepth() ;
-  depthContribution = depthContribution/60 ;
-  float expToRound = depthContribution + scaledRespSize ; // Why is it that we have to store every term separately for expToRound to not evaluate to 0?
-  float numKnots = expToRound * node->GetObsInNode().size() ;
-
+  // float scaledRespSize =  0.05 ;
+  // float depthContribution = 19*node->GetDepth() ;
+  // depthContribution = depthContribution/60 ;
+  // float expToRound = depthContribution + scaledRespSize ; // Why is it that we have to store every term separately for expToRound to not evaluate to 0?
+  // float numKnots = expToRound * node->GetObsInNode().size() ;
+  //// CAREFUL: THIS IS HARD-CODED, THERE MIGHT BE A BETTER WAY /////////////
+  float numKnots = sqrt((float) node->GetObsInNode().size()) ;
   uint numKnotsToGen = uint (std::ceil(numKnots)) ;
   node->genRandomKnots(m_dataset, numKnotsToGen, m_randomNumGenerator) ;
   if (node->GetChildren().at(0) != NULL) {
@@ -149,8 +151,14 @@ void AugTree::computeWmats() {
 
   for (uint level = 1; level < (m_M+1); level++) {
     std::vector<TreeNode *> levelNodes = getLevelNodes(level) ;
-    for (auto & i : levelNodes) {
-      i->ComputeWmat() ;
+    // for (auto & i : levelNodes) {
+    //   i->ComputeWmat() ;
+    // }
+    // Trying openmp. We need to have a standard looping structure.
+    #pragma omp parallel for
+    for (std::vector<TreeNode *>::iterator it = levelNodes.begin(); it < levelNodes.end(); it++)
+    {
+      (*it)->ComputeWmat() ;
     }
   }
 
@@ -171,8 +179,12 @@ void AugTree::deriveAtildeMatrices() {
     uint levelRecast = (uint) level ;
     std::vector<TreeNode *> levelNodes = getLevelNodes(levelRecast) ;
 
-    for (auto & i : levelNodes) {
-      i->DeriveAtilde() ;
+    // for (auto & i : levelNodes) {
+    //   i->DeriveAtilde() ;
+    // }
+    #pragma omp parallel for
+    for (std::vector<TreeNode *>::iterator it = levelNodes.begin(); it < levelNodes.end(); it++) {
+      (*it)->DeriveAtilde() ;
     }
   }
 }
@@ -201,8 +213,15 @@ void AugTree::computeD() {
   for (int level = m_M; level >= 0 ; level--) {
     uint levelRecast = (uint) level ;
     std::vector<TreeNode *> levelNodes = getLevelNodes(levelRecast) ;
-    for (auto & i : levelNodes) {
-      i->DeriveD() ;
+
+    // Trying openmp. We need to have a standard looping structure.
+    // for (auto & i : levelNodes) {
+    // #pragma omp parallel num_threads(4)
+    // {
+      // #pragma omp parallel for
+      for (std::vector<TreeNode *>::iterator it = levelNodes.begin(); it < levelNodes.end(); it++) {
+        (*it)->DeriveD() ;
+      // }
     }
   }
 }
