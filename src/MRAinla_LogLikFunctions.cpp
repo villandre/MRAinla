@@ -4,7 +4,7 @@
 #include <string>
 #include <algorithm>
 #include <RcppArmadillo.h>
-#include "gperftools/profiler.h"
+// #include "gperftools/profiler.h"
 
 #include "AugTree.h"
 
@@ -14,17 +14,17 @@ using namespace MRAinla;
 
 typedef unsigned int uint ;
 
-// [[Rcpp::export]]
-SEXP start_profiler(SEXP str) {
-  ProfilerStart(as<const char*>(str));
-  return R_NilValue;
-}
+// // [[Rcpp::export]]
+// SEXP start_profiler(SEXP str) {
+//   ProfilerStart(as<const char*>(str));
+//   return R_NilValue;
+// }
 
-// [[Rcpp::export]]
-SEXP stop_profiler() {
-  ProfilerStop();
-  return R_NilValue;
-}
+// // [[Rcpp::export]]
+// SEXP stop_profiler() {
+//   ProfilerStop();
+//   return R_NilValue;
+// }
 
 // [[Rcpp::export]]
 
