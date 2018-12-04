@@ -9,32 +9,35 @@ using namespace Rcpp ;
 using namespace arma ;
 using namespace MRAinla ;
 
-AugTree::AugTree(uint & M, vec & lonRange, vec & latRange, uvec & timeRange, vec & observations, mat & obsSp, uvec & obsTime, uint & minObsForTimeSplit, unsigned long int & seed, vec & covPars)
+AugTree::AugTree(uint & M, vec & lonRange, vec & latRange, uvec & timeRange, vec & observations, mat & obsSp, uvec & obsTime, uint & minObsForTimeSplit, unsigned long int & seed, mat & covariates)
   : m_M(M)
 {
-  m_dataset = inputdata(observations, obsSp, obsTime) ;
+  m_dataset = inputdata(observations, obsSp, obsTime, covariates) ;
   m_mapDimensions = dimensions(lonRange, latRange, timeRange) ;
   m_randomNumGenerator = gsl_rng_alloc(gsl_rng_taus) ;
-  gsl_rng_set(m_randomNumGenerator, seed) ;
 
-  BuildTree(minObsForTimeSplit, covPars) ;
+  gsl_rng_set(m_randomNumGenerator, seed) ;
+  m_fixedEffParameters.resize(m_dataset.covariateValues.n_cols + 1) ; // An extra 1 is added to take into account the intercept.
+
+  BuildTree(minObsForTimeSplit) ;
 }
 
-void AugTree::BuildTree(const uint & minObsForTimeSplit, const vec & covPara)
+void AugTree::BuildTree(const uint & minObsForTimeSplit)
 {
   m_vertexVector.reserve(1) ;
 
   // We create the first internal node
 
-  InternalNode * topNode = new InternalNode(m_mapDimensions, m_dataset, covPara) ;
+  InternalNode * topNode = new InternalNode(m_mapDimensions, m_dataset) ;
+
   m_vertexVector.push_back(topNode) ;
 
-  createLevels(topNode, minObsForTimeSplit, covPara) ;
+  createLevels(topNode, minObsForTimeSplit) ;
 
   generateKnots(topNode) ;
 }
 
-void AugTree::createLevels(TreeNode * parent, const uint & numObsForTimeSplit, const vec & covPara) {
+void AugTree::createLevels(TreeNode * parent, const uint & numObsForTimeSplit) {
   uvec obsForMedian(m_dataset.responseValues.size(), fill::zeros) ;
   obsForMedian = parent->GetObsInNode() ;
 
@@ -90,11 +93,11 @@ void AugTree::createLevels(TreeNode * parent, const uint & numObsForTimeSplit, c
 
   for (auto &&i : dimensionsForChildren) {
     if (parent->GetDepth() < m_M-1) {
-      InternalNode * newNode = new InternalNode(i, incrementedDepth, parent, m_dataset, covPara) ;
+      InternalNode * newNode = new InternalNode(i, incrementedDepth, parent, m_dataset) ;
       m_vertexVector.push_back(newNode) ;
       parent->AddChild(newNode) ;
     } else {
-      TipNode * newNode = new TipNode(i, incrementedDepth, parent, m_dataset, covPara) ;
+      TipNode * newNode = new TipNode(i, incrementedDepth, parent, m_dataset) ;
       m_numTips = m_numTips+1 ;
       m_vertexVector.push_back(newNode) ;
       parent->AddChild(newNode) ;
@@ -103,7 +106,7 @@ void AugTree::createLevels(TreeNode * parent, const uint & numObsForTimeSplit, c
   if (incrementedDepth < m_M) {
     incrementedDepth = incrementedDepth + 1 ;
     for (auto && i : parent->GetChildren()) {
-      createLevels(i, numObsForTimeSplit, covPara) ;
+      createLevels(i, numObsForTimeSplit) ;
     }
   }
 }
@@ -125,7 +128,7 @@ void AugTree::generateKnots(TreeNode * node) {
   }
 }
 
-void AugTree::ComputeLoglik()
+void AugTree::ComputeMRAloglik()
 {
   cout << "Entering ComputeLoglik \n" ;
   computeWmats() ;
@@ -142,12 +145,12 @@ void AugTree::ComputeLoglik()
   // head of m_vertexVector, since it's the first one we ever created.
   double tempLogLik = (m_vertexVector.at(0)->GetD() + m_vertexVector.at(0)->GetU()) ;
   tempLogLik = -tempLogLik/2 ;
-  m_logLik = tempLogLik ;
+  m_MRAlogLik = tempLogLik ;
 }
 
 void AugTree::computeWmats() {
-  m_vertexVector.at(0)->ComputeBaseKmat() ;
-  m_vertexVector.at(0)->ComputeWmat() ;
+  m_vertexVector.at(0)->ComputeBaseKmat(m_covParameters) ;
+  m_vertexVector.at(0)->ComputeWmat(m_covParameters) ;
 
   for (uint level = 1; level < (m_M+1); level++) {
     std::vector<TreeNode *> levelNodes = getLevelNodes(level) ;
@@ -158,7 +161,7 @@ void AugTree::computeWmats() {
     #pragma omp parallel for
     for (std::vector<TreeNode *>::iterator it = levelNodes.begin(); it < levelNodes.end(); it++)
     {
-      (*it)->ComputeWmat() ;
+      (*it)->ComputeWmat(m_covParameters) ;
     }
   }
 
@@ -194,7 +197,7 @@ void AugTree::computeOmegas() {
     uint levelRecast = (uint) level ;
     std::vector<TreeNode *> levelNodes = getLevelNodes(levelRecast) ;
     for (auto & i : levelNodes) {
-      i->DeriveOmega(m_dataset) ;
+      i->DeriveOmega(m_dataset, m_fixedEffParameters) ;
     }
   }
 }
@@ -215,13 +218,50 @@ void AugTree::computeD() {
     std::vector<TreeNode *> levelNodes = getLevelNodes(levelRecast) ;
 
     // Trying openmp. We need to have a standard looping structure.
-    // for (auto & i : levelNodes) {
-    // #pragma omp parallel num_threads(4)
-    // {
-      // #pragma omp parallel for
-      for (std::vector<TreeNode *>::iterator it = levelNodes.begin(); it < levelNodes.end(); it++) {
-        (*it)->DeriveD() ;
-      // }
+
+    // #pragma omp parallel for
+    for (std::vector<TreeNode *>::iterator it = levelNodes.begin(); it < levelNodes.end(); it++) {
+      (*it)->DeriveD() ;
     }
   }
+}
+
+// The code only allows for main effects for now.
+
+mat AugTree::ComputePosteriors(spatialcoor & predictionLocations, double & stepSize) {
+  mat posteriorMatrix(predictionLocations.timeCoords.size() + m_dataset.covariateValues.n_cols + 1, 4, fill::zeros) ;
+
+}
+
+void AugTree::ComputeConditionalPrediction(const spatialcoor & predictionLocations) {
+  mat incrementedCovar(m_dataset.covariateValues) ;
+  incrementedCovar.insert_cols(0, 1) ;
+  incrementedCovar.col(0).fill(1) ;
+  vec centeredResponses(m_dataset.responseValues.size(), 0) ;
+  centeredResponses = m_dataset.responseValues - incrementedCovar * m_fixedEffParameters ;
+  for (int level = m_M; level >= 0 ; level--) {
+    uint levelRecast = (uint) level ;
+    std::vector<TreeNode *> levelNodes = getLevelNodes(levelRecast) ;
+    for (auto & i : levelNodes) {
+      i->ComputeParasEtaDeltaTilde(predictionLocations, centeredResponses, m_covParameters) ;
+    }
+  }
+}
+
+double AugTree::ComputeGlobalLogLik() {
+  // First we create the necessary GSL vectors...
+  mat incrementedCovar(m_dataset.covariateValues) ;
+  incrementedCovar.insert_cols(0, 1) ;
+  incrementedCovar.col(0).fill(1) ;
+  vec meanVec(m_dataset.responseValues.size(), 0) ;
+  meanVec = incrementedCovar * m_fixedEffParameters + m_spatialComponents ;
+  vec sdVec(m_dataset.responseValues.size(), m_errorSD) ;
+  vec logDensVec(m_dataset.responseValues.size(), 0) ;
+  logDensVec = log(normpdf(m_dataset.responseValues, meanVec, sdVec)) ;
+  return sum(logDensVec) ;
+}
+
+void AugTree::distributePredictionData(const spatialcoor & predictLocations) {
+
+
 }

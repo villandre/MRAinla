@@ -33,10 +33,11 @@ struct spatialcoor {
 
 struct inputdata : public spatialcoor {
   arma::vec responseValues = arma::vec(1, arma::fill::zeros) ;
+  arma::mat covariateValues = arma::mat(1, 1, arma::fill::zeros) ;
 
   inputdata() : spatialcoor() {};
-  inputdata(arma::vec f_responses, arma::mat f_sp, arma::uvec f_time)
-    : spatialcoor(f_sp, f_time), responseValues(f_responses) {  } ;
+  inputdata(arma::vec f_responses, arma::mat f_sp, arma::uvec f_time, arma::mat f_covariates)
+    : spatialcoor(f_sp, f_time), responseValues(f_responses), covariateValues(f_covariates) {  } ;
 };
 
 struct dimensions {
@@ -72,10 +73,12 @@ public:
   virtual void RemoveChildren()=0;
   virtual uint GetM()=0;
   virtual void DeriveAtilde()=0 ;
-  virtual void DeriveOmega(const inputdata &)=0 ;
+  virtual void DeriveOmega(const inputdata &, const arma::vec &)=0 ;
   virtual void DeriveU(const inputdata &)=0 ;
   virtual void DeriveD()=0 ;
-  virtual void ComputeWmat()=0 ;
+  virtual void ComputeWmat(const arma::vec &)=0 ;
+  virtual void ComputeParasEtaDeltaTilde(const spatialcoor &, const arma::vec &, const arma::vec &)=0 ;
+
 
   virtual void genRandomKnots(inputdata &, uint &, const gsl_rng *) = 0;
 
@@ -91,8 +94,9 @@ public:
 
   ~ TreeNode() { } ;
 
-  void ComputeBaseKmat() ;
+  void ComputeBaseKmat(const arma::vec &) ;
   // void SetAtildeList(arma::mat & matrix, uint &i, uint &j) {m_AtildeList.at(i).at(j) = matrix ;}
+  void SetPredictLocations(const spatialcoor &) ;
 
 protected:
 
@@ -105,7 +109,7 @@ protected:
   void deriveObsInNode(const inputdata &) ;
 
   std::vector<std::vector<arma::mat>>& GetAtildeList() {return m_AtildeList ;}
-  void baseComputeWmat() ;
+  void baseComputeWmat(const arma::vec &) ;
   TreeNode * GetParent() {return m_parent ;}
   void SetParent(TreeNode * vertexParentPoint) {m_parent = vertexParentPoint ;}
 
@@ -122,18 +126,14 @@ protected:
 
   arma::mat m_K ;
   arma::mat m_Kinverse ;
-  // arma::mat m_SigmaInverse ;
 
-  arma::vec m_covPara ;
-
-  double covFunction(const Spatiotemprange &) ;
+  double covFunction(const Spatiotemprange &, const arma::vec &) ;
   std::vector<TreeNode *> getAncestors() ;
-  arma::mat computeCovMat(const spatialcoor &, const spatialcoor &) ;
-  void baseInitialise(const dimensions & dims, const uint & depth, TreeNode * parent, const inputdata & dataset, const arma::vec & covPars) {
+  arma::mat computeCovMat(const spatialcoor &, const spatialcoor &, const arma::vec &) ;
+  void baseInitialise(const dimensions & dims, const uint & depth, TreeNode * parent, const inputdata & dataset) {
     m_dimensions = dims;
     m_depth = depth ;
     m_parent = parent ;
-    m_covPara = covPars ;
     m_Wlist.resize(m_depth+1) ;
     m_AtildeList.resize(m_depth+1) ;
     for (uint i = 0; i < m_AtildeList.size(); i++) {
@@ -141,6 +141,9 @@ protected:
     }
     m_omegaTilde.resize(m_depth + 1) ;
   }
+
+  // For prediction
+  arma::uvec m_predictLocations ;
 };
 }
 #endif /* TREENODE_H */

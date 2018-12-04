@@ -70,7 +70,7 @@ void InternalNode::DeriveAtilde() {
   }
 }
 
-void InternalNode::DeriveOmega(const inputdata & dataset) {
+void InternalNode::DeriveOmega(const inputdata & dataset, const arma::vec & fixedEffParas) {
   vec containerVec ;
   for (uint k = 0; k <= m_depth ; k++) {
     containerVec.resize(m_children.at(0)->GetOmegaTilde(k).size()) ;
@@ -119,8 +119,8 @@ void::InternalNode::DeriveD() {
   m_d = m_d + thirdTerm ;
 }
 
-void InternalNode::ComputeWmat() {
-  baseComputeWmat() ;
+void InternalNode::ComputeWmat(const arma::vec & covParas) {
+  baseComputeWmat(covParas) ;
   m_Kinverse = m_Wlist.at(m_depth) ;
   m_K = inv_sympd(m_Kinverse) ; // The K matrix is some sort of covariance matrix, so it should always be symmetrical..
 }

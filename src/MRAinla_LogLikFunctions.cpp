@@ -29,9 +29,8 @@ typedef unsigned int uint ;
 // [[Rcpp::export]]
 
 SEXP setupGridCpp(NumericVector responseValues, NumericMatrix spCoords, IntegerVector obsTime,
-                  uint M, NumericVector lonRange, NumericVector latRange,
-                  IntegerVector timeRange, uint randomSeed, uint cutForTimeSplit,
-                  NumericVector covarianceParameter)
+                  NumericMatrix covariateMatrix, uint M, NumericVector lonRange, NumericVector latRange,
+                  IntegerVector timeRange, uint randomSeed, uint cutForTimeSplit)
 {
   vec lonR = as<vec>(lonRange) ;
   vec latR = as<vec>(latRange) ;
@@ -39,10 +38,10 @@ SEXP setupGridCpp(NumericVector responseValues, NumericMatrix spCoords, IntegerV
   vec response = as<vec>(responseValues) ;
   mat sp = as<mat>(spCoords) ;
   uvec time = as<uvec>(obsTime) ;
-  vec covParaVec = as<vec>(covarianceParameter) ;
   unsigned long int seedForRNG = randomSeed ;
+  mat covariateMat = as<mat>(covariateMatrix) ;
 
-  AugTree * MRAgrid = new AugTree(M, lonR, latR, timeR, response, sp, time, cutForTimeSplit, seedForRNG, covParaVec) ;
+  AugTree * MRAgrid = new AugTree(M, lonR, latR, timeR, response, sp, time, cutForTimeSplit, seedForRNG, covariateMat) ;
 
   XPtr<AugTree> p(MRAgrid, false) ; // Disabled automatic garbage collection.
 
@@ -51,14 +50,22 @@ SEXP setupGridCpp(NumericVector responseValues, NumericMatrix spCoords, IntegerV
 
 // [[Rcpp::export]]
 
-List logLikCpp(SEXP treePointer)
+List logLikCpp(SEXP treePointer, NumericVector & covParameters, NumericVector & fixedEffectParameters, double & errorSD, double & fixedEffSD)
 {
   //omp_set_num_threads(numOpenMP) ;
   double logLikVal = 0;
+  vec fixedEffVec = as<vec>(fixedEffectParameters) ;
+  vec covParVec = as<vec>(covParameters) ;
   if (!(treePointer == NULL))
   {
     XPtr<AugTree> pointedTree(treePointer) ; // Becomes a regular pointer again.
-    pointedTree->ComputeLoglik() ;
+    pointedTree->SetCovParameters(covParVec) ;
+    pointedTree->SetFixedEffParameters(fixedEffVec) ;
+    pointedTree->SetErrorSD(errorSD) ;
+    pointedTree->SetFixedEffSD(fixedEffSD) ;
+
+    pointedTree->ComputeMRAloglik() ;
+    pointedTree->ComputeGlobalLogLik() ;
     logLikVal = pointedTree->GetLoglik() ;
   }
   else
@@ -66,4 +73,23 @@ List logLikCpp(SEXP treePointer)
     throw Rcpp::exception("Pointer to MRA grid is null." ) ;
   }
   return List::create(Named("logLik") = logLikVal, Named("gridPointer") = treePointer) ;
+}
+
+// [[Rcpp::export]]
+
+NumericMatrix inla(SEXP treePointer, NumericMatrix predictionLocations, IntegerVector predictionTime, double stepSize) {
+
+  arma::mat posteriorMatrix ;
+
+  if (!(treePointer == NULL))
+  {
+    XPtr<AugTree> pointedTree(treePointer) ; // Becomes a regular pointer again.
+    spatialcoor predictionST(as<mat>(predictionLocations), as<uvec>(predictionTime)) ;
+    posteriorMatrix = pointedTree->ComputePosteriors(predictionST, stepSize) ;
+  }
+  else
+  {
+    throw Rcpp::exception("Pointer to MRA grid is null." ) ;
+  }
+  return Rcpp::wrap(posteriorMatrix) ;
 }

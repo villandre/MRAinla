@@ -19,16 +19,17 @@ public:
     return currentAddress->GetDepth() ;
   }
   void DeriveAtilde() ;
-  void DeriveOmega(const inputdata &) ;
+  void DeriveOmega(const inputdata &, const arma::vec &) ;
   void DeriveU(const inputdata &) ;
   void DeriveD() ;
-  void ComputeWmat() ;
+  void ComputeWmat(const arma::vec &) ;
+  void ComputeParasEtaDeltaTilde(const spatialcoor &, const arma::vec &, const arma::vec &) ;
 
   void genRandomKnots(inputdata &, uint &, const gsl_rng *) ;
 
   InternalNode(const dimensions & dims, const uint & depth, TreeNode * parent,
-               const inputdata & dataset, const arma::vec & covPars) {
-    baseInitialise(dims, depth, parent, dataset, covPars) ;
+               const inputdata & dataset) {
+    baseInitialise(dims, depth, parent, dataset) ;
     deriveObsInNode(dataset) ;
     m_omega.resize(m_depth + 1) ;
     m_Alist.resize(m_depth+1) ;
@@ -37,8 +38,8 @@ public:
     }
   }
 
-  InternalNode(const dimensions & dims, const inputdata & dataset, const arma::vec & covPars) {
-    baseInitialise(dims, 0, this, dataset, covPars) ;
+  InternalNode(const dimensions & dims, const inputdata & dataset) {
+    baseInitialise(dims, 0, this, dataset) ;
     uint numObs = dataset.responseValues.size() ;
     m_obsInNode = arma::regspace<arma::uvec>(0, numObs - 1) ;
     m_omega.resize(m_depth + 1) ;

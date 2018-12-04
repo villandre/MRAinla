@@ -26,8 +26,12 @@ public:
     }
   }
 
-  void DeriveOmega(const inputdata & dataset) {
+  void DeriveOmega(const inputdata & dataset, const arma::vec & fixedEffValues) {
     arma::vec subResponses = dataset.responseValues.elem(m_obsInNode) ;
+
+    arma::vec fixedSubtraction(m_obsInNode.size(), 0) ;
+    fixedSubtraction = dataset.covariateValues.rows(m_obsInNode) * fixedEffValues ;
+    subResponses -= fixedSubtraction ;
     // std::transform(GetBlist().begin(), std::prev(GetBlist().end()), m_omegaTilde.begin(),
     // [this, subResponses] (arma::mat & Bmatrix) {
     //   std::cout << "Using B... " ;
@@ -55,10 +59,12 @@ public:
     m_d = val ;
   }
 
-  void ComputeWmat() {
-    baseComputeWmat() ;
+  void ComputeWmat(const arma::vec & covParas) {
+    baseComputeWmat(covParas) ;
     m_SigmaInverse = arma::inv_sympd(GetSigma()) ;
   }
+
+  void ComputeParasEtaDeltaTilde(const spatialcoor &, const arma::vec &, const arma::vec &) ;
 
   void genRandomKnots(inputdata & dataset, uint & numKnots, const gsl_rng * RNG) {
     m_knotsCoor = spatialcoor(dataset.spatialCoords.rows(m_obsInNode),
@@ -66,12 +72,17 @@ public:
   }
 
   TipNode(const dimensions & dims, const uint & depth, TreeNode * parent,
-          const inputdata & dataset, const arma::vec & covPars) {
-    baseInitialise(dims, depth, parent, dataset, covPars) ;
+          const inputdata & dataset) {
+    baseInitialise(dims, depth, parent, dataset) ;
     deriveObsInNode(dataset) ;
   }
 
 protected:
+
+  void computeV(const spatialcoor &, const vec &) ;
+  void computeU(const spatialcoor &, const vec &) ;
+
+  arma::mat GetLM() { return m_UmatList.at(m_depth + 1) ;}
 
   arma::mat GetB(uint & l) {
     if (l == m_depth) {
@@ -94,5 +105,11 @@ protected:
   std::vector<arma::mat> m_bKnots ;
   std::vector<std::vector<arma::mat>> m_Btilde ;
   arma::mat m_SigmaInverse ;
+
+  // Prediction components (should probably be freed once computations are done)
+
+  arma::mat m_V ;
+  std::vector<arma::mat> m_UmatList ;
+  arma::mat m_covMatrixPredict ;
 };
 }
