@@ -29,6 +29,12 @@ struct spatialcoor {
 
   spatialcoor() { } ;
   spatialcoor(arma::mat f_sp, arma::uvec f_time) : spatialCoords(f_sp), timeCoords(f_time) { } ;
+
+  spatialcoor subset(arma::uvec & indices)  const {
+    arma::mat subSpatialCoords = spatialCoords.rows(indices) ;
+    arma::uvec subTimeCoords = timeCoords.rows(indices) ;
+    return spatialcoor(subSpatialCoords, subTimeCoords) ;
+  };
 };
 
 struct inputdata : public spatialcoor {
@@ -38,6 +44,14 @@ struct inputdata : public spatialcoor {
   inputdata() : spatialcoor() {};
   inputdata(arma::vec f_responses, arma::mat f_sp, arma::uvec f_time, arma::mat f_covariates)
     : spatialcoor(f_sp, f_time), responseValues(f_responses), covariateValues(f_covariates) {  } ;
+
+  inputdata subset(arma::uvec & indices)  const {
+    arma::mat subSpatialCoords = spatialCoords.rows(indices) ;
+    arma::uvec subTimeCoords = timeCoords.elem(indices) ;
+    arma::vec subResponseValues = responseValues.elem(indices) ;
+    arma::mat subCovariates = covariateValues.rows(indices) ;
+    return inputdata(subResponseValues, subSpatialCoords, subTimeCoords, subCovariates) ;
+  };
 };
 
 struct dimensions {
@@ -64,6 +78,13 @@ struct SpatiotempCoor{
   SpatiotempCoor() { } ;
 };
 
+struct GaussDistParas {
+  arma::vec meanPara ;
+  arma::mat covPara ;
+  GaussDistParas() { }
+  GaussDistParas(arma::vec & meanVec, arma::mat & covMat) : meanPara(meanVec), covPara(covMat) { }
+};
+
 class TreeNode
 {
 public:
@@ -77,8 +98,7 @@ public:
   virtual void DeriveU(const inputdata &)=0 ;
   virtual void DeriveD()=0 ;
   virtual void ComputeWmat(const arma::vec &)=0 ;
-  virtual void ComputeParasEtaDeltaTilde(const spatialcoor &, const arma::vec &, const arma::vec &)=0 ;
-
+  virtual void ComputeParasEtaDeltaTilde(const spatialcoor &, const inputdata &, const arma::vec &, const arma::vec &)=0 ;
 
   virtual void genRandomKnots(inputdata &, uint &, const gsl_rng *) = 0;
 
@@ -88,6 +108,10 @@ public:
 
   arma::mat GetAtildeList(uint & i, uint & j) {return m_AtildeList.at(i).at(j) ;}
   arma::mat GetOmegaTilde(uint & k) { return m_omegaTilde.at(k) ;}
+  spatialcoor GetKnotsCoor() {return m_knotsCoor;}
+  arma::mat GetKmatrix() {return m_K ;}
+  arma::mat GetKmatrixInverse() {return m_Kinverse ;}
+  std::vector<arma::mat>& GetWlist() {return m_Wlist ;}
 
   double GetU() {return m_u ;}
   double GetD() {return m_d ;}
@@ -96,7 +120,9 @@ public:
 
   void ComputeBaseKmat(const arma::vec &) ;
   // void SetAtildeList(arma::mat & matrix, uint &i, uint &j) {m_AtildeList.at(i).at(j) = matrix ;}
-  void SetPredictLocations(const spatialcoor &) ;
+  void SetPredictLocations(const spatialcoor & predictLocations) ;
+
+  arma::uvec deriveObsInNode(const spatialcoor &) ;
 
 protected:
 
@@ -106,17 +132,10 @@ protected:
   dimensions m_dimensions ; // First dimension is longitude, second is latitude, last is time.
   spatialcoor m_knotsCoor ;  // First element is spatial coordinates (longitude, latitude), second is time.
 
-  void deriveObsInNode(const inputdata &) ;
-
   std::vector<std::vector<arma::mat>>& GetAtildeList() {return m_AtildeList ;}
   void baseComputeWmat(const arma::vec &) ;
   TreeNode * GetParent() {return m_parent ;}
   void SetParent(TreeNode * vertexParentPoint) {m_parent = vertexParentPoint ;}
-
-  spatialcoor GetKnotsCoor() {return m_knotsCoor;}
-  arma::mat GetKmatrix() {return m_K ;}
-  arma::mat GetKmatrixInverse() {return m_Kinverse ;}
-  std::vector<arma::mat>& GetWlist() {return m_Wlist ;}
 
   std::vector<std::vector<arma::mat>> m_AtildeList ;
   std::vector<arma::mat> m_Wlist ;
@@ -143,7 +162,7 @@ protected:
   }
 
   // For prediction
-  arma::uvec m_predictLocations ;
+  arma::uvec m_predictLocIndices ;
 };
 }
 #endif /* TREENODE_H */

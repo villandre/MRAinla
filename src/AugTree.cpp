@@ -234,6 +234,7 @@ mat AugTree::ComputePosteriors(spatialcoor & predictionLocations, double & stepS
 }
 
 void AugTree::ComputeConditionalPrediction(const spatialcoor & predictionLocations) {
+  distributePredictionData(predictionLocations) ;
   mat incrementedCovar(m_dataset.covariateValues) ;
   incrementedCovar.insert_cols(0, 1) ;
   incrementedCovar.col(0).fill(1) ;
@@ -262,6 +263,9 @@ double AugTree::ComputeGlobalLogLik() {
 }
 
 void AugTree::distributePredictionData(const spatialcoor & predictLocations) {
+  m_predictLocations = predictLocations ;
 
-
+  for (auto & i : m_vertexVector) {
+    i->SetPredictLocations(predictLocations) ;
+  }
 }
