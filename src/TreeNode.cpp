@@ -99,3 +99,27 @@ void TreeNode::SetPredictLocations(const spatialcoor & predictLocations) {
     (predictLocations.timeCoords <= max(m_dimensions.time)) ; // Time check
   m_predictLocIndices = find(lonCheck % latCheck % timeCheck) ; // find is equivalent to which in R
 }
+
+void TreeNode::initiateBknots(const vec & covParas) {
+  std::vector<TreeNode *> brickList = getAncestors() ;
+  if (m_depth > 0) {
+    m_bKnots.resize(m_depth) ;
+    m_bKnots.at(0) = computeCovMat(m_knotsCoor, brickList.at(0)->GetKnotsCoor(), covParas) ;
+  }
+}
+
+void TreeNode::completeBknots(const vec & covParas, const uint level) {
+  std::vector<TreeNode *> brickList = getAncestors() ;
+  mat currentV = computeCovMat(m_knotsCoor, brickList.at(level)->GetKnotsCoor(), covParas) ;
+  if (level > 0) {
+    for (uint i = 0; i < level ; i++) {
+      currentV -= m_bKnots.at(i) * brickList.at(i)->GetKmatrix() * trans(brickList.at(level)->GetBknots().at(i)) ;
+    }
+  }
+  m_bKnots.at(level) = currentV ;
+  if (GetChildren().at(0) != NULL) {
+    for (auto & i : GetChildren()) {
+      i->completeBknots(covParas, level) ;
+    }
+  }
+}

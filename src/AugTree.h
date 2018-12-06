@@ -73,7 +73,9 @@ private:
 
   // Prediction functions
 
+  std::vector<TreeNode *> GetLevel(const uint) ;
   void distributePredictionData(const spatialcoor &) ;
+  void computeBtildeInTips() ;
   spatialcoor m_predictLocations ;
 };
 }

@@ -235,18 +235,26 @@ mat AugTree::ComputePosteriors(spatialcoor & predictionLocations, double & stepS
 
 void AugTree::ComputeConditionalPrediction(const spatialcoor & predictionLocations) {
   distributePredictionData(predictionLocations) ;
-  mat incrementedCovar(m_dataset.covariateValues) ;
-  incrementedCovar.insert_cols(0, 1) ;
-  incrementedCovar.col(0).fill(1) ;
-  vec centeredResponses(m_dataset.responseValues.size(), 0) ;
-  centeredResponses = m_dataset.responseValues - incrementedCovar * m_fixedEffParameters ;
+  // mat incrementedCovar(m_dataset.covariateValues) ;
+  // incrementedCovar.insert_cols(0, 1) ;
+  // incrementedCovar.col(0).fill(1) ;
+  // vec centeredResponses(m_dataset.responseValues.size(), 0) ;
+  // centeredResponses = m_dataset.responseValues - incrementedCovar * m_fixedEffParameters ;
   for (int level = m_M; level >= 0 ; level--) {
     uint levelRecast = (uint) level ;
-    std::vector<TreeNode *> levelNodes = getLevelNodes(levelRecast) ;
+    std::vector<TreeNode *> levelNodes = GetLevel(levelRecast) ;
     for (auto & i : levelNodes) {
-      i->ComputeParasEtaDeltaTilde(predictionLocations, centeredResponses, m_covParameters) ;
+      i->ComputeParasEtaDeltaTilde(predictionLocations, m_dataset, m_fixedEffParameters, m_covParameters) ;
     }
   }
+  computeBtildeInTips() ;
+
+  std::vector<vec> predictionsFromEachSection ;
+  std::vector<TreeNode *> tipNodes = GetLevel(m_M) ;
+  std::vector<GaussDistParas> distParasFromEachZone(tipNodes.size()) ;
+  std::transform(tipNodes.begin(), tipNodes.end(), distParasFromEachZone, [] (TreeNode * node) {
+    return node->CombineEtaDelta() ; // Check the ordering of observations.
+  }) ;
 }
 
 double AugTree::ComputeGlobalLogLik() {
@@ -268,4 +276,42 @@ void AugTree::distributePredictionData(const spatialcoor & predictLocations) {
   for (auto & i : m_vertexVector) {
     i->SetPredictLocations(predictLocations) ;
   }
+}
+
+void AugTree::computeBtildeInTips() {
+  std::vector<std::vector<TreeNode *>> nodesAtLevels(m_M+1) ;
+  for (uint i = 0 ; i <= m_M ; i++) {
+    nodesAtLevels.at(i) = GetLevel(i) ;
+  }
+  // The two following loops cannot be joined.
+  for (uint level = 1; level <= m_M ; level++) {
+    for (auto & i : nodesAtLevels.at(level)) {
+      i->initiateBknots(m_covParameters) ;
+    }
+  }
+
+  for (uint level = 1; level < m_M ; level++) {
+    for (auto & i : nodesAtLevels.at(level+1)) {
+      i->completeBknots(m_covParameters, level) ;
+    }
+  }
+
+  for (auto & i : nodesAtLevels.at(m_M)) {
+    i->computeBpred(m_predictLocations, m_covParameters) ;
+    i->deriveBtilde(m_predictLocations) ;
+  }
+}
+
+std::vector<TreeNode *> AugTree::GetLevel(const uint level) {
+  std::vector<TreeNode *> nodesAtLevel;
+  if (level == 0) {
+    nodesAtLevel.push_back(m_vertexVector.at(0)) ;
+    return nodesAtLevel ;
+  }
+  for (auto & i : m_vertexVector) {
+    if (i->GetDepth() == level) {
+      nodesAtLevel.push_back(i) ;
+    }
+  }
+  return nodesAtLevel ;
 }

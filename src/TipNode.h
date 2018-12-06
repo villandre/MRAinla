@@ -68,6 +68,12 @@ public:
   }
 
   void ComputeParasEtaDeltaTilde(const spatialcoor &, const inputdata &, const arma::vec &, const arma::vec &) ;
+  std::vector<std::vector<arma::mat>> GetAlist() const {throw Rcpp::exception("Trying to get an A matrix in a tip node! \n") ;}
+  arma::mat GetKtilde() const {throw Rcpp::exception("Trying to get Ktilde in a tip node! \n") ;}
+  void deriveBtilde(const spatialcoor & ) ;
+  void computeBpred(const spatialcoor &, const arma::vec &) ;
+  GaussDistParas CombineEtaDelta() ;
+  GaussDistParas GetEtaDelta() const { return m_deltaTilde ;}
 
   void genRandomKnots(inputdata & dataset, uint & numKnots, const gsl_rng * RNG) {
     m_knotsCoor = spatialcoor(dataset.spatialCoords.rows(m_obsInNode),
@@ -105,7 +111,7 @@ protected:
   void computeUpred(const arma::vec &, const spatialcoor &) ;
   arma::mat GetLM() { return m_UmatList.at(m_depth) ;}
   void computeDeltaTildeParas(const inputdata &, const arma::vec &) ;
-  void deriveBtilde(const spatialcoor & ) ;
+  void recurseBtilde(const uint, const uint) ;
 
   arma::mat m_V ;
   std::vector<arma::mat> m_UmatList ;
@@ -113,6 +119,5 @@ protected:
   GaussDistParas m_deltaTilde ;
   std::vector<std::vector<arma::mat>> m_Btilde ;
   std::vector<arma::mat> m_bPred ;
-  std::vector<arma::mat> m_bKnots ;
 };
 }

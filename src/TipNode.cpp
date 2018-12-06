@@ -8,7 +8,7 @@ void TipNode::ComputeParasEtaDeltaTilde(const spatialcoor & predictLocations, co
   computeUpred(covParas, predictLocations) ;
   computeVpred(covParas, predictLocations) ;
 
-  computeDeltaTildeParas(dataset) ;
+  computeDeltaTildeParas(dataset, fixedParas) ;
 }
 
 void TipNode::computeUpred(const vec & covParas, const spatialcoor & predictLocations) {
@@ -58,49 +58,69 @@ void TipNode::computeDeltaTildeParas(const inputdata & dataset, const vec & fixe
 }
 
 void TipNode::deriveBtilde(const spatialcoor & predictLocations) {
-  m_Btilde.resize(m_depth + 1) ;
-  for (auto & i : m_Btilde) {
-    i.resize(m_depth) ;
-  }
-  mat bPredMat = computeBpred(predictLocations) ;
-  m_Btilde.at(m_depth).at(m_depth - 1) = bPredMat - GetLM() * m_SigmaInverse * GetB(m_depth - 1) ;
+  if (m_predictLocIndices.size() > 0) {
+    spatialcoor subLocations = predictLocations.subset(m_predictLocIndices) ;
 
+    m_Btilde.resize(m_depth + 1) ;
+    for (uint i = 1; i < (m_depth + 1) ; i++) {
+      m_Btilde.at(i).resize(i) ;
+    }
+    std::vector<TreeNode *> brickList = getAncestors() ;
+    for (uint k = 0 ; k < m_depth ; k++) {
+      m_Btilde.at(m_depth).at(k) = m_bPred.at(k) - GetLM() * m_SigmaInverse * m_Wlist.at(k) ;
+    }
+
+    for (uint k = m_depth-1 ; k >= 1 ; k--) {
+      recurseBtilde(k , k-1) ;
+      if (k > 1) recurseBtilde(k, k-2) ;
+      if (k > 2) recurseBtilde(k, k -3) ;
+    }
+  }
 };
 
-// .computeBpreds <- function(gridObj, locations) {
-//
-// allTips <- .tipAddresses(gridObj)
-//
-//   recurseBpred <- function(tipAddress) {
-//     subLocations <- subset(x = locations, latExtent = tipAddress$dimensions$latitude, lonExtent = tipAddress$dimensions$longitude, timeExtent = tipAddress$dimensions$time)
-//     tipAddress$bPred <- vector('list', length = gridObj$M+1)
-//     if (length(subLocations) == 0) {
-//       tipAddress$bPred <- NULL
-//       return(invisible())
-//     }
-//     tipAddress$bPred[[1]] <- gridObj$covFct(subLocations, gridObj$knotPositions)
-//
-//       brickList <- .getAllParentAddresses(brickObj = tipAddress, flip = FALSE) ## Lists bricks from root to current tip (included).
-//
-//     recurseBpred <- function(level) {
-//       currentV <- gridObj$covFct(subLocations, brickList[[level+1]]$knotPositions) - tipAddress$bPred[[1]] %*% gridObj$K %*% t(brickList[[level+1]]$bKnots[[1]]) ### SAME ISSUE AS IN .computeBknots with the position of the t(...). ###
-//       if (level == 1) {
-//         tipAddress$bPred[[2]] <- currentV
-//         return(invisible())
-//       }
-//
-//       for (i in 2:level) {
-//         currentV <- currentV - tipAddress$bPred[[i]] %*% brickList[[i]]$K %*% t(brickList[[level+1]]$bKnots[[i]]) # Changed the position of the t to ensure correspondence.
-//       }
-//       tipAddress$bPred[[level+1]] <- currentV
-//         invisible()
-//     }
-//
-//     for (levelIndex in 1:gridObj$M) {
-//       recurseBpred(levelIndex)
-//     }
-//     invisible()
-//   }
-//   lapply(allTips, recurseBpred)
-// }
+void TipNode::recurseBtilde(const uint l, const uint k) {
+  std::vector<TreeNode *> brickList = getAncestors() ;
+  m_Btilde.at(l).at(k) = m_Btilde.at(l+1).at(k) - m_Btilde.at(l+1).at(l) * brickList.at(l)->GetKtilde() * brickList.at(l)->GetAlist().at(l).at(k) ;
+}
 
+void TipNode::computeBpred(const spatialcoor & predictLocations, const vec & covParas) {
+  if (m_predictLocIndices.size() > 0) {
+    spatialcoor subLocations = predictLocations.subset(m_predictLocIndices) ;
+    m_bPred.resize(m_depth+1) ;
+    m_bPred.at(0) = computeCovMat(subLocations, m_knotsCoor, covParas) ;
+    std::vector<TreeNode *> brickList = getAncestors() ;
+
+    for (uint levelIndex = 1 ; levelIndex <= m_depth ; levelIndex++) {
+      mat currentV = computeCovMat(subLocations, brickList.at(levelIndex)->GetKnotsCoor(), covParas) -
+        m_bPred.at(0) * brickList.at(0)->GetKmatrix() * trans(brickList.at(levelIndex)->GetBknots().at(0)) ;
+      if (levelIndex > 1) {
+        for (uint i = 1 ; i < levelIndex ; i++) {
+          currentV -= m_bPred.at(i) * brickList.at(i)->GetKmatrix() * trans(brickList.at(levelIndex)->GetBknots().at(i)) ;
+        }
+      }
+      m_bPred.at(levelIndex) = currentV ;
+    }
+  }
+}
+
+GaussDistParas TipNode::CombineEtaDelta() {
+  vec defaultVec(1,0) ;
+  mat defaultMat(1,1,fill::zeros) ;
+  GaussDistParas estimatesFromRegion(defaultVec, defaultMat) ;
+
+  if (m_predictLocIndices.size() > 0) {
+
+    vec meanVec(m_predictLocIndices.size(), 0) ;
+    mat covMat(m_predictLocIndices.size(), m_predictLocIndices.size(), fill::zeros) ;
+    std::vector<TreeNode *> brickList = getAncestors() ;
+    for (uint m=0 ; m <= m_depth-1 ; m++) {
+      meanVec += m_Btilde.at(m+1).at(m) * brickList.at(m)->GetEtaDelta().meanPara ;
+      covMat += m_Btilde.at(m+1).at(m) * brickList.at(m)->GetEtaDelta().covPara * trans(m_Btilde.at(m+1).at(m)) ;
+    }
+    meanVec += m_deltaTilde.meanPara ;
+    covMat += m_deltaTilde.covPara ;
+    estimatesFromRegion.meanPara = meanVec ;
+    estimatesFromRegion.covPara = covMat ;
+  }
+  return estimatesFromRegion ;
+}

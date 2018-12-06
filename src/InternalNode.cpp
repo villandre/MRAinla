@@ -126,11 +126,6 @@ void InternalNode::ComputeWmat(const arma::vec & covParas) {
 }
 
 void InternalNode::ComputeParasEtaDeltaTilde(const spatialcoor & predictLocations, const inputdata & dataset, const arma::vec & fixedParas, const arma::vec & covParas) {
-  computeEtaTildeParas() ;
-}
-
-void InternalNode::computeEtaTildeParas() {
   m_etaTilde.meanPara = m_Ktilde * m_omega.at(m_depth) ;
   m_etaTilde.covPara = m_Ktilde ; // This is repetition. It should not harm memory too much though.
-};
-
+}

@@ -24,6 +24,12 @@ public:
   void DeriveD() ;
   void ComputeWmat(const arma::vec &) ;
   void ComputeParasEtaDeltaTilde(const spatialcoor &, const inputdata &, const arma::vec &, const arma::vec &) ;
+  std::vector<std::vector<arma::mat>> GetAlist() const {return m_Alist ;};
+  arma::mat GetKtilde() const {return m_Ktilde ;}
+  void deriveBtilde(const spatialcoor & x1) { throw Rcpp::exception("Btilde are only needed for tips. \n") ;}
+  void computeBpred(const spatialcoor & x1, const arma::vec & x2) { throw Rcpp::exception("Bpred should only be computed in tips. \n") ;}
+  GaussDistParas CombineEtaDelta() { throw Rcpp::exception("Combination should only occur in tip nodes. \n") ;}
+  GaussDistParas GetEtaDelta() const { return m_etaTilde ;}
 
   void genRandomKnots(inputdata &, uint &, const gsl_rng *) ;
 
@@ -59,7 +65,6 @@ protected:
 
   // Prediction elements
 
-  void computeEtaTildeParas() ;
   GaussDistParas m_etaTilde ;
 };
 }

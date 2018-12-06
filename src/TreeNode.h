@@ -99,6 +99,12 @@ public:
   virtual void DeriveD()=0 ;
   virtual void ComputeWmat(const arma::vec &)=0 ;
   virtual void ComputeParasEtaDeltaTilde(const spatialcoor &, const inputdata &, const arma::vec &, const arma::vec &)=0 ;
+  virtual std::vector<std::vector<arma::mat>> GetAlist() const = 0;
+  virtual arma::mat GetKtilde() const = 0;
+  virtual void deriveBtilde(const spatialcoor & )=0 ;
+  virtual void computeBpred(const spatialcoor &, const arma::vec &)=0 ;
+  virtual GaussDistParas CombineEtaDelta()=0 ;
+  virtual GaussDistParas GetEtaDelta() const =0 ;
 
   virtual void genRandomKnots(inputdata &, uint &, const gsl_rng *) = 0;
 
@@ -123,6 +129,9 @@ public:
   void SetPredictLocations(const spatialcoor & predictLocations) ;
 
   arma::uvec deriveObsInNode(const spatialcoor &) ;
+  void initiateBknots(const arma::vec &) ;
+  void completeBknots(const arma::vec &, const uint) ;
+  std::vector<arma::mat> GetBknots() const { return m_bKnots ;}
 
 protected:
 
@@ -162,7 +171,10 @@ protected:
   }
 
   // For prediction
+  void computeBknots() ;
+
   arma::uvec m_predictLocIndices ;
+  std::vector<arma::mat> m_bKnots ;
 };
 }
 #endif /* TREENODE_H */
