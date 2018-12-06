@@ -14,10 +14,10 @@ public:
 
   void ComputeMRAloglik() ;
   double ComputeGlobalLogLik() ;
-  void ComputeConditionalPrediction(const spatialcoor &) ;
+  std::vector<GaussDistParas> ComputeConditionalPrediction(const spatialcoor &) ;
   arma::mat ComputePosteriors(spatialcoor &, double &) ;
 
-  double GetLoglik() {return m_logLik ;}
+  double GetMRAlogLik() const {return m_MRAlogLik ;}
   gsl_rng * GetRandomNumGenerator() {return m_randomNumGenerator ;}
   inputdata GetDataset() {return m_dataset;}
   uint GetNumTips() {return m_numTips ;}

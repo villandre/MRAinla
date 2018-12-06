@@ -6,3 +6,4 @@ TreeNode.o
 AugTree.o
 RcppExports.R
 helper.o
+TipNode.o

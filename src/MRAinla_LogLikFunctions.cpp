@@ -66,7 +66,7 @@ List logLikCpp(SEXP treePointer, NumericVector & covParameters, NumericVector & 
 
     pointedTree->ComputeMRAloglik() ;
     pointedTree->ComputeGlobalLogLik() ;
-    logLikVal = pointedTree->GetLoglik() ;
+    logLikVal = pointedTree->GetMRAlogLik() ;
   }
   else
   {
@@ -74,6 +74,37 @@ List logLikCpp(SEXP treePointer, NumericVector & covParameters, NumericVector & 
   }
   return List::create(Named("logLik") = logLikVal, Named("gridPointer") = treePointer) ;
 }
+
+// [[Rcpp::export]]
+
+List testFunction() {
+  std::vector<mat> myVec(10) ;
+  for(auto & i : myVec) {
+    i.resize(2,4) ;
+    i.fill(0) ;
+  }
+  List returnList = Rcpp::wrap(myVec) ;
+  return returnList ;
+}
+
+
+// List predictMRA(SEXP treePointer, NumericMatrix predSpatialCoor, IntegerVector predTime) {
+//   uvec predictionTime = as<uvec>(predTime) ;
+//   mat predSp = as<mat>(predSpatialCoor) ;
+//   std::vector<GaussDistParas> predsInZones ;
+//
+//   if (!(treePointer == NULL))
+//   {
+//     XPtr<AugTree> pointedTree(treePointer) ; // Becomes a regular pointer again.
+//     spatialcoor predLocs(predSp, predictionTime) ;
+//     predsInZones = pointedTree->ComputeConditionalPrediction(predLocs) ;
+//   }
+//   else
+//   {
+//     throw Rcpp::exception("Pointer to MRA grid is null." ) ;
+//   }
+//   List convert(predInZones)
+// }
 
 // [[Rcpp::export]]
 

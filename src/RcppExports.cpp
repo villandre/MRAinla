@@ -7,40 +7,70 @@
 using namespace Rcpp;
 
 // setupGridCpp
-SEXP setupGridCpp(NumericVector responseValues, NumericMatrix spCoords, IntegerVector obsTime, uint M, NumericVector lonRange, NumericVector latRange, IntegerVector timeRange, uint randomSeed, uint cutForTimeSplit, NumericVector covarianceParameter);
-RcppExport SEXP _MRAinla_setupGridCpp(SEXP responseValuesSEXP, SEXP spCoordsSEXP, SEXP obsTimeSEXP, SEXP MSEXP, SEXP lonRangeSEXP, SEXP latRangeSEXP, SEXP timeRangeSEXP, SEXP randomSeedSEXP, SEXP cutForTimeSplitSEXP, SEXP covarianceParameterSEXP) {
+SEXP setupGridCpp(NumericVector responseValues, NumericMatrix spCoords, IntegerVector obsTime, NumericMatrix covariateMatrix, uint M, NumericVector lonRange, NumericVector latRange, IntegerVector timeRange, uint randomSeed, uint cutForTimeSplit);
+RcppExport SEXP _MRAinla_setupGridCpp(SEXP responseValuesSEXP, SEXP spCoordsSEXP, SEXP obsTimeSEXP, SEXP covariateMatrixSEXP, SEXP MSEXP, SEXP lonRangeSEXP, SEXP latRangeSEXP, SEXP timeRangeSEXP, SEXP randomSeedSEXP, SEXP cutForTimeSplitSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
     Rcpp::traits::input_parameter< NumericVector >::type responseValues(responseValuesSEXP);
     Rcpp::traits::input_parameter< NumericMatrix >::type spCoords(spCoordsSEXP);
     Rcpp::traits::input_parameter< IntegerVector >::type obsTime(obsTimeSEXP);
+    Rcpp::traits::input_parameter< NumericMatrix >::type covariateMatrix(covariateMatrixSEXP);
     Rcpp::traits::input_parameter< uint >::type M(MSEXP);
     Rcpp::traits::input_parameter< NumericVector >::type lonRange(lonRangeSEXP);
     Rcpp::traits::input_parameter< NumericVector >::type latRange(latRangeSEXP);
     Rcpp::traits::input_parameter< IntegerVector >::type timeRange(timeRangeSEXP);
     Rcpp::traits::input_parameter< uint >::type randomSeed(randomSeedSEXP);
     Rcpp::traits::input_parameter< uint >::type cutForTimeSplit(cutForTimeSplitSEXP);
-    Rcpp::traits::input_parameter< NumericVector >::type covarianceParameter(covarianceParameterSEXP);
-    rcpp_result_gen = Rcpp::wrap(setupGridCpp(responseValues, spCoords, obsTime, M, lonRange, latRange, timeRange, randomSeed, cutForTimeSplit, covarianceParameter));
+    rcpp_result_gen = Rcpp::wrap(setupGridCpp(responseValues, spCoords, obsTime, covariateMatrix, M, lonRange, latRange, timeRange, randomSeed, cutForTimeSplit));
     return rcpp_result_gen;
 END_RCPP
 }
 // logLikCpp
-List logLikCpp(SEXP treePointer);
-RcppExport SEXP _MRAinla_logLikCpp(SEXP treePointerSEXP) {
+List logLikCpp(SEXP treePointer, NumericVector& covParameters, NumericVector& fixedEffectParameters, double& errorSD, double& fixedEffSD);
+RcppExport SEXP _MRAinla_logLikCpp(SEXP treePointerSEXP, SEXP covParametersSEXP, SEXP fixedEffectParametersSEXP, SEXP errorSDSEXP, SEXP fixedEffSDSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
     Rcpp::traits::input_parameter< SEXP >::type treePointer(treePointerSEXP);
-    rcpp_result_gen = Rcpp::wrap(logLikCpp(treePointer));
+    Rcpp::traits::input_parameter< NumericVector& >::type covParameters(covParametersSEXP);
+    Rcpp::traits::input_parameter< NumericVector& >::type fixedEffectParameters(fixedEffectParametersSEXP);
+    Rcpp::traits::input_parameter< double& >::type errorSD(errorSDSEXP);
+    Rcpp::traits::input_parameter< double& >::type fixedEffSD(fixedEffSDSEXP);
+    rcpp_result_gen = Rcpp::wrap(logLikCpp(treePointer, covParameters, fixedEffectParameters, errorSD, fixedEffSD));
+    return rcpp_result_gen;
+END_RCPP
+}
+// testFunction
+List testFunction();
+RcppExport SEXP _MRAinla_testFunction() {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    rcpp_result_gen = Rcpp::wrap(testFunction());
+    return rcpp_result_gen;
+END_RCPP
+}
+// inla
+NumericMatrix inla(SEXP treePointer, NumericMatrix predictionLocations, IntegerVector predictionTime, double stepSize);
+RcppExport SEXP _MRAinla_inla(SEXP treePointerSEXP, SEXP predictionLocationsSEXP, SEXP predictionTimeSEXP, SEXP stepSizeSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< SEXP >::type treePointer(treePointerSEXP);
+    Rcpp::traits::input_parameter< NumericMatrix >::type predictionLocations(predictionLocationsSEXP);
+    Rcpp::traits::input_parameter< IntegerVector >::type predictionTime(predictionTimeSEXP);
+    Rcpp::traits::input_parameter< double >::type stepSize(stepSizeSEXP);
+    rcpp_result_gen = Rcpp::wrap(inla(treePointer, predictionLocations, predictionTime, stepSize));
     return rcpp_result_gen;
 END_RCPP
 }
 
 static const R_CallMethodDef CallEntries[] = {
     {"_MRAinla_setupGridCpp", (DL_FUNC) &_MRAinla_setupGridCpp, 10},
-    {"_MRAinla_logLikCpp", (DL_FUNC) &_MRAinla_logLikCpp, 1},
+    {"_MRAinla_logLikCpp", (DL_FUNC) &_MRAinla_logLikCpp, 5},
+    {"_MRAinla_testFunction", (DL_FUNC) &_MRAinla_testFunction, 0},
+    {"_MRAinla_inla", (DL_FUNC) &_MRAinla_inla, 4},
     {NULL, NULL, 0}
 };
 

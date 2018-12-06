@@ -233,7 +233,7 @@ mat AugTree::ComputePosteriors(spatialcoor & predictionLocations, double & stepS
 
 }
 
-void AugTree::ComputeConditionalPrediction(const spatialcoor & predictionLocations) {
+std::vector<GaussDistParas> AugTree::ComputeConditionalPrediction(const spatialcoor & predictionLocations) {
   distributePredictionData(predictionLocations) ;
   // mat incrementedCovar(m_dataset.covariateValues) ;
   // incrementedCovar.insert_cols(0, 1) ;
@@ -252,10 +252,18 @@ void AugTree::ComputeConditionalPrediction(const spatialcoor & predictionLocatio
   std::vector<vec> predictionsFromEachSection ;
   std::vector<TreeNode *> tipNodes = GetLevel(m_M) ;
   std::vector<GaussDistParas> distParasFromEachZone(tipNodes.size()) ;
-  std::transform(tipNodes.begin(), tipNodes.end(), distParasFromEachZone, [] (TreeNode * node) {
-    return node->CombineEtaDelta() ; // Check the ordering of observations.
-  }) ;
+  // std::transform(tipNodes.begin(), tipNodes.end(), distParasFromEachZone, [] (TreeNode * node) {
+  //   return node->CombineEtaDelta() ; // Check the ordering of observations.
+  // }) ;
+
+  std::vector<GaussDistParas>::iterator outputIterator = distParasFromEachZone.begin() ;
+  for (auto & i : tipNodes) {
+    *outputIterator = i->CombineEtaDelta() ;
+    std::next(outputIterator) ;
+  }
+  return distParasFromEachZone ;
 }
+
 
 double AugTree::ComputeGlobalLogLik() {
   // First we create the necessary GSL vectors...
