@@ -26,9 +26,9 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
-// logLikCpp
-List logLikCpp(SEXP treePointer, NumericVector& covParameters, NumericVector& fixedEffectParameters, double& errorSD, double& fixedEffSD);
-RcppExport SEXP _MRAinla_logLikCpp(SEXP treePointerSEXP, SEXP covParametersSEXP, SEXP fixedEffectParametersSEXP, SEXP errorSDSEXP, SEXP fixedEffSDSEXP) {
+// logLikMRAcpp
+List logLikMRAcpp(SEXP treePointer, NumericVector& covParameters, NumericVector& fixedEffectParameters, double& errorSD, double& fixedEffSD);
+RcppExport SEXP _MRAinla_logLikMRAcpp(SEXP treePointerSEXP, SEXP covParametersSEXP, SEXP fixedEffectParametersSEXP, SEXP errorSDSEXP, SEXP fixedEffSDSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -37,17 +37,20 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< NumericVector& >::type fixedEffectParameters(fixedEffectParametersSEXP);
     Rcpp::traits::input_parameter< double& >::type errorSD(errorSDSEXP);
     Rcpp::traits::input_parameter< double& >::type fixedEffSD(fixedEffSDSEXP);
-    rcpp_result_gen = Rcpp::wrap(logLikCpp(treePointer, covParameters, fixedEffectParameters, errorSD, fixedEffSD));
+    rcpp_result_gen = Rcpp::wrap(logLikMRAcpp(treePointer, covParameters, fixedEffectParameters, errorSD, fixedEffSD));
     return rcpp_result_gen;
 END_RCPP
 }
-// testFunction
-List testFunction();
-RcppExport SEXP _MRAinla_testFunction() {
+// predictMRArcpp
+List predictMRArcpp(SEXP treePointer, NumericMatrix predSpatialCoor, IntegerVector predTime);
+RcppExport SEXP _MRAinla_predictMRArcpp(SEXP treePointerSEXP, SEXP predSpatialCoorSEXP, SEXP predTimeSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
-    rcpp_result_gen = Rcpp::wrap(testFunction());
+    Rcpp::traits::input_parameter< SEXP >::type treePointer(treePointerSEXP);
+    Rcpp::traits::input_parameter< NumericMatrix >::type predSpatialCoor(predSpatialCoorSEXP);
+    Rcpp::traits::input_parameter< IntegerVector >::type predTime(predTimeSEXP);
+    rcpp_result_gen = Rcpp::wrap(predictMRArcpp(treePointer, predSpatialCoor, predTime));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -68,8 +71,8 @@ END_RCPP
 
 static const R_CallMethodDef CallEntries[] = {
     {"_MRAinla_setupGridCpp", (DL_FUNC) &_MRAinla_setupGridCpp, 10},
-    {"_MRAinla_logLikCpp", (DL_FUNC) &_MRAinla_logLikCpp, 5},
-    {"_MRAinla_testFunction", (DL_FUNC) &_MRAinla_testFunction, 0},
+    {"_MRAinla_logLikMRAcpp", (DL_FUNC) &_MRAinla_logLikMRAcpp, 5},
+    {"_MRAinla_predictMRArcpp", (DL_FUNC) &_MRAinla_predictMRArcpp, 3},
     {"_MRAinla_inla", (DL_FUNC) &_MRAinla_inla, 4},
     {NULL, NULL, 0}
 };

@@ -5,12 +5,12 @@ setupGridCpp <- function(responseValues, spCoords, obsTime, covariateMatrix, M, 
     .Call('_MRAinla_setupGridCpp', PACKAGE = 'MRAinla', responseValues, spCoords, obsTime, covariateMatrix, M, lonRange, latRange, timeRange, randomSeed, cutForTimeSplit)
 }
 
-logLikCpp <- function(treePointer, covParameters, fixedEffectParameters, errorSD, fixedEffSD) {
-    .Call('_MRAinla_logLikCpp', PACKAGE = 'MRAinla', treePointer, covParameters, fixedEffectParameters, errorSD, fixedEffSD)
+logLikMRAcpp <- function(treePointer, covParameters, fixedEffectParameters, errorSD, fixedEffSD) {
+    .Call('_MRAinla_logLikMRAcpp', PACKAGE = 'MRAinla', treePointer, covParameters, fixedEffectParameters, errorSD, fixedEffSD)
 }
 
-testFunction <- function() {
-    .Call('_MRAinla_testFunction', PACKAGE = 'MRAinla')
+predictMRArcpp <- function(treePointer, predSpatialCoor, predTime) {
+    .Call('_MRAinla_predictMRArcpp', PACKAGE = 'MRAinla', treePointer, predSpatialCoor, predTime)
 }
 
 inla <- function(treePointer, predictionLocations, predictionTime, stepSize) {

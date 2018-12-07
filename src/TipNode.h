@@ -26,15 +26,10 @@ public:
     }
   }
 
-  void DeriveOmega(const inputdata & dataset, const arma::vec & fixedEffValues) {
+  void DeriveOmega(const inputdata & dataset) {
 
     arma::vec subResponses = dataset.responseValues.elem(m_obsInNode) ;
-    arma::vec fixedSubtraction(m_obsInNode.size(), 0) ;
-    arma::mat incCovariates = dataset.covariateValues ;
-    incCovariates.insert_cols(0, 1) ;
-    incCovariates.col(0).fill(1) ;
-    fixedSubtraction = incCovariates.rows(m_obsInNode) * fixedEffValues ;
-    subResponses -= fixedSubtraction ;
+
     // std::transform(GetBlist().begin(), std::prev(GetBlist().end()), m_omegaTilde.begin(),
     // [this, subResponses] (arma::mat & Bmatrix) {
     //   std::cout << "Using B... " ;
@@ -67,12 +62,12 @@ public:
     m_SigmaInverse = arma::inv_sympd(GetSigma()) ;
   }
 
-  void ComputeParasEtaDeltaTilde(const spatialcoor &, const inputdata &, const arma::vec &, const arma::vec &) ;
+  void ComputeParasEtaDeltaTilde(const spatialcoor &, const inputdata &, const arma::vec &) ;
   std::vector<std::vector<arma::mat>> GetAlist() const {throw Rcpp::exception("Trying to get an A matrix in a tip node! \n") ;}
   arma::mat GetKtilde() const {throw Rcpp::exception("Trying to get Ktilde in a tip node! \n") ;}
   void deriveBtilde(const spatialcoor & ) ;
   void computeBpred(const spatialcoor &, const arma::vec &) ;
-  GaussDistParas CombineEtaDelta() ;
+  GaussDistParas CombineEtaDelta(const inputdata &, const arma::vec &) ;
   GaussDistParas GetEtaDelta() const { return m_deltaTilde ;}
 
   void genRandomKnots(inputdata & dataset, uint & numKnots, const gsl_rng * RNG) {
@@ -110,7 +105,7 @@ protected:
   void computeVpred(const arma::vec &, const spatialcoor &) ;
   void computeUpred(const arma::vec &, const spatialcoor &) ;
   arma::mat GetLM() { return m_UmatList.at(m_depth) ;}
-  void computeDeltaTildeParas(const inputdata &, const arma::vec &) ;
+  void computeDeltaTildeParas(const inputdata &) ;
   void recurseBtilde(const uint, const uint) ;
 
   arma::mat m_V ;

@@ -4,11 +4,10 @@
 using namespace arma ;
 using namespace MRAinla ;
 
-void TipNode::ComputeParasEtaDeltaTilde(const spatialcoor & predictLocations, const inputdata & dataset, const arma::vec & fixedParas, const arma::vec & covParas) {
+void TipNode::ComputeParasEtaDeltaTilde(const spatialcoor & predictLocations, const inputdata & dataset, const arma::vec & covParas) {
   computeUpred(covParas, predictLocations) ;
   computeVpred(covParas, predictLocations) ;
-
-  computeDeltaTildeParas(dataset, fixedParas) ;
+  computeDeltaTildeParas(dataset) ;
 }
 
 void TipNode::computeUpred(const vec & covParas, const spatialcoor & predictLocations) {
@@ -45,14 +44,8 @@ void TipNode::computeVpred(const arma::vec & covParas, const spatialcoor & predi
   }
 };
 
-void TipNode::computeDeltaTildeParas(const inputdata & dataset, const vec & fixedEffValues) {
+void TipNode::computeDeltaTildeParas(const inputdata & dataset) {
   arma::vec subResponses = dataset.responseValues.elem(m_obsInNode) ;
-  arma::vec fixedSubtraction(m_obsInNode.size(), 0) ;
-  arma::mat incCovariates = dataset.covariateValues ;
-  incCovariates.insert_cols(0, 1) ;
-  incCovariates.col(0).fill(1) ;
-  fixedSubtraction = incCovariates.rows(m_obsInNode) * fixedEffValues ;
-  subResponses -= fixedSubtraction ;
   m_deltaTilde.meanPara = m_UmatList.at(m_depth) * m_SigmaInverse * subResponses ;
   m_deltaTilde.covPara = m_V - GetLM() * m_SigmaInverse * trans(GetLM()) ;
 }
@@ -103,7 +96,7 @@ void TipNode::computeBpred(const spatialcoor & predictLocations, const vec & cov
   }
 }
 
-GaussDistParas TipNode::CombineEtaDelta() {
+GaussDistParas TipNode::CombineEtaDelta(const inputdata & dataset, const vec & fixedEffParas) {
   vec defaultVec(1,0) ;
   mat defaultMat(1,1,fill::zeros) ;
   GaussDistParas estimatesFromRegion(defaultVec, defaultMat) ;
@@ -118,6 +111,14 @@ GaussDistParas TipNode::CombineEtaDelta() {
       covMat += m_Btilde.at(m+1).at(m) * brickList.at(m)->GetEtaDelta().covPara * trans(m_Btilde.at(m+1).at(m)) ;
     }
     meanVec += m_deltaTilde.meanPara ;
+
+    // We need to re-add the mean contribution of the fixed effect parameters, which were subtracted in the beginning with AugTree::CenterResponse
+    vec subResponses = dataset.responseValues.elem(m_obsInNode) ;
+    mat subCovar = dataset.covariateValues.rows(m_obsInNode) ;
+    subCovar.insert_cols(0, 1, TRUE) ;
+    subCovar.col(0).fill(1) ;
+    meanVec += subCovar * fixedEffParas ;
+    //
     covMat += m_deltaTilde.covPara ;
     estimatesFromRegion.meanPara = meanVec ;
     estimatesFromRegion.covPara = covMat ;

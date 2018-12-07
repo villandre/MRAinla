@@ -197,10 +197,11 @@ void AugTree::computeOmegas() {
     uint levelRecast = (uint) level ;
     std::vector<TreeNode *> levelNodes = getLevelNodes(levelRecast) ;
     for (auto & i : levelNodes) {
-      i->DeriveOmega(m_dataset, m_fixedEffParameters) ;
+      i->DeriveOmega(m_dataset) ;
     }
   }
 }
+
 
 void AugTree::computeU() {
   for (int level = m_M; level >= 0 ; level--) {
@@ -235,16 +236,12 @@ mat AugTree::ComputePosteriors(spatialcoor & predictionLocations, double & stepS
 
 std::vector<GaussDistParas> AugTree::ComputeConditionalPrediction(const spatialcoor & predictionLocations) {
   distributePredictionData(predictionLocations) ;
-  // mat incrementedCovar(m_dataset.covariateValues) ;
-  // incrementedCovar.insert_cols(0, 1) ;
-  // incrementedCovar.col(0).fill(1) ;
-  // vec centeredResponses(m_dataset.responseValues.size(), 0) ;
-  // centeredResponses = m_dataset.responseValues - incrementedCovar * m_fixedEffParameters ;
+
   for (int level = m_M; level >= 0 ; level--) {
     uint levelRecast = (uint) level ;
     std::vector<TreeNode *> levelNodes = GetLevel(levelRecast) ;
     for (auto & i : levelNodes) {
-      i->ComputeParasEtaDeltaTilde(predictionLocations, m_dataset, m_fixedEffParameters, m_covParameters) ;
+      i->ComputeParasEtaDeltaTilde(predictionLocations, m_dataset, m_covParameters) ;
     }
   }
   computeBtildeInTips() ;
@@ -258,12 +255,11 @@ std::vector<GaussDistParas> AugTree::ComputeConditionalPrediction(const spatialc
 
   std::vector<GaussDistParas>::iterator outputIterator = distParasFromEachZone.begin() ;
   for (auto & i : tipNodes) {
-    *outputIterator = i->CombineEtaDelta() ;
+    *outputIterator = i->CombineEtaDelta(m_dataset, m_fixedEffParameters) ;
     std::next(outputIterator) ;
   }
   return distParasFromEachZone ;
 }
-
 
 double AugTree::ComputeGlobalLogLik() {
   // First we create the necessary GSL vectors...
@@ -322,4 +318,19 @@ std::vector<TreeNode *> AugTree::GetLevel(const uint level) {
     }
   }
   return nodesAtLevel ;
+}
+
+void AugTree::CleanPredictionComponents() {
+  //TO_DO
+}
+
+void AugTree::CenterResponse() {
+  cout << "Entering CenterResponse() \n" ;
+  mat incrementedCovar = m_dataset.covariateValues ;
+  incrementedCovar.insert_cols(0, 1, TRUE) ;
+  incrementedCovar.col(0).fill(1) ;
+  vec meanVec(m_dataset.responseValues.size(), 0) ;
+  meanVec = incrementedCovar * m_fixedEffParameters ;
+  m_dataset.responseValues -= meanVec ;
+  cout << "Leaving CenterResponse() \n" ;
 }

@@ -28,6 +28,8 @@ public:
   void SetFixedEffParameters(arma::vec & fixedParas) {m_fixedEffParameters = fixedParas ;}
   void SetFixedEffSD(const double & fixedEffSD) {m_fixedEffSD = fixedEffSD ;}
   void SetErrorSD(const double & errorSD) {m_errorSD = errorSD ;}
+  void CleanPredictionComponents() ;
+  void CenterResponse() ;
 
   ~ AugTree() {
     deallocate_container(m_vertexVector) ;

@@ -94,16 +94,16 @@ public:
   virtual void RemoveChildren()=0;
   virtual uint GetM()=0;
   virtual void DeriveAtilde()=0 ;
-  virtual void DeriveOmega(const inputdata &, const arma::vec &)=0 ;
+  virtual void DeriveOmega(const inputdata &)=0 ;
   virtual void DeriveU(const inputdata &)=0 ;
   virtual void DeriveD()=0 ;
   virtual void ComputeWmat(const arma::vec &)=0 ;
-  virtual void ComputeParasEtaDeltaTilde(const spatialcoor &, const inputdata &, const arma::vec &, const arma::vec &)=0 ;
+  virtual void ComputeParasEtaDeltaTilde(const spatialcoor &, const inputdata &, const arma::vec &)=0 ;
   virtual std::vector<std::vector<arma::mat>> GetAlist() const = 0;
   virtual arma::mat GetKtilde() const = 0;
   virtual void deriveBtilde(const spatialcoor & )=0 ;
   virtual void computeBpred(const spatialcoor &, const arma::vec &)=0 ;
-  virtual GaussDistParas CombineEtaDelta()=0 ;
+  virtual GaussDistParas CombineEtaDelta(const inputdata &, const arma::vec &)=0 ;
   virtual GaussDistParas GetEtaDelta() const =0 ;
 
   virtual void genRandomKnots(inputdata &, uint &, const gsl_rng *) = 0;

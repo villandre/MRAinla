@@ -70,7 +70,7 @@ void InternalNode::DeriveAtilde() {
   }
 }
 
-void InternalNode::DeriveOmega(const inputdata & dataset, const arma::vec & fixedEffParas) {
+void InternalNode::DeriveOmega(const inputdata & dataset) {
   vec containerVec ;
   for (uint k = 0; k <= m_depth ; k++) {
     containerVec.resize(m_children.at(0)->GetOmegaTilde(k).size()) ;
@@ -125,7 +125,7 @@ void InternalNode::ComputeWmat(const arma::vec & covParas) {
   m_K = inv_sympd(m_Kinverse) ; // The K matrix is some sort of covariance matrix, so it should always be symmetrical..
 }
 
-void InternalNode::ComputeParasEtaDeltaTilde(const spatialcoor & predictLocations, const inputdata & dataset, const arma::vec & fixedParas, const arma::vec & covParas) {
+void InternalNode::ComputeParasEtaDeltaTilde(const spatialcoor & predictLocations, const inputdata & dataset, const arma::vec & covParas) {
   m_etaTilde.meanPara = m_Ktilde * m_omega.at(m_depth) ;
   m_etaTilde.covPara = m_Ktilde ; // This is repetition. It should not harm memory too much though.
 }
