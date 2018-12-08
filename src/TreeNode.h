@@ -133,6 +133,8 @@ public:
   void completeBknots(const arma::vec &, const uint) ;
   std::vector<arma::mat> GetBknots() const { return m_bKnots ;}
 
+  arma::uvec GetPredictLocIndices() const {return m_predictLocIndices ;}
+
 protected:
 
   TreeNode * m_parent ;

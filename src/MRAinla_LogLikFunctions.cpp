@@ -78,22 +78,34 @@ List logLikMRAcpp(SEXP treePointer, NumericVector & covParameters, NumericVector
 
 // [[Rcpp::export]]
 
-List predictMRArcpp(SEXP treePointer, NumericMatrix predSpatialCoor, IntegerVector predTime) {
+List predictMRArcpp(SEXP treePointer, NumericMatrix predSpatialCoor, IntegerVector predTime, NumericMatrix covariatesAtPredLocs) {
   uvec predictionTime = as<uvec>(predTime) ;
   mat predSp = as<mat>(predSpatialCoor) ;
+  mat predCovariates = as<mat>(covariatesAtPredLocs) ;
   std::vector<GaussDistParas> predsInZones ;
   std::vector<vec> meanVecVec ;
   std::vector<mat> covMatVec ;
+  vec predResponses = zeros<vec>(predictionTime.size()) ;
+  inputdata dataForPreds(predResponses, predSp, predictionTime, predCovariates) ;
 
   if (!(treePointer == NULL))
   {
     XPtr<AugTree> pointedTree(treePointer) ; // Becomes a regular pointer again.
     spatialcoor predLocs(predSp, predictionTime) ;
-    predsInZones = pointedTree->ComputeConditionalPrediction(predLocs) ;
+    predsInZones = pointedTree->ComputeConditionalPrediction(dataForPreds) ;
+    cout << "Entering copy loop... \n" ;
+    printf("Number of zones: %u \n", predsInZones.size()) ;
+    cout << "Indexed value: " << predsInZones.at(0).covPara(0,0) << "\n" ;
+    uint counter = 0 ;
     for (auto & i : predsInZones) {
-      meanVecVec.push_back(i.meanPara) ;
-      covMatVec.push_back(i.covPara) ;
+      if (i.covPara(0,0) != -1) { // A value under 0 on the diagonal indicates that the region had no observations for prediction
+        meanVecVec.push_back(i.meanPara) ;
+        covMatVec.push_back(i.covPara) ;
+        printf("Counter value: %u \n", counter) ;
+        counter += 1 ;
+      }
     }
+    cout << "Leaving copy loop... \n" ;
     pointedTree->CleanPredictionComponents() ;
   }
   else

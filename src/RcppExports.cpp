@@ -42,15 +42,16 @@ BEGIN_RCPP
 END_RCPP
 }
 // predictMRArcpp
-List predictMRArcpp(SEXP treePointer, NumericMatrix predSpatialCoor, IntegerVector predTime);
-RcppExport SEXP _MRAinla_predictMRArcpp(SEXP treePointerSEXP, SEXP predSpatialCoorSEXP, SEXP predTimeSEXP) {
+List predictMRArcpp(SEXP treePointer, NumericMatrix predSpatialCoor, IntegerVector predTime, NumericMatrix covariatesAtPredLocs);
+RcppExport SEXP _MRAinla_predictMRArcpp(SEXP treePointerSEXP, SEXP predSpatialCoorSEXP, SEXP predTimeSEXP, SEXP covariatesAtPredLocsSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
     Rcpp::traits::input_parameter< SEXP >::type treePointer(treePointerSEXP);
     Rcpp::traits::input_parameter< NumericMatrix >::type predSpatialCoor(predSpatialCoorSEXP);
     Rcpp::traits::input_parameter< IntegerVector >::type predTime(predTimeSEXP);
-    rcpp_result_gen = Rcpp::wrap(predictMRArcpp(treePointer, predSpatialCoor, predTime));
+    Rcpp::traits::input_parameter< NumericMatrix >::type covariatesAtPredLocs(covariatesAtPredLocsSEXP);
+    rcpp_result_gen = Rcpp::wrap(predictMRArcpp(treePointer, predSpatialCoor, predTime, covariatesAtPredLocs));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -72,7 +73,7 @@ END_RCPP
 static const R_CallMethodDef CallEntries[] = {
     {"_MRAinla_setupGridCpp", (DL_FUNC) &_MRAinla_setupGridCpp, 10},
     {"_MRAinla_logLikMRAcpp", (DL_FUNC) &_MRAinla_logLikMRAcpp, 5},
-    {"_MRAinla_predictMRArcpp", (DL_FUNC) &_MRAinla_predictMRArcpp, 3},
+    {"_MRAinla_predictMRArcpp", (DL_FUNC) &_MRAinla_predictMRArcpp, 4},
     {"_MRAinla_inla", (DL_FUNC) &_MRAinla_inla, 4},
     {NULL, NULL, 0}
 };

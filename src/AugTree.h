@@ -14,7 +14,7 @@ public:
 
   void ComputeMRAloglik() ;
   double ComputeGlobalLogLik() ;
-  std::vector<GaussDistParas> ComputeConditionalPrediction(const spatialcoor &) ;
+  std::vector<GaussDistParas> ComputeConditionalPrediction(const inputdata &) ;
   arma::mat ComputePosteriors(spatialcoor &, double &) ;
 
   double GetMRAlogLik() const {return m_MRAlogLik ;}

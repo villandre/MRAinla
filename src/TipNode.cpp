@@ -5,9 +5,11 @@ using namespace arma ;
 using namespace MRAinla ;
 
 void TipNode::ComputeParasEtaDeltaTilde(const spatialcoor & predictLocations, const inputdata & dataset, const arma::vec & covParas) {
-  computeUpred(covParas, predictLocations) ;
-  computeVpred(covParas, predictLocations) ;
-  computeDeltaTildeParas(dataset) ;
+  if (m_predictLocIndices.size() > 0) {
+    computeUpred(covParas, predictLocations) ;
+    computeVpred(covParas, predictLocations) ;
+    computeDeltaTildeParas(dataset) ;
+  }
 }
 
 void TipNode::computeUpred(const vec & covParas, const spatialcoor & predictLocations) {
@@ -16,13 +18,11 @@ void TipNode::computeUpred(const vec & covParas, const spatialcoor & predictLoca
     m_UmatList.resize(m_depth + 1) ;
 
     spatialcoor subLocations = predictLocations.subset(m_predictLocIndices) ; // Will I need to invoke the destructor to avoid a memory leak?
-    m_UmatList.at(0) = computeCovMat(subLocations, m_knotsCoor, covParas) ;
+    m_UmatList.at(0) = computeCovMat(subLocations, brickList.at(0)->GetKnotsCoor(), covParas) ;
 
-    mat firstTerm(m_UmatList.at(0).n_rows, m_UmatList.at(0).n_cols) ;
-    mat secondTerm(firstTerm.n_rows, firstTerm.n_cols) ;
     for (uint l = 1; l <= m_depth; l++) {
-      firstTerm = computeCovMat(subLocations, brickList.at(l)->GetKnotsCoor(), covParas) ;
-      secondTerm.fill(0) ;
+      mat firstTerm = computeCovMat(subLocations, brickList.at(l)->GetKnotsCoor(), covParas) ;
+      mat secondTerm(firstTerm.n_rows, firstTerm.n_cols, fill::zeros) ;
       for (uint k = 0 ; k <= l-1; k++) {
          secondTerm += m_UmatList.at(k) * brickList.at(k)->GetKmatrix() * trans(brickList.at(l)->GetWlist().at(k)) ;
       }
@@ -45,9 +45,11 @@ void TipNode::computeVpred(const arma::vec & covParas, const spatialcoor & predi
 };
 
 void TipNode::computeDeltaTildeParas(const inputdata & dataset) {
-  arma::vec subResponses = dataset.responseValues.elem(m_obsInNode) ;
-  m_deltaTilde.meanPara = m_UmatList.at(m_depth) * m_SigmaInverse * subResponses ;
-  m_deltaTilde.covPara = m_V - GetLM() * m_SigmaInverse * trans(GetLM()) ;
+  if (m_predictLocIndices.size() > 0) {
+    arma::vec subResponses = dataset.responseValues.elem(m_obsInNode) ;
+    m_deltaTilde.meanPara = m_UmatList.at(m_depth) * m_SigmaInverse * subResponses ;
+    m_deltaTilde.covPara = m_V - GetLM() * m_SigmaInverse * trans(GetLM()) ;
+  }
 }
 
 void TipNode::deriveBtilde(const spatialcoor & predictLocations) {
@@ -80,8 +82,8 @@ void TipNode::computeBpred(const spatialcoor & predictLocations, const vec & cov
   if (m_predictLocIndices.size() > 0) {
     spatialcoor subLocations = predictLocations.subset(m_predictLocIndices) ;
     m_bPred.resize(m_depth+1) ;
-    m_bPred.at(0) = computeCovMat(subLocations, m_knotsCoor, covParas) ;
     std::vector<TreeNode *> brickList = getAncestors() ;
+    m_bPred.at(0) = computeCovMat(subLocations, brickList.at(0)->GetKnotsCoor(), covParas) ;
 
     for (uint levelIndex = 1 ; levelIndex <= m_depth ; levelIndex++) {
       mat currentV = computeCovMat(subLocations, brickList.at(levelIndex)->GetKnotsCoor(), covParas) -
@@ -97,29 +99,38 @@ void TipNode::computeBpred(const spatialcoor & predictLocations, const vec & cov
 }
 
 GaussDistParas TipNode::CombineEtaDelta(const inputdata & dataset, const vec & fixedEffParas) {
-  vec defaultVec(1,0) ;
-  mat defaultMat(1,1,fill::zeros) ;
+  vec defaultVec = zeros<vec>(1) ;
+  mat defaultMat = zeros<mat>(1,1) ;
+  defaultMat.at(0,0) = -1 ;
   GaussDistParas estimatesFromRegion(defaultVec, defaultMat) ;
 
   if (m_predictLocIndices.size() > 0) {
 
-    vec meanVec(m_predictLocIndices.size(), 0) ;
-    mat covMat(m_predictLocIndices.size(), m_predictLocIndices.size(), fill::zeros) ;
+    vec meanVec = zeros<vec>(m_predictLocIndices.size()) ;
+    mat covMat = zeros<mat>(m_predictLocIndices.size(), m_predictLocIndices.size()) ;
+    estimatesFromRegion.meanPara.resize(meanVec.size()) ;
+    estimatesFromRegion.covPara.resize(covMat.n_rows, covMat.n_cols) ;
     std::vector<TreeNode *> brickList = getAncestors() ;
     for (uint m=0 ; m <= m_depth-1 ; m++) {
+      printf("In loop in CombineEtaDelta... Iteration %u, updating mean... \n", m) ;
       meanVec += m_Btilde.at(m+1).at(m) * brickList.at(m)->GetEtaDelta().meanPara ;
+      printf("Done. Updating cov... \n") ;
       covMat += m_Btilde.at(m+1).at(m) * brickList.at(m)->GetEtaDelta().covPara * trans(m_Btilde.at(m+1).at(m)) ;
+      cout << "Done. \n" ;
     }
+    cout << "Adding m_deltaTilde.meanPara. \n" ;
     meanVec += m_deltaTilde.meanPara ;
-
+    cout << "Done. \n" ;
     // We need to re-add the mean contribution of the fixed effect parameters, which were subtracted in the beginning with AugTree::CenterResponse
-    vec subResponses = dataset.responseValues.elem(m_obsInNode) ;
-    mat subCovar = dataset.covariateValues.rows(m_obsInNode) ;
-    subCovar.insert_cols(0, 1, TRUE) ;
-    subCovar.col(0).fill(1) ;
+
+    mat subCovar = dataset.covariateValues.rows(m_predictLocIndices) ;
+    vec interceptVec = ones<vec>(m_predictLocIndices.size()) ;
+    subCovar.insert_cols(0, interceptVec) ;
     meanVec += subCovar * fixedEffParas ;
     //
     covMat += m_deltaTilde.covPara ;
+    covMat.print("Covariance matrix:") ;
+    meanVec.print("Mean vector:") ;
     estimatesFromRegion.meanPara = meanVec ;
     estimatesFromRegion.covPara = covMat ;
   }

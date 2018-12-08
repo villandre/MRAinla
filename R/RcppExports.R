@@ -9,8 +9,8 @@ logLikMRAcpp <- function(treePointer, covParameters, fixedEffectParameters, erro
     .Call('_MRAinla_logLikMRAcpp', PACKAGE = 'MRAinla', treePointer, covParameters, fixedEffectParameters, errorSD, fixedEffSD)
 }
 
-predictMRArcpp <- function(treePointer, predSpatialCoor, predTime) {
-    .Call('_MRAinla_predictMRArcpp', PACKAGE = 'MRAinla', treePointer, predSpatialCoor, predTime)
+predictMRArcpp <- function(treePointer, predSpatialCoor, predTime, covariatesAtPredLocs) {
+    .Call('_MRAinla_predictMRArcpp', PACKAGE = 'MRAinla', treePointer, predSpatialCoor, predTime, covariatesAtPredLocs)
 }
 
 inla <- function(treePointer, predictionLocations, predictionTime, stepSize) {
