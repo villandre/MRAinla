@@ -112,15 +112,12 @@ GaussDistParas TipNode::CombineEtaDelta(const inputdata & dataset, const vec & f
     estimatesFromRegion.covPara.resize(covMat.n_rows, covMat.n_cols) ;
     std::vector<TreeNode *> brickList = getAncestors() ;
     for (uint m=0 ; m <= m_depth-1 ; m++) {
-      printf("In loop in CombineEtaDelta... Iteration %u, updating mean... \n", m) ;
       meanVec += m_Btilde.at(m+1).at(m) * brickList.at(m)->GetEtaDelta().meanPara ;
-      printf("Done. Updating cov... \n") ;
       covMat += m_Btilde.at(m+1).at(m) * brickList.at(m)->GetEtaDelta().covPara * trans(m_Btilde.at(m+1).at(m)) ;
-      cout << "Done. \n" ;
     }
-    cout << "Adding m_deltaTilde.meanPara. \n" ;
+
     meanVec += m_deltaTilde.meanPara ;
-    cout << "Done. \n" ;
+
     // We need to re-add the mean contribution of the fixed effect parameters, which were subtracted in the beginning with AugTree::CenterResponse
 
     mat subCovar = dataset.covariateValues.rows(m_predictLocIndices) ;
@@ -129,8 +126,6 @@ GaussDistParas TipNode::CombineEtaDelta(const inputdata & dataset, const vec & f
     meanVec += subCovar * fixedEffParas ;
     //
     covMat += m_deltaTilde.covPara ;
-    covMat.print("Covariance matrix:") ;
-    meanVec.print("Mean vector:") ;
     estimatesFromRegion.meanPara = meanVec ;
     estimatesFromRegion.covPara = covMat ;
   }

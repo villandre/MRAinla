@@ -93,19 +93,13 @@ List predictMRArcpp(SEXP treePointer, NumericMatrix predSpatialCoor, IntegerVect
     XPtr<AugTree> pointedTree(treePointer) ; // Becomes a regular pointer again.
     spatialcoor predLocs(predSp, predictionTime) ;
     predsInZones = pointedTree->ComputeConditionalPrediction(dataForPreds) ;
-    cout << "Entering copy loop... \n" ;
-    printf("Number of zones: %u \n", predsInZones.size()) ;
-    cout << "Indexed value: " << predsInZones.at(0).covPara(0,0) << "\n" ;
-    uint counter = 0 ;
+
     for (auto & i : predsInZones) {
       if (i.covPara(0,0) != -1) { // A value under 0 on the diagonal indicates that the region had no observations for prediction
         meanVecVec.push_back(i.meanPara) ;
         covMatVec.push_back(i.covPara) ;
-        printf("Counter value: %u \n", counter) ;
-        counter += 1 ;
       }
     }
-    cout << "Leaving copy loop... \n" ;
     pointedTree->CleanPredictionComponents() ;
   }
   else

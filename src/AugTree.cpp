@@ -236,35 +236,25 @@ mat AugTree::ComputePosteriors(spatialcoor & predictionLocations, double & stepS
 
 std::vector<GaussDistParas> AugTree::ComputeConditionalPrediction(const inputdata & predictionData) {
   distributePredictionData(predictionData) ;
-  cout << "Entering ComputeConditionalPrediction... \n" ;
+
   for (int level = m_M; level >= 0 ; level--) {
-    printf("Processing level %u. \n", level) ;
     uint levelRecast = (uint) level ;
     std::vector<TreeNode *> levelNodes = GetLevel(levelRecast) ;
     for (auto & i : levelNodes) {
       i->ComputeParasEtaDeltaTilde(predictionData, m_dataset, m_covParameters) ;
     }
   }
-  cout << "Entering computeBtildeInTips... \n" ;
   computeBtildeInTips() ;
-  cout << "Leaving computeBtildeInTips... \n" ;
+
   std::vector<vec> predictionsFromEachSection ;
   std::vector<TreeNode *> tipNodes = GetLevel(m_M) ;
-  printf("Number of tips: %u \n", tipNodes.size()) ;
-  std::vector<GaussDistParas> distParasFromEachZone(tipNodes.size()) ;
-  // std::transform(tipNodes.begin(), tipNodes.end(), distParasFromEachZone, [] (TreeNode * node) {
-  //   return node->CombineEtaDelta() ; // Check the ordering of observations.
-  // }) ;
-  cout << "Entering combination phase (CombineEtaDelta)... \n" ;
-  std::vector<GaussDistParas>::iterator outputIterator = distParasFromEachZone.begin() ;
-  uint numObs = 0 ;
+
+  std::vector<GaussDistParas> distParasFromEachZone ;
+
   for (auto & i : tipNodes) {
-    numObs += i->GetPredictLocIndices().size() ;
-    *outputIterator = i->CombineEtaDelta(predictionData, m_fixedEffParameters) ;
-    std::next(outputIterator) ;
+    distParasFromEachZone.push_back(i->CombineEtaDelta(predictionData, m_fixedEffParameters)) ;
   }
-  printf("Number of predictions registered in tips: %u \n", numObs) ;
-  cout << "Leaving ComputeConditionalPrediction... \n" ;
+
   return distParasFromEachZone ;
 }
 
@@ -295,24 +285,20 @@ void AugTree::computeBtildeInTips() {
     nodesAtLevels.at(i) = GetLevel(i) ;
   }
   // The two following loops cannot be joined.
-  cout << "Initiating bKnots... \n" ;
   for (uint level = 1; level <= m_M ; level++) {
     for (auto & i : nodesAtLevels.at(level)) {
       i->initiateBknots(m_covParameters) ;
     }
   }
-  cout << "Done. Completing bKnots... \n" ;
   for (uint level = 1; level < m_M ; level++) {
     for (auto & i : nodesAtLevels.at(level+1)) {
       i->completeBknots(m_covParameters, level) ;
     }
   }
-  cout << "Done. Computing Bpred and Btilde... \n" ;
   for (auto & i : nodesAtLevels.at(m_M)) {
     i->computeBpred(m_predictLocations, m_covParameters) ;
     i->deriveBtilde(m_predictLocations) ;
   }
-  cout << "Done. Leaving computeBtildeInTips. \n" ;
 }
 
 std::vector<TreeNode *> AugTree::GetLevel(const uint level) {
