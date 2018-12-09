@@ -36,7 +36,7 @@ void TipNode::computeVpred(const arma::vec & covParas, const spatialcoor & predi
     std::vector<TreeNode *> brickList = getAncestors() ;
     spatialcoor subLocations = predictLocations.subset(m_predictLocIndices) ;
     mat firstTerm = computeCovMat(subLocations, subLocations, covParas) ;
-    mat secondTerm(firstTerm.n_rows, firstTerm.n_cols) ;
+    mat secondTerm = zeros<mat>(firstTerm.n_rows, firstTerm.n_cols) ;
     for (uint k = 0 ; k <= m_depth-1; k++) {
       secondTerm += m_UmatList.at(k) * brickList.at(k)->GetKmatrix() * trans(m_UmatList.at(k)) ;
     }
