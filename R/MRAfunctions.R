@@ -535,3 +535,15 @@ predict.Spacetimegrid <- function(gridObj, spacetimeCoor, cl = NULL) {
   lapply(gridObj$childBricks, internalFun)
   invisible()
 }
+
+predictMRA <- function(treePointer, predictLocations, timePoints, covariatesForPreds) {
+  predictions <- predictMRArcpp(treePointer = treePointer, predSpatialCoor = predictLocations, predTime = timePoints, covariatesAtPredLocs = covariatesForPreds)
+  predictions$means <- do.call("c", predictions$means)
+  predictions$covar <- lapply(predictions$covMatricesNoDim, function(x) {
+    numRows <- numCols <- sqrt(length(x))
+    dim(x) <- c(numRows, numCols)
+    x
+  })
+  predictions <- predictions[-which(names(predictions) == "covMatricesNoDim")]
+  predictions
+}

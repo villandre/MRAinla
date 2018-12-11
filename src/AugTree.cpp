@@ -240,8 +240,10 @@ std::vector<GaussDistParas> AugTree::ComputeConditionalPrediction(const inputdat
   for (int level = m_M; level >= 0 ; level--) {
     uint levelRecast = (uint) level ;
     std::vector<TreeNode *> levelNodes = GetLevel(levelRecast) ;
-    for (auto & i : levelNodes) {
-      i->ComputeParasEtaDeltaTilde(predictionData, m_dataset, m_covParameters) ;
+    #pragma omp parallel for
+    for (std::vector<TreeNode *>::iterator it = levelNodes.begin(); it < levelNodes.end(); it++) {
+    // for (auto & i : levelNodes) {
+      (*it)->ComputeParasEtaDeltaTilde(predictionData, m_dataset, m_covParameters) ;
     }
   }
   computeBtildeInTips() ;
@@ -250,9 +252,10 @@ std::vector<GaussDistParas> AugTree::ComputeConditionalPrediction(const inputdat
   std::vector<TreeNode *> tipNodes = GetLevel(m_M) ;
 
   std::vector<GaussDistParas> distParasFromEachZone ;
-
-  for (auto & i : tipNodes) {
-    distParasFromEachZone.push_back(i->CombineEtaDelta(predictionData, m_fixedEffParameters)) ;
+  #pragma omp parallel for
+  for (std::vector<TreeNode *>::iterator it = tipNodes.begin(); it < tipNodes.end(); it++) {
+  // for (auto & i : tipNodes) {
+    distParasFromEachZone.push_back((*it)->CombineEtaDelta(predictionData, m_fixedEffParameters)) ;
   }
 
   return distParasFromEachZone ;
