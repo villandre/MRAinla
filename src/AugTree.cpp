@@ -20,6 +20,9 @@ AugTree::AugTree(uint & M, vec & lonRange, vec & latRange, uvec & timeRange, vec
   m_fixedEffParameters.resize(m_dataset.covariateValues.n_cols + 1) ; // An extra 1 is added to take into account the intercept.
 
   BuildTree(minObsForTimeSplit) ;
+  for (uint i = 0 ; i < m_vertexVector.size() ; i++) {
+    m_vertexVector.at(i)->SetId(i) ;
+  }
 }
 
 void AugTree::BuildTree(const uint & minObsForTimeSplit)
@@ -329,4 +332,70 @@ void AugTree::CenterResponse() {
   vec meanVec = vec(m_dataset.covariateValues.n_rows) ;
   meanVec = incrementedCovar * m_fixedEffParameters ;
   m_dataset.responseValues -= meanVec ;
+}
+
+arma::sp_mat AugTree::createSigmaStarInverse() {
+  std::vector<mat *> KinverseAndBetaMatrixList = getKmatricesInversePointers() ;
+  mat SigmaBetaInverse = eye<mat>(m_fixedEffParameters.size(), m_fixedEffParameters.size())/m_covParameters.at(0) ; // Make sure those parameters are named.
+  KinverseAndBetaMatrixList.push_back(&SigmaBetaInverse) ;
+  sp_mat SigmaStarInverse = createSparseMatrix(KinverseAndBetaMatrixList) ;
+  return SigmaStarInverse ;
+}
+
+arma::sp_mat AugTree::createHstar() {
+  sp_mat Fmatrix = createFmatrix() ;
+  vec intercept = ones<vec>(m_dataset.covariateValues.n_rows) ;
+  mat covarCopy = m_dataset.covariateValues ;
+  covarCopy.insert_cols(0, intercept) ;
+  sp_mat incrementedCovar = conv_to<sp_mat>::from(covarCopy) ;
+
+  sp_mat Hstar = join_rows(Fmatrix, incrementedCovar) ;
+  return Hstar ;
+}
+
+arma::sp_mat AugTree::createFmatrix() {
+  uint numKnotsTotal = 0 ;
+
+  for (auto & i : m_vertexVector) {
+    numKnotsTotal += i->GetKnotsCoor().timeCoords.size() ;
+  }
+  sp_mat Fmat(m_dataset.timeCoords.size(), numKnotsTotal) ;
+  std::vector<TreeNode *> tipNodes = getLevelNodes(m_M) ;
+
+ for (auto & i : tipNodes) {
+   uint numKnots = i->GetKnotsCoor().timeCoords.size() ;
+   std::vector<uint> ancestorIds = i->GetAncestorIds() ;
+   std::vector<uint> placementIds(ancestorIds.size()) ;
+
+   for (uint index = 0 ; index < placementIds.size() ; index++) {
+     uint numKnotsPartial = 0 ;
+     uint vertexToReach = ancestorIds.at(index) ;
+
+     for(uint innerIndex = 0 ; innerIndex < vertexToReach ; innerIndex++) {
+       numKnotsPartial += m_vertexVector.at(innerIndex)->GetKnotsCoor().timeCoords.size() ;
+     }
+     placementIds.at(index) = numKnotsPartial ;
+   }
+   uint jCounter = 0 ;
+
+   for (auto & j : i->GetObsInNode()) {
+     for (uint k = 0 ; k < placementIds.size() - 1; k++) {
+       Fmat.submat(j, placementIds.at(k), j, placementIds.at(k) + numKnots) = i->GetB(k).row(jCounter) ;
+     }
+     // We still need to specify B^M_{j_1, ..., j_M}: thanks to the correspondence between observations and knots
+     // at the finest resolution, we have that B^M_{j_1, ..., j_M} = Sigma_{j_1, ..., j_M}
+     Fmat.submat(j, placementIds.back(), j, placementIds.back() + numKnots) = i->GetSigma() ;
+     jCounter += 1 ;
+   }
+ }
+ return Fmat ;
+}
+
+arma::sp_mat AugTree::createQ() {
+  sp_mat Hstar = createHstar() ;
+  sp_mat SigmaStarInverse = createSigmaStarInverse() ;
+  sp_mat TmatrixInverse(m_dataset.timeCoords.size(), m_dataset.timeCoords.size()) ;
+  TmatrixInverse.diag().fill(1/m_covParameters.at(0)) ;
+  sp_mat Qmat = trans(Hstar) * TmatrixInverse * Hstar + SigmaStarInverse;
+  return Qmat ;
 }

@@ -70,6 +70,17 @@ public:
   GaussDistParas CombineEtaDelta(const inputdata &, const arma::vec &) ;
   GaussDistParas GetEtaDelta() const { return m_deltaTilde ;}
 
+  arma::mat GetB(const uint & l) {
+    if (l == m_depth) {
+      throw Rcpp::exception("Trying to get B^M(j_1, ..., j_M)... \n") ;
+    }
+    return m_Wlist.at(l) ;
+  }
+
+  arma::mat GetSigma() {
+    return m_Wlist.at(m_depth) ;
+  }
+
   void genRandomKnots(inputdata & dataset, uint & numKnots, const gsl_rng * RNG) {
     m_knotsCoor = spatialcoor(dataset.spatialCoords.rows(m_obsInNode),
                               dataset.timeCoords.elem(m_obsInNode)) ;
@@ -83,20 +94,9 @@ public:
 
 protected:
 
-  arma::mat GetB(const uint & l) {
-    if (l == m_depth) {
-      throw Rcpp::exception("Trying to get B^M(j_1, ..., j_M)... \n") ;
-    }
-    return m_Wlist.at(l) ;
-  }
-
   std::vector<arma::mat> GetBlist() {
     return m_Wlist ;
   };
-
-  arma::mat GetSigma() {
-    return m_Wlist.at(m_depth) ;
-  }
 
   arma::mat m_SigmaInverse ;
 

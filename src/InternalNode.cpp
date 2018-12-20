@@ -54,6 +54,9 @@ void InternalNode::DeriveAtilde() {
       m_Alist.at(k).at(l) = containerMat ;
     }
   }
+  for (auto & i : m_children) {
+    i->clearAtildeList() ;
+  }
   m_KtildeInverse = m_Kinverse + m_Alist.at(m_depth).at(m_depth) ;
   // if (!m_KtildeInverse.is_symmetric(1e-4)) {
   //   throw Rcpp::exception("KtildeInverse is a precision matrix and should be symmetric.\n") ;
@@ -80,6 +83,9 @@ void InternalNode::DeriveOmega(const inputdata & dataset) {
                                      return a + b->GetOmegaTilde(k);
                                    }) ;
     m_omega.at(k) = containerVec ;
+  }
+  for (auto & i : m_children) {
+    i->clearOmegaTilde() ;
   }
   for (uint k = 0; k <= m_depth ; k++) {
     vec secondTerm = trans(m_Alist.at(m_depth).at(k)) * m_Ktilde * m_omega.at(m_depth) ;

@@ -30,6 +30,9 @@ public:
   void SetErrorSD(const double & errorSD) {m_errorSD = errorSD ;}
   void CleanPredictionComponents() ;
   void CenterResponse() ;
+  arma::sp_mat createHstar() ;
+  arma::sp_mat createSigmaStarInverse() ;
+  arma::sp_mat createQ() ;
 
   ~ AugTree() {
     deallocate_container(m_vertexVector) ;
@@ -79,6 +82,14 @@ private:
   void distributePredictionData(const spatialcoor &) ;
   void computeBtildeInTips() ;
   spatialcoor m_predictLocations ;
+
+  // INLA functions
+  std::vector<arma::mat *> getKmatricesInversePointers() {
+    std::vector<arma::mat *> KmatrixInverseList ;
+    for (auto & i : m_vertexVector) KmatrixInverseList.push_back(i->GetKmatrixInverseAddress()) ;
+    return KmatrixInverseList ;
+  }
+  arma::sp_mat createFmatrix() ;
 };
 }
 #endif

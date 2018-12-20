@@ -105,6 +105,8 @@ public:
   virtual void computeBpred(const spatialcoor &, const arma::vec &)=0 ;
   virtual GaussDistParas CombineEtaDelta(const inputdata &, const arma::vec &)=0 ;
   virtual GaussDistParas GetEtaDelta() const =0 ;
+  virtual arma::mat GetB(const uint & l)=0 ;
+  virtual arma::mat GetSigma()=0 ;
 
   virtual void genRandomKnots(inputdata &, uint &, const gsl_rng *) = 0;
 
@@ -116,11 +118,15 @@ public:
   arma::mat GetOmegaTilde(uint & k) { return m_omegaTilde.at(k) ;}
   spatialcoor GetKnotsCoor() {return m_knotsCoor;}
   arma::mat GetKmatrix() {return m_K ;}
+  arma::mat * GetKmatrixAddress() {return &m_K ;}
+  arma::mat * GetKmatrixInverseAddress() { return &m_Kinverse ;}
   arma::mat GetKmatrixInverse() {return m_Kinverse ;}
   std::vector<arma::mat>& GetWlist() {return m_Wlist ;}
+  uint GetNodeId() { return m_nodeId ;}
 
   double GetU() {return m_u ;}
   double GetD() {return m_d ;}
+  void SetNodeId(const uint i) { m_nodeId = i ;}
 
   ~ TreeNode() { } ;
 
@@ -134,6 +140,15 @@ public:
   std::vector<arma::mat> GetBknots() const { return m_bKnots ;}
 
   arma::uvec GetPredictLocIndices() const {return m_predictLocIndices ;}
+  void clearAtildeList() {m_AtildeList.clear() ;}
+  void clearOmegaTilde() {m_omegaTilde.clear() ;}
+
+  std::vector<uint> GetAncestorIds() {
+    std::vector<TreeNode *> ancestorsList = getAncestors() ;
+    std::vector<uint> ancestorIds(ancestorsList.size()) ;
+    std::transform(ancestorsList.begin(), ancestorsList.end(), ancestorIds.begin(), [] (TreeNode * treeNode) {treeNode->GetNodeId() ;}) ;
+    return ancestorIds ;
+  }
 
 protected:
 
@@ -142,6 +157,7 @@ protected:
   uint m_depth ;
   dimensions m_dimensions ; // First dimension is longitude, second is latitude, last is time.
   spatialcoor m_knotsCoor ;  // First element is spatial coordinates (longitude, latitude), second is time.
+  uint m_nodeId ;
 
   std::vector<std::vector<arma::mat>>& GetAtildeList() {return m_AtildeList ;}
   void baseComputeWmat(const arma::vec &) ;

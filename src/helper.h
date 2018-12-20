@@ -23,4 +23,25 @@ template <typename T> inline void deallocate_container(T& c) {
     delete *i;
 };
 
+arma::sp_mat createSparseMatrix(std::vector<arma::mat *> listOfMatrices) {
+  int numMatrices = listOfMatrices.size() ;
+  int dimen = 0 ;
+  arma::ivec dimvec(numMatrices) ;
+
+  for(unsigned int i = 0; i < numMatrices; i++) {
+    dimvec[i] = listOfMatrices.at(i)->n_rows ;
+    dimen += dimvec[i] ;
+  }
+
+  arma::sp_mat X(dimen, dimen);
+  int idx=0;
+
+  for(unsigned int i = 0; i < numMatrices; i++) {
+    X.submat( idx, idx, idx + dimvec[i] - 1, idx + dimvec[i] - 1 ) = *(listOfMatrices.at(i)) ;
+    idx = idx + dimvec[i] ;
+  }
+
+  return(X);
+}
+
 #endif /* HELPER_H */

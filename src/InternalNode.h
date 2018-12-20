@@ -30,6 +30,8 @@ public:
   void computeBpred(const spatialcoor & x1, const arma::vec & x2) { throw Rcpp::exception("Bpred should only be computed in tips. \n") ;}
   GaussDistParas CombineEtaDelta(const inputdata &, const arma::vec &) { throw Rcpp::exception("Combination should only occur in tip nodes. \n") ;}
   GaussDistParas GetEtaDelta() const { return m_etaTilde ;}
+  arma::mat GetB(const uint & l) { throw Rcpp::exception("Trying to get B matrix in internal node.\n") ;}
+  arma::mat GetSigma() { throw Rcpp::exception("Trying to get Sigma matrix in internal node.\n") ;}
 
   void genRandomKnots(inputdata &, uint &, const gsl_rng *) ;
 
