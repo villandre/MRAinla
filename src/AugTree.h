@@ -12,15 +12,21 @@ public:
 
   std::vector<TreeNode *> GetVertexVector() {return m_vertexVector ;} ;
 
-  void ComputeMRAloglik() ;
-  double ComputeGlobalLogLik() ;
+  double ComputePriors(const arma::vec &, const double, const double, const double, const double) ;
+
+  double ComputeMRAloglik(const arma::vec &, const bool) ;
   std::vector<GaussDistParas> ComputeConditionalPrediction(const inputdata &) ;
   arma::mat ComputePosteriors(spatialcoor &, double &) ;
+  double ComputeJointPsiPrior(arma::vec & meanVec, double sigmaPsi) ;
+  double ComputeJointCondTheta(arma::vec &, arma::vec &) ;
+  double ComputeGlobalLogLik(const arma::vec &, const arma::vec &, const double) ;
+  double ComputeFullConditional(arma::vec &) ;
 
-  double GetMRAlogLik() const {return m_MRAlogLik ;}
+  // double GetMRAlogLik() const {return m_MRAlogLik ;}
   gsl_rng * GetRandomNumGenerator() {return m_randomNumGenerator ;}
   inputdata GetDataset() {return m_dataset;}
   uint GetNumTips() {return m_numTips ;}
+  arma::vec GetCovParameters() {return m_covParameters ;}
 
   void SetRNG(gsl_rng * myRNG) { m_randomNumGenerator = myRNG ;}
 
@@ -33,6 +39,8 @@ public:
   arma::sp_mat createHstar() ;
   arma::sp_mat createSigmaStarInverse() ;
   arma::sp_mat createQ() ;
+
+  double ComputeJointPsiMarginal() ;
 
   ~ AugTree() {
     deallocate_container(m_vertexVector) ;
@@ -71,9 +79,9 @@ private:
 
   void computeWmats() ;
   void deriveAtildeMatrices() ;
-  void computeOmegas() ;
+  void computeOmegas(const arma::vec &) ;
 
-  void computeU() ;
+  void computeU(const arma::vec &) ;
   void computeD() ;
 
   // Prediction functions

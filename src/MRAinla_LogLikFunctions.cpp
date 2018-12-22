@@ -50,24 +50,30 @@ SEXP setupGridCpp(NumericVector responseValues, NumericMatrix spCoords, IntegerV
 
 // [[Rcpp::export]]
 
-List logLikMRAcpp(SEXP treePointer, NumericVector & covParameters, NumericVector & fixedEffectParameters, double & errorSD, double & fixedEffSD)
+List logLikMRAcpp(SEXP treePointer, NumericVector & covParameters, NumericVector & fixedEffectParameters,
+                  double & errorSD, double & fixedEffSD, NumericVector & fieldValues)
 {
   //omp_set_num_threads(numOpenMP) ;
   double logLikVal = 0;
   vec fixedEffVec = as<vec>(fixedEffectParameters) ;
   vec covParVec = as<vec>(covParameters) ;
+  vec fieldValuesVec = as<vec>(fieldValues) ;
   if (!(treePointer == NULL))
   {
     XPtr<AugTree> pointedTree(treePointer) ; // Becomes a regular pointer again.
+    bool testEqual = false ;
+    if (covParVec.size() == pointedTree->GetCovParameters().size()) {
+      testEqual = approx_equal(covParVec, pointedTree->GetCovParameters(), "absdiff", 1e-6) ;
+    } // If covariance parameters haven't changed since the last evaluation, there's no need to re-run functions involving only covariance calculations.
+
     pointedTree->SetCovParameters(covParVec) ;
     pointedTree->SetFixedEffParameters(fixedEffVec) ;
     pointedTree->SetErrorSD(errorSD) ;
     pointedTree->SetFixedEffSD(fixedEffSD) ;
-    pointedTree->CenterResponse() ;
+    // pointedTree->CenterResponse() ;
 
-    pointedTree->ComputeMRAloglik() ;
+    logLikVal = pointedTree->ComputeMRAloglik(fieldValuesVec, testEqual) ;
     // pointedTree->ComputeGlobalLogLik() ;
-    logLikVal = pointedTree->GetMRAlogLik() ;
   }
   else
   {

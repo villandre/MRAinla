@@ -94,8 +94,8 @@ public:
   virtual void RemoveChildren()=0;
   virtual uint GetM()=0;
   virtual void DeriveAtilde()=0 ;
-  virtual void DeriveOmega(const inputdata &)=0 ;
-  virtual void DeriveU(const inputdata &)=0 ;
+  virtual void DeriveOmega(const arma::vec &)=0 ;
+  virtual void DeriveU(const arma::vec &)=0 ;
   virtual void DeriveD()=0 ;
   virtual void ComputeWmat(const arma::vec &)=0 ;
   virtual void ComputeParasEtaDeltaTilde(const spatialcoor &, const inputdata &, const arma::vec &)=0 ;

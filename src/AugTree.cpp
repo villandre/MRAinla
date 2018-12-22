@@ -1,5 +1,6 @@
 #include <cmath>
 #include <omp.h>
+#include <gsl/gsl_randist.h>
 
 #include "AugTree.h"
 #include "TipNode.h"
@@ -15,13 +16,15 @@ AugTree::AugTree(uint & M, vec & lonRange, vec & latRange, uvec & timeRange, vec
   m_dataset = inputdata(observations, obsSp, obsTime, covariates) ;
   m_mapDimensions = dimensions(lonRange, latRange, timeRange) ;
   m_randomNumGenerator = gsl_rng_alloc(gsl_rng_taus) ;
+  m_covParameters.resize(1) ;
+  m_covParameters.fill(-1.5e6) ;
 
   gsl_rng_set(m_randomNumGenerator, seed) ;
   m_fixedEffParameters.resize(m_dataset.covariateValues.n_cols + 1) ; // An extra 1 is added to take into account the intercept.
 
   BuildTree(minObsForTimeSplit) ;
   for (uint i = 0 ; i < m_vertexVector.size() ; i++) {
-    m_vertexVector.at(i)->SetId(i) ;
+    m_vertexVector.at(i)->SetNodeId(i) ;
   }
 }
 
@@ -131,24 +134,28 @@ void AugTree::generateKnots(TreeNode * node) {
   }
 }
 
-void AugTree::ComputeMRAloglik()
+double AugTree::ComputeMRAloglik(const vec & responseValues, const bool sameCovParametersTest)
 {
-  cout << "Entering ComputeLoglik \n" ;
-  computeWmats() ;
-  cout << "Entering deriveAtildeMatrices \n" ;
-  deriveAtildeMatrices() ;
+  if (!sameCovParametersTest) {
+    cout << "Entering ComputeLoglik \n" ;
+    computeWmats() ;
+    cout << "Entering deriveAtildeMatrices \n" ;
+    deriveAtildeMatrices() ;
+  }
   cout << "Entering computeOmegas \n" ;
-  computeOmegas() ;
+  computeOmegas(responseValues) ;
   cout << "Entering computeU \n" ;
-  computeU() ;
+  computeU(responseValues) ;
   cout << "Entering computeD \n" ;
-  computeD() ;
+  if (!sameCovParametersTest) {
+    computeD() ;
+  }
   cout << "Finalising evaluation \n" ;
   // The log-likelihood is a function of d and u computed at the root node, being at the
   // head of m_vertexVector, since it's the first one we ever created.
   double tempLogLik = (m_vertexVector.at(0)->GetD() + m_vertexVector.at(0)->GetU()) ;
   tempLogLik = -tempLogLik/2 ;
-  m_MRAlogLik = tempLogLik ;
+  return tempLogLik ;
 }
 
 void AugTree::computeWmats() {
@@ -167,7 +174,6 @@ void AugTree::computeWmats() {
       (*it)->ComputeWmat(m_covParameters) ;
     }
   }
-
 }
 
 std::vector<TreeNode *> AugTree::getLevelNodes(uint & level) {
@@ -195,23 +201,22 @@ void AugTree::deriveAtildeMatrices() {
   }
 }
 
-void AugTree::computeOmegas() {
+void AugTree::computeOmegas(const vec & responseValues) {
   for (int level = m_M; level >= 0 ; level--) {
     uint levelRecast = (uint) level ;
     std::vector<TreeNode *> levelNodes = getLevelNodes(levelRecast) ;
     for (auto & i : levelNodes) {
-      i->DeriveOmega(m_dataset) ;
+      i->DeriveOmega(responseValues) ;
     }
   }
 }
 
-
-void AugTree::computeU() {
+void AugTree::computeU(const vec & responseValues) {
   for (int level = m_M; level >= 0 ; level--) {
     uint levelRecast = (uint) level ;
     std::vector<TreeNode *> levelNodes = getLevelNodes(levelRecast) ;
     for (auto & i : levelNodes) {
-      i->DeriveU(m_dataset) ;
+      i->DeriveU(responseValues) ;
     }
   }
 };
@@ -264,16 +269,16 @@ std::vector<GaussDistParas> AugTree::ComputeConditionalPrediction(const inputdat
   return distParasFromEachZone ;
 }
 
-double AugTree::ComputeGlobalLogLik() {
+double AugTree::ComputeGlobalLogLik(const vec & fixedEffParams, const vec & responseValues, const double errorSD) {
   // First we create the necessary GSL vectors...
   mat incrementedCovar(m_dataset.covariateValues) ;
   incrementedCovar.insert_cols(0, 1) ;
   incrementedCovar.col(0).fill(1) ;
   vec meanVec(m_dataset.responseValues.size(), 0) ;
-  meanVec = incrementedCovar * m_fixedEffParameters + m_spatialComponents ;
-  vec sdVec(m_dataset.responseValues.size(), m_errorSD) ;
+  meanVec = incrementedCovar * fixedEffParams + responseValues ;
+  vec sdVec(m_dataset.responseValues.size(), errorSD) ;
   vec logDensVec(m_dataset.responseValues.size(), 0) ;
-  logDensVec = log(normpdf(m_dataset.responseValues, meanVec, sdVec)) ;
+  logDensVec = log(normpdf(responseValues, meanVec, sdVec)) ;
   return sum(logDensVec) ;
 }
 
@@ -398,4 +403,33 @@ arma::sp_mat AugTree::createQ() {
   TmatrixInverse.diag().fill(1/m_covParameters.at(0)) ;
   sp_mat Qmat = trans(Hstar) * TmatrixInverse * Hstar + SigmaStarInverse;
   return Qmat ;
+}
+
+double AugTree::ComputeJointPsiMarginal() {
+
+}
+
+// For now, we assume that all hyperpriors have an inverse gamma distribution with the same parameters.
+
+double AugTree::ComputePriors(const arma::vec & MRAhyperPriorVec, const double errorSD, const double fixedParamSD, const double hyperAlpha, const double hyperBeta) {
+  vec hyperPriorVec = MRAhyperPriorVec ;
+  hyperPriorVec.resize(hyperPriorVec.size() + 2) ;
+  hyperPriorVec(MRAhyperPriorVec.size()) = errorSD ;
+  hyperPriorVec(MRAhyperPriorVec.size() + 1) = fixedParamSD ;
+  vec invertedValues = 1/hyperPriorVec ;
+  vec logContributions(invertedValues.size(), fill::zeros) ;
+  double a = 1.1 ;
+  double test = gsl_ran_gamma_pdf(a,a,a) ;
+  std::transform(invertedValues.begin(), invertedValues.end(), logContributions.begin(),
+                 [hyperAlpha, hyperBeta] (double & invertedValue) {return log(gsl_ran_gamma_pdf(invertedValue, hyperAlpha, hyperBeta)) + 2*log(invertedValue) ;}) ;
+}
+
+double AugTree::ComputeJointCondTheta(const arma::vec & responseValues, const arma::vec & MRAcovParameters, const arma::vec fixedEffParams, const double fixedEffSD, const double errorSD) {
+  bool firstTest = (m_errorSD == errorSD) ;
+  bool secondTest = (m_fixedEffSD == fixedEffSD) ;
+  bool thirdTest = false ;
+  if (MRAcovParameters.size() == m_MRAcovParas.size()) {
+    thirdTest = approx_equal(m_MRAcovParas, MRAcovParameters, "abs_diff", 1e-06) ;
+  }
+  ComputeMRAloglik(responseValues, firstTest & secondTest & thirdTest) ;
 }

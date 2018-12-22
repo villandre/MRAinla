@@ -19,8 +19,8 @@ public:
     return currentAddress->GetDepth() ;
   }
   void DeriveAtilde() ;
-  void DeriveOmega(const inputdata &) ;
-  void DeriveU(const inputdata &) ;
+  void DeriveOmega(const arma::vec &) ;
+  void DeriveU(const arma::vec &) ;
   void DeriveD() ;
   void ComputeWmat(const arma::vec &) ;
   void ComputeParasEtaDeltaTilde(const spatialcoor &, const inputdata &, const arma::vec &) ;

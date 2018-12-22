@@ -73,7 +73,7 @@ void InternalNode::DeriveAtilde() {
   }
 }
 
-void InternalNode::DeriveOmega(const inputdata & dataset) {
+void InternalNode::DeriveOmega(const arma::vec & responseValues) {
   vec containerVec ;
   for (uint k = 0; k <= m_depth ; k++) {
     containerVec.resize(m_children.at(0)->GetOmegaTilde(k).size()) ;
@@ -93,7 +93,7 @@ void InternalNode::DeriveOmega(const inputdata & dataset) {
   }
 }
 
-void InternalNode::DeriveU(const inputdata & dataset) {
+void InternalNode::DeriveU(const arma::vec & responseValues) {
   mat firstTerm = -trans(m_omega.at(m_depth)) * m_Ktilde * m_omega.at(m_depth) ;
   double secondTerm = 0 ;
   secondTerm = std::accumulate(m_children.begin(), m_children.end(), secondTerm,

@@ -26,9 +26,9 @@ public:
     }
   }
 
-  void DeriveOmega(const inputdata & dataset) {
+  void DeriveOmega(const arma::vec & responseValues) {
 
-    arma::vec subResponses = dataset.responseValues.elem(m_obsInNode) ;
+    arma::vec subResponses = responseValues.elem(m_obsInNode) ;
 
     // std::transform(GetBlist().begin(), std::prev(GetBlist().end()), m_omegaTilde.begin(),
     // [this, subResponses] (arma::mat & Bmatrix) {
@@ -41,9 +41,9 @@ public:
     }
   }
 
-  void DeriveU(const inputdata & dataset) {
-    arma::mat uInMat = arma::trans(dataset.responseValues.elem(m_obsInNode)) * m_SigmaInverse *
-      dataset.responseValues.elem(m_obsInNode) ;
+  void DeriveU(const arma::vec & responseValues) {
+    arma::mat uInMat = arma::trans(responseValues.elem(m_obsInNode)) * m_SigmaInverse *
+      responseValues.elem(m_obsInNode) ;
     m_u = uInMat.at(0,0) ; // uInMat is supposed to be a 1x1 matrix.
   }
 
