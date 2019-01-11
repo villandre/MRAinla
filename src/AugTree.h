@@ -12,25 +12,23 @@ public:
 
   std::vector<TreeNode *> GetVertexVector() {return m_vertexVector ;} ;
 
-  double ComputePriors(const arma::vec &, const double, const double, const double, const double) ;
-
-  double ComputeMRAloglik(const arma::vec &, const bool) ;
+  double ComputeMRAlogLik(const arma::vec &, const bool) ;
   std::vector<GaussDistParas> ComputeConditionalPrediction(const inputdata &) ;
   arma::mat ComputePosteriors(spatialcoor &, double &) ;
-  double ComputeJointPsiPrior(arma::vec & meanVec, double sigmaPsi) ;
-  double ComputeJointCondTheta(arma::vec &, arma::vec &) ;
+  double ComputeLogJointCondTheta(const arma::vec &, const arma::vec &, const arma::vec &, const double, const double) ;
   double ComputeGlobalLogLik(const arma::vec &, const arma::vec &, const double) ;
-  double ComputeFullConditional(arma::vec &) ;
+  double ComputeLogFullConditional(const arma::vec &, const arma::vec &) ;
+  double ComputeLogPriors(const arma::vec &, const double, const double, const double, const double) ;
 
   // double GetMRAlogLik() const {return m_MRAlogLik ;}
   gsl_rng * GetRandomNumGenerator() {return m_randomNumGenerator ;}
   inputdata GetDataset() {return m_dataset;}
   uint GetNumTips() {return m_numTips ;}
-  arma::vec GetCovParameters() {return m_covParameters ;}
+  // arma::vec GetCovParameters() {return m_covParameters ;}
 
   void SetRNG(gsl_rng * myRNG) { m_randomNumGenerator = myRNG ;}
 
-  void SetCovParameters(arma::vec & covParas) {m_covParameters = covParas ;}
+  // void SetCovParameters(arma::vec & covParas) {m_covParameters = covParas ;}
   void SetFixedEffParameters(arma::vec & fixedParas) {m_fixedEffParameters = fixedParas ;}
   void SetFixedEffSD(const double & fixedEffSD) {m_fixedEffSD = fixedEffSD ;}
   void SetErrorSD(const double & errorSD) {m_errorSD = errorSD ;}
@@ -40,7 +38,7 @@ public:
   arma::sp_mat createSigmaStarInverse() ;
   arma::sp_mat createQ() ;
 
-  double ComputeJointPsiMarginal() ;
+  double ComputeJointPsiMarginal(const arma::vec &, const double, const double, const double, const double) ;
 
   ~ AugTree() {
     deallocate_container(m_vertexVector) ;
@@ -60,7 +58,7 @@ private:
   double m_fixedEffSD ;
   arma::vec m_spatialComponents ;
 
-  arma::vec m_covParameters ;
+  arma::vec m_MRAcovParas ;
   arma::vec m_fixedEffParameters ;
 
   dimensions m_mapDimensions;
