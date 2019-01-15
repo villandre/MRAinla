@@ -135,3 +135,26 @@ NumericMatrix inla(SEXP treePointer, NumericMatrix predictionLocations, IntegerV
   }
   return Rcpp::wrap(posteriorMatrix) ;
 }
+
+// [[Rcpp::export]]
+
+double funForOptimJointHyperMarginal(SEXP treePointer, Rcpp::NumericVector MRAhyperparas, double fixedEffSD, double errorSD, double hyperAlpha, double hyperBeta) {
+  arma::mat posteriorMatrix ;
+  double outputValue = 0 ;
+
+  if (!(treePointer == NULL))
+  {
+    XPtr<AugTree> pointedTree(treePointer) ; // Becomes a regular pointer again.
+    vec MRAvalues(pointedTree->GetDataset().responseValues.size(), fill::zeros) ;
+    vec fixedParValues(pointedTree->GetDataset().covariateValues.n_cols + 1, fill::zeros) ;
+    outputValue = pointedTree->ComputeGlobalLogLik(MRAvalues, fixedParValues, errorSD) +
+      pointedTree->ComputeLogJointCondTheta(MRAvalues, MRAhyperparas, fixedParValues, fixedEffSD, errorSD) +
+      pointedTree->ComputeLogPriors(MRAhyperparas, errorSD, fixedEffSD, hyperAlpha, hyperBeta) -
+      pointedTree->ComputeLogFullConditional(MRAvalues, fixedParValues) ; // The dependence with the MRA hyperparameters is already entered in the tree. It's been processed when computing the MRA log-lik. expression.
+    }
+  else
+  {
+    throw Rcpp::exception("Pointer to MRA grid is null." ) ;
+  }
+  return outputValue ;
+}

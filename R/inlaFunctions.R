@@ -28,26 +28,21 @@
 #' }
 #' @export
 
-MRA_INLA <- function(covarianceFct, gridObj, numKnots, hyperpriorFunList) {
-  hyperpriorNames <- names(hyperpriorFunList)
-  covarianceParas <- hyperpriorNames[!(hyperpriorNames == "MEvar")]
+MRA_INLA <- function(responseValues, spacetimeData, errorSDstart, fixedEffSDstart, MRAhyperparasStart, M, lonRange, latRange, timeRange, randomSeed, cutForTimeSplit = 400, hyperAlpha, hyperBeta) {
+  dataCoordinates <- spacetimeData@sp
+  timeValues <- as.integer(spacetimeData@time)
+  covariateMatrix <- spacetimeData@data[, -1]
+  gridPointer <- setupGridCpp(responseValues, dataCoordinates, timeValues, covariateMatrix, M, lonRange, latRange, timeRange, randomSeed, cutForTimeSplit)
+  # First we compute values relating to the hyperprior marginal distribution...
+  xStartValues <- c(MRAhyperparasStart, fixedEffSDstart, errorSDstart)
+  numMRAhyperparas <- length(MRAhyperparasStart)
+  funForOptim <- function(x) {
+    funForOptimJointHyperMarginal(gridPointer, x[1:numMRAhyperparas], x[numMRAhyperparas+1], x[numMRAhyperparas+2], hyperAlpha, hyperBeta)
+  }
+  optimResult <- optim(par = xStartValues, fn = funForOptim, hessian = TRUE)
+  hyperMode <- optimResult$par
+  hyperHessian <- optimResult$hessian
 
-  respAndCovValues <- gridObj$dataset@data
-  psiFun <- function(psi) { # Values of psi must be named! The element for the measurement error variance must be named "MEvar".
-    prod(sapply(seq_along(hyperpriorFunList), function(hyperIndex) hyperpriorFunList[hyperIndex](psi[hyperIndex])))
-  }
-  dataLikFun <- function(x, mean, variance) {
-    dnorm(x = x, mean = mean, sd = sqrt(variance))
-  }
-  MRAlikFun <- function(gridObj, spacetimeTheta, hyperpara) {
-    covFct <- function(spacetime1, spacetime2) {
-      covarianceHyperValuesAsList <- as.list(hyperpara[covarianceParas])
-      do.call("covarianceFct", args = c(list(spacetime1 = spacetime1, spacetime2 = spacetime2), covarianceHyperValuesAsList))
-    }
-    .populateObservations(gridObj, spacetimeTheta) # Maybe computational gains could be obtained if the thetas could be directly assigned to the different regions.
-    computeLogLik(gridObj = gridObj, covFct = covarianceFct)
-  }
-  .makeMarginalPsiFun(gridObj, psiPriorFun = psiFun, MRAlikFun = MRAlikFun, dataLikFun = dataLikFun)
 }
 
 # MRAprecision will have to be coded as block diagonal to ensure tractability.
