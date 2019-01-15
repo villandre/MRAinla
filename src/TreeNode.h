@@ -146,7 +146,7 @@ public:
   std::vector<uint> GetAncestorIds() {
     std::vector<TreeNode *> ancestorsList = getAncestors() ;
     std::vector<uint> ancestorIds(ancestorsList.size()) ;
-    std::transform(ancestorsList.begin(), ancestorsList.end(), ancestorIds.begin(), [] (TreeNode * treeNode) {treeNode->GetNodeId() ;}) ;
+    std::transform(ancestorsList.begin(), ancestorsList.end(), ancestorIds.begin(), [] (TreeNode * treeNode) {return treeNode->GetNodeId() ;}) ;
     return ancestorIds ;
   }
 

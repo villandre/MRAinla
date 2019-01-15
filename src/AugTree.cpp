@@ -425,8 +425,11 @@ double AugTree::ComputeLogFullConditional(const arma::vec & MRAvalues, const arm
   vec meanVec = QmatInverse * bVec ;
   vec thetaValues = join_rows(MRAvalues, fixedEffCoefs) ;
   vec centeredThetas = thetaValues - meanVec ;
+  double val;
+  double sign;
+  log_det(val, sign, QmatInverse) ;
   double logDensPart1 = - 0.5 * QmatInverse.n_rows * (log((double) 2) +
-                          log((double) datum::pi)) + 0.5 *log_det(QmatInverse) ;
+                          log(M_PI)) + 0.5 * sign * val ;
   mat logDensPart2 = 0.5 * trans(centeredThetas) * QmatInverse * centeredThetas ;
   return logDensPart1 - logDensPart2(0,0) ;
 }

@@ -42,7 +42,7 @@ MRA_INLA <- function(responseValues, spacetimeData, errorSDstart, fixedEffSDstar
   optimResult <- optim(par = xStartValues, fn = funForOptim, hessian = TRUE)
   hyperMode <- optimResult$par
   hyperHessian <- optimResult$hessian
-
+  list(hyperDistMode = hyperMode, hessianAtMode = hyperHessian)
 }
 
 # MRAprecision will have to be coded as block diagonal to ensure tractability.

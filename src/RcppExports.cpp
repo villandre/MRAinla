@@ -26,55 +26,26 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
-// logLikMRAcpp
-List logLikMRAcpp(SEXP treePointer, NumericVector& covParameters, NumericVector& fixedEffectParameters, double& errorSD, double& fixedEffSD);
-RcppExport SEXP _MRAinla_logLikMRAcpp(SEXP treePointerSEXP, SEXP covParametersSEXP, SEXP fixedEffectParametersSEXP, SEXP errorSDSEXP, SEXP fixedEffSDSEXP) {
+// funForOptimJointHyperMarginal
+double funForOptimJointHyperMarginal(SEXP treePointer, Rcpp::NumericVector MRAhyperparas, double fixedEffSD, double errorSD, double hyperAlpha, double hyperBeta);
+RcppExport SEXP _MRAinla_funForOptimJointHyperMarginal(SEXP treePointerSEXP, SEXP MRAhyperparasSEXP, SEXP fixedEffSDSEXP, SEXP errorSDSEXP, SEXP hyperAlphaSEXP, SEXP hyperBetaSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
     Rcpp::traits::input_parameter< SEXP >::type treePointer(treePointerSEXP);
-    Rcpp::traits::input_parameter< NumericVector& >::type covParameters(covParametersSEXP);
-    Rcpp::traits::input_parameter< NumericVector& >::type fixedEffectParameters(fixedEffectParametersSEXP);
-    Rcpp::traits::input_parameter< double& >::type errorSD(errorSDSEXP);
-    Rcpp::traits::input_parameter< double& >::type fixedEffSD(fixedEffSDSEXP);
-    rcpp_result_gen = Rcpp::wrap(logLikMRAcpp(treePointer, covParameters, fixedEffectParameters, errorSD, fixedEffSD));
-    return rcpp_result_gen;
-END_RCPP
-}
-// predictMRArcpp
-List predictMRArcpp(SEXP treePointer, NumericMatrix predSpatialCoor, IntegerVector predTime, NumericMatrix covariatesAtPredLocs);
-RcppExport SEXP _MRAinla_predictMRArcpp(SEXP treePointerSEXP, SEXP predSpatialCoorSEXP, SEXP predTimeSEXP, SEXP covariatesAtPredLocsSEXP) {
-BEGIN_RCPP
-    Rcpp::RObject rcpp_result_gen;
-    Rcpp::RNGScope rcpp_rngScope_gen;
-    Rcpp::traits::input_parameter< SEXP >::type treePointer(treePointerSEXP);
-    Rcpp::traits::input_parameter< NumericMatrix >::type predSpatialCoor(predSpatialCoorSEXP);
-    Rcpp::traits::input_parameter< IntegerVector >::type predTime(predTimeSEXP);
-    Rcpp::traits::input_parameter< NumericMatrix >::type covariatesAtPredLocs(covariatesAtPredLocsSEXP);
-    rcpp_result_gen = Rcpp::wrap(predictMRArcpp(treePointer, predSpatialCoor, predTime, covariatesAtPredLocs));
-    return rcpp_result_gen;
-END_RCPP
-}
-// inla
-NumericMatrix inla(SEXP treePointer, NumericMatrix predictionLocations, IntegerVector predictionTime, double stepSize);
-RcppExport SEXP _MRAinla_inla(SEXP treePointerSEXP, SEXP predictionLocationsSEXP, SEXP predictionTimeSEXP, SEXP stepSizeSEXP) {
-BEGIN_RCPP
-    Rcpp::RObject rcpp_result_gen;
-    Rcpp::RNGScope rcpp_rngScope_gen;
-    Rcpp::traits::input_parameter< SEXP >::type treePointer(treePointerSEXP);
-    Rcpp::traits::input_parameter< NumericMatrix >::type predictionLocations(predictionLocationsSEXP);
-    Rcpp::traits::input_parameter< IntegerVector >::type predictionTime(predictionTimeSEXP);
-    Rcpp::traits::input_parameter< double >::type stepSize(stepSizeSEXP);
-    rcpp_result_gen = Rcpp::wrap(inla(treePointer, predictionLocations, predictionTime, stepSize));
+    Rcpp::traits::input_parameter< Rcpp::NumericVector >::type MRAhyperparas(MRAhyperparasSEXP);
+    Rcpp::traits::input_parameter< double >::type fixedEffSD(fixedEffSDSEXP);
+    Rcpp::traits::input_parameter< double >::type errorSD(errorSDSEXP);
+    Rcpp::traits::input_parameter< double >::type hyperAlpha(hyperAlphaSEXP);
+    Rcpp::traits::input_parameter< double >::type hyperBeta(hyperBetaSEXP);
+    rcpp_result_gen = Rcpp::wrap(funForOptimJointHyperMarginal(treePointer, MRAhyperparas, fixedEffSD, errorSD, hyperAlpha, hyperBeta));
     return rcpp_result_gen;
 END_RCPP
 }
 
 static const R_CallMethodDef CallEntries[] = {
     {"_MRAinla_setupGridCpp", (DL_FUNC) &_MRAinla_setupGridCpp, 10},
-    {"_MRAinla_logLikMRAcpp", (DL_FUNC) &_MRAinla_logLikMRAcpp, 5},
-    {"_MRAinla_predictMRArcpp", (DL_FUNC) &_MRAinla_predictMRArcpp, 4},
-    {"_MRAinla_inla", (DL_FUNC) &_MRAinla_inla, 4},
+    {"_MRAinla_funForOptimJointHyperMarginal", (DL_FUNC) &_MRAinla_funForOptimJointHyperMarginal, 6},
     {NULL, NULL, 0}
 };
 
