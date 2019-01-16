@@ -147,14 +147,21 @@ double funForOptimJointHyperMarginal(SEXP treePointer, Rcpp::NumericVector MRAhy
     XPtr<AugTree> pointedTree(treePointer) ; // Becomes a regular pointer again.
     vec MRAvalues(pointedTree->GetDataset().responseValues.size(), fill::zeros) ;
     vec fixedParValues(pointedTree->GetDataset().covariateValues.n_cols + 1, fill::zeros) ;
-    outputValue = pointedTree->ComputeGlobalLogLik(MRAvalues, fixedParValues, errorSD) +
-      pointedTree->ComputeLogJointCondTheta(MRAvalues, MRAhyperparas, fixedParValues, fixedEffSD, errorSD) +
-      pointedTree->ComputeLogPriors(MRAhyperparas, errorSD, fixedEffSD, hyperAlpha, hyperBeta) -
-      pointedTree->ComputeLogFullConditional(MRAvalues, fixedParValues) ; // The dependence with the MRA hyperparameters is already entered in the tree. It's been processed when computing the MRA log-lik. expression.
-    }
+    cout << "Computing global log-likelihood... \n" ;
+    double globalLogLik = pointedTree->ComputeGlobalLogLik(MRAvalues, fixedParValues, errorSD) ;
+    cout << "Computing joint conditional theta contribution... \n" ;
+    double logJointCondTheta = pointedTree->ComputeLogJointCondTheta(MRAvalues, MRAhyperparas, fixedParValues, fixedEffSD) ;
+    cout << "Computing log-priors contribution... \n" ;
+    double logPriors = pointedTree->ComputeLogPriors(MRAhyperparas, errorSD, fixedEffSD, hyperAlpha, hyperBeta) ;
+    cout << "Computing full conditional contribution... \n" ;
+    double logFullConditional = pointedTree->ComputeLogFullConditional(MRAvalues, fixedParValues) ; // The dependence with the MRA hyperparameters is already entered in the tree. It's been processed when computing the MRA log-lik. expression.
+    cout << "Computing unstandardised p(Psi | y) \n" ;
+    outputValue = globalLogLik + logJointCondTheta + logPriors - logFullConditional ;
+  }
   else
   {
     throw Rcpp::exception("Pointer to MRA grid is null." ) ;
   }
   return outputValue ;
 }
+

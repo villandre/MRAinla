@@ -12,10 +12,10 @@ public:
 
   std::vector<TreeNode *> GetVertexVector() {return m_vertexVector ;} ;
 
-  double ComputeMRAlogLik(const arma::vec &, const bool) ;
+  double ComputeMRAlogLik(const arma::vec &, const arma::vec &) ;
   std::vector<GaussDistParas> ComputeConditionalPrediction(const inputdata &) ;
   arma::mat ComputePosteriors(spatialcoor &, double &) ;
-  double ComputeLogJointCondTheta(const arma::vec &, const arma::vec &, const arma::vec &, const double, const double) ;
+  double ComputeLogJointCondTheta(const arma::vec &, const arma::vec &, const arma::vec &, const double) ;
   double ComputeGlobalLogLik(const arma::vec &, const arma::vec &, const double) ;
   double ComputeLogFullConditional(const arma::vec &, const arma::vec &) ;
   double ComputeLogPriors(const arma::vec &, const double, const double, const double, const double) ;

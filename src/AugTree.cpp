@@ -134,18 +134,26 @@ void AugTree::generateKnots(TreeNode * node) {
   }
 }
 
-double AugTree::ComputeMRAlogLik(const vec & responseValues, const bool sameCovParametersTest)
+double AugTree::ComputeMRAlogLik(const vec & thetaValues, const vec & MRAcovParas)
 {
+  cout << "Entering ComputeLoglik \n" ;
+  bool sameCovParametersTest = false ;
+  if (MRAcovParas.size() == m_MRAcovParas.size()) {
+    sameCovParametersTest = approx_equal(m_MRAcovParas, MRAcovParas, "abs_diff", 1e-06) ;
+  }
+  printf("Equality test %i \n", sameCovParametersTest) ;
   if (!sameCovParametersTest) {
-    cout << "Entering ComputeLoglik \n" ;
+    m_MRAcovParas = MRAcovParas ;
+    cout << "Entering computeWmats \n" ;
+    m_MRAcovParas.print("MRA cov. parameters: ") ;
     computeWmats() ;
     cout << "Entering deriveAtildeMatrices \n" ;
     deriveAtildeMatrices() ;
   }
   cout << "Entering computeOmegas \n" ;
-  computeOmegas(responseValues) ;
+  computeOmegas(thetaValues) ;
   cout << "Entering computeU \n" ;
-  computeU(responseValues) ;
+  computeU(thetaValues) ;
   cout << "Entering computeD \n" ;
   if (!sameCovParametersTest) {
     computeD() ;
@@ -347,18 +355,21 @@ arma::sp_mat AugTree::createHstar() {
 
 arma::sp_mat AugTree::createFmatrix() {
   uint numKnotsTotal = 0 ;
-
+  cout << "Creating F matrix... \n" ;
   for (auto & i : m_vertexVector) {
     numKnotsTotal += i->GetKnotsCoor().timeCoords.size() ;
   }
+  printf("Number of knots: %i \n", numKnotsTotal) ;
   sp_mat Fmat(m_dataset.timeCoords.size(), numKnotsTotal) ;
   std::vector<TreeNode *> tipNodes = getLevelNodes(m_M) ;
 
  for (auto & i : tipNodes) {
-   uint numKnots = i->GetKnotsCoor().timeCoords.size() ;
-   std::vector<uint> ancestorIds = i->GetAncestorIds() ;
-   std::vector<uint> placementIds(ancestorIds.size()) ;
+  uint numKnots = i->GetKnotsCoor().timeCoords.size() ;
+  std::vector<uint> ancestorIds = i->GetAncestorIds() ;
 
+  std::vector<uint> placementIds(ancestorIds.size()) ;
+  cout << "Ancestor IDs: \n" ;
+  for(auto & anc : ancestorIds) cout << anc << "\n" ;
    for (uint index = 0 ; index < placementIds.size() ; index++) {
      uint numKnotsPartial = 0 ;
      uint vertexToReach = ancestorIds.at(index) ;
@@ -369,17 +380,20 @@ arma::sp_mat AugTree::createFmatrix() {
      placementIds.at(index) = numKnotsPartial ;
    }
    uint jCounter = 0 ;
-
+   cout << "Placement IDs: \n" ;
+   for(auto & anc : placementIds) cout << anc << "\n" ;
    for (auto & j : i->GetObsInNode()) {
      for (uint k = 0 ; k < placementIds.size() - 1; k++) {
-       Fmat.submat(j, placementIds.at(k), j, placementIds.at(k) + numKnots) = i->GetB(k).row(jCounter) ;
+       uint numElements = i->GetB(k).n_cols ;
+       Fmat.submat(j, placementIds.at(k), j, placementIds.at(k) + numElements) = i->GetB(k).row(jCounter) ;
      }
      // We still need to specify B^M_{j_1, ..., j_M}: thanks to the correspondence between observations and knots
      // at the finest resolution, we have that B^M_{j_1, ..., j_M} = Sigma_{j_1, ..., j_M}
-     Fmat.submat(j, placementIds.back(), j, placementIds.back() + numKnots) = i->GetSigma() ;
+     Fmat.submat(j, placementIds.back(), j, placementIds.back() + numKnots) = i->GetSigma().row(jCounter) ;
      jCounter += 1 ;
    }
  }
+ cout << "Returning F matrix... \n" ;
  return Fmat ;
 }
 
@@ -398,14 +412,9 @@ double AugTree::ComputeLogPriors(const arma::vec & MRAhyperPriorVec, const doubl
   return sum(logContributions) ;
 }
 
-double AugTree::ComputeLogJointCondTheta(const arma::vec & MRAvalues, const arma::vec & MRAcovParameters, const arma::vec & fixedEffParams, const double fixedEffSD, const double errorSD) {
-  bool firstTest = (m_errorSD == errorSD) ;
-  bool secondTest = (m_fixedEffSD == fixedEffSD) ;
-  bool thirdTest = false ;
-  if (MRAcovParameters.size() == m_MRAcovParas.size()) {
-    thirdTest = approx_equal(m_MRAcovParas, MRAcovParameters, "abs_diff", 1e-06) ;
-  }
-  double MRAlogLik = ComputeMRAlogLik(MRAvalues, firstTest & secondTest & thirdTest) ;
+double AugTree::ComputeLogJointCondTheta(const arma::vec & MRAvalues, const arma::vec & MRAcovParameters, const arma::vec & fixedEffParams, const double fixedEffSD) {
+
+  double MRAlogLik = ComputeMRAlogLik(MRAvalues, MRAcovParameters) ;
   double fixedEffMean = 0 ;
   double fixedEffLogLik = 0 ;
   for (auto & i : fixedEffParams) {
@@ -414,12 +423,18 @@ double AugTree::ComputeLogJointCondTheta(const arma::vec & MRAvalues, const arma
   return (MRAlogLik + fixedEffLogLik) ;
 }
 
+
 double AugTree::ComputeLogFullConditional(const arma::vec & MRAvalues, const arma::vec & fixedEffCoefs) {
+  cout << "Creating Hstar... \n" ;
   sp_mat Hstar = createHstar() ;
+  cout << "Creating SigmaStarInverse... \n" ;
   sp_mat SigmaStarInverse = createSigmaStarInverse() ;
+  cout << "Creating Tmatrix... \n" ;
   sp_mat TmatrixInverse(m_dataset.timeCoords.size(), m_dataset.timeCoords.size()) ;
   TmatrixInverse.diag().fill(1/m_MRAcovParas.at(0)) ;
+  cout << "Creating Qmat... \n" ;
   sp_mat Qmat = trans(Hstar) * TmatrixInverse * Hstar + SigmaStarInverse ;
+  cout << "Computing bVec... \n" ;
   vec bVec = trans(Hstar) * TmatrixInverse * m_dataset.responseValues + SigmaStarInverse ;
   mat QmatInverse = inv_sympd(conv_to<mat>::from(Qmat)) ;
   vec meanVec = QmatInverse * bVec ;
@@ -428,6 +443,7 @@ double AugTree::ComputeLogFullConditional(const arma::vec & MRAvalues, const arm
   double val;
   double sign;
   log_det(val, sign, QmatInverse) ;
+  cout << "Finalising density evaluation..." ;
   double logDensPart1 = - 0.5 * QmatInverse.n_rows * (log((double) 2) +
                           log(M_PI)) + 0.5 * sign * val ;
   mat logDensPart2 = 0.5 * trans(centeredThetas) * QmatInverse * centeredThetas ;
@@ -435,13 +451,14 @@ double AugTree::ComputeLogFullConditional(const arma::vec & MRAvalues, const arm
 }
 
 double AugTree::ComputeGlobalLogLik(const arma::vec & MRAvalues, const arma::vec & fixedEffParams, const double errorSD) {
-  mat incrementedCovar(m_dataset.covariateValues) ;
+  mat incrementedCovar = m_dataset.covariateValues ;
   incrementedCovar.insert_cols(0, 1) ;
   incrementedCovar.col(0).fill(1) ;
-  vec meanVec(m_dataset.responseValues.size(), 0) ;
+  vec meanVec(m_dataset.responseValues.size(), fill::zeros) ;
   meanVec = incrementedCovar * fixedEffParams + MRAvalues ;
-  vec sdVec(m_dataset.responseValues.size(), errorSD) ;
-  vec logDensVec(m_dataset.responseValues.size(), 0) ;
+  vec sdVec(m_dataset.responseValues.size(), fill::zeros) ;
+  sdVec.fill(errorSD) ;
+  vec logDensVec(m_dataset.responseValues.size(), fill::zeros) ;
   logDensVec = log(normpdf(m_dataset.responseValues, meanVec, sdVec)) ;
   return sum(logDensVec) ;
 }
@@ -453,7 +470,7 @@ double AugTree::ComputeJointPsiMarginal(const arma::vec & MRAhyperparas, const d
   vec fixedEffCoefs(m_dataset.responseValues.size(), fill::zeros) ;
   double totalLogLik = ComputeGlobalLogLik(MRAvalues, fixedEffCoefs, errorSD) ;
   double logPrior = ComputeLogPriors(MRAhyperparas, errorSD, fixedEffSD, hyperAlpha, hyperBeta) ;
-  double logCondDist = ComputeLogJointCondTheta(MRAvalues, MRAhyperparas, fixedEffCoefs, fixedEffSD, errorSD) ;
+  double logCondDist = ComputeLogJointCondTheta(MRAvalues, MRAhyperparas, fixedEffCoefs, fixedEffSD) ;
   double logFullCond = ComputeLogFullConditional(MRAvalues, fixedEffCoefs) ;
   return logPrior + logCondDist + totalLogLik - logFullCond ;
 }
