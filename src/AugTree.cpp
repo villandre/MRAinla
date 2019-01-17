@@ -359,42 +359,27 @@ arma::sp_mat AugTree::createFmatrix() {
   for (auto & i : m_vertexVector) {
     numKnotsTotal += i->GetKnotsCoor().timeCoords.size() ;
   }
-  printf("Number of knots: %i \n", numKnotsTotal) ;
   sp_mat Fmat(m_dataset.timeCoords.size(), numKnotsTotal) ;
   std::vector<TreeNode *> tipNodes = getLevelNodes(m_M) ;
 
- for (auto & i : tipNodes) {
-  uint numKnots = i->GetKnotsCoor().timeCoords.size() ;
-  std::vector<uint> ancestorIds = i->GetAncestorIds() ;
+  uvec verticalBoundaryVec(m_M, fill::zeros) ;
 
-  std::vector<uint> placementIds(ancestorIds.size()) ;
-  cout << "Ancestor IDs: \n" ;
-  for(auto & anc : ancestorIds) cout << anc << "\n" ;
-   for (uint index = 0 ; index < placementIds.size() ; index++) {
-     uint numKnotsPartial = 0 ;
-     uint vertexToReach = ancestorIds.at(index) ;
+  for (uint resolution = 1 ; resolution <= m_M ; resolution++) {
+    std::vector<TreeNode *> levelNodes = getLevelNodes(m_M) ;
+    uint numKnotsAtLevel = 0 ;
+    for (auto & nodes : levelNodes) {
+      numKnotsAtLevel += nodes->GetKnotsCoor().timeCoords.size() ;
+    }
+    verticalBoundaryVec(resolution) = verticalBoundaryVec(resolution - 1) + numKnotsAtLevel;
+  }
 
-     for(uint innerIndex = 0 ; innerIndex < vertexToReach ; innerIndex++) {
-       numKnotsPartial += m_vertexVector.at(innerIndex)->GetKnotsCoor().timeCoords.size() ;
-     }
-     placementIds.at(index) = numKnotsPartial ;
-   }
-   uint jCounter = 0 ;
-   cout << "Placement IDs: \n" ;
-   for(auto & anc : placementIds) cout << anc << "\n" ;
-   for (auto & j : i->GetObsInNode()) {
-     for (uint k = 0 ; k < placementIds.size() - 1; k++) {
-       uint numElements = i->GetB(k).n_cols ;
-       Fmat.submat(j, placementIds.at(k), j, placementIds.at(k) + numElements) = i->GetB(k).row(jCounter) ;
-     }
-     // We still need to specify B^M_{j_1, ..., j_M}: thanks to the correspondence between observations and knots
-     // at the finest resolution, we have that B^M_{j_1, ..., j_M} = Sigma_{j_1, ..., j_M}
-     Fmat.submat(j, placementIds.back(), j, placementIds.back() + numKnots) = i->GetSigma().row(jCounter) ;
-     jCounter += 1 ;
-   }
- }
- cout << "Returning F matrix... \n" ;
- return Fmat ;
+  for (uint resolution = 0; resolution <= m_M ; resolution++) {
+    for (auto & i : tipNodes) {
+
+    }
+  }
+  cout << "Returning F matrix... \n" ;
+  return Fmat ;
 }
 
 // For now, we assume that all hyperpriors have an inverse gamma distribution with the same parameters.
