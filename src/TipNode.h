@@ -71,10 +71,10 @@ public:
   GaussDistParas GetEtaDelta() const { return m_deltaTilde ;}
 
   arma::mat GetB(const uint & l) {
-    if (l == m_depth) {
-      throw Rcpp::exception("Trying to get B^M(j_1, ..., j_M)... \n") ;
+    if (l > m_depth) {
+      throw Rcpp::exception("Trying to get B^l(j_1, ..., j_M) with l > M! \n") ;
     }
-    return m_Wlist.at(l) ;
+    return m_Wlist.at(l) ; // This works for l = M because knot positions in tips correspond to observation positions. It wouldn't be valid otherwise.
   }
 
   arma::mat GetSigma() {

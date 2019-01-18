@@ -353,33 +353,103 @@ arma::sp_mat AugTree::createHstar() {
   return Hstar ;
 }
 
+// Very long fonction. Should probably be shortened...
+// The F mat is a huge sparse matrix with number of rows (columns) equal to the total
+// number of observations (knots).
+// The function starts by inputting in Fmat matrices at resolution M (in a block-diagonal fashion).
+// All matrices added to F are taken from m_BmatList(resolution) in the tip nodes,
+// with resolution = M at this point.
+// To make sure there's correspondence in rows between matrices inputted at all resolutions
+// the function creates a parent matrix for all sets of siblings at the level currently considered.
+// This matrix is a combination of m_BmatList(resolution - 1) across siblings.
+// The matrices created are bound in a list.
+// Once all sets of siblings at a given resolution have been processed, the algorithm moves
+// up to resolution = resolution - 1.  The list of matrices created previously must now be processed.
+// To do that, the algorithm follows the same steps outlined before (initially, the list
+// considered was made up of m_BmatList(m_M) for all tip nodes).
+// The algorithm ends when resolution 0 is reached.
+
 arma::sp_mat AugTree::createFmatrix() {
-  uint numKnotsTotal = 0 ;
   cout << "Creating F matrix... \n" ;
+  uint numKnotsTotal = 0 ;
+
   for (auto & i : m_vertexVector) {
-    numKnotsTotal += i->GetKnotsCoor().timeCoords.size() ;
+    numKnotsTotal += i->GetNumKnots() ;
   }
+
   sp_mat Fmat(m_dataset.timeCoords.size(), numKnotsTotal) ;
   std::vector<TreeNode *> tipNodes = getLevelNodes(m_M) ;
+  std::vector<std::pair<TreeNode *, mat>> currentLevelMatrices ;
+  std::vector<std::pair<TreeNode *, mat>> parentLevelMatrices ;
+  uint horizontalBoundary ;
+  uint verticalBoundary = numKnotsTotal ; // Vertical boundary starts on the right of the very last knot.
 
-  uvec verticalBoundaryVec(m_M, fill::zeros) ;
-
-  for (uint resolution = 1 ; resolution <= m_M ; resolution++) {
-    std::vector<TreeNode *> levelNodes = getLevelNodes(m_M) ;
+  for (auto & i : tipNodes) {
+    currentLevelMatrices.push_back(std::make_pair(i, i->GetB(m_M))) ;
+  }
+  uint numProcessedKnots = 0 ;
+  for (uint inverseResol = 0 ; inverseResol <= m_M ; inverseResol++) {
+    uint resolution = m_M - inverseResol ;
+    horizontalBoundary = 0 ;
     uint numKnotsAtLevel = 0 ;
-    for (auto & nodes : levelNodes) {
-      numKnotsAtLevel += nodes->GetKnotsCoor().timeCoords.size() ;
+    for (auto & j : GetLevel(resolution)) numKnotsAtLevel += j->GetNumKnots() ;
+    numProcessedKnots += numKnotsAtLevel ;
+    verticalBoundary = numKnotsTotal - numProcessedKnots ;
+
+    while (currentLevelMatrices.size() > 0) { // currentLevelMatrices contains matrices that have not been added to Fmat yet. Once it is empty, it means they have all been added.
+      std::vector<TreeNode *> nodeSiblings = currentLevelMatrices.at(0).first->Siblings() ;
+      std::pair<TreeNode *, mat> siblingParentPair = std::make_pair(nodeSiblings.at(0)->GetParent(),
+        mat(0, nodeSiblings.at(0)->GetParent()->GetNumKnots(), fill::zeros)) ; // This will eventually contain information about the parent matrix for all the siblings.
+
+      for (auto & i : nodeSiblings) {
+        uint index = 0 ;
+        bool check = currentLevelMatrices.at(0).first == i ;
+        // Find the element of currentLevelMatrices that corresponds to the sibling currently being processed.
+        while (!check) {
+          check = currentLevelMatrices.at(index).first == i ;
+          index += 1 ;
+        }
+        // Update Fmat
+        Fmat(horizontalBoundary, verticalBoundary, size(currentLevelMatrices.at(index).second)) = currentLevelMatrices.at(index).second ;
+        // Update placement indices for the blocks in Fmat.
+        horizontalBoundary += i->GetObsInNode().size() ;
+        verticalBoundary += i->GetNumKnots() ;
+        // printf("Updated boundaries: %i, %i \n", horizontalBoundary, verticalBoundary) ;
+        // The node sibling is removed from currentLevelMatrices once it has been processed.
+        currentLevelMatrices.erase(currentLevelMatrices.begin() + index) ;
+      }
+      // Prepare the list of matrices one resolution up
+      if (resolution > 0) {
+        std::vector<TreeNode *> descendedTips = Descendants(nodeSiblings) ;
+        siblingParentPair.second = mat(0, siblingParentPair.first->GetNumKnots()) ;
+        for (auto & i : descendedTips) {
+          siblingParentPair.second = join_cols(siblingParentPair.second, i->GetB(resolution - 1)) ;
+        }
+      }
+      parentLevelMatrices.push_back(siblingParentPair) ;
     }
-    verticalBoundaryVec(resolution) = verticalBoundaryVec(resolution - 1) + numKnotsAtLevel;
+
+    currentLevelMatrices = parentLevelMatrices ;
+    parentLevelMatrices.empty() ; // parentLevelMatrices will be re-populated from scratch, hence the need to empty it.
   }
 
-  for (uint resolution = 0; resolution <= m_M ; resolution++) {
-    for (auto & i : tipNodes) {
-
-    }
-  }
   cout << "Returning F matrix... \n" ;
   return Fmat ;
+}
+
+std::vector<TreeNode *> AugTree::Descendants(std::vector<TreeNode *> nodeList) {
+  std::vector<TreeNode *> descendantList ;
+  for (auto & i : nodeList) diveAndUpdate(i, &descendantList) ;
+  return descendantList;
+}
+
+void AugTree::diveAndUpdate(TreeNode * nodePointer, std::vector<TreeNode *> * descendantList) {
+  std::vector<TreeNode *> childrenVector = nodePointer->GetChildren() ;
+  if (childrenVector.at(0) == NULL) {
+    descendantList->push_back(nodePointer) ;
+  } else {
+    for (auto & i : childrenVector) diveAndUpdate(i, descendantList) ;
+  }
 }
 
 // For now, we assume that all hyperpriors have an inverse gamma distribution with the same parameters.

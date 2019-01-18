@@ -149,6 +149,18 @@ public:
     std::transform(ancestorsList.begin(), ancestorsList.end(), ancestorIds.begin(), [] (TreeNode * treeNode) {return treeNode->GetNodeId() ;}) ;
     return ancestorIds ;
   }
+  TreeNode * GetParent() {return m_parent ;}
+
+  std::vector<TreeNode *> Siblings() {
+    std::vector<TreeNode *> siblingVec ;
+    if (m_depth > 0) {
+      siblingVec = m_parent->GetChildren() ;
+    } else {
+      siblingVec.push_back(this) ;
+    }
+    return siblingVec ;
+  }
+  uint GetNumKnots() {return m_knotsCoor.timeCoords.size() ;}
 
 protected:
 
@@ -161,7 +173,6 @@ protected:
 
   std::vector<std::vector<arma::mat>>& GetAtildeList() {return m_AtildeList ;}
   void baseComputeWmat(const arma::vec &) ;
-  TreeNode * GetParent() {return m_parent ;}
   void SetParent(TreeNode * vertexParentPoint) {m_parent = vertexParentPoint ;}
 
   std::vector<std::vector<arma::mat>> m_AtildeList ;

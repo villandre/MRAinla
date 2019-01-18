@@ -68,6 +68,9 @@ private:
   // GSL_RNG_SEED and takes value 0 by default.
   gsl_rng * m_randomNumGenerator ;
 
+  std::vector<TreeNode *> Descendants(std::vector<TreeNode *>) ;
+  void diveAndUpdate(TreeNode *, std::vector<TreeNode *> *) ;
+
   // Tree construction functions //
   void BuildTree(const uint &) ;
   void createLevels(TreeNode *, const uint &) ;
