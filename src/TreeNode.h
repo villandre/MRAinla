@@ -107,6 +107,10 @@ public:
   virtual GaussDistParas GetEtaDelta() const =0 ;
   virtual arma::mat GetB(const uint & l)=0 ;
   virtual arma::mat GetSigma()=0 ;
+  virtual arma::mat GetKmatrix()=0 ;
+  virtual arma::mat * GetKmatrixAddress()=0 ;
+  virtual arma::mat * GetKmatrixInverseAddress()=0 ;
+  virtual arma::mat GetKmatrixInverse()=0 ;
 
   virtual void genRandomKnots(inputdata &, uint &, const gsl_rng *) = 0;
 
@@ -117,10 +121,7 @@ public:
   arma::mat GetAtildeList(uint & i, uint & j) {return m_AtildeList.at(i).at(j) ;}
   arma::mat GetOmegaTilde(uint & k) { return m_omegaTilde.at(k) ;}
   spatialcoor GetKnotsCoor() {return m_knotsCoor;}
-  arma::mat GetKmatrix() {return m_K ;}
-  arma::mat * GetKmatrixAddress() {return &m_K ;}
-  arma::mat * GetKmatrixInverseAddress() { return &m_Kinverse ;}
-  arma::mat GetKmatrixInverse() {return m_Kinverse ;}
+
   std::vector<arma::mat>& GetWlist() {return m_Wlist ;}
   uint GetNodeId() { return m_nodeId ;}
 
@@ -130,7 +131,6 @@ public:
 
   ~ TreeNode() { } ;
 
-  void ComputeBaseKmat(const arma::vec &) ;
   // void SetAtildeList(arma::mat & matrix, uint &i, uint &j) {m_AtildeList.at(i).at(j) = matrix ;}
   void SetPredictLocations(const spatialcoor & predictLocations) ;
 
@@ -181,9 +181,6 @@ protected:
   double m_u ;
   double m_d ;
 
-  arma::mat m_K ;
-  arma::mat m_Kinverse ;
-
   double covFunction(const Spatiotemprange &, const arma::vec &) ;
   std::vector<TreeNode *> getAncestors() ;
   arma::mat computeCovMat(const spatialcoor &, const spatialcoor &, const arma::vec &) ;
@@ -198,6 +195,7 @@ protected:
     }
     m_omegaTilde.resize(m_depth + 1) ;
   }
+  arma::mat ComputeCovMatrix(const arma::vec &) ;
 
   // For prediction
   void computeBknots() ;

@@ -80,6 +80,12 @@ public:
   arma::mat GetSigma() {
     return m_Wlist.at(m_depth) ;
   }
+  // The following Kmatrix-related functions work because of the correspondence between knots
+  // and observations at the finest resolution.
+  arma::mat GetKmatrix() {return m_SigmaInverse ;}
+  arma::mat * GetKmatrixAddress() {return &m_SigmaInverse ;}
+  arma::mat * GetKmatrixInverseAddress() { return &m_Wlist.at(m_depth) ;}
+  arma::mat GetKmatrixInverse() {return GetSigma() ;}
 
   void genRandomKnots(inputdata & dataset, uint & numKnots, const gsl_rng * RNG) {
     m_knotsCoor = spatialcoor(dataset.spatialCoords.rows(m_obsInNode),

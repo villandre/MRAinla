@@ -167,7 +167,6 @@ double AugTree::ComputeMRAlogLik(const vec & thetaValues, const vec & MRAcovPara
 }
 
 void AugTree::computeWmats() {
-  m_vertexVector.at(0)->ComputeBaseKmat(m_MRAcovParas) ;
   m_vertexVector.at(0)->ComputeWmat(m_MRAcovParas) ;
 
   for (uint level = 1; level < (m_M+1); level++) {
@@ -370,13 +369,11 @@ arma::sp_mat AugTree::createHstar() {
 // The algorithm ends when resolution 0 is reached.
 
 arma::sp_mat AugTree::createFmatrix() {
-  cout << "Creating F matrix... \n" ;
   uint numKnotsTotal = 0 ;
 
   for (auto & i : m_vertexVector) {
     numKnotsTotal += i->GetNumKnots() ;
   }
-
   sp_mat Fmat(m_dataset.timeCoords.size(), numKnotsTotal) ;
   std::vector<TreeNode *> tipNodes = getLevelNodes(m_M) ;
   std::vector<std::pair<TreeNode *, mat>> currentLevelMatrices ;
@@ -390,15 +387,15 @@ arma::sp_mat AugTree::createFmatrix() {
     currentLevelMatrices.push_back(std::make_pair(i, i->GetB(m_M))) ;
   }
   uint numProcessedKnots = 0 ;
+
   for (uint inverseResol = 0 ; inverseResol <= m_M ; inverseResol++) {
     uint resolution = m_M - inverseResol ;
-    printf("Processing resolution %i \n", resolution) ;
     horizontalBoundary = 0 ;
     uint numKnotsAtLevel = 0 ;
     for (auto & j : GetLevel(resolution)) numKnotsAtLevel += j->GetNumKnots() ;
     numProcessedKnots += numKnotsAtLevel ;
     verticalBoundary = numKnotsTotal - numProcessedKnots ;
-    printf("Initial boundaries: %i, %i \n", horizontalBoundary, verticalBoundary) ;
+
     while (currentLevelMatrices.size() > 0) { // currentLevelMatrices contains matrices that have not been added to Fmat yet. Once it is empty, it means they have all been added.
       if (resolution > 0) {
         nodeSiblings = currentLevelMatrices.at(0).first->Siblings() ;
@@ -409,7 +406,6 @@ arma::sp_mat AugTree::createFmatrix() {
       }
 
       for (auto & i : nodeSiblings) {
-        printf("Number of siblings: %i \n", nodeSiblings.size()) ;
         uint index = 0 ;
         bool check = currentLevelMatrices.at(0).first == i ;
         // Find the element of currentLevelMatrices that corresponds to the sibling currently being processed.
@@ -422,7 +418,6 @@ arma::sp_mat AugTree::createFmatrix() {
         // Update placement indices for the blocks in Fmat.
         horizontalBoundary += i->GetObsInNode().size() ;
         verticalBoundary += i->GetNumKnots() ;
-        printf("Updated boundaries: %i, %i \n", horizontalBoundary, verticalBoundary) ;
         // The node sibling is removed from currentLevelMatrices once it has been processed.
         currentLevelMatrices.erase(currentLevelMatrices.begin() + index) ;
       }
@@ -440,7 +435,6 @@ arma::sp_mat AugTree::createFmatrix() {
     currentLevelMatrices = parentLevelMatrices ;
     parentLevelMatrices.clear() ; // parentLevelMatrices will be re-populated from scratch, hence the need to empty it.
   }
-  cout << "Returning F matrix... \n" ;
   return Fmat ;
 }
 
@@ -495,6 +489,9 @@ double AugTree::ComputeLogFullConditional(const arma::vec & MRAvalues, const arm
   sp_mat TmatrixInverse(m_dataset.timeCoords.size(), m_dataset.timeCoords.size()) ;
   TmatrixInverse.diag().fill(1/m_MRAcovParas.at(0)) ;
   cout << "Creating Qmat... \n" ;
+  printf("Hstar dim.: %i %i \n", Hstar.n_rows, Hstar.n_cols) ;
+  printf("TmatrixInverse dim.: %i %i \n", TmatrixInverse.n_rows, TmatrixInverse.n_cols) ;
+  printf("SigmaStarInverse dim.: %i %i", SigmaStarInverse.n_rows, SigmaStarInverse.n_cols) ;
   sp_mat Qmat = trans(Hstar) * TmatrixInverse * Hstar + SigmaStarInverse ;
   cout << "Computing bVec... \n" ;
   vec bVec = trans(Hstar) * TmatrixInverse * m_dataset.responseValues + SigmaStarInverse ;

@@ -32,6 +32,10 @@ public:
   GaussDistParas GetEtaDelta() const { return m_etaTilde ;}
   arma::mat GetB(const uint & l) { throw Rcpp::exception("Trying to get B matrix in internal node.\n") ;}
   arma::mat GetSigma() { throw Rcpp::exception("Trying to get Sigma matrix in internal node.\n") ;}
+  arma::mat GetKmatrix() {return m_K ;}
+  arma::mat * GetKmatrixAddress() {return &m_K ;}
+  arma::mat * GetKmatrixInverseAddress() { return &(m_Wlist.back()) ;}
+  arma::mat GetKmatrixInverse() {return m_Wlist.back() ;}
 
   void genRandomKnots(inputdata &, uint &, const gsl_rng *) ;
 
@@ -64,6 +68,7 @@ protected:
   std::vector<arma::vec> m_omega ;
   arma::mat m_Ktilde ;
   arma::mat m_KtildeInverse ;
+  arma::mat m_K ;
 
   // Prediction elements
 

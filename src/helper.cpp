@@ -22,17 +22,18 @@ arma::sp_mat createSparseMatrix(std::vector<arma::mat *> listOfMatrices) {
   arma::ivec dimvec(numMatrices) ;
 
   for(unsigned int i = 0; i < numMatrices; i++) {
+    printf("Sigma matrix size: %i \n", listOfMatrices.at(i)->n_rows) ;
     dimvec[i] = listOfMatrices.at(i)->n_rows ;
     dimen += dimvec[i] ;
   }
 
   arma::sp_mat X(dimen, dimen);
-  int idx=0;
 
+  int idx=0;
   for(unsigned int i = 0; i < numMatrices; i++) {
-    X.submat( idx, idx, idx + dimvec[i] - 1, idx + dimvec[i] - 1 ) = *(listOfMatrices.at(i)) ;
+    X(idx, idx, size(*(listOfMatrices.at(i)))) = *(listOfMatrices.at(i)) ;
     idx = idx + dimvec[i] ;
   }
-
-  return(X);
+  printf("X matrix dimension: %i %i \n", X.n_rows, X.n_cols) ;
+  return X ;
 }

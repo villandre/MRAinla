@@ -21,42 +21,36 @@ double TreeNode::covFunction(const Spatiotemprange & distance, const vec & covPa
   return gsl_sf_exp(spExp) * gsl_sf_exp(timeExp) ;
 };
 
-void TreeNode::ComputeBaseKmat(const vec & covParaVec) {
-  mat covMatrix(m_knotsCoor.timeCoords.size(), m_knotsCoor.timeCoords.size(), fill::zeros) ;
+arma::mat TreeNode::ComputeCovMatrix(const vec & covParaVec) {
   Spatiotemprange container ;
-
+  mat covMatrix(m_knotsCoor.timeCoords.size(), m_knotsCoor.timeCoords.size(), fill::zeros) ;
   for (uint rowIndex = 0 ; rowIndex < m_knotsCoor.timeCoords.size() ; rowIndex++) {
     for (uint colIndex = 0 ; colIndex <= rowIndex ; colIndex++) {
       vec space1 = conv_to<vec>::from(m_knotsCoor.spatialCoords.row(rowIndex)) ;
       uint time1 = m_knotsCoor.timeCoords.at(rowIndex) ;
       vec space2 = conv_to<vec>::from(m_knotsCoor.spatialCoords.row(colIndex)) ;
       uint time2 = m_knotsCoor.timeCoords.at(colIndex) ;
-       container = sptimeDistance(space1, time1, space2, time2) ;
+      container = sptimeDistance(space1, time1, space2, time2) ;
       covMatrix.at(rowIndex, colIndex) = covFunction(container, covParaVec) ;
     }
   }
-  m_Kinverse = symmatl(covMatrix) ;
-  m_K = inv_sympd(covMatrix) ;
+  return covMatrix ;
 }
 
 void TreeNode::baseComputeWmat(const vec & covParas) {
   uint M = GetM() ;
-  if (m_depth > 0) {
-    std::vector<TreeNode *> brickList = getAncestors() ;
-    m_Wlist.at(0) = computeCovMat(m_knotsCoor, brickList.at(0)->GetKnotsCoor(), covParas) ;
+  std::vector<TreeNode *> brickList = getAncestors() ;
+  m_Wlist.at(0) = computeCovMat(m_knotsCoor, brickList.at(0)->GetKnotsCoor(), covParas) ;
 
-    for (uint l = 1; l < m_depth+1; l++) {
-      mat firstMat = computeCovMat(m_knotsCoor, brickList.at(l)->GetKnotsCoor(), covParas) ;
-      mat secondMat(firstMat.n_rows, firstMat.n_cols, fill::zeros) ;
-      for (uint k = 0; k < l ; k++) {
-        secondMat += m_Wlist.at(k) *
-          brickList.at(k)->GetKmatrix() *
-          trans(brickList.at(l)->GetWlist().at(k)) ;
-      }
-      m_Wlist.at(l) = firstMat - secondMat ;
+  for (uint l = 1; l < m_depth+1; l++) {
+    mat firstMat = computeCovMat(m_knotsCoor, brickList.at(l)->GetKnotsCoor(), covParas) ;
+    mat secondMat(firstMat.n_rows, firstMat.n_cols, fill::zeros) ;
+    for (uint k = 0; k < l ; k++) {
+      secondMat += m_Wlist.at(k) *
+        brickList.at(k)->GetKmatrix() *
+        trans(brickList.at(l)->GetWlist().at(k)) ;
     }
-  } else {
-    m_Wlist.at(0) = m_Kinverse ;
+    m_Wlist.at(l) = firstMat - secondMat ;
   }
 }
 

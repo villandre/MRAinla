@@ -57,7 +57,7 @@ void InternalNode::DeriveAtilde() {
   for (auto & i : m_children) {
     i->clearAtildeList() ;
   }
-  m_KtildeInverse = m_Kinverse + m_Alist.at(m_depth).at(m_depth) ;
+  m_KtildeInverse = GetKmatrixInverse() + m_Alist.at(m_depth).at(m_depth) ;
   // if (!m_KtildeInverse.is_symmetric(1e-4)) {
   //   throw Rcpp::exception("KtildeInverse is a precision matrix and should be symmetric.\n") ;
   // }
@@ -112,7 +112,7 @@ void::InternalNode::DeriveD() {
     throw Rcpp::exception("Precision matrix KtildeInverse cannot have negative determinant. \n") ;
   }
   m_d = value ;
-  log_det(value, sign, m_Kinverse) ;
+  log_det(value, sign, GetKmatrixInverse()) ;
   if (sign < 0) {
     throw Rcpp::exception("Precision matrix Kinverse cannot have negative determinant. \n") ;
   }
@@ -127,11 +127,16 @@ void::InternalNode::DeriveD() {
 
 void InternalNode::ComputeWmat(const arma::vec & covParas) {
   baseComputeWmat(covParas) ;
-  m_Kinverse = m_Wlist.at(m_depth) ;
-  m_K = inv_sympd(m_Kinverse) ; // The K matrix is some sort of covariance matrix, so it should always be symmetrical..
+  m_K = inv_sympd(GetKmatrix()) ; // The K matrix is some sort of covariance matrix, so it should always be symmetrical..
 }
 
 void InternalNode::ComputeParasEtaDeltaTilde(const spatialcoor & predictLocations, const inputdata & dataset, const arma::vec & covParas) {
   m_etaTilde.meanPara = m_Ktilde * m_omega.at(m_depth) ;
   m_etaTilde.covPara = m_Ktilde ; // This is repetition. It should not harm memory too much though.
 }
+
+// void InternalNode::ComputeBaseKmat(const vec & covParaVec) {
+//   mat covMatrix = ComputeCovMatrix(covParaVec) ;
+//   m_Kinverse = symmatl(covMatrix) ;
+//   m_K = inv_sympd(covMatrix) ;
+// }
