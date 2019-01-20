@@ -127,7 +127,7 @@ void::InternalNode::DeriveD() {
 
 void InternalNode::ComputeWmat(const arma::vec & covParas) {
   baseComputeWmat(covParas) ;
-  m_K = inv_sympd(GetKmatrix()) ; // The K matrix is some sort of covariance matrix, so it should always be symmetrical..
+  m_K = inv_sympd(GetKmatrixInverse()) ; // The K matrix is some sort of covariance matrix, so it should always be symmetrical..
 }
 
 void InternalNode::ComputeParasEtaDeltaTilde(const spatialcoor & predictLocations, const inputdata & dataset, const arma::vec & covParas) {
