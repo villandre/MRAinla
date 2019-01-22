@@ -494,8 +494,11 @@ double AugTree::ComputeLogFullConditional(const arma::vec & MRAvalues, const arm
   printf("SigmaStarInverse dim.: %i %i", SigmaStarInverse.n_rows, SigmaStarInverse.n_cols) ;
   sp_mat Qmat = trans(Hstar) * TmatrixInverse * Hstar + SigmaStarInverse ;
   cout << "Computing bVec... \n" ;
-  vec bVec = trans(Hstar) * TmatrixInverse * m_dataset.responseValues + SigmaStarInverse ;
-  mat QmatInverse = inv_sympd(conv_to<mat>::from(Qmat)) ;
+  // The formulation for bVec is valid if priors for the eta's and fixed effect coefficients have mean zero, else, a second term comes into play Sigma * mu ;
+  vec bVec = trans(Hstar) * TmatrixInverse * m_dataset.responseValues ;
+
+  // mat QmatInverse = inv_sympd(conv_to<mat>::from(Qmat)) ;
+  mat QmatInverse = spsolve(Qmat, eye<mat>(Qmat.n_rows, Qmat.n_cols)) ;
   vec meanVec = QmatInverse * bVec ;
   vec thetaValues = join_rows(MRAvalues, fixedEffCoefs) ;
   vec centeredThetas = thetaValues - meanVec ;
