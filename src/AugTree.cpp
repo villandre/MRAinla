@@ -498,12 +498,13 @@ double AugTree::ComputeLogFullConditional(const arma::vec & MRAvalues, const arm
   sp_mat bVec = HstarT * TmatrixInverse * conv_to<sp_mat>::from(m_dataset.responseValues) ;
 
   // mat QmatInverse = inv_sympd(conv_to<mat>::from(Qmat)) ;
+
   mat QmatInverse ;
   vec foo ;
   vec bar = zeros<vec>(Qmat.n_cols) ;
   bar(0) = 1 ;
-
-  spsolve(foo, Qmat, bar, "superlu") ;
+  mat CholMat = chol(mat(Qmat)) ;
+  // spsolve(foo, Qmat, bar, "superlu") ;
 
   // sp_mat QmatInverseSp = conv_to<sp_mat>::from(QmatInverse) ;
   // sp_mat temp(bVec) ;
