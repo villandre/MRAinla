@@ -39,10 +39,11 @@ MRA_INLA <- function(spacetimeData, errorSDstart, fixedEffSDstart, MRAhyperparas
   funForOptim <- function(x) {
     funForOptimJointHyperMarginal(gridPointer$gridPointer, x[1:numMRAhyperparas], x[numMRAhyperparas + 1], x[numMRAhyperparas + 2], hyperAlpha, hyperBeta)
   }
-  optimResult <- optim(par = xStartValues, fn = funForOptim, hessian = TRUE)
-  hyperMode <- optimResult$par
-  hyperHessian <- optimResult$hessian
-  list(hyperDistMode = hyperMode, hessianAtMode = hyperHessian)
+  funForOptim(xStartValues)
+  # optimResult <- optim(par = xStartValues, fn = funForOptim, hessian = TRUE)
+  # hyperMode <- optimResult$par
+  # hyperHessian <- optimResult$hessian
+  # list(hyperDistMode = hyperMode, hessianAtMode = hyperHessian)
 }
 
 # MRAprecision will have to be coded as block diagonal to ensure tractability.

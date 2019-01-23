@@ -1,5 +1,8 @@
-// [[Rcpp::depends(RcppArmadillo)]]
+// Important: this definition ensures Armadillo enables SuperLU
+#define ARMA_USE_SUPERLU 1
+
 // [[Rcpp::depends(RcppGSL)]]
+// [[Rcpp::depends(RcppArmadillo)]]
 
 #include <algorithm>
 #include <vector>

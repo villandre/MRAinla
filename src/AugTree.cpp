@@ -341,15 +341,15 @@ arma::sp_mat AugTree::createSigmaStarInverse() {
   return SigmaStarInverse ;
 }
 
-arma::sp_mat AugTree::createHstar() {
+arma::sp_mat AugTree::createHstarT() {
   sp_mat Fmatrix = createFmatrix() ;
   vec intercept = ones<vec>(m_dataset.covariateValues.n_rows) ;
   mat covarCopy = m_dataset.covariateValues ;
   covarCopy.insert_cols(0, intercept) ;
   sp_mat incrementedCovar = conv_to<sp_mat>::from(covarCopy) ;
 
-  sp_mat Hstar = join_rows(Fmatrix, incrementedCovar) ;
-  return Hstar ;
+  sp_mat HstarT = join_cols(trans(Fmatrix), trans(incrementedCovar)) ;
+  return HstarT ;
 }
 
 // Very long fonction. Should probably be shortened...
@@ -481,35 +481,44 @@ double AugTree::ComputeLogJointCondTheta(const arma::vec & MRAvalues, const arma
 
 
 double AugTree::ComputeLogFullConditional(const arma::vec & MRAvalues, const arma::vec & fixedEffCoefs) {
-  cout << "Creating Hstar... \n" ;
-  sp_mat Hstar = createHstar() ;
+  cout << "Creating t(Hstar)... \n" ;
+  sp_mat HstarT = createHstarT() ;
   cout << "Creating SigmaStarInverse... \n" ;
   sp_mat SigmaStarInverse = createSigmaStarInverse() ;
   cout << "Creating Tmatrix... \n" ;
   sp_mat TmatrixInverse(m_dataset.timeCoords.size(), m_dataset.timeCoords.size()) ;
   TmatrixInverse.diag().fill(1/m_MRAcovParas.at(0)) ;
   cout << "Creating Qmat... \n" ;
-  printf("Hstar dim.: %i %i \n", Hstar.n_rows, Hstar.n_cols) ;
   printf("TmatrixInverse dim.: %i %i \n", TmatrixInverse.n_rows, TmatrixInverse.n_cols) ;
   printf("SigmaStarInverse dim.: %i %i", SigmaStarInverse.n_rows, SigmaStarInverse.n_cols) ;
-  sp_mat Qmat = trans(Hstar) * TmatrixInverse * Hstar + SigmaStarInverse ;
+  sp_mat Qmat = HstarT * TmatrixInverse * trans(HstarT) + SigmaStarInverse ;
+  printf("Qmat size = %i %i \n", Qmat.n_rows, Qmat.n_cols) ;
   cout << "Computing bVec... \n" ;
   // The formulation for bVec is valid if priors for the eta's and fixed effect coefficients have mean zero, else, a second term comes into play Sigma * mu ;
-  vec bVec = trans(Hstar) * TmatrixInverse * m_dataset.responseValues ;
+  sp_mat bVec = HstarT * TmatrixInverse * conv_to<sp_mat>::from(m_dataset.responseValues) ;
 
   // mat QmatInverse = inv_sympd(conv_to<mat>::from(Qmat)) ;
-  mat QmatInverse = spsolve(Qmat, eye<mat>(Qmat.n_rows, Qmat.n_cols)) ;
-  vec meanVec = QmatInverse * bVec ;
-  vec thetaValues = join_rows(MRAvalues, fixedEffCoefs) ;
-  vec centeredThetas = thetaValues - meanVec ;
-  double val;
-  double sign;
-  log_det(val, sign, QmatInverse) ;
-  cout << "Finalising density evaluation..." ;
-  double logDensPart1 = - 0.5 * QmatInverse.n_rows * (log((double) 2) +
-                          log(M_PI)) + 0.5 * sign * val ;
-  mat logDensPart2 = 0.5 * trans(centeredThetas) * QmatInverse * centeredThetas ;
-  return logDensPart1 - logDensPart2(0,0) ;
+  mat QmatInverse ;
+  vec foo ;
+  vec bar = zeros<vec>(Qmat.n_cols) ;
+  bar(0) = 1 ;
+
+  spsolve(foo, Qmat, bar, "superlu") ;
+
+  // sp_mat QmatInverseSp = conv_to<sp_mat>::from(QmatInverse) ;
+  // sp_mat temp(bVec) ;
+  // sp_mat meanVec = QmatInverseSp * temp ;
+  // vec thetaValues = join_rows(MRAvalues, fixedEffCoefs) ;
+  // sp_mat centeredThetas = conv_to<sp_mat>::from(thetaValues) - meanVec ;
+  // double val;
+  // double sign;
+  // log_det(val, sign, QmatInverseSp) ;
+  // cout << "Finalising density evaluation..." ;
+  // double logDensPart1 = - 0.5 * QmatInverse.n_rows * (log((double) 2) +
+  //                         log(M_PI)) + 0.5 * sign * val ;
+  // mat logDensPart2 = 0.5 * trans(centeredThetas) * QmatInverse * centeredThetas ;
+  // return logDensPart1 - logDensPart2(0,0) ;
+  return 0;
 }
 
 double AugTree::ComputeGlobalLogLik(const arma::vec & MRAvalues, const arma::vec & fixedEffParams, const double errorSD) {

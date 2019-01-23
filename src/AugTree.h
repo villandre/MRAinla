@@ -34,7 +34,7 @@ public:
   void SetErrorSD(const double & errorSD) {m_errorSD = errorSD ;}
   void CleanPredictionComponents() ;
   void CenterResponse() ;
-  arma::sp_mat createHstar() ;
+  arma::sp_mat createHstarT() ;
   arma::sp_mat createSigmaStarInverse() ;
   arma::sp_mat createQ() ;
 
