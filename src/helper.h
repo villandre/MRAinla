@@ -17,6 +17,7 @@ Spatiotemprange sptimeDistance(const arma::vec & spCoor1, const unsigned int & t
                                const unsigned int & time2) ;
 
 arma::sp_mat createSparseMatrix(std::vector<arma::mat *>) ;
+std::vector<arma::mat> extractBlocks(const arma::sp_mat &) ;
 
 // Inlining the function solves the linking issue I encountered. As it turns out, templated functions
 // must be defined in the header. A simple declaration will lead to a linking error.

@@ -9,6 +9,9 @@
 using namespace Rcpp ;
 using namespace arma ;
 using namespace MRAinla ;
+using namespace Eigen ;
+
+typedef Eigen::SparseMatrix<double> SpMat; // declares a column-major sparse matrix type of double
 
 AugTree::AugTree(uint & M, vec & lonRange, vec & latRange, uvec & timeRange, vec & observations, mat & obsSp, uvec & obsTime, uint & minObsForTimeSplit, unsigned long int & seed, mat & covariates)
   : m_M(M)
@@ -341,15 +344,16 @@ arma::sp_mat AugTree::createSigmaStarInverse() {
   return SigmaStarInverse ;
 }
 
-arma::sp_mat AugTree::createHstarT() {
+arma::sp_mat AugTree::createHstar() {
   sp_mat Fmatrix = createFmatrix() ;
+  sp_mat smallFmat = Fmatrix.cols(0, 100) ;
+
   vec intercept = ones<vec>(m_dataset.covariateValues.n_rows) ;
   mat covarCopy = m_dataset.covariateValues ;
   covarCopy.insert_cols(0, intercept) ;
   sp_mat incrementedCovar = conv_to<sp_mat>::from(covarCopy) ;
-
-  sp_mat HstarT = join_cols(trans(Fmatrix), trans(incrementedCovar)) ;
-  return HstarT ;
+  sp_mat Hstar = join_horiz(Fmatrix, incrementedCovar) ;
+  return Hstar ;
 }
 
 // Very long fonction. Should probably be shortened...
@@ -384,7 +388,7 @@ arma::sp_mat AugTree::createFmatrix() {
   std::pair<TreeNode *, mat> siblingParentPair ;
 
   for (auto & i : tipNodes) {
-    currentLevelMatrices.push_back(std::make_pair(i, i->GetB(m_M))) ;
+    currentLevelMatrices.push_back(std::make_pair(i, i->GetB(m_M))) ; // We start iterating at resolution M, hence the initialisation implemented here.
   }
   uint numProcessedKnots = 0 ;
 
@@ -421,15 +425,17 @@ arma::sp_mat AugTree::createFmatrix() {
         // The node sibling is removed from currentLevelMatrices once it has been processed.
         currentLevelMatrices.erase(currentLevelMatrices.begin() + index) ;
       }
-      nodeSiblings.clear() ; // This vector will be re-incremented, hence the need to empty it.
       // Prepare the list of matrices one resolution up
       if (resolution > 0) {
         std::vector<TreeNode *> descendedTips = Descendants(nodeSiblings) ;
-        siblingParentPair.second = mat(0, siblingParentPair.first->GetNumKnots()) ;
+        siblingParentPair.second = mat(siblingParentPair.first->GetNumKnots(), 0) ; // We'll transpose the result of binding matrices columnwise. This is faster than binding rowwise.
         for (auto & i : descendedTips) {
-          siblingParentPair.second = join_cols(siblingParentPair.second, i->GetB(resolution - 1)) ;
+          // Matrices in Armadillo are column-major. Horizontal joins are therefore faster than vertical joins.
+          siblingParentPair.second = join_horiz(siblingParentPair.second, trans(i->GetB(resolution - 1))) ; // Vertical join, like cbind in R, join_horiz would be faster, since matrix are column-based in Armadillo.
         }
+        siblingParentPair.second = trans(siblingParentPair.second) ; // Transposing is fast.
         parentLevelMatrices.push_back(siblingParentPair) ;
+        nodeSiblings.clear() ; // This vector will be re-incremented, hence the need to empty it.
       }
     }
     currentLevelMatrices = parentLevelMatrices ;
@@ -482,7 +488,7 @@ double AugTree::ComputeLogJointCondTheta(const arma::vec & MRAvalues, const arma
 
 double AugTree::ComputeLogFullConditional(const arma::vec & MRAvalues, const arma::vec & fixedEffCoefs) {
   cout << "Creating t(Hstar)... \n" ;
-  sp_mat HstarT = createHstarT() ;
+  sp_mat Hstar = createHstar() ;
   cout << "Creating SigmaStarInverse... \n" ;
   sp_mat SigmaStarInverse = createSigmaStarInverse() ;
   cout << "Creating Tmatrix... \n" ;
@@ -491,20 +497,32 @@ double AugTree::ComputeLogFullConditional(const arma::vec & MRAvalues, const arm
   cout << "Creating Qmat... \n" ;
   printf("TmatrixInverse dim.: %i %i \n", TmatrixInverse.n_rows, TmatrixInverse.n_cols) ;
   printf("SigmaStarInverse dim.: %i %i", SigmaStarInverse.n_rows, SigmaStarInverse.n_cols) ;
-  sp_mat Qmat = HstarT * TmatrixInverse * trans(HstarT) + SigmaStarInverse ;
+  sp_mat Qmat = trans(Hstar) * TmatrixInverse * Hstar + SigmaStarInverse ;
   printf("Qmat size = %i %i \n", Qmat.n_rows, Qmat.n_cols) ;
   cout << "Computing bVec... \n" ;
   // The formulation for bVec is valid if priors for the eta's and fixed effect coefficients have mean zero, else, a second term comes into play Sigma * mu ;
-  sp_mat bVec = HstarT * TmatrixInverse * conv_to<sp_mat>::from(m_dataset.responseValues) ;
-
+  sp_mat bVec = trans(Hstar) * TmatrixInverse * conv_to<sp_mat>::from(m_dataset.responseValues) ;
+  printf("Number of non-zero entries in Qmat: %i \n", nonzeros(Qmat).size()) ;
+  printf("Is Q mat symmetric? %i \n", Qmat.is_symmetric(1e-6)) ;
+  printf("Is SigmaStarInverse symmetric? %i \n", SigmaStarInverse.is_symmetric(1e-6)) ;
+  extrackBlocks(Qmat) ;
+  // mat subHmat = mat(Hstar.col(1)) ;
+  // subHmat.print("First column of Hmat \n \n") ;
+  // mat subHmatRow = mat(Hstar.row(1)) ;
+  // subHmatRow.print("First row of Hmat \n") ;
   // mat QmatInverse = inv_sympd(conv_to<mat>::from(Qmat)) ;
-
-  mat QmatInverse ;
-  vec foo ;
-  vec bar = zeros<vec>(Qmat.n_cols) ;
-  bar(0) = 1 ;
-  mat CholMat = chol(mat(Qmat)) ;
-  // spsolve(foo, Qmat, bar, "superlu") ;
+  // SparseMatrix<double> EigenMat = Rcpp::as<Eigen::SparseMatrix<double>>(Rcpp::wrap(Qmat)) ;
+  // VectorXd b(Qmat.n_rows) ;
+  // b(0) = 1 ;
+  // MatrixXd bMat = MatrixXd::Identity(Qmat.n_rows, Qmat.n_rows) ;
+  // SimplicialCholesky<SparseMatrix<double>> chol(EigenMat);  // performs a Cholesky factorization of A
+  // MatrixXd x = chol.solve(bMat);         // use the factorization to
+  //
+  // SimplicialLDLT<SparseMatrix<double> > solver;
+  // solver.compute(EigenMat);
+  // SparseMatrix<double> I(Qmat.n_rows, Qmat.n_rows);
+  // I.setIdentity();
+  // auto A_inv = solver.solve(I);
 
   // sp_mat QmatInverseSp = conv_to<sp_mat>::from(QmatInverse) ;
   // sp_mat temp(bVec) ;

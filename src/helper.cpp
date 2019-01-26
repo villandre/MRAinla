@@ -22,7 +22,6 @@ arma::sp_mat createSparseMatrix(std::vector<arma::mat *> listOfMatrices) {
   arma::ivec dimvec(numMatrices) ;
 
   for(unsigned int i = 0; i < numMatrices; i++) {
-    printf("Sigma matrix size: %i \n", listOfMatrices.at(i)->n_rows) ;
     dimvec[i] = listOfMatrices.at(i)->n_rows ;
     dimen += dimvec[i] ;
   }
@@ -34,6 +33,26 @@ arma::sp_mat createSparseMatrix(std::vector<arma::mat *> listOfMatrices) {
     X(idx, idx, size(*(listOfMatrices.at(i)))) = *(listOfMatrices.at(i)) ;
     idx = idx + dimvec[i] ;
   }
-  printf("X matrix dimension: %i %i \n", X.n_rows, X.n_cols) ;
+
   return X ;
+}
+
+std::vector<arma::mat> extractBlocks(const arma::sp_mat & symmSparseMatrix) {
+
+  std::vector<arma::mat> matrixList ;
+  int posLastNonZero = 0 ;
+  while (posLastNonZero < symmSparseMatrix.n_cols) {
+    arma::uvec nonZeroElements = arma::find(symmSparseMatrix.col(posLastNonZero)) ;
+    int checkLastNonZero = nonZeroElements.tail(1)(1) ;
+    bool testVar = TRUE ;
+    for (int i = posLastNonZero; i < checkLastNonZero; i++) {
+      arma::uvec nonZeroElements = arma::find(symmSparseMatrix.col(i)) ;
+      testVar = testVar && (nonZeroElements.tail(1)(1) <= posLastNonZero) ;
+    }
+    if (testVar) {
+      matrixList.push_back(arma::mat(symmSparseMatrix.submat(posLastNonZero, posLastNonZero, checkLastNonZero, checkLastNonZero))) ;
+      posLastNonZero = checkLastNonZero + 1 ;
+    }
+  }
+
 }
