@@ -99,6 +99,7 @@ private:
     return KmatrixInverseList ;
   }
   arma::sp_mat createFmatrix() ;
+  std::vector<uint> extractBlockIndicesFromLowerRight(const arma::sp_mat &) ;
 };
 }
 #endif
