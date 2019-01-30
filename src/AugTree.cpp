@@ -339,7 +339,9 @@ void AugTree::CenterResponse() {
 arma::sp_mat AugTree::createSigmaStarInverse() {
   std::vector<mat *> KinverseAndBetaMatrixList = getKmatricesInversePointers() ;
   mat SigmaBetaInverse = eye<mat>(m_fixedEffParameters.size(), m_fixedEffParameters.size())/m_MRAcovParas.at(0) ; // Make sure those parameters are named.
-  KinverseAndBetaMatrixList.push_back(&SigmaBetaInverse) ;
+  // KinverseAndBetaMatrixList.push_back(&SigmaBetaInverse) ;
+  // The Beta covariances are inserted at the top of the matrix to group non-zero elements in the H* matrix.
+  KinverseAndBetaMatrixList.insert(KinverseAndBetaMatrixList.begin(), &SigmaBetaInverse) ;
   sp_mat SigmaStarInverse = createSparseMatrix(KinverseAndBetaMatrixList) ;
   return SigmaStarInverse ;
 }
@@ -350,9 +352,10 @@ arma::sp_mat AugTree::createHstar() {
 
   vec intercept = ones<vec>(m_dataset.covariateValues.n_rows) ;
   mat covarCopy = m_dataset.covariateValues ;
-  covarCopy.insert_cols(0, intercept) ;
+  covarCopy.insert_cols(1, intercept) ;
   sp_mat incrementedCovar = conv_to<sp_mat>::from(covarCopy) ;
-  sp_mat Hstar = join_horiz(Fmatrix, incrementedCovar) ;
+  // Unlike in the notes, the covariate values are placed at the left of the matrix. This is not an issue, as long as Sigma* is adjusted accordingly.
+  sp_mat Hstar = join_horiz(incrementedCovar, Fmatrix) ;
   return Hstar ;
 }
 
@@ -505,7 +508,10 @@ double AugTree::ComputeLogFullConditional(const arma::vec & MRAvalues, const arm
   printf("Number of non-zero entries in Qmat: %i \n", nonzeros(Qmat).size()) ;
   printf("Is Q mat symmetric? %i \n", Qmat.is_symmetric(1e-6)) ;
   printf("Is SigmaStarInverse symmetric? %i \n", SigmaStarInverse.is_symmetric(1e-6)) ;
-  extrackBlocks(Qmat) ;
+  std::vector<mat> blocksInMatrix = extractBlocks(Qmat.submat(Qmat.n_rows-m_dataset.timeCoords.size()-1, Qmat.n_rows-m_dataset.timeCoords.size()-1,
+                                                          Qmat.n_rows-1, Qmat.n_rows-1)) ;
+  printf("Number of blocks: %i \n", (int) blocksInMatrix.size()) ;
+  for (auto & i : blocksInMatrix) printf("Number of rows: %i \n", (int) i.n_rows) ;
   // mat subHmat = mat(Hstar.col(1)) ;
   // subHmat.print("First column of Hmat \n \n") ;
   // mat subHmatRow = mat(Hstar.row(1)) ;
@@ -563,4 +569,27 @@ double AugTree::ComputeJointPsiMarginal(const arma::vec & MRAhyperparas, const d
   double logCondDist = ComputeLogJointCondTheta(MRAvalues, MRAhyperparas, fixedEffCoefs, fixedEffSD) ;
   double logFullCond = ComputeLogFullConditional(MRAvalues, fixedEffCoefs) ;
   return logPrior + logCondDist + totalLogLik - logFullCond ;
+}
+
+void AugTree::invertQmat(const sp_mat & Qmat, sp_mat * QmatInverse) {
+  // We start in the lower-right corner and use M levels of nesting.
+  std::vector<mat> lowerRight = extractBlocks(Qmat.submat(Qmat.n_rows-m_dataset.timeCoords.size()-1, Qmat.n_rows-m_dataset.timeCoords.size()-1,
+                                                         Qmat.n_rows-1, Qmat.n_rows-1)) ;
+  for (auto & i : lowerRight) {
+    i = inv_sympd(i) ;
+  }
+
+}
+
+void AugTree::findBlockBreaksFromLowerRight(const sp_mat & Qmat) {
+
+  int subIndex = Qmat.n_rows-1 ;
+
+  bool testVar ;
+
+  while (testVar) {
+    find(Qmat.col(Qmat.n_rows-1)) ;
+  }
+
+
 }
