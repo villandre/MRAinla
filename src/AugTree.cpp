@@ -9,9 +9,6 @@
 using namespace Rcpp ;
 using namespace arma ;
 using namespace MRAinla ;
-using namespace Eigen ;
-
-typedef Eigen::SparseMatrix<double> SpMat; // declares a column-major sparse matrix type of double
 
 AugTree::AugTree(uint & M, vec & lonRange, vec & latRange, uvec & timeRange, vec & observations, mat & obsSp, uvec & obsTime, uint & minObsForTimeSplit, unsigned long int & seed, mat & covariates)
   : m_M(M)
@@ -508,10 +505,9 @@ double AugTree::ComputeLogFullConditional(const arma::vec & MRAvalues, const arm
   printf("Number of non-zero entries in Qmat: %i \n", nonzeros(Qmat).size()) ;
   printf("Is Q mat symmetric? %i \n", Qmat.is_symmetric(1e-6)) ;
   printf("Is SigmaStarInverse symmetric? %i \n", SigmaStarInverse.is_symmetric(1e-6)) ;
-  std::vector<mat> blocksInMatrix = extractBlocks(Qmat.submat(Qmat.n_rows-m_dataset.timeCoords.size()-1, Qmat.n_rows-m_dataset.timeCoords.size()-1,
-                                                          Qmat.n_rows-1, Qmat.n_rows-1)) ;
-  printf("Number of blocks: %i \n", (int) blocksInMatrix.size()) ;
-  for (auto & i : blocksInMatrix) printf("Number of rows: %i \n", (int) i.n_rows) ;
+  mat QmatrixInverse = invertQmat(Qmat) ;
+  cout << "Done inverting Qmat! \n" ;
+
   // mat subHmat = mat(Hstar.col(1)) ;
   // subHmat.print("First column of Hmat \n \n") ;
   // mat subHmatRow = mat(Hstar.row(1)) ;
@@ -571,7 +567,11 @@ double AugTree::ComputeJointPsiMarginal(const arma::vec & MRAhyperparas, const d
   return logPrior + logCondDist + totalLogLik - logFullCond ;
 }
 
-void AugTree::invertQmat(const sp_mat & Qmat, sp_mat * QmatInverse) {
+// This inversion is based on recursive partitioning of the Q matrix. It is based on the observation that it is
+// possible to form block-diagonal matrices on the diagonal which can be easily inverted.
+// The challenge in inverting Qmat was the very heavy memory burden.
+// This function involves much smaller matrices, which will make the operations easier to handle.
+mat AugTree::invertQmat(const sp_mat & Qmat) {
   // We start in the lower-right corner and use M levels of nesting.
   // We find all block diagonal matrices on the diagonal.
   std::vector<std::vector<uint>> blockDiagonalMatricesIndices ;
@@ -582,29 +582,39 @@ void AugTree::invertQmat(const sp_mat & Qmat, sp_mat * QmatInverse) {
     lowerBound = indicesInBlock.at(0) - 1 ;
   } while (lowerBound >= 0) ;
 
-  for (uint index = 0 ; index < blockDiagonalMatricesIndices.size() ; index++) {
-    uint nrowA11, nrowA22 ;
-    int reverseIndex = blockDiagonalMatricesIndices.size() - 1 ;
-    nrowA11 = blockDiagonalMatricesIndices.at(reverseIndex - 1).back() - blockDiagonalMatricesIndices.at(reverseIndex - 1).at(0) ;
-    nrowA22 = blockDiagonalMatricesIndices.at(reverseIndex).back() - blockDiagonalMatricesIndices.at(reverseIndex).at(0) ;
-    invFromDecomposition(
-      Qmat.submat(blockDiagonalMatricesIndices.at(reverseIndex - 1).at(0),
-                  blockDiagonalMatricesIndices.at(reverseIndex - 1).at(0),
-                  blockDiagonalMatricesIndices.at(reverseIndex - 1).back(),
-                  blockDiagonalMatricesIndices.at(reverseIndex - 1).back()),
-      Qmat.submat(blockDiagonalMatricesIndices.at(reverseIndex - 1).at(0),
-                  blockDiagonalMatricesIndices.at(reverseIndex - 1).at(0),
-                  blockDiagonalMatricesIndices.at(reverseIndex - 1).back(),
-                  blockDiagonalMatricesIndices.at(reverseIndex - 1).back()),,
-                  A21,
-                  Qmat.submat(blockDiagonalMatricesIndices.at(reverseIndex).at(0),
-                              blockDiagonalMatricesIndices.at(reverseIndex).at(0),
-                              blockDiagonalMatricesIndices.at(reverseIndex).back(),
-                              blockDiagonalMatricesIndices.at(reverseIndex).back()),
-                  )
+  sp_mat A22 = Qmat.submat(blockDiagonalMatricesIndices.back().at(0),
+                        blockDiagonalMatricesIndices.back().at(0),
+                        blockDiagonalMatricesIndices.back().back(),
+                        blockDiagonalMatricesIndices.back().back()) ;
+  uint shift = blockDiagonalMatricesIndices.back().at(0) ;
+  std::vector<uint> shiftedBlockIndices(blockDiagonalMatricesIndices.size()) ;
+  std::transform(blockDiagonalMatricesIndices.back().begin(), blockDiagonalMatricesIndices.back().end(),
+                 shiftedBlockIndices.begin(), [shift] (const uint & index) {return index - shift ;}) ;
+  mat A22inv = invertSymmBlockDiag(A22, shiftedBlockIndices) ;
 
+  int reverseIndexA11 ;
 
+  for (uint index = 2 ; index < blockDiagonalMatricesIndices.size() ; index++) {
+    uint nrowA11 =  blockDiagonalMatricesIndices.at(reverseIndexA11).back() -
+      blockDiagonalMatricesIndices.at(reverseIndexA11).at(0) ;
+    uint nrowA22 = A22inv.n_rows ;
+    reverseIndexA11 = blockDiagonalMatricesIndices.size() - index ;
+    shiftedBlockIndices.resize(blockDiagonalMatricesIndices.at(reverseIndexA11).size()) ;
+    shift = blockDiagonalMatricesIndices.at(reverseIndexA11).at(0) ;
+    std::transform(blockDiagonalMatricesIndices.at(reverseIndexA11).begin(), blockDiagonalMatricesIndices.at(reverseIndexA11).end(),
+                   shiftedBlockIndices.begin(), [shift] (const uint & index) {return index - shift ;}) ;
+    A22inv = invFromDecomposition(Qmat(blockDiagonalMatricesIndices.at(reverseIndexA11).at(0),
+                                       blockDiagonalMatricesIndices.at(reverseIndexA11).at(0),
+                                       size(nrowA11, nrowA11)),
+                                  Qmat(blockDiagonalMatricesIndices.at(reverseIndexA11).at(0),
+                                       blockDiagonalMatricesIndices.at(reverseIndexA11).at(0) + nrowA11,
+                                       size(nrowA11, nrowA22)),
+                                  A22, A22inv, shiftedBlockIndices) ;
+    A22 = Qmat(blockDiagonalMatricesIndices.at(reverseIndexA11).at(0),
+               blockDiagonalMatricesIndices.at(reverseIndexA11).at(0),
+               size(nrowA11 + nrowA22, nrowA11 + nrowA22)) ;
   }
+  return A22inv ;
 }
 
 std::vector<uint> AugTree::extractBlockIndicesFromLowerRight(const arma::sp_mat & symmSparseMatrix) {
@@ -633,26 +643,24 @@ std::vector<uint> AugTree::extractBlockIndicesFromLowerRight(const arma::sp_mat 
   return blockIndices ;
 }
 
-// This function assumes that A22 is
-mat AugTree::invFromDecomposition(const sp_mat & A11, const mat & A12, const mat & A21, const sp_mat & A22,
-                                  const std::vector<uint> & blockDiagA11indices,
-                                  const std::vector<uint> & blockDiagA22indices) {
-  mat A11inv, A22inv ;
+mat AugTree::invFromDecomposition(const sp_mat & A11, const sp_mat & A12, const sp_mat & A22,
+                                  const mat & A22inv, const std::vector<uint> & blockDiagA11indices) {
+  mat A11inv ;
+  // Typecasting those sparse matrices will be required for inversions.
+  mat A11mat = mat(A11) ;
+  mat A22mat = mat(A22) ;
+  mat A12mat = mat(A12) ;
+
   if (blockDiagA11indices.size() > 1) {
-    A11inv = invertSymmBlockDiag(A11, blockDiagA11indices) ;
+    A11inv = invertSymmBlockDiag(sp_mat(A11), blockDiagA11indices) ;
   } else {
     A11inv = inv_sympd(mat(A11)) ;
   }
-  if (blockDiagA22indices.size() > 1) {
-    A22inv = invertSymmBlockDiag(A22, blockDiagA22indices) ;
-  } else {
-    A22inv = inv_sympd(mat(A22)) ;
-  }
 
-  mat firstInvertedBlock = inv_sympd(A22 - trans(A12) * A11inv * A12) ;
-  mat B11 = A11inv + A11inv * A12 * firstInvertedBlock * trans(A12) * A11inv ;
-  mat B22 = A22inv + A22inv * trans(A12) * inv_sympd(A11 - A12 * A22inv * trans(A12)) * A12 * A22inv ;
-  mat B12t = -A11inv * A12 * firstInvertedBlock ;
+  mat firstInvertedBlock = inv_sympd(A22 - trans(A12mat) * A11inv * A12mat) ;
+  mat B11 = A11inv + A11inv * A12mat * firstInvertedBlock * trans(A12mat) * A11inv ;
+  mat B22 = A22inv + A22inv * trans(A12mat) * inv_sympd(A11mat - A12mat * A22inv * trans(A12mat)) * A12mat * A22inv ;
+  mat B12t = -A11inv * A12mat * firstInvertedBlock ;
 
   mat Bmatrix = join_rows(join_cols(B11, B12t), join_cols(trans(B12t), B22)) ;
   return Bmatrix ;
