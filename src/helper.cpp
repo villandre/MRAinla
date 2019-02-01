@@ -97,7 +97,7 @@ std::vector<unsigned int> extractBlockIndices(const arma::sp_mat & symmSparseMat
 //   return Bmatrix ;
 // }
 
-mat invertSymmBlockDiag(const sp_mat & blockMatrix, const std::vector<unsigned int> & blockIndices) {
+mat invertSymmBlockDiag(const sp_mat & blockMatrix, const uvec & blockIndices) {
   int numRows = blockMatrix.n_rows ;
   mat inverted(numRows, numRows, fill::zeros) ;
 
