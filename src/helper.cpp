@@ -97,14 +97,17 @@ std::vector<unsigned int> extractBlockIndices(const arma::sp_mat & symmSparseMat
 //   return Bmatrix ;
 // }
 
-mat invertSymmBlockDiag(const sp_mat & blockMatrix, const uvec & blockIndices) {
+sp_mat invertSymmBlockDiag(const sp_mat & blockMatrix, const uvec & blockIndices) {
   int numRows = blockMatrix.n_rows ;
-  mat inverted(numRows, numRows, fill::zeros) ;
+  sp_mat inverted(numRows, numRows) ;
+  unsigned int diagElement = 0 ;
+  unsigned int blockSize ;
 
   for (unsigned int i = 0; i < (blockIndices.size()-1); i++) {
-    unsigned int blockSize = blockIndices.at(i+1) - blockIndices.at(i) ;
-    inverted.submat(i, i, i+blockSize-1, i+blockSize-1) =
-      inv_sympd(mat(blockMatrix.submat(i, i, i+blockSize-1, i+blockSize-1))) ;
+    blockSize = blockIndices.at(i+1) - blockIndices.at(i) ;
+    inverted(diagElement, diagElement, size(blockSize, blockSize)) =
+      inv_sympd(mat(blockMatrix(diagElement, diagElement, size(blockSize, blockSize)))) ;
+    diagElement += blockSize ;
   }
   return inverted ;
 }

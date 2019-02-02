@@ -101,7 +101,7 @@ private:
   arma::sp_mat createFmatrix() ;
   arma::mat invertQmat(const arma::sp_mat &) ;
   arma::uvec extractBlockIndicesFromLowerRight(const arma::sp_mat &) ;
-  arma::mat invFromDecomposition(const arma::sp_mat &, const arma::sp_mat &, const arma::sp_mat &, const arma::mat &,
+  void invFromDecomposition(const arma::sp_mat &, const arma::sp_mat &, const arma::sp_mat &, arma::sp_mat *,
                                  const arma::uvec &) ;
 
 };

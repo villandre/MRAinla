@@ -587,47 +587,55 @@ mat AugTree::invertQmat(const sp_mat & Qmat) {
   for (auto & i : blockDiagonalMatricesIndices) {
     printf("Number of blocks: %i \n" , int(i.size())) ;
   }
-  cout << "Initializing A22... \n" ;
-  uint numRowsA22 = blockDiagonalMatricesIndices.back().tail(1)(0) - blockDiagonalMatricesIndices.back().at(0) ;
-  sp_mat A22 = Qmat(blockDiagonalMatricesIndices.back().at(0),
-                    blockDiagonalMatricesIndices.back().at(0),
-                    size(numRowsA22, numRowsA22)) ;
-  uint shift = blockDiagonalMatricesIndices.back().at(0) ;
+  cout << "Initializing D... \n" ;
+  uint numRowsD = blockDiagonalMatricesIndices.at(0).tail(1)(0) - blockDiagonalMatricesIndices.at(0)(0) ;
+  // printf("Indices first/last element in D: %i %i \n", blockDiagonalMatricesIndices.at(0)(0), blockDiagonalMatricesIndices.at(0).tail(1)(0)) ;
+  blockDiagonalMatricesIndices.at(0).print("Block indices:") ;
+  Qmat(blockDiagonalMatricesIndices.at(0).at(0),
+       blockDiagonalMatricesIndices.at(0).at(0),
+       size(1, numRowsD)).print("D first row:") ;
+  uint shift = blockDiagonalMatricesIndices.at(0).at(0) ;
   uvec shiftedBlockIndices(blockDiagonalMatricesIndices.size()) ;
-  shiftedBlockIndices = blockDiagonalMatricesIndices.back() - shift ;
-  cout << "Initializing A22inv... \n" ;
-  mat A22inv = invertSymmBlockDiag(A22, shiftedBlockIndices) ;
+  shiftedBlockIndices = blockDiagonalMatricesIndices.at(0) - shift ;
+  cout << "Initializing Dinv... \n" ;
+  sp_mat Dinv = invertSymmBlockDiag(Qmat(blockDiagonalMatricesIndices.at(0).at(0),
+                                         blockDiagonalMatricesIndices.at(0).at(0),
+                                         size(numRowsD, numRowsD)),
+                                         shiftedBlockIndices) ;
 
-  int reverseIndexA11 ;
+  // int reverseIndexA ;
   cout << "Launching the recursion... \n" ;
   for (uint index = 2 ; index < blockDiagonalMatricesIndices.size() ; index++) {
-    uint nrowA11 =  blockDiagonalMatricesIndices.at(reverseIndexA11).tail(1)(0) -
-      blockDiagonalMatricesIndices.at(reverseIndexA11).at(0) ;
-    uint nrowA22 = A22inv.n_rows ;
-    reverseIndexA11 = blockDiagonalMatricesIndices.size() - index ;
-    printf("Processing A11 matrix %i \n", reverseIndexA11) ;
-    shift = blockDiagonalMatricesIndices.at(reverseIndexA11).at(0) ;
-    shiftedBlockIndices = blockDiagonalMatricesIndices.at(reverseIndexA11) - shift ;
-    A22inv = invFromDecomposition(Qmat(blockDiagonalMatricesIndices.at(reverseIndexA11).at(0),
-                                       blockDiagonalMatricesIndices.at(reverseIndexA11).at(0),
-                                       size(nrowA11, nrowA11)),
-                                  Qmat(blockDiagonalMatricesIndices.at(reverseIndexA11).at(0),
-                                       blockDiagonalMatricesIndices.at(reverseIndexA11).at(0) + nrowA11,
-                                       size(nrowA11, nrowA22)),
-                                  A22, A22inv, shiftedBlockIndices) ;
-    A22 = Qmat(blockDiagonalMatricesIndices.at(reverseIndexA11).at(0),
-               blockDiagonalMatricesIndices.at(reverseIndexA11).at(0),
-               size(nrowA11 + nrowA22, nrowA11 + nrowA22)) ;
+    // reverseIndexA = blockDiagonalMatricesIndices.size() - index ;
+    uint nrowA =  blockDiagonalMatricesIndices.at(index).tail(1)(0) -
+      blockDiagonalMatricesIndices.at(index).at(0) ;
+    uint nrowD = Dinv.n_rows ;
+    printf("Number of rows of A and D: %i %i \n", int(nrowA), int(nrowD)) ;
+    printf("Processing A matrix %i \n", index) ;
+    shift = blockDiagonalMatricesIndices.at(index).at(0) ;
+    shiftedBlockIndices = blockDiagonalMatricesIndices.at(index) - shift ;
+    invFromDecomposition(Qmat(blockDiagonalMatricesIndices.at(index).at(0),
+                                       blockDiagonalMatricesIndices.at(index).at(0),
+                                       size(nrowA, nrowA)),
+                                  Qmat(blockDiagonalMatricesIndices.at(index).at(0),
+                                        blockDiagonalMatricesIndices.at(index).at(0) + nrowA,
+                                        size(nrowA, nrowD)),
+                                  Qmat(blockDiagonalMatricesIndices.at(index).at(0) + nrowA,
+                                        blockDiagonalMatricesIndices.at(index).at(0) + nrowA,
+                                        size(nrowD, nrowD)),
+                                        &Dinv, shiftedBlockIndices) ;
+    // D = Qmat(blockDiagonalMatricesIndices.at(index).at(0),
+    //            blockDiagonalMatricesIndices.at(index).at(0),
+    //            size(nrowA + nrowD, nrowA + nrowD)) ;
   }
   cout << "Recursion done! Exiting...\n" ;
-  return A22inv ;
+  return mat(1,1, fill::zeros) ; // PLACEHOLDER!!!
 }
 
 uvec AugTree::extractBlockIndicesFromLowerRight(const arma::sp_mat & symmSparseMatrix) {
-  cout << "Entering extractBlockIndices... \n" ;
   std::vector<uint> blockIndices ;
   blockIndices.push_back(symmSparseMatrix.n_rows) ; // We start by adding a bound on the right, although other points in the vector correspond to upper-left corners.
-  int index = symmSparseMatrix.n_rows - 2 ;
+  int index = symmSparseMatrix.n_rows - 1 ;
   uint lowerBoundary = symmSparseMatrix.n_rows - 1 ;
   uvec nonZeros ;
   if (any(vec(symmSparseMatrix.diag()) == 0)) {
@@ -637,43 +645,57 @@ uvec AugTree::extractBlockIndicesFromLowerRight(const arma::sp_mat & symmSparseM
   // We only do a search in columns because the Q matrix is symmetrical. Hence a search on rows would always yield
   // the same result.
   do {
-    printf("Current index: %i \n", index) ;
-    //nonZeros = find(vec(symmSparseMatrix.submat(index, index, lowerBoundary, lowerBoundary).col(index))) ;
+    index = index - 1 ;
     nonZeros = find(vec(symmSparseMatrix(index, index, size(symmSparseMatrix.n_rows - index , 1)))) ;
     if ((nonZeros.size() == 1)) { // We have entered a new block, this element has to be on the diagonal.
       blockIndices.push_back(index+1) ;
       lowerBoundary = index ;
-      printf("Block finished. Moving boundary to pos. %i", lowerBoundary) ;
     }
-    index = index - 1 ;
-  } while ((max(nonZeros) <= lowerBoundary) & (index >= 0)) ;
+  } while (((max(nonZeros) + index) <= lowerBoundary) & (index > 0)) ;
   blockIndices.push_back(index + 1) ; // The last block will not be added in the loop, hence this step.
   std::sort(blockIndices.begin(), blockIndices.end()) ;
-  cout << "Leaving extractBlockIndices... \n" ;
   return conv_to<uvec>::from(blockIndices) ;
 }
 
-mat AugTree::invFromDecomposition(const sp_mat & A11, const sp_mat & A12, const sp_mat & A22,
-                                  const mat & A22inv, const uvec & blockDiagA11indices) {
+void AugTree::invFromDecomposition(const sp_mat & A, const sp_mat & B, const sp_mat & D,
+                                  sp_mat * Dinv, const uvec & blockDiagAindices) {
   cout << "Entering invFromDecomposition... \n" ;
-  mat A11inv ;
+  sp_mat Ainv ;
   // Typecasting those sparse matrices will be required for inversions.
-  mat A11mat = mat(A11) ;
-  mat A22mat = mat(A22) ;
-  mat A12mat = mat(A12) ;
-
-  if (blockDiagA11indices.size() > 1) {
-    A11inv = invertSymmBlockDiag(sp_mat(A11), blockDiagA11indices) ;
+  // mat Amat = mat(A) ;
+  // mat Dmat = mat(D) ;
+  // mat Bmat = mat(B) ;
+  cout << "Inverting A... \n" ;
+  if (blockDiagAindices.size() > 1) {
+    Ainv = invertSymmBlockDiag(A, blockDiagAindices) ;
   } else {
-    A11inv = inv_sympd(mat(A11)) ;
+    Ainv = sp_mat(inv_sympd(mat(A))) ;
   }
+  cout << "Generating components... \n" ;
+  printf("A size: %i %i \n B size %i %i \n", A.n_rows, A.n_cols, B.n_rows, B.n_cols) ;
+  mat(B(0,0,size(20,30))).print("B matrix:") ;
+  mat(A(0,0,size(30,30))).print("A matrix:") ;
+  sp_mat M11 = sp_mat(inv_sympd(mat(A - B * (*Dinv) * trans(B)))) ;
+  sp_mat M12 = -M11 * B * (*Dinv) ;
+  sp_mat M22 = sp_mat(*Dinv) * (sp_mat(eye<mat>((*Dinv).n_rows, (*Dinv).n_cols)) - trans(B) * M12) ;
 
-  mat invertedBlock = inv_sympd(A11mat - A12mat * A22inv * trans(A12mat)) ;
-  mat B11 = A11inv + A11inv * A12mat * inv_sympd(A22 - trans(A12mat) * A11inv * A12mat) * trans(A12mat) * A11inv ;
-  mat B22 = A22inv + A22inv * trans(A12mat) * invertedBlock  * A12mat * A22inv ;
-  mat B12t = -A22inv * trans(A12mat) * invertedBlock ;
-
-  mat Bmatrix = join_rows(join_cols(B11, B12t), join_cols(trans(B12t), B22)) ;
+  cout << "Creating the inverse matrix... \n" ;
+  *Dinv = join_rows(join_cols(M11, trans(M12)), join_cols(M12, M22)) ; // Will the memory be freed once the function is done running?
   cout << "Leaving invFromDecomposition... \n" ;
-  return Bmatrix ;
 }
+
+// std::vector<uvec> AugTree::splitBlocksDiagMatrix(std::vector<uvec> splitBlockList, uint blockSizeLimit) {
+//
+//   for (auto & i : splitBlockList) {
+//     uint splitPos = 0 ;
+//     uvec shiftedIndices = i - i.at(0) ;
+//     uvec cumulativeSizes ;
+//     uint cutPosition ;
+//     if (i.tail(1)(0) > blockSizeLimit) {
+//       cumulativeSizes = cumsum(shiftedIndices) ;
+//       uvec bigPositions = find(cumulativeSizes > blockSizeLimit) ;
+//       cutPosition = bigPositions.at(0) - 1 ;
+//
+//     }
+//   }
+// }
