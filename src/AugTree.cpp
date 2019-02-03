@@ -591,9 +591,6 @@ mat AugTree::invertQmat(const sp_mat & Qmat) {
   uint numRowsD = blockDiagonalMatricesIndices.at(0).tail(1)(0) - blockDiagonalMatricesIndices.at(0)(0) ;
   // printf("Indices first/last element in D: %i %i \n", blockDiagonalMatricesIndices.at(0)(0), blockDiagonalMatricesIndices.at(0).tail(1)(0)) ;
   blockDiagonalMatricesIndices.at(0).print("Block indices:") ;
-  Qmat(blockDiagonalMatricesIndices.at(0).at(0),
-       blockDiagonalMatricesIndices.at(0).at(0),
-       size(1, numRowsD)).print("D first row:") ;
   uint shift = blockDiagonalMatricesIndices.at(0).at(0) ;
   uvec shiftedBlockIndices(blockDiagonalMatricesIndices.size()) ;
   shiftedBlockIndices = blockDiagonalMatricesIndices.at(0) - shift ;
@@ -635,7 +632,7 @@ mat AugTree::invertQmat(const sp_mat & Qmat) {
 uvec AugTree::extractBlockIndicesFromLowerRight(const arma::sp_mat & symmSparseMatrix) {
   std::vector<uint> blockIndices ;
   blockIndices.push_back(symmSparseMatrix.n_rows) ; // We start by adding a bound on the right, although other points in the vector correspond to upper-left corners.
-  int index = symmSparseMatrix.n_rows - 1 ;
+  int index = symmSparseMatrix.n_rows - 2 ;
   uint lowerBoundary = symmSparseMatrix.n_rows - 1 ;
   uvec nonZeros ;
   if (any(vec(symmSparseMatrix.diag()) == 0)) {
@@ -645,14 +642,18 @@ uvec AugTree::extractBlockIndicesFromLowerRight(const arma::sp_mat & symmSparseM
   // We only do a search in columns because the Q matrix is symmetrical. Hence a search on rows would always yield
   // the same result.
   do {
-    index = index - 1 ;
     nonZeros = find(vec(symmSparseMatrix(index, index, size(symmSparseMatrix.n_rows - index , 1)))) ;
     if ((nonZeros.size() == 1)) { // We have entered a new block, this element has to be on the diagonal.
       blockIndices.push_back(index+1) ;
       lowerBoundary = index ;
     }
-  } while (((max(nonZeros) + index) <= lowerBoundary) & (index > 0)) ;
-  blockIndices.push_back(index + 1) ; // The last block will not be added in the loop, hence this step.
+    index = index - 1 ;
+  } while (((max(nonZeros) + index + 1) <= lowerBoundary) & (index >= 0)) ;
+  int lastIndex = index + 2;
+  if (index < 0) {
+    lastIndex = 0 ;
+  }
+  blockIndices.push_back(lastIndex) ; // The last block will not be added in the loop, hence this step.
   std::sort(blockIndices.begin(), blockIndices.end()) ;
   return conv_to<uvec>::from(blockIndices) ;
 }
@@ -673,11 +674,15 @@ void AugTree::invFromDecomposition(const sp_mat & A, const sp_mat & B, const sp_
   }
   cout << "Generating components... \n" ;
   printf("A size: %i %i \n B size %i %i \n", A.n_rows, A.n_cols, B.n_rows, B.n_cols) ;
-  mat(B(0,0,size(20,30))).print("B matrix:") ;
-  mat(A(0,0,size(30,30))).print("A matrix:") ;
+  mat toInvert = mat(A - B * (*Dinv) * trans(B)) ;
+  toInvert(0,0, size(15,15)).print("Matrix to invert:") ;
+
   sp_mat M11 = sp_mat(inv_sympd(mat(A - B * (*Dinv) * trans(B)))) ;
+  cout << "Obtained M11... \n" ;
   sp_mat M12 = -M11 * B * (*Dinv) ;
+  cout << "Obtained M12... \n" ;
   sp_mat M22 = sp_mat(*Dinv) * (sp_mat(eye<mat>((*Dinv).n_rows, (*Dinv).n_cols)) - trans(B) * M12) ;
+  cout << "Obtained M22... \n" ;
 
   cout << "Creating the inverse matrix... \n" ;
   *Dinv = join_rows(join_cols(M11, trans(M12)), join_cols(M12, M22)) ; // Will the memory be freed once the function is done running?
