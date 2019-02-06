@@ -336,9 +336,7 @@ void AugTree::CenterResponse() {
 arma::sp_mat AugTree::createSigmaStarInverse() {
   std::vector<mat *> KinverseAndBetaMatrixList = getKmatricesInversePointers() ;
   mat SigmaBetaInverse = eye<mat>(m_fixedEffParameters.size(), m_fixedEffParameters.size())/m_MRAcovParas.at(0) ; // Make sure those parameters are named.
-  // KinverseAndBetaMatrixList.push_back(&SigmaBetaInverse) ;
-  // The Beta covariances are inserted at the top of the matrix to group non-zero elements in the H* matrix.
-  KinverseAndBetaMatrixList.insert(KinverseAndBetaMatrixList.begin(), &SigmaBetaInverse) ;
+  KinverseAndBetaMatrixList.push_back(&SigmaBetaInverse) ;
   sp_mat SigmaStarInverse = createSparseMatrix(KinverseAndBetaMatrixList) ;
   return SigmaStarInverse ;
 }
@@ -349,10 +347,9 @@ arma::sp_mat AugTree::createHstar() {
 
   vec intercept = ones<vec>(m_dataset.covariateValues.n_rows) ;
   mat covarCopy = m_dataset.covariateValues ;
-  covarCopy.insert_cols(1, intercept) ;
+  covarCopy.insert_cols(0, intercept) ;
   sp_mat incrementedCovar = conv_to<sp_mat>::from(covarCopy) ;
-  // Unlike in the notes, the covariate values are placed at the left of the matrix. This is not an issue, as long as Sigma* is adjusted accordingly.
-  sp_mat Hstar = join_horiz(incrementedCovar, Fmatrix) ;
+  sp_mat Hstar = join_rows(Fmatrix, incrementedCovar) ;
   return Hstar ;
 }
 
@@ -487,16 +484,17 @@ double AugTree::ComputeLogJointCondTheta(const arma::vec & MRAvalues, const arma
 
 
 double AugTree::ComputeLogFullConditional(const arma::vec & MRAvalues, const arma::vec & fixedEffCoefs) {
+  printf("Num. knots at resolution 0: %i \n", m_vertexVector.at(0)->GetKnotsCoor().timeCoords.size()) ;
   cout << "Creating t(Hstar)... \n" ;
   sp_mat Hstar = createHstar() ;
+  // Hstar(0,0,size(20,50)).print("Hstar matrix:") ;
   cout << "Creating SigmaStarInverse... \n" ;
   sp_mat SigmaStarInverse = createSigmaStarInverse() ;
+  // SigmaStarInverse(0,0,size(50,50)).print("Section of Sigma Star inv.:") ;
   cout << "Creating Tmatrix... \n" ;
   sp_mat TmatrixInverse(m_dataset.timeCoords.size(), m_dataset.timeCoords.size()) ;
   TmatrixInverse.diag().fill(1/m_MRAcovParas.at(0)) ;
   cout << "Creating Qmat... \n" ;
-  printf("TmatrixInverse dim.: %i %i \n", TmatrixInverse.n_rows, TmatrixInverse.n_cols) ;
-  printf("SigmaStarInverse dim.: %i %i", SigmaStarInverse.n_rows, SigmaStarInverse.n_cols) ;
   sp_mat Qmat = trans(Hstar) * TmatrixInverse * Hstar + SigmaStarInverse ;
   printf("Qmat size = %i %i \n", Qmat.n_rows, Qmat.n_cols) ;
   cout << "Computing bVec... \n" ;
@@ -504,41 +502,15 @@ double AugTree::ComputeLogFullConditional(const arma::vec & MRAvalues, const arm
   sp_mat bVec = trans(Hstar) * TmatrixInverse * conv_to<sp_mat>::from(m_dataset.responseValues) ;
   printf("Number of non-zero entries in Qmat: %i \n", nonzeros(Qmat).size()) ;
   printf("Is Q mat symmetric? %i \n", Qmat.is_symmetric(1e-6)) ;
-  printf("Is SigmaStarInverse symmetric? %i \n", SigmaStarInverse.is_symmetric(1e-6)) ;
-  mat QmatrixInverse = invertQmat(Qmat) ;
-  cout << "Done inverting Qmat! \n" ;
+  Eigen::SparseMatrix<double> eigen_s = Rcpp::as<Eigen::SparseMatrix<double>>(Rcpp::wrap(Qmat));
+  Eigen::SparseLU<Eigen::SparseMatrix<double>> solver;
+  solver.compute(eigen_s);
+  double ldet = solver.logAbsDeterminant();
 
-  // mat subHmat = mat(Hstar.col(1)) ;
-  // subHmat.print("First column of Hmat \n \n") ;
-  // mat subHmatRow = mat(Hstar.row(1)) ;
-  // subHmatRow.print("First row of Hmat \n") ;
-  // mat QmatInverse = inv_sympd(conv_to<mat>::from(Qmat)) ;
-  // SparseMatrix<double> EigenMat = Rcpp::as<Eigen::SparseMatrix<double>>(Rcpp::wrap(Qmat)) ;
-  // VectorXd b(Qmat.n_rows) ;
-  // b(0) = 1 ;
-  // MatrixXd bMat = MatrixXd::Identity(Qmat.n_rows, Qmat.n_rows) ;
-  // SimplicialCholesky<SparseMatrix<double>> chol(EigenMat);  // performs a Cholesky factorization of A
-  // MatrixXd x = chol.solve(bMat);         // use the factorization to
-  //
-  // SimplicialLDLT<SparseMatrix<double> > solver;
-  // solver.compute(EigenMat);
-  // SparseMatrix<double> I(Qmat.n_rows, Qmat.n_rows);
-  // I.setIdentity();
-  // auto A_inv = solver.solve(I);
+  vec thetaValues = join_cols(MRAvalues, fixedEffCoefs) ;
+  double logFullValue = -0.5 * SigmaStarInverse.n_rows * log(2*PI) + 0.5 * ldet +
+    exp(-0.5 * trans(thetaValues) * Qmat * thetaValues + trans(thetaValues) * bVec) ; ;
 
-  // sp_mat QmatInverseSp = conv_to<sp_mat>::from(QmatInverse) ;
-  // sp_mat temp(bVec) ;
-  // sp_mat meanVec = QmatInverseSp * temp ;
-  // vec thetaValues = join_rows(MRAvalues, fixedEffCoefs) ;
-  // sp_mat centeredThetas = conv_to<sp_mat>::from(thetaValues) - meanVec ;
-  // double val;
-  // double sign;
-  // log_det(val, sign, QmatInverseSp) ;
-  // cout << "Finalising density evaluation..." ;
-  // double logDensPart1 = - 0.5 * QmatInverse.n_rows * (log((double) 2) +
-  //                         log(M_PI)) + 0.5 * sign * val ;
-  // mat logDensPart2 = 0.5 * trans(centeredThetas) * QmatInverse * centeredThetas ;
-  // return logDensPart1 - logDensPart2(0,0) ;
   return 0;
 }
 
@@ -590,7 +562,7 @@ mat AugTree::invertQmat(const sp_mat & Qmat) {
   cout << "Initializing D... \n" ;
   uint numRowsD = blockDiagonalMatricesIndices.at(0).tail(1)(0) - blockDiagonalMatricesIndices.at(0)(0) ;
   // printf("Indices first/last element in D: %i %i \n", blockDiagonalMatricesIndices.at(0)(0), blockDiagonalMatricesIndices.at(0).tail(1)(0)) ;
-  blockDiagonalMatricesIndices.at(0).print("Block indices:") ;
+  // blockDiagonalMatricesIndices.at(0).print("Block indices:") ;
   uint shift = blockDiagonalMatricesIndices.at(0).at(0) ;
   uvec shiftedBlockIndices(blockDiagonalMatricesIndices.size()) ;
   shiftedBlockIndices = blockDiagonalMatricesIndices.at(0) - shift ;
@@ -674,19 +646,35 @@ void AugTree::invFromDecomposition(const sp_mat & A, const sp_mat & B, const sp_
   }
   cout << "Generating components... \n" ;
   printf("A size: %i %i \n B size %i %i \n", A.n_rows, A.n_cols, B.n_rows, B.n_cols) ;
-  mat toInvert = mat(A - B * (*Dinv) * trans(B)) ;
-  toInvert(0,0, size(15,15)).print("Matrix to invert:") ;
-
-  sp_mat M11 = sp_mat(inv_sympd(mat(A - B * (*Dinv) * trans(B)))) ;
+  // Ainverse(0,0, size(161, 10)).print("Inverse of A:") ;
+  sp_mat M11 = sp_mat(inv(mat(A - B * (*Dinv) * trans(B)))) ;
   cout << "Obtained M11... \n" ;
+  printf("M11 size: %i %i \n", M11.n_rows, M11.n_cols) ;
   sp_mat M12 = -M11 * B * (*Dinv) ;
   cout << "Obtained M12... \n" ;
-  sp_mat M22 = sp_mat(*Dinv) * (sp_mat(eye<mat>((*Dinv).n_rows, (*Dinv).n_cols)) - trans(B) * M12) ;
-  cout << "Obtained M22... \n" ;
+  printf("M12 size: %i %i \n", M12.n_rows, M12.n_cols) ;
+  printf("trans(B) size: %i %i \n", B.n_cols, B.n_rows) ;
+  sp_fmat identity = sp_fmat((*Dinv).n_rows, (*Dinv).n_cols) ;
+  identity.diag().ones() ;
+  sp_mat difference((*Dinv).n_rows, (*Dinv).n_cols) ;
+  sp_mat difference1 = (*Dinv) * trans(B) ;
+  difference1(0,0,size(difference1.n_rows, 1)).print("First column 1:") ;
+  sp_mat difference2 = difference1 * M12 ;
+  difference2(0,0,size(difference2.n_rows, 1)).print("First column 2:") ;
+  throw Rcpp::exception("Stop here for now...\n") ;
+  cout << "Assigned identity... \n" ;
+  cout << "Number of zeros: " << approx_equal(difference, sp_mat(difference.n_cols, difference.n_cols), "absdiff", 1e-6) << "\n";
 
-  cout << "Creating the inverse matrix... \n" ;
-  *Dinv = join_rows(join_cols(M11, trans(M12)), join_cols(M12, M22)) ; // Will the memory be freed once the function is done running?
-  cout << "Leaving invFromDecomposition... \n" ;
+  cout << "Found difference. \n" ;
+  printf("difference size: %i %i \n", difference.n_rows, difference.n_cols) ;
+
+  // sp_mat multiplier = identity - difference ;
+  // cout << "Got multiplier... \n" ;
+  // sp_mat M22 = (*Dinv) * multiplier ;
+  // cout << "Obtained M22... \n" ;
+  // cout << "Creating the inverse matrix... \n" ;
+  // *Dinv = join_rows(join_cols(M11, trans(M12)), join_cols(M12, M22)) ; // Will the memory be freed once the function is done running?
+  // cout << "Leaving invFromDecomposition... \n" ;
 }
 
 // std::vector<uvec> AugTree::splitBlocksDiagMatrix(std::vector<uvec> splitBlockList, uint blockSizeLimit) {
