@@ -1,6 +1,7 @@
 #include <math.h>
 #include <omp.h>
 #include <gsl/gsl_randist.h>
+#include <gsl/gsl_multimin.h>
 
 #include "AugTree.h"
 #include "TipNode.h"
@@ -9,6 +10,11 @@
 using namespace Rcpp ;
 using namespace arma ;
 using namespace MRAinla ;
+
+struct gridPair{
+  AugTree * grid ;
+  vec * vector ;
+};
 
 AugTree::AugTree(uint & M, vec & lonRange, vec & latRange, uvec & timeRange, vec & observations, mat & obsSp, uvec & obsTime, uint & minObsForTimeSplit, unsigned long int & seed, mat & covariates)
   : m_M(M)
@@ -23,8 +29,10 @@ AugTree::AugTree(uint & M, vec & lonRange, vec & latRange, uvec & timeRange, vec
   m_fixedEffParameters.resize(m_dataset.covariateValues.n_cols + 1) ; // An extra 1 is added to take into account the intercept.
 
   BuildTree(minObsForTimeSplit) ;
+  m_numKnots = 0 ;
   for (uint i = 0 ; i < m_vertexVector.size() ; i++) {
     m_vertexVector.at(i)->SetNodeId(i) ;
+    m_numKnots += m_vertexVector.at(i)->GetKnotsCoor().timeCoords.size() ;
   }
 }
 
@@ -506,10 +514,11 @@ double AugTree::ComputeLogFullConditional(const arma::vec & MRAvalues, const arm
   Eigen::SparseLU<Eigen::SparseMatrix<double>> solver;
   solver.compute(eigen_s);
   double ldet = solver.logAbsDeterminant();
+  sp_mat thetaValues = join_cols(sp_mat(MRAvalues), sp_mat(fixedEffCoefs)) ;
 
-  vec thetaValues = join_cols(MRAvalues, fixedEffCoefs) ;
-  double logFullValue = -0.5 * SigmaStarInverse.n_rows * log(2*PI) + 0.5 * ldet +
-    exp(-0.5 * trans(thetaValues) * Qmat * thetaValues + trans(thetaValues) * bVec) ; ;
+  sp_mat logKernelResult = - 0.5 * (trans(thetaValues) * Qmat * thetaValues + trans(thetaValues) * bVec) ;
+
+  double logFullValue = -0.5 * SigmaStarInverse.n_rows * log(2*PI) + 0.5 * ldet + logKernelResult(0,0) ;
 
   return 0;
 }
@@ -527,10 +536,10 @@ double AugTree::ComputeGlobalLogLik(const arma::vec & MRAvalues, const arma::vec
   return sum(logDensVec) ;
 }
 
-double AugTree::ComputeJointPsiMarginal(const arma::vec & MRAhyperparas, const double errorSD, const double fixedEffSD, const double hyperAlpha, const double hyperBeta) {
+double AugTree::ComputeJointPsiMarginal(const arma::vec & MRAhyperparas, const double fixedEffSD, const double errorSD, const double hyperAlpha, const double hyperBeta) {
   // In theory, this function should not depend on the theta values...
   // We can therefore arbitrarily set them all to 0.
-  vec MRAvalues(m_dataset.responseValues.size(), fill::zeros) ;
+  vec MRAvalues(m_numKnots + m_dataset.covariateValues.n_cols + 1, fill::zeros) ;
   vec fixedEffCoefs(m_dataset.responseValues.size(), fill::zeros) ;
   double totalLogLik = ComputeGlobalLogLik(MRAvalues, fixedEffCoefs, errorSD) ;
   double logPrior = ComputeLogPriors(MRAhyperparas, errorSD, fixedEffSD, hyperAlpha, hyperBeta) ;
@@ -543,139 +552,139 @@ double AugTree::ComputeJointPsiMarginal(const arma::vec & MRAhyperparas, const d
 // possible to form block-diagonal matrices on the diagonal which can be easily inverted.
 // The challenge in inverting Qmat was the very heavy memory burden.
 // This function involves much smaller matrices, which will make the operations easier to handle.
-mat AugTree::invertQmat(const sp_mat & Qmat) {
-  // We start in the lower-right corner and use M levels of nesting.
-  // We find all block diagonal matrices on the diagonal.
-  std::vector<uvec> blockDiagonalMatricesIndices ;
-  int lowerBound = Qmat.n_rows - 1 ;
-  cout << "Detecting block diagonal matrices... \n" ;
-  do {
-    uvec indicesInBlock = extractBlockIndicesFromLowerRight(Qmat.submat(0, 0, lowerBound, lowerBound)) ;
-    blockDiagonalMatricesIndices.push_back(indicesInBlock) ;
-    lowerBound = indicesInBlock.at(0) - 1 ;
-  } while (lowerBound >= 0) ;
-  cout << "Done! \n" ;
-  printf("Number of block diagonal matrices : %i \n", int(blockDiagonalMatricesIndices.size())) ;
-  for (auto & i : blockDiagonalMatricesIndices) {
-    printf("Number of blocks: %i \n" , int(i.size())) ;
-  }
-  cout << "Initializing D... \n" ;
-  uint numRowsD = blockDiagonalMatricesIndices.at(0).tail(1)(0) - blockDiagonalMatricesIndices.at(0)(0) ;
-  // printf("Indices first/last element in D: %i %i \n", blockDiagonalMatricesIndices.at(0)(0), blockDiagonalMatricesIndices.at(0).tail(1)(0)) ;
-  // blockDiagonalMatricesIndices.at(0).print("Block indices:") ;
-  uint shift = blockDiagonalMatricesIndices.at(0).at(0) ;
-  uvec shiftedBlockIndices(blockDiagonalMatricesIndices.size()) ;
-  shiftedBlockIndices = blockDiagonalMatricesIndices.at(0) - shift ;
-  cout << "Initializing Dinv... \n" ;
-  sp_mat Dinv = invertSymmBlockDiag(Qmat(blockDiagonalMatricesIndices.at(0).at(0),
-                                         blockDiagonalMatricesIndices.at(0).at(0),
-                                         size(numRowsD, numRowsD)),
-                                         shiftedBlockIndices) ;
+// mat AugTree::invertQmat(const sp_mat & Qmat) {
+//   // We start in the lower-right corner and use M levels of nesting.
+//   // We find all block diagonal matrices on the diagonal.
+//   std::vector<uvec> blockDiagonalMatricesIndices ;
+//   int lowerBound = Qmat.n_rows - 1 ;
+//   cout << "Detecting block diagonal matrices... \n" ;
+//   do {
+//     uvec indicesInBlock = extractBlockIndicesFromLowerRight(Qmat.submat(0, 0, lowerBound, lowerBound)) ;
+//     blockDiagonalMatricesIndices.push_back(indicesInBlock) ;
+//     lowerBound = indicesInBlock.at(0) - 1 ;
+//   } while (lowerBound >= 0) ;
+//   cout << "Done! \n" ;
+//   printf("Number of block diagonal matrices : %i \n", int(blockDiagonalMatricesIndices.size())) ;
+//   for (auto & i : blockDiagonalMatricesIndices) {
+//     printf("Number of blocks: %i \n" , int(i.size())) ;
+//   }
+//   cout << "Initializing D... \n" ;
+//   uint numRowsD = blockDiagonalMatricesIndices.at(0).tail(1)(0) - blockDiagonalMatricesIndices.at(0)(0) ;
+//   // printf("Indices first/last element in D: %i %i \n", blockDiagonalMatricesIndices.at(0)(0), blockDiagonalMatricesIndices.at(0).tail(1)(0)) ;
+//   // blockDiagonalMatricesIndices.at(0).print("Block indices:") ;
+//   uint shift = blockDiagonalMatricesIndices.at(0).at(0) ;
+//   uvec shiftedBlockIndices(blockDiagonalMatricesIndices.size()) ;
+//   shiftedBlockIndices = blockDiagonalMatricesIndices.at(0) - shift ;
+//   cout << "Initializing Dinv... \n" ;
+//   sp_mat Dinv = invertSymmBlockDiag(Qmat(blockDiagonalMatricesIndices.at(0).at(0),
+//                                          blockDiagonalMatricesIndices.at(0).at(0),
+//                                          size(numRowsD, numRowsD)),
+//                                          shiftedBlockIndices) ;
+//
+//   // int reverseIndexA ;
+//   cout << "Launching the recursion... \n" ;
+//   for (uint index = 2 ; index < blockDiagonalMatricesIndices.size() ; index++) {
+//     // reverseIndexA = blockDiagonalMatricesIndices.size() - index ;
+//     uint nrowA =  blockDiagonalMatricesIndices.at(index).tail(1)(0) -
+//       blockDiagonalMatricesIndices.at(index).at(0) ;
+//     uint nrowD = Dinv.n_rows ;
+//     printf("Number of rows of A and D: %i %i \n", int(nrowA), int(nrowD)) ;
+//     printf("Processing A matrix %i \n", index) ;
+//     shift = blockDiagonalMatricesIndices.at(index).at(0) ;
+//     shiftedBlockIndices = blockDiagonalMatricesIndices.at(index) - shift ;
+//     invFromDecomposition(Qmat(blockDiagonalMatricesIndices.at(index).at(0),
+//                                        blockDiagonalMatricesIndices.at(index).at(0),
+//                                        size(nrowA, nrowA)),
+//                                   Qmat(blockDiagonalMatricesIndices.at(index).at(0),
+//                                         blockDiagonalMatricesIndices.at(index).at(0) + nrowA,
+//                                         size(nrowA, nrowD)),
+//                                   Qmat(blockDiagonalMatricesIndices.at(index).at(0) + nrowA,
+//                                         blockDiagonalMatricesIndices.at(index).at(0) + nrowA,
+//                                         size(nrowD, nrowD)),
+//                                         &Dinv, shiftedBlockIndices) ;
+//     // D = Qmat(blockDiagonalMatricesIndices.at(index).at(0),
+//     //            blockDiagonalMatricesIndices.at(index).at(0),
+//     //            size(nrowA + nrowD, nrowA + nrowD)) ;
+//   }
+//   cout << "Recursion done! Exiting...\n" ;
+//   return mat(1,1, fill::zeros) ; // PLACEHOLDER!!!
+// }
 
-  // int reverseIndexA ;
-  cout << "Launching the recursion... \n" ;
-  for (uint index = 2 ; index < blockDiagonalMatricesIndices.size() ; index++) {
-    // reverseIndexA = blockDiagonalMatricesIndices.size() - index ;
-    uint nrowA =  blockDiagonalMatricesIndices.at(index).tail(1)(0) -
-      blockDiagonalMatricesIndices.at(index).at(0) ;
-    uint nrowD = Dinv.n_rows ;
-    printf("Number of rows of A and D: %i %i \n", int(nrowA), int(nrowD)) ;
-    printf("Processing A matrix %i \n", index) ;
-    shift = blockDiagonalMatricesIndices.at(index).at(0) ;
-    shiftedBlockIndices = blockDiagonalMatricesIndices.at(index) - shift ;
-    invFromDecomposition(Qmat(blockDiagonalMatricesIndices.at(index).at(0),
-                                       blockDiagonalMatricesIndices.at(index).at(0),
-                                       size(nrowA, nrowA)),
-                                  Qmat(blockDiagonalMatricesIndices.at(index).at(0),
-                                        blockDiagonalMatricesIndices.at(index).at(0) + nrowA,
-                                        size(nrowA, nrowD)),
-                                  Qmat(blockDiagonalMatricesIndices.at(index).at(0) + nrowA,
-                                        blockDiagonalMatricesIndices.at(index).at(0) + nrowA,
-                                        size(nrowD, nrowD)),
-                                        &Dinv, shiftedBlockIndices) ;
-    // D = Qmat(blockDiagonalMatricesIndices.at(index).at(0),
-    //            blockDiagonalMatricesIndices.at(index).at(0),
-    //            size(nrowA + nrowD, nrowA + nrowD)) ;
-  }
-  cout << "Recursion done! Exiting...\n" ;
-  return mat(1,1, fill::zeros) ; // PLACEHOLDER!!!
-}
+// uvec AugTree::extractBlockIndicesFromLowerRight(const arma::sp_mat & symmSparseMatrix) {
+//   std::vector<uint> blockIndices ;
+//   blockIndices.push_back(symmSparseMatrix.n_rows) ; // We start by adding a bound on the right, although other points in the vector correspond to upper-left corners.
+//   int index = symmSparseMatrix.n_rows - 2 ;
+//   uint lowerBoundary = symmSparseMatrix.n_rows - 1 ;
+//   uvec nonZeros ;
+//   if (any(vec(symmSparseMatrix.diag()) == 0)) {
+//     throw Rcpp::exception("Full conditional has an element with 0 variance! \n") ;
+//   }
+//   // We start the search for blocks in the lower right corner.
+//   // We only do a search in columns because the Q matrix is symmetrical. Hence a search on rows would always yield
+//   // the same result.
+//   do {
+//     nonZeros = find(vec(symmSparseMatrix(index, index, size(symmSparseMatrix.n_rows - index , 1)))) ;
+//     if ((nonZeros.size() == 1)) { // We have entered a new block, this element has to be on the diagonal.
+//       blockIndices.push_back(index+1) ;
+//       lowerBoundary = index ;
+//     }
+//     index = index - 1 ;
+//   } while (((max(nonZeros) + index + 1) <= lowerBoundary) & (index >= 0)) ;
+//   int lastIndex = index + 2;
+//   if (index < 0) {
+//     lastIndex = 0 ;
+//   }
+//   blockIndices.push_back(lastIndex) ; // The last block will not be added in the loop, hence this step.
+//   std::sort(blockIndices.begin(), blockIndices.end()) ;
+//   return conv_to<uvec>::from(blockIndices) ;
+// }
 
-uvec AugTree::extractBlockIndicesFromLowerRight(const arma::sp_mat & symmSparseMatrix) {
-  std::vector<uint> blockIndices ;
-  blockIndices.push_back(symmSparseMatrix.n_rows) ; // We start by adding a bound on the right, although other points in the vector correspond to upper-left corners.
-  int index = symmSparseMatrix.n_rows - 2 ;
-  uint lowerBoundary = symmSparseMatrix.n_rows - 1 ;
-  uvec nonZeros ;
-  if (any(vec(symmSparseMatrix.diag()) == 0)) {
-    throw Rcpp::exception("Full conditional has an element with 0 variance! \n") ;
-  }
-  // We start the search for blocks in the lower right corner.
-  // We only do a search in columns because the Q matrix is symmetrical. Hence a search on rows would always yield
-  // the same result.
-  do {
-    nonZeros = find(vec(symmSparseMatrix(index, index, size(symmSparseMatrix.n_rows - index , 1)))) ;
-    if ((nonZeros.size() == 1)) { // We have entered a new block, this element has to be on the diagonal.
-      blockIndices.push_back(index+1) ;
-      lowerBoundary = index ;
-    }
-    index = index - 1 ;
-  } while (((max(nonZeros) + index + 1) <= lowerBoundary) & (index >= 0)) ;
-  int lastIndex = index + 2;
-  if (index < 0) {
-    lastIndex = 0 ;
-  }
-  blockIndices.push_back(lastIndex) ; // The last block will not be added in the loop, hence this step.
-  std::sort(blockIndices.begin(), blockIndices.end()) ;
-  return conv_to<uvec>::from(blockIndices) ;
-}
-
-void AugTree::invFromDecomposition(const sp_mat & A, const sp_mat & B, const sp_mat & D,
-                                  sp_mat * Dinv, const uvec & blockDiagAindices) {
-  cout << "Entering invFromDecomposition... \n" ;
-  sp_mat Ainv ;
-  // Typecasting those sparse matrices will be required for inversions.
-  // mat Amat = mat(A) ;
-  // mat Dmat = mat(D) ;
-  // mat Bmat = mat(B) ;
-  cout << "Inverting A... \n" ;
-  if (blockDiagAindices.size() > 1) {
-    Ainv = invertSymmBlockDiag(A, blockDiagAindices) ;
-  } else {
-    Ainv = sp_mat(inv_sympd(mat(A))) ;
-  }
-  cout << "Generating components... \n" ;
-  printf("A size: %i %i \n B size %i %i \n", A.n_rows, A.n_cols, B.n_rows, B.n_cols) ;
-  // Ainverse(0,0, size(161, 10)).print("Inverse of A:") ;
-  sp_mat M11 = sp_mat(inv(mat(A - B * (*Dinv) * trans(B)))) ;
-  cout << "Obtained M11... \n" ;
-  printf("M11 size: %i %i \n", M11.n_rows, M11.n_cols) ;
-  sp_mat M12 = -M11 * B * (*Dinv) ;
-  cout << "Obtained M12... \n" ;
-  printf("M12 size: %i %i \n", M12.n_rows, M12.n_cols) ;
-  printf("trans(B) size: %i %i \n", B.n_cols, B.n_rows) ;
-  sp_fmat identity = sp_fmat((*Dinv).n_rows, (*Dinv).n_cols) ;
-  identity.diag().ones() ;
-  sp_mat difference((*Dinv).n_rows, (*Dinv).n_cols) ;
-  sp_mat difference1 = (*Dinv) * trans(B) ;
-  difference1(0,0,size(difference1.n_rows, 1)).print("First column 1:") ;
-  sp_mat difference2 = difference1 * M12 ;
-  difference2(0,0,size(difference2.n_rows, 1)).print("First column 2:") ;
-  throw Rcpp::exception("Stop here for now...\n") ;
-  cout << "Assigned identity... \n" ;
-  cout << "Number of zeros: " << approx_equal(difference, sp_mat(difference.n_cols, difference.n_cols), "absdiff", 1e-6) << "\n";
-
-  cout << "Found difference. \n" ;
-  printf("difference size: %i %i \n", difference.n_rows, difference.n_cols) ;
-
-  // sp_mat multiplier = identity - difference ;
-  // cout << "Got multiplier... \n" ;
-  // sp_mat M22 = (*Dinv) * multiplier ;
-  // cout << "Obtained M22... \n" ;
-  // cout << "Creating the inverse matrix... \n" ;
-  // *Dinv = join_rows(join_cols(M11, trans(M12)), join_cols(M12, M22)) ; // Will the memory be freed once the function is done running?
-  // cout << "Leaving invFromDecomposition... \n" ;
-}
+// void AugTree::invFromDecomposition(const sp_mat & A, const sp_mat & B, const sp_mat & D,
+//                                   sp_mat * Dinv, const uvec & blockDiagAindices) {
+//   cout << "Entering invFromDecomposition... \n" ;
+//   sp_mat Ainv ;
+//   // Typecasting those sparse matrices will be required for inversions.
+//   // mat Amat = mat(A) ;
+//   // mat Dmat = mat(D) ;
+//   // mat Bmat = mat(B) ;
+//   cout << "Inverting A... \n" ;
+//   if (blockDiagAindices.size() > 1) {
+//     Ainv = invertSymmBlockDiag(A, blockDiagAindices) ;
+//   } else {
+//     Ainv = sp_mat(inv_sympd(mat(A))) ;
+//   }
+//   cout << "Generating components... \n" ;
+//   printf("A size: %i %i \n B size %i %i \n", A.n_rows, A.n_cols, B.n_rows, B.n_cols) ;
+//   // Ainverse(0,0, size(161, 10)).print("Inverse of A:") ;
+//   sp_mat M11 = sp_mat(inv(mat(A - B * (*Dinv) * trans(B)))) ;
+//   cout << "Obtained M11... \n" ;
+//   printf("M11 size: %i %i \n", M11.n_rows, M11.n_cols) ;
+//   sp_mat M12 = -M11 * B * (*Dinv) ;
+//   cout << "Obtained M12... \n" ;
+//   printf("M12 size: %i %i \n", M12.n_rows, M12.n_cols) ;
+//   printf("trans(B) size: %i %i \n", B.n_cols, B.n_rows) ;
+//   sp_fmat identity = sp_fmat((*Dinv).n_rows, (*Dinv).n_cols) ;
+//   identity.diag().ones() ;
+//   sp_mat difference((*Dinv).n_rows, (*Dinv).n_cols) ;
+//   sp_mat difference1 = (*Dinv) * trans(B) ;
+//   difference1(0,0,size(difference1.n_rows, 1)).print("First column 1:") ;
+//   sp_mat difference2 = difference1 * M12 ;
+//   difference2(0,0,size(difference2.n_rows, 1)).print("First column 2:") ;
+//   throw Rcpp::exception("Stop here for now...\n") ;
+//   cout << "Assigned identity... \n" ;
+//   cout << "Number of zeros: " << approx_equal(difference, sp_mat(difference.n_cols, difference.n_cols), "absdiff", 1e-6) << "\n";
+//
+//   cout << "Found difference. \n" ;
+//   printf("difference size: %i %i \n", difference.n_rows, difference.n_cols) ;
+//
+//   // sp_mat multiplier = identity - difference ;
+//   // cout << "Got multiplier... \n" ;
+//   // sp_mat M22 = (*Dinv) * multiplier ;
+//   // cout << "Obtained M22... \n" ;
+//   // cout << "Creating the inverse matrix... \n" ;
+//   // *Dinv = join_rows(join_cols(M11, trans(M12)), join_cols(M12, M22)) ; // Will the memory be freed once the function is done running?
+//   // cout << "Leaving invFromDecomposition... \n" ;
+// }
 
 // std::vector<uvec> AugTree::splitBlocksDiagMatrix(std::vector<uvec> splitBlockList, uint blockSizeLimit) {
 //
@@ -692,3 +701,94 @@ void AugTree::invFromDecomposition(const sp_mat & A, const sp_mat & B, const sp_
 //     }
 //   }
 // }
+
+double AugTree::ComputeJointPsiMarginalPropConstant(const vec & MRAhyperStart,  const double fixedEffSDstart, const double errorSDstart, const double hyperAlpha, const double hyperBeta) {
+  vec jointFunPeak = optimJointHyperMarg(MRAhyperStart, errorSDstart,fixedEffSDstart, hyperAlpha, hyperBeta) ;
+  jointFunPeak.print("Optimised values:") ;
+  return 0;
+}
+
+double my_f (const gsl_vector *v, void *params)  {
+
+    gridPair *p = (gridPair *)params;
+    vec MRAhyperParas(2, fill::zeros) ;
+    MRAhyperParas(0)  = gsl_vector_get(v, 0) ;
+    MRAhyperParas(1) = gsl_vector_get(v, 1) ;
+    // The '-' is because we want to maximise. Finding the position of the minimum of "-function" is equivalent to
+    // finding the position of the maximum of "function".
+    return -p->grid->ComputeJointPsiMarginal(MRAhyperParas, gsl_vector_get(v, 2),
+                                   gsl_vector_get(v, 3), p->vector->at(0), p->vector->at(1)) ;
+  }
+
+vec AugTree::optimJointHyperMarg(const vec & MRAhyperStart, const double fixedEffSDstart,
+                  const double errorSDstart,  const double hyperAlpha, const double hyperBeta) {
+  vec parasToOptim = MRAhyperStart ;
+  parasToOptim.resize(MRAhyperStart.size() + 2) ;
+  parasToOptim(MRAhyperStart.size()) = fixedEffSDstart ;
+  parasToOptim(MRAhyperStart.size()+1) = errorSDstart ;
+
+  uint n = parasToOptim.n_rows ;
+  gridPair * par ;
+  par->vector->set_size(2) ;
+  par->vector->at(0) = hyperAlpha;
+  par->vector->at(1) = hyperBeta;
+  par->grid = this;
+
+  const gsl_multimin_fminimizer_type *T = gsl_multimin_fminimizer_nmsimplex2;
+  gsl_multimin_fminimizer *s = NULL;
+  gsl_vector *ss, *x;
+  gsl_multimin_function minex_func;
+
+  size_t iter = 0;
+  int status;
+  double size;
+
+  /* Starting point */
+  x = gsl_vector_alloc(n);
+
+  for (int i = 0 ; i < n ; i++) {
+    gsl_vector_set(x, i, parasToOptim.at(i));
+  }
+
+  /* Set initial step sizes to 0.5 */
+  ss = gsl_vector_alloc(n);
+  gsl_vector_set_all(ss, 0.5);
+
+  /* Initialize method and iterate */
+  minex_func.n = n ;
+  minex_func.f = my_f ;
+  minex_func.params = (void *)par;
+
+  s = gsl_multimin_fminimizer_alloc(T, n);
+  gsl_multimin_fminimizer_set(s, &minex_func, x, ss);
+
+  do
+  {
+    iter++;
+    status = gsl_multimin_fminimizer_iterate(s);
+
+    if (status)
+      break;
+
+    size = gsl_multimin_fminimizer_size(s);
+    status = gsl_multimin_test_size(size, 1e-2);
+
+    if (status == GSL_SUCCESS)
+    {
+      printf ("converged to minimum at\n");
+    }
+  }
+  while (status == GSL_CONTINUE && iter < 500);
+
+  vec optimalParas(x->size, fill::zeros) ;
+
+  for (uint i = 0 ; i < x->size ; i++) {
+    optimalParas(i) = gsl_vector_get(x, i) ;
+  }
+
+  gsl_vector_free(x);
+  gsl_vector_free(ss);
+  gsl_multimin_fminimizer_free (s);
+
+  return optimalParas ;
+}

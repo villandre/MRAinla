@@ -39,6 +39,7 @@ public:
   arma::sp_mat createQ() ;
 
   double ComputeJointPsiMarginal(const arma::vec &, const double, const double, const double, const double) ;
+  double ComputeJointPsiMarginalPropConstant(const arma::vec &, const double, const double, const double, const double) ;
 
   ~ AugTree() {
     deallocate_container(m_vertexVector) ;
@@ -51,6 +52,7 @@ private:
 
   double m_MRAlogLik{ 0 } ;
   double m_globalLogLik{ } ;
+  uint m_numKnots ;
 
   uint m_M{ 0 } ;
   uint m_numTips{ 0 } ;
@@ -99,10 +101,11 @@ private:
     return KmatrixInverseList ;
   }
   arma::sp_mat createFmatrix() ;
-  arma::mat invertQmat(const arma::sp_mat &) ;
-  arma::uvec extractBlockIndicesFromLowerRight(const arma::sp_mat &) ;
-  void invFromDecomposition(const arma::sp_mat &, const arma::sp_mat &, const arma::sp_mat &, arma::sp_mat *,
-                                 const arma::uvec &) ;
+  arma::vec optimJointHyperMarg(const arma::vec &, const double, const double, const double, const double) ;
+  // arma::mat invertQmat(const arma::sp_mat &) ;
+  // arma::uvec extractBlockIndicesFromLowerRight(const arma::sp_mat &) ;
+  // void invFromDecomposition(const arma::sp_mat &, const arma::sp_mat &, const arma::sp_mat &, arma::sp_mat *,
+  //                                const arma::uvec &) ;
 
 };
 }
