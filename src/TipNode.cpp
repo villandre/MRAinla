@@ -4,6 +4,13 @@
 using namespace arma ;
 using namespace MRAinla ;
 
+void TipNode::DeriveOmega(const arma::vec & responseValues) {
+  arma::vec subResponses = responseValues.elem(m_obsInNode) ;
+  for (uint i = 0 ; i < m_depth; i++) {
+    m_omegaTilde.at(i) = arma::trans(GetB(i)) * m_SigmaInverse * subResponses ;
+  }
+}
+
 void TipNode::ComputeParasEtaDeltaTilde(const spatialcoor & predictLocations, const inputdata & dataset, const arma::vec & covParas) {
   if (m_predictLocIndices.size() > 0) {
     computeUpred(covParas, predictLocations) ;

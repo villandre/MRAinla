@@ -34,13 +34,15 @@ MRA_INLA <- function(spacetimeData, errorSDstart, fixedEffSDstart, MRAhyperparas
   covariateMatrix <- as.matrix(spacetimeData@data[, -1, drop = FALSE])
   gridPointer <- setupGridCpp(spacetimeData@data[, 1], dataCoordinates, timeValues, covariateMatrix, M, lonRange, latRange, timeRange, randomSeed, cutForTimeSplit)
   # First we compute values relating to the hyperprior marginal distribution...
-  xStartValues <- c(MRAhyperparasStart, fixedEffSDstart, errorSDstart)
+  xStartValues <- log(c(MRAhyperparasStart, fixedEffSDstart, errorSDstart))
   numMRAhyperparas <- length(MRAhyperparasStart)
-  funForOptim <- function(x) {
-    funForOptimJointHyperMarginal(gridPointer$gridPointer, x[1:numMRAhyperparas], x[numMRAhyperparas + 1], x[numMRAhyperparas + 2], hyperAlpha, hyperBeta)
+  funForOptim <- function(x, treePointer, hyperAlpha, hyperBeta) {
+    result <- funForOptimJointHyperMarginal(treePointer, exp(x[1:numMRAhyperparas]), exp(x[numMRAhyperparas + 1]), exp(x[numMRAhyperparas + 2]), hyperAlpha, hyperBeta)
+    result
   }
-  funForOptim(xStartValues)
-  # optimResult <- optim(par = xStartValues, fn = funForOptim, hessian = TRUE)
+  cat("Start values: ", xStartValues, "\n")
+  optimResult <- optim(par = xStartValues, fn = funForOptim, gr = NULL, treePointer = gridPointer$gridPointer, hyperAlpha = hyperAlpha, hyperBeta = hyperBeta)
+  optimResult
   # hyperMode <- optimResult$par
   # hyperHessian <- optimResult$hessian
   # list(hyperDistMode = hyperMode, hessianAtMode = hyperHessian)

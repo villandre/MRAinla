@@ -152,21 +152,14 @@ double AugTree::ComputeMRAlogLik(const vec & thetaValues, const vec & MRAcovPara
   printf("Equality test %i \n", sameCovParametersTest) ;
   if (!sameCovParametersTest) {
     m_MRAcovParas = MRAcovParas ;
-    cout << "Entering computeWmats \n" ;
-    m_MRAcovParas.print("MRA cov. parameters: ") ;
     computeWmats() ;
-    cout << "Entering deriveAtildeMatrices \n" ;
     deriveAtildeMatrices() ;
   }
-  cout << "Entering computeOmegas \n" ;
   computeOmegas(thetaValues) ;
-  cout << "Entering computeU \n" ;
   computeU(thetaValues) ;
-  cout << "Entering computeD \n" ;
   if (!sameCovParametersTest) {
     computeD() ;
   }
-  cout << "Finalising evaluation \n" ;
   // The log-likelihood is a function of d and u computed at the root node, being at the
   // head of m_vertexVector, since it's the first one we ever created.
   double tempLogLik = (m_vertexVector.at(0)->GetD() + m_vertexVector.at(0)->GetU()) ;
@@ -491,36 +484,27 @@ double AugTree::ComputeLogJointCondTheta(const arma::vec & MRAvalues, const arma
 }
 
 
-double AugTree::ComputeLogFullConditional(const arma::vec & MRAvalues, const arma::vec & fixedEffCoefs) {
-  printf("Num. knots at resolution 0: %i \n", m_vertexVector.at(0)->GetKnotsCoor().timeCoords.size()) ;
-  cout << "Creating t(Hstar)... \n" ;
+double AugTree::ComputeLogFullConditional(const arma::vec & meanParaValues, const arma::vec & fixedEffCoefs) {
+
   sp_mat Hstar = createHstar() ;
-  // Hstar(0,0,size(20,50)).print("Hstar matrix:") ;
-  cout << "Creating SigmaStarInverse... \n" ;
   sp_mat SigmaStarInverse = createSigmaStarInverse() ;
-  // SigmaStarInverse(0,0,size(50,50)).print("Section of Sigma Star inv.:") ;
-  cout << "Creating Tmatrix... \n" ;
   sp_mat TmatrixInverse(m_dataset.timeCoords.size(), m_dataset.timeCoords.size()) ;
   TmatrixInverse.diag().fill(1/m_MRAcovParas.at(0)) ;
-  cout << "Creating Qmat... \n" ;
   sp_mat Qmat = trans(Hstar) * TmatrixInverse * Hstar + SigmaStarInverse ;
-  printf("Qmat size = %i %i \n", Qmat.n_rows, Qmat.n_cols) ;
-  cout << "Computing bVec... \n" ;
   // The formulation for bVec is valid if priors for the eta's and fixed effect coefficients have mean zero, else, a second term comes into play Sigma * mu ;
   sp_mat bVec = trans(Hstar) * TmatrixInverse * conv_to<sp_mat>::from(m_dataset.responseValues) ;
-  printf("Number of non-zero entries in Qmat: %i \n", nonzeros(Qmat).size()) ;
-  printf("Is Q mat symmetric? %i \n", Qmat.is_symmetric(1e-6)) ;
+
   Eigen::SparseMatrix<double> eigen_s = Rcpp::as<Eigen::SparseMatrix<double>>(Rcpp::wrap(Qmat));
   Eigen::SparseLU<Eigen::SparseMatrix<double>> solver;
   solver.compute(eigen_s);
   double ldet = solver.logAbsDeterminant();
-  sp_mat thetaValues = join_cols(sp_mat(MRAvalues), sp_mat(fixedEffCoefs)) ;
+  sp_mat thetaValues= sp_mat(meanParaValues) ;
 
   sp_mat logKernelResult = - 0.5 * (trans(thetaValues) * Qmat * thetaValues + trans(thetaValues) * bVec) ;
 
   double logFullValue = -0.5 * SigmaStarInverse.n_rows * log(2*PI) + 0.5 * ldet + logKernelResult(0,0) ;
 
-  return 0;
+  return logFullValue;
 }
 
 double AugTree::ComputeGlobalLogLik(const arma::vec & MRAvalues, const arma::vec & fixedEffParams, const double errorSD) {
@@ -539,12 +523,19 @@ double AugTree::ComputeGlobalLogLik(const arma::vec & MRAvalues, const arma::vec
 double AugTree::ComputeJointPsiMarginal(const arma::vec & MRAhyperparas, const double fixedEffSD, const double errorSD, const double hyperAlpha, const double hyperBeta) {
   // In theory, this function should not depend on the theta values...
   // We can therefore arbitrarily set them all to 0.
+  cout << "Entering ComputeJointPsiMarginal... \n" ;
   vec MRAvalues(m_numKnots + m_dataset.covariateValues.n_cols + 1, fill::zeros) ;
-  vec fixedEffCoefs(m_dataset.responseValues.size(), fill::zeros) ;
-  double totalLogLik = ComputeGlobalLogLik(MRAvalues, fixedEffCoefs, errorSD) ;
+  vec MRAvaluesInterpolant(m_dataset.timeCoords.n_rows, fill::zeros) ;
+  vec fixedParValues(m_dataset.covariateValues.n_cols + 1, fill::zeros) ;
+  cout << "Computing global log-lik... \n" ;
+  double totalLogLik = ComputeGlobalLogLik(MRAvaluesInterpolant, fixedParValues, errorSD) ;
+  cout << "Computing log-priors... \n" ;
   double logPrior = ComputeLogPriors(MRAhyperparas, errorSD, fixedEffSD, hyperAlpha, hyperBeta) ;
-  double logCondDist = ComputeLogJointCondTheta(MRAvalues, MRAhyperparas, fixedEffCoefs, fixedEffSD) ;
-  double logFullCond = ComputeLogFullConditional(MRAvalues, fixedEffCoefs) ;
+  cout << "Computing log-conditional... \n" ;
+  double logCondDist = ComputeLogJointCondTheta(MRAvalues, MRAhyperparas, fixedParValues, fixedEffSD) ;
+  cout << "Computing log-full conditional... \n" ;
+  double logFullCond = ComputeLogFullConditional(MRAvalues, fixedParValues) ;
+  cout << "Summing... \n" ;
   return logPrior + logCondDist + totalLogLik - logFullCond ;
 }
 

@@ -26,20 +26,7 @@ public:
     }
   }
 
-  void DeriveOmega(const arma::vec & responseValues) {
-
-    arma::vec subResponses = responseValues.elem(m_obsInNode) ;
-
-    // std::transform(GetBlist().begin(), std::prev(GetBlist().end()), m_omegaTilde.begin(),
-    // [this, subResponses] (arma::mat & Bmatrix) {
-    //   std::cout << "Using B... " ;
-    //   arma::vec noTemp = arma::trans(Bmatrix) * m_SigmaInverse * subResponses ;
-    //   std::cout << "Done! \n" ;
-    //   return noTemp;}) ;
-    for (uint i = 0 ; i < m_depth; i++) {
-      m_omegaTilde.at(i) = arma::trans(GetB(i)) * m_SigmaInverse * subResponses ;
-    }
-  }
+  void DeriveOmega(const arma::vec &) ;
 
   void DeriveU(const arma::vec & responseValues) {
     arma::mat uInMat = arma::trans(responseValues.elem(m_obsInNode)) * m_SigmaInverse *
