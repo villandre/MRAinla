@@ -13,7 +13,9 @@ using namespace MRAinla ;
 
 struct gridPair{
   AugTree * grid ;
-  vec * vector ;
+  vec vector ;
+  gridPair() { } ;
+  gridPair(AugTree * gridArg, vec vectorArg) : grid(gridArg), vector(vectorArg) { } ;
 };
 
 AugTree::AugTree(uint & M, vec & lonRange, vec & latRange, uvec & timeRange, vec & observations, mat & obsSp, uvec & obsTime, uint & minObsForTimeSplit, unsigned long int & seed, mat & covariates)
@@ -162,8 +164,10 @@ double AugTree::ComputeMRAlogLik(const vec & thetaValues, const vec & MRAcovPara
   }
   // The log-likelihood is a function of d and u computed at the root node, being at the
   // head of m_vertexVector, since it's the first one we ever created.
+
   double tempLogLik = (m_vertexVector.at(0)->GetD() + m_vertexVector.at(0)->GetU()) ;
   tempLogLik = -tempLogLik/2 ;
+  cout << "Leaving ComputeMRAlogLik... \n" ;
   return tempLogLik ;
 }
 
@@ -484,7 +488,7 @@ double AugTree::ComputeLogJointCondTheta(const arma::vec & MRAvalues, const arma
 }
 
 
-double AugTree::ComputeLogFullConditional(const arma::vec & meanParaValues, const arma::vec & fixedEffCoefs) {
+double AugTree::ComputeLogFullConditional(const arma::vec & MRAparaValues, const arma::vec & fixedEffCoefs) {
 
   sp_mat Hstar = createHstar() ;
   sp_mat SigmaStarInverse = createSigmaStarInverse() ;
@@ -498,7 +502,7 @@ double AugTree::ComputeLogFullConditional(const arma::vec & meanParaValues, cons
   Eigen::SparseLU<Eigen::SparseMatrix<double>> solver;
   solver.compute(eigen_s);
   double ldet = solver.logAbsDeterminant();
-  sp_mat thetaValues= sp_mat(meanParaValues) ;
+  sp_mat thetaValues= sp_mat(MRAparaValues.size() + m_dataset.covariateValues.n_cols + 1 , 1) ;
 
   sp_mat logKernelResult = - 0.5 * (trans(thetaValues) * Qmat * thetaValues + trans(thetaValues) * bVec) ;
 
@@ -524,7 +528,7 @@ double AugTree::ComputeJointPsiMarginal(const arma::vec & MRAhyperparas, const d
   // In theory, this function should not depend on the theta values...
   // We can therefore arbitrarily set them all to 0.
   cout << "Entering ComputeJointPsiMarginal... \n" ;
-  vec MRAvalues(m_numKnots + m_dataset.covariateValues.n_cols + 1, fill::zeros) ;
+  vec MRAvalues(m_numKnots, fill::zeros) ;
   vec MRAvaluesInterpolant(m_dataset.timeCoords.n_rows, fill::zeros) ;
   vec fixedParValues(m_dataset.covariateValues.n_cols + 1, fill::zeros) ;
   cout << "Computing global log-lik... \n" ;
@@ -693,8 +697,11 @@ double AugTree::ComputeJointPsiMarginal(const arma::vec & MRAhyperparas, const d
 //   }
 // }
 
-double AugTree::ComputeJointPsiMarginalPropConstant(const vec & MRAhyperStart,  const double fixedEffSDstart, const double errorSDstart, const double hyperAlpha, const double hyperBeta) {
-  vec jointFunPeak = optimJointHyperMarg(MRAhyperStart, errorSDstart,fixedEffSDstart, hyperAlpha, hyperBeta) ;
+double AugTree::ComputeJointPsiMarginalPropConstant(const vec & MRAhyperStart,
+                                const double fixedEffSDstart, const double errorSDstart,
+                                const double hyperAlpha, const double hyperBeta) {
+  cout << "Entered ComputeJointPsiMarginalPropConstant... \n" ;
+  vec jointFunPeak = optimJointHyperMarg(MRAhyperStart, errorSDstart, fixedEffSDstart, hyperAlpha, hyperBeta) ;
   jointFunPeak.print("Optimised values:") ;
   return 0;
 }
@@ -707,24 +714,28 @@ double my_f (const gsl_vector *v, void *params)  {
     MRAhyperParas(1) = gsl_vector_get(v, 1) ;
     // The '-' is because we want to maximise. Finding the position of the minimum of "-function" is equivalent to
     // finding the position of the maximum of "function".
-    return -p->grid->ComputeJointPsiMarginal(MRAhyperParas, gsl_vector_get(v, 2),
-                                   gsl_vector_get(v, 3), p->vector->at(0), p->vector->at(1)) ;
+    return -p->grid->ComputeJointPsiMarginal(exp(MRAhyperParas), exp(gsl_vector_get(v, 2)),
+                                   exp(gsl_vector_get(v, 3)), p->vector.at(0), p->vector.at(1)) ;
   }
 
 vec AugTree::optimJointHyperMarg(const vec & MRAhyperStart, const double fixedEffSDstart,
                   const double errorSDstart,  const double hyperAlpha, const double hyperBeta) {
+  cout << "Entered optimJointHyperMarg... \n" ;
   vec parasToOptim = MRAhyperStart ;
   parasToOptim.resize(MRAhyperStart.size() + 2) ;
   parasToOptim(MRAhyperStart.size()) = fixedEffSDstart ;
   parasToOptim(MRAhyperStart.size()+1) = errorSDstart ;
+  parasToOptim = log(parasToOptim) ;
 
   uint n = parasToOptim.n_rows ;
-  gridPair * par ;
-  par->vector->set_size(2) ;
-  par->vector->at(0) = hyperAlpha;
-  par->vector->at(1) = hyperBeta;
-  par->grid = this;
+  gridPair par ;
 
+  par.vector.set_size(2) ;
+  par.vector.at(0) = hyperAlpha;
+  par.vector.at(1) = hyperBeta;
+  par.grid = this;
+  gridPair * parPoint = &par ;
+  cout << "Initializing mimimizer... \n" ;
   const gsl_multimin_fminimizer_type *T = gsl_multimin_fminimizer_nmsimplex2;
   gsl_multimin_fminimizer *s = NULL;
   gsl_vector *ss, *x;
@@ -748,29 +759,29 @@ vec AugTree::optimJointHyperMarg(const vec & MRAhyperStart, const double fixedEf
   /* Initialize method and iterate */
   minex_func.n = n ;
   minex_func.f = my_f ;
-  minex_func.params = (void *)par;
+  minex_func.params = (void *)parPoint ;
 
   s = gsl_multimin_fminimizer_alloc(T, n);
   gsl_multimin_fminimizer_set(s, &minex_func, x, ss);
-
-  do
-  {
-    iter++;
-    status = gsl_multimin_fminimizer_iterate(s);
-
-    if (status)
-      break;
-
-    size = gsl_multimin_fminimizer_size(s);
-    status = gsl_multimin_test_size(size, 1e-2);
-
-    if (status == GSL_SUCCESS)
-    {
-      printf ("converged to minimum at\n");
-    }
-  }
-  while (status == GSL_CONTINUE && iter < 500);
-
+  cout << "Entering minimisation loop... \n" ;
+  // do
+  // {
+  //   iter++;
+  //   status = gsl_multimin_fminimizer_iterate(s);
+  //
+  //   if (status)
+  //     break;
+  //
+  //   size = gsl_multimin_fminimizer_size(s);
+  //   status = gsl_multimin_test_size(size, 1e-2);
+  //
+  //   if (status == GSL_SUCCESS)
+  //   {
+  //     printf ("converged to minimum at\n");
+  //   }
+  // }
+  // while (status == GSL_CONTINUE && iter < 500);
+  cout << "Minimisation complete! \n" ;
   vec optimalParas(x->size, fill::zeros) ;
 
   for (uint i = 0 ; i < x->size ; i++) {
@@ -780,6 +791,6 @@ vec AugTree::optimJointHyperMarg(const vec & MRAhyperStart, const double fixedEf
   gsl_vector_free(x);
   gsl_vector_free(ss);
   gsl_multimin_fminimizer_free (s);
-
+  cout << "Returning values... \n" ;
   return optimalParas ;
 }

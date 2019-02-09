@@ -76,17 +76,19 @@ void InternalNode::DeriveAtilde() {
 void InternalNode::DeriveOmega(const arma::vec & responseValues) {
   vec containerVec ;
   for (uint k = 0; k <= m_depth ; k++) {
-    containerVec.resize(m_children.at(0)->GetOmegaTilde(k).size()) ;
+    containerVec.set_size(m_children.at(0)->GetOmegaTilde(k).size()) ;
     containerVec.fill(0) ;
-    containerVec = std::accumulate(m_children.begin(), m_children.end(), containerVec,
-                                   [&k](vec a, TreeNode * b) {
-                                     return a + b->GetOmegaTilde(k);
-                                   }) ;
+
+    for (auto & i: m_children) {
+      containerVec += i->GetOmegaTilde(k) ;
+    }
     m_omega.at(k) = containerVec ;
   }
+
   for (auto & i : m_children) {
     i->clearOmegaTilde() ;
   }
+
   for (uint k = 0; k <= m_depth ; k++) {
     vec secondTerm = trans(m_Alist.at(m_depth).at(k)) * m_Ktilde * m_omega.at(m_depth) ;
     m_omegaTilde.at(k) = m_omega.at(k) -  secondTerm;

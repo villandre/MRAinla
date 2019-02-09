@@ -121,6 +121,7 @@ public:
   uint GetDepth() {return m_depth ;}
 
   arma::mat GetAtildeList(uint & i, uint & j) {return m_AtildeList.at(i).at(j) ;}
+  std::vector<arma::vec> GetOmegaTilde() {return m_omegaTilde ;}
   arma::mat GetOmegaTilde(uint & k) { return m_omegaTilde.at(k) ;}
   spatialcoor GetKnotsCoor() {return m_knotsCoor;}
 
