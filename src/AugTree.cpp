@@ -166,6 +166,7 @@ double AugTree::ComputeMRAlogLik(const vec & thetaValues, const vec & MRAcovPara
   // head of m_vertexVector, since it's the first one we ever created.
 
   double tempLogLik = (m_vertexVector.at(0)->GetD() + m_vertexVector.at(0)->GetU()) ;
+  printf("D and U: %.4e %.4e \n", m_vertexVector.at(0)->GetD(), m_vertexVector.at(0)->GetU()) ;
   tempLogLik = -tempLogLik/2 ;
   cout << "Leaving ComputeMRAlogLik... \n" ;
   return tempLogLik ;
@@ -484,6 +485,7 @@ double AugTree::ComputeLogJointCondTheta(const arma::vec & MRAvalues, const arma
   for (auto & i : fixedEffParams) {
     fixedEffLogLik += log(normpdf(i, fixedEffMean, fixedEffSD)) ;
   }
+  printf("Log-joint cond. dist., MRA and Cov: %.4e %.4e \n", MRAlogLik, fixedEffLogLik) ;
   return (MRAlogLik + fixedEffLogLik) ;
 }
 
@@ -540,6 +542,7 @@ double AugTree::ComputeJointPsiMarginal(const arma::vec & MRAhyperparas, const d
   cout << "Computing log-full conditional... \n" ;
   double logFullCond = ComputeLogFullConditional(MRAvalues, fixedParValues) ;
   cout << "Summing... \n" ;
+  printf("Prior, conditional, global, full cond: %+.4e %+.4e %+.4e %+.4e \n", logPrior, logCondDist, totalLogLik, logFullCond) ;
   return logPrior + logCondDist + totalLogLik - logFullCond ;
 }
 

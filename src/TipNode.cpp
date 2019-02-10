@@ -5,8 +5,6 @@ using namespace arma ;
 using namespace MRAinla ;
 
 void TipNode::DeriveOmega(const arma::vec & responseValues) {
-  cout << "Starting recursion for omega in tip" << m_nodeId << "\n" ;
-  printf("m_Wlist size: %i \n", (int) m_Wlist.size()) ;
   arma::vec subResponses = responseValues.elem(m_obsInNode) ;
   for (uint i = 0 ; i < m_depth; i++) {
     m_omegaTilde.at(i) = arma::trans(GetB(i)) * m_SigmaInverse * subResponses ;

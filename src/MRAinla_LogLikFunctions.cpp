@@ -148,7 +148,7 @@ double funForOptimJointHyperMarginal(SEXP treePointer, Rcpp::NumericVector MRAhy
     XPtr<AugTree> pointedTree(treePointer) ; // Becomes a regular pointer again.
     // outputValue = pointedTree->ComputeJointPsiMarginalPropConstant(as<vec>(MRAhyperparas),
     //                                              fixedEffSD, errorSD, hyperAlpha, hyperBeta) ;
-    outputValue = pointedTree->ComputeJointPsiMarginal(MRAhyperparas, fixedEffSD, errorSD, hyperAlpha, hyperBeta) ;
+    outputValue = pointedTree->ComputeJointPsiMarginal(as<vec>(MRAhyperparas), fixedEffSD, errorSD, hyperAlpha, hyperBeta) ;
   }
   else
   {

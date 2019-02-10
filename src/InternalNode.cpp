@@ -54,9 +54,9 @@ void InternalNode::DeriveAtilde() {
       m_Alist.at(k).at(l) = containerMat ;
     }
   }
-  for (auto & i : m_children) {
-    i->clearAtildeList() ;
-  }
+  // for (auto & i : m_children) {
+  //   i->clearAtildeList() ;
+  // }
   m_KtildeInverse = GetKmatrixInverse() + m_Alist.at(m_depth).at(m_depth) ;
   // if (!m_KtildeInverse.is_symmetric(1e-4)) {
   //   throw Rcpp::exception("KtildeInverse is a precision matrix and should be symmetric.\n") ;
@@ -85,9 +85,9 @@ void InternalNode::DeriveOmega(const arma::vec & responseValues) {
     m_omega.at(k) = containerVec ;
   }
 
-  for (auto & i : m_children) {
-    i->clearOmegaTilde() ;
-  }
+  // for (auto & i : m_children) {
+  //   i->clearOmegaTilde() ;
+  // }
 
   for (uint k = 0; k <= m_depth ; k++) {
     vec secondTerm = trans(m_Alist.at(m_depth).at(k)) * m_Ktilde * m_omega.at(m_depth) ;
@@ -98,10 +98,13 @@ void InternalNode::DeriveOmega(const arma::vec & responseValues) {
 void InternalNode::DeriveU(const arma::vec & responseValues) {
   mat firstTerm = -trans(m_omega.at(m_depth)) * m_Ktilde * m_omega.at(m_depth) ;
   double secondTerm = 0 ;
-  secondTerm = std::accumulate(m_children.begin(), m_children.end(), secondTerm,
-                               [](double a, TreeNode * b) {
-                                 return a + b->GetU();
-                               }) ;
+  // secondTerm = std::accumulate(m_children.begin(), m_children.end(), secondTerm,
+  //                              [](double a, TreeNode * b) {
+  //                                return a + b->GetU();
+  //                              }) ;
+  for (auto & i : m_children) {
+    secondTerm += i->GetU() ;
+  }
   m_u = firstTerm.at(0,0) + secondTerm ;
 }
 
@@ -120,10 +123,13 @@ void::InternalNode::DeriveD() {
   }
   m_d = m_d - value ;
   double thirdTerm = 0 ;
-  thirdTerm = std::accumulate(m_children.begin(), m_children.end(), thirdTerm,
-                               [](double a, TreeNode * b) {
-                                 return a + b->GetD();
-                               }) ;
+  // thirdTerm = std::accumulate(m_children.begin(), m_children.end(), thirdTerm,
+  //                              [](double a, TreeNode * b) {
+  //                                return a + b->GetD();
+  //                              }) ;
+  for (auto & i : m_children) {
+    thirdTerm += i->GetD() ;
+  }
   m_d = m_d + thirdTerm ;
 }
 

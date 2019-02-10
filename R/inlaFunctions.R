@@ -40,12 +40,12 @@ MRA_INLA <- function(spacetimeData, errorSDstart, fixedEffSDstart, MRAhyperparas
   #   result <- funForOptimJointHyperMarginal(treePointer, exp(x[1:numMRAhyperparas]), exp(x[numMRAhyperparas + 1]), exp(x[numMRAhyperparas + 2]), hyperAlpha, hyperBeta)
   #   result
   # }
-  valeur1 <- funForOptimJointHyperMarginal(gridPointer$gridPointer, MRAhyperparasStart,
-                                fixedEffSDstart, errorSDstart, hyperAlpha, hyperBeta)
-  cat("Obtained valeur1! \n") ;
+  # valeur1 <- funForOptimJointHyperMarginal(gridPointer$gridPointer, MRAhyperparasStart,
+  #                               fixedEffSDstart, errorSDstart, hyperAlpha, hyperBeta)
+  # cat("Obtained valeur1! \n") ;
   valeur2 <- funForOptimJointHyperMarginal(gridPointer$gridPointer, MRAhyperparasStart,
-                                           fixedEffSDstart + 1, errorSDstart + 1, hyperAlpha, hyperBeta)
-  cat("Valeurs 1 et 2: ", valeur1, " ", valeur2, "\n")
+                                           fixedEffSDstart, errorSDstart, hyperAlpha, hyperBeta)
+  cat("Valeurs 2: ", valeur2, "\n")
   # cat("Start values: ", xStartValues, "\n")
   # optimResult <- optim(par = xStartValues, fn = funForOptim, gr = NULL, treePointer = gridPointer$gridPointer, hyperAlpha = hyperAlpha, hyperBeta = hyperBeta)
   # optimResult
