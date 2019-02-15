@@ -139,7 +139,8 @@ SEXP setupGridCpp(NumericVector responseValues, NumericMatrix spCoords, IntegerV
 // [[Rcpp::export]]
 
 double funForOptimJointHyperMarginal(SEXP treePointer, Rcpp::NumericVector MRAhyperparas,
-                                     double fixedEffSD, double errorSD, double hyperAlpha, double hyperBeta) {
+         double fixedEffSD, double errorSD, Rcpp::List MRAcovParasIGalphaBeta,
+         NumericVector fixedEffIGalphaBeta, NumericVector errorIGalphaBeta) {
   arma::mat posteriorMatrix ;
   double outputValue = 0 ;
 
@@ -149,7 +150,26 @@ double funForOptimJointHyperMarginal(SEXP treePointer, Rcpp::NumericVector MRAhy
     // outputValue = pointedTree->ComputeJointPsiMarginalPropConstant(as<vec>(MRAhyperparas),
     //                                              fixedEffSD, errorSD, hyperAlpha, hyperBeta) ;
     // ProfilerStart("/home/luc/Downloads/myprofile.log") ;
-    outputValue = pointedTree->ComputeJointPsiMarginal(as<vec>(MRAhyperparas), fixedEffSD, errorSD, hyperAlpha, hyperBeta) ;
+    // The alpha's and beta's for the IG distribution of the hyperparameters do not change.
+    if (pointedTree->GetMRAcovParasIGalphaBeta().size() == 0) {
+      std::vector<IGhyperParas> MRAalphaBeta ;
+      for (auto & i : MRAcovParasIGalphaBeta) {
+        vec alphaBetaVec = Rcpp::as<vec>(i) ;
+        IGhyperParas alphaBetaStruct(alphaBetaVec.at(0), alphaBetaVec.at(1)) ;
+        MRAalphaBeta.push_back(alphaBetaStruct) ;
+      }
+      pointedTree->SetMRAcovParasIGalphaBeta(MRAalphaBeta) ;
+      vec fixedEffAlphaBeta = Rcpp::as<vec>(fixedEffIGalphaBeta) ;
+      vec errorAlphaBeta = Rcpp::as<vec>(errorIGalphaBeta) ;
+
+      pointedTree->SetFixedEffIGalphaBeta(IGhyperParas(fixedEffAlphaBeta.at(0), fixedEffAlphaBeta.at(1))) ;
+      pointedTree->SetErrorIGalphaBeta(IGhyperParas(errorAlphaBeta.at(0), errorAlphaBeta.at(1))) ;
+    }
+    pointedTree->SetErrorSD(errorSD) ;
+    pointedTree->SetFixedEffSD(fixedEffSD) ;
+    pointedTree->SetMRAcovParas(MRAhyperparas) ;
+
+    outputValue = pointedTree->ComputeJointPsiMarginal() ;
     // ProfilerStop() ;
   }
   else

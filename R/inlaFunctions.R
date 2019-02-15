@@ -28,7 +28,7 @@
 #' }
 #' @export
 
-MRA_INLA <- function(spacetimeData, errorSDstart, fixedEffSDstart, MRAhyperparasStart, M, lonRange, latRange, timeRange, randomSeed, cutForTimeSplit = 400, hyperAlpha, hyperBeta) {
+MRA_INLA <- function(spacetimeData, errorSDstart, fixedEffSDstart, MRAhyperparasStart, M, lonRange, latRange, timeRange, randomSeed, cutForTimeSplit = 400, MRAcovParasIGalphaBeta, fixedEffIGalphaBeta, errorIGalphaBeta) {
   dataCoordinates <- spacetimeData@sp@coords
   timeValues <- as.integer(time(spacetimeData@time))/(3600*24) # The division is to obtain values in days.
   covariateMatrix <- as.matrix(spacetimeData@data[, -1, drop = FALSE])
@@ -37,10 +37,10 @@ MRA_INLA <- function(spacetimeData, errorSDstart, fixedEffSDstart, MRAhyperparas
   xStartValues <- 2*log(c(MRAhyperparasStart, fixedEffSDstart, errorSDstart))
   numMRAhyperparas <- length(MRAhyperparasStart)
   # funForOptimJointHyperMarginal(gridPointer$gridPointer, MRAhyperparasStart, fixedEffSDstart, errorSDstart, hyperAlpha = hyperAlpha, hyperBeta = hyperBeta)
-  funForOptim <- function(x, treePointer, hyperAlpha, hyperBeta) {
-    -funForOptimJointHyperMarginal(treePointer, exp(0.5*x[1:numMRAhyperparas]), exp(0.5*x[numMRAhyperparas + 1]), exp(0.5*x[numMRAhyperparas + 2]), hyperAlpha, hyperBeta)
+  funForOptim <- function(x, treePointer, MRAcovParasIGalphaBeta, fixedEffIGalphaBeta, errorIGalphaBeta) {
+    -funForOptimJointHyperMarginal(treePointer, exp(0.5*x[1:numMRAhyperparas]), exp(0.5*x[numMRAhyperparas + 1]), exp(0.5*x[numMRAhyperparas + 2]), MRAcovParasIGalphaBeta, fixedEffIGalphaBeta, errorIGalphaBeta)
   }
-  optimResult <- optim(par = xStartValues, hessian = TRUE, fn = funForOptim, gr = NULL, treePointer = gridPointer$gridPointer, hyperAlpha = hyperAlpha, hyperBeta = hyperBeta)
+  optimResult <- optim(par = xStartValues, hessian = TRUE, fn = funForOptim, gr = NULL, treePointer = gridPointer$gridPointer, MRAcovParasIGalphaBeta = MRAcovParasIGalphaBeta, fixedEffIGalphaBeta = fixedEffIGalphaBeta, errorIGalphaBeta = errorIGalphaBeta)
   hyperMode <- optimResult$par
   hyperHessian <- optimResult$hessian
   list(hyperDistMode = hyperMode, hessianAtMode = hyperHessian)

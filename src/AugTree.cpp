@@ -27,6 +27,7 @@ AugTree::AugTree(uint & M, fvec & lonRange, fvec & latRange, fvec & timeRange, v
   m_randomNumGenerator = gsl_rng_alloc(gsl_rng_taus) ;
   m_MRAcovParas.resize(1) ;
   m_MRAcovParas.fill(-1.5e6) ;
+  m_newHyperParas = true ;
 
   gsl_rng_set(m_randomNumGenerator, seed) ;
   m_fixedEffParameters.resize(m_dataset.covariateValues.n_cols + 1) ; // An extra 1 is added to take into account the intercept.
@@ -145,20 +146,15 @@ void AugTree::generateKnots(TreeNode * node) {
   }
 }
 
-double AugTree::ComputeMRAlogLik(const vec & thetaValues, const vec & MRAcovParas)
+double AugTree::ComputeMRAlogLik(const vec & thetaValues)
 {
-  bool sameCovParametersTest = false ;
-  if (MRAcovParas.size() == m_MRAcovParas.size()) {
-    sameCovParametersTest = approx_equal(m_MRAcovParas, MRAcovParas, "abs_diff", 1e-06) ;
-  }
-  if (!sameCovParametersTest) {
-    m_MRAcovParas = MRAcovParas ;
+  if (!m_newHyperParas) {
     computeWmats() ;
     deriveAtildeMatrices() ;
   }
   computeOmegas(thetaValues) ;
   computeU(thetaValues) ;
-  if (!sameCovParametersTest) {
+  if (!m_newHyperParas) {
     computeD() ;
   }
   // The log-likelihood is a function of d and u computed at the root node, being at the
@@ -167,6 +163,9 @@ double AugTree::ComputeMRAlogLik(const vec & thetaValues, const vec & MRAcovPara
   double tempLogLik = (m_vertexVector.at(0)->GetD() + m_vertexVector.at(0)->GetU()) ;
 
   tempLogLik = -tempLogLik/2 ;
+  // We set m_newHyperParas=false to indicate that covariance computations with the current hyperparameters
+  // have been perfomed, and need not be performed again, unless we change the hyperparameters.
+  m_newHyperParas = false ;
   return tempLogLik ;
 }
 
@@ -244,13 +243,6 @@ void AugTree::computeD() {
       (*it)->DeriveD() ;
     }
   }
-}
-
-// The code only allows for main effects for now.
-
-mat AugTree::ComputePosteriors(spatialcoor & predictionLocations, double & stepSize) {
-  mat posteriorMatrix(predictionLocations.timeCoords.size() + m_dataset.covariateValues.n_cols + 1, 4, fill::zeros) ;
-
 }
 
 std::vector<GaussDistParas> AugTree::ComputeConditionalPrediction(const inputdata & predictionData) {
@@ -467,44 +459,48 @@ void AugTree::diveAndUpdate(TreeNode * nodePointer, std::vector<TreeNode *> * de
 
 // For now, we assume that all hyperpriors have an inverse gamma distribution with the same parameters.
 
-double AugTree::ComputeLogPriors(const arma::vec & MRAhyperPriorVec, const double errorSD, const double fixedParamSD, const double hyperAlpha, const double hyperBeta) {
-  vec hyperPriorVec = MRAhyperPriorVec ;
+double AugTree::ComputeLogPriors() {
+  vec hyperPriorVec = m_MRAcovParas ;
   hyperPriorVec.resize(hyperPriorVec.size() + 2) ;
-  hyperPriorVec(MRAhyperPriorVec.size()) = errorSD ;
-  hyperPriorVec(MRAhyperPriorVec.size() + 1) = fixedParamSD ;
+  hyperPriorVec(m_MRAcovParas.size()) = m_fixedEffSD ;
+  hyperPriorVec(m_MRAcovParas.size() + 1) = m_errorSD ;
+
+  std::vector<IGhyperParas> incrementedIG = m_MRAcovParasIGalphaBeta ;
+  incrementedIG.push_back(m_fixedEffIGalphaBeta) ;
+  incrementedIG.push_back(m_errorIGalphaBeta) ;
 
   hyperPriorVec.print("Hyperparameter values:") ;
 
   double logPrior = 0 ;
 
-  for (auto & i : hyperPriorVec) {
+  for (uint i = 0 ; i < hyperPriorVec.size() ; i++){
     // logPrior += hyperAlpha * log(hyperBeta) - gsl_sf_lngamma(hyperAlpha) -
     //   (hyperAlpha + 1) * log(i) - hyperBeta/i ;
-    logPrior += -((hyperAlpha + 1) * log(i) + hyperBeta/i) ; // Since hyperAlpha and hyperBeta do not vary, we can ignore them for optimisation purposes.
+    logPrior += -((incrementedIG.at(i).m_alpha + 1) * log(hyperPriorVec.at(i)) + incrementedIG.at(i).m_beta/hyperPriorVec.at(i)) ; // Since hyperAlpha and hyperBeta do not vary, we can ignore them for optimisation purposes.
   }
 
   return logPrior ;
 }
 
-double AugTree::ComputeLogJointCondTheta(const arma::vec & MRAvalues, const arma::vec & MRAcovParameters, const arma::vec & fixedEffParams, const double fixedEffSD) {
+double AugTree::ComputeLogJointCondTheta(const arma::vec & MRAvalues) {
 
-  double MRAlogLik = ComputeMRAlogLik(MRAvalues, MRAcovParameters) ;
+  double MRAlogLik = ComputeMRAlogLik(MRAvalues) ;
   double fixedEffMean = 0 ;
   double fixedEffLogLik = 0 ;
-  for (auto & i : fixedEffParams) {
-    fixedEffLogLik += log(normpdf(i, fixedEffMean, fixedEffSD)) ;
+  for (auto & i : m_fixedEffParameters) {
+    fixedEffLogLik += log(normpdf(i, fixedEffMean, m_fixedEffSD)) ;
   }
   printf("Log-joint cond. dist., MRA and Cov: %.4e %.4e \n", MRAlogLik, fixedEffLogLik) ;
   return (MRAlogLik + fixedEffLogLik) ;
 }
 
 
-double AugTree::ComputeLogFullConditional(const arma::vec & MRAparaValues, const arma::vec & fixedEffCoefs) {
+double AugTree::ComputeLogFullConditional(const arma::vec & MRAparaValues) {
 
   sp_mat Hstar = createHstar() ;
   sp_mat SigmaStarInverse = createSigmaStarInverse() ;
   sp_mat TmatrixInverse(m_dataset.timeCoords.size(), m_dataset.timeCoords.size()) ;
-  TmatrixInverse.diag().fill(1/m_MRAcovParas.at(0)) ; // IS THIS OK?
+  TmatrixInverse.diag().fill(1/m_errorSD) ;
   sp_mat Qmat = trans(Hstar) * TmatrixInverse * Hstar + SigmaStarInverse ;
   // The formulation for bVec is valid if priors for the eta's and fixed effect coefficients have mean zero, else, a second term comes into play Sigma * mu ;
   sp_mat bVec = trans(Hstar) * TmatrixInverse * conv_to<sp_mat>::from(m_dataset.responseValues) ;
@@ -527,20 +523,20 @@ double AugTree::ComputeLogFullConditional(const arma::vec & MRAparaValues, const
   return logFullValue;
 }
 
-double AugTree::ComputeGlobalLogLik(const arma::vec & MRAvalues, const arma::vec & fixedEffParams, const double errorSD) {
+double AugTree::ComputeGlobalLogLik(const arma::vec & MRAvalues) {
   fmat incrementedCovar = m_dataset.covariateValues ;
   incrementedCovar.insert_cols(0, 1) ;
   incrementedCovar.col(0).fill(1) ;
   vec meanVec(m_dataset.responseValues.size(), fill::zeros) ;
-  meanVec = incrementedCovar * fixedEffParams + MRAvalues ;
+  meanVec = incrementedCovar * m_fixedEffParameters + MRAvalues ;
   vec sdVec(m_dataset.responseValues.size(), fill::zeros) ;
-  sdVec.fill(errorSD) ;
+  sdVec.fill(m_errorSD) ;
   vec logDensVec(m_dataset.responseValues.size(), fill::zeros) ;
   logDensVec = log(normpdf(m_dataset.responseValues, meanVec, sdVec)) ;
   return sum(logDensVec) ;
 }
 
-double AugTree::ComputeJointPsiMarginal(const arma::vec & MRAhyperparas, const double fixedEffSD, const double errorSD, const double hyperAlpha, const double hyperBeta) {
+double AugTree::ComputeJointPsiMarginal() {
   // In theory, this function should not depend on the theta values...
   // We can therefore arbitrarily set them all to 0.
 
@@ -548,13 +544,13 @@ double AugTree::ComputeJointPsiMarginal(const arma::vec & MRAhyperparas, const d
   vec MRAvaluesInterpolant(m_dataset.timeCoords.n_rows, fill::zeros) ;
   vec fixedParValues(m_dataset.covariateValues.n_cols + 1, fill::zeros) ;
 
-  double totalLogLik = ComputeGlobalLogLik(MRAvaluesInterpolant, fixedParValues, errorSD) ;
+  double totalLogLik = ComputeGlobalLogLik(MRAvaluesInterpolant) ;
 
-  double logPrior = ComputeLogPriors(MRAhyperparas, errorSD, fixedEffSD, hyperAlpha, hyperBeta) ;
+  double logPrior = ComputeLogPriors() ;
 
-  double logCondDist = ComputeLogJointCondTheta(MRAvalues, MRAhyperparas, fixedParValues, fixedEffSD) ;
+  double logCondDist = ComputeLogJointCondTheta(MRAvalues) ;
 
-  double logFullCond = ComputeLogFullConditional(MRAvalues, fixedParValues, errorSD) ;
+  double logFullCond = ComputeLogFullConditional(MRAvalues) ;
 
   printf("Prior, conditional, global, full cond: %+.4e %+.4e %+.4e %+.4e \n", logPrior, logCondDist, totalLogLik, logFullCond) ;
   double output = logPrior + logCondDist + totalLogLik - logFullCond ;
@@ -686,100 +682,103 @@ uvec AugTree::extractBlockIndicesFromLowerRight(const arma::sp_mat & symmSparseM
 //   }
 // }
 
-double AugTree::ComputeJointPsiMarginalPropConstant(const vec & MRAhyperStart,
-                                const double fixedEffSDstart, const double errorSDstart,
-                                const double hyperAlpha, const double hyperBeta) {
-  cout << "Entered ComputeJointPsiMarginalPropConstant... \n" ;
-  vec jointFunPeak = optimJointHyperMarg(MRAhyperStart, errorSDstart, fixedEffSDstart, hyperAlpha, hyperBeta) ;
-  jointFunPeak.print("Optimised values:") ;
-  return 0;
-}
+// double AugTree::ComputeJointPsiMarginalPropConstant(const vec & MRAhyperStart,
+//                                 const double fixedEffSDstart, const double errorSDstart,
+//                                 const double hyperAlpha, const double hyperBeta) {
+//   cout << "Entered ComputeJointPsiMarginalPropConstant... \n" ;
+//   vec jointFunPeak = optimJointHyperMarg(MRAhyperStart, errorSDstart, fixedEffSDstart, hyperAlpha, hyperBeta) ;
+//   jointFunPeak.print("Optimised values:") ;
+//   return 0;
+// }
 
-double my_f (const gsl_vector *v, void *params)  {
+// This is for running Nelder-Mead directly in C++. It's not working yet. If optim in R doesn't deliver,
+// Uncomment and fix the following.
 
-    gridPair *p = (gridPair *)params;
-    vec MRAhyperParas(2, fill::zeros) ;
-    MRAhyperParas(0)  = gsl_vector_get(v, 0) ;
-    MRAhyperParas(1) = gsl_vector_get(v, 1) ;
-    // The '-' is because we want to maximise. Finding the position of the minimum of "-function" is equivalent to
-    // finding the position of the maximum of "function".
-    return -p->grid->ComputeJointPsiMarginal(exp(MRAhyperParas), exp(gsl_vector_get(v, 2)),
-                                   exp(gsl_vector_get(v, 3)), p->vector.at(0), p->vector.at(1)) ;
-  }
+// double my_f (const gsl_vector *v, void *params)  {
+//
+//     gridPair *p = (gridPair *)params;
+//     vec MRAhyperParas(2, fill::zeros) ;
+//     MRAhyperParas(0)  = gsl_vector_get(v, 0) ;
+//     MRAhyperParas(1) = gsl_vector_get(v, 1) ;
+//     // The '-' is because we want to maximise. Finding the position of the minimum of "-function" is equivalent to
+//     // finding the position of the maximum of "function".
+//     return -p->grid->ComputeJointPsiMarginal() ;
+//   }
+//
+// vec AugTree::optimJointHyperMarg(const vec & MRAhyperStart, const double fixedEffSDstart,
+//                   const double errorSDstart,  const double hyperAlpha, const double hyperBeta) {
+//   cout << "Entered optimJointHyperMarg... \n" ;
+//   vec parasToOptim = MRAhyperStart ;
+//   parasToOptim.resize(MRAhyperStart.size() + 2) ;
+//   parasToOptim(MRAhyperStart.size()) = fixedEffSDstart ;
+//   parasToOptim(MRAhyperStart.size()+1) = errorSDstart ;
+//   parasToOptim = log(parasToOptim) ;
+//
+//   uint n = parasToOptim.n_rows ;
+//   gridPair par ;
+//
+//   par.vector.set_size(2) ;
+//   par.vector.at(0) = hyperAlpha;
+//   par.vector.at(1) = hyperBeta;
+//   par.grid = this;
+//   gridPair * parPoint = &par ;
+//   cout << "Initializing mimimizer... \n" ;
+//   const gsl_multimin_fminimizer_type *T = gsl_multimin_fminimizer_nmsimplex2;
+//   gsl_multimin_fminimizer *s = NULL;
+//   gsl_vector *ss, *x;
+//   gsl_multimin_function minex_func;
+//
+//   size_t iter = 0;
+//   int status;
+//   double size;
+//
+//   /* Starting point */
+//   x = gsl_vector_alloc(n);
+//
+//   for (int i = 0 ; i < n ; i++) {
+//     gsl_vector_set(x, i, parasToOptim.at(i));
+//   }
+//
+//   /* Set initial step sizes to 0.5 */
+//   ss = gsl_vector_alloc(n);
+//   gsl_vector_set_all(ss, 0.5);
+//
+//   /* Initialize method and iterate */
+//   minex_func.n = n ;
+//   minex_func.f = my_f ;
+//   minex_func.params = (void *)parPoint ;
+//
+//   s = gsl_multimin_fminimizer_alloc(T, n);
+//   gsl_multimin_fminimizer_set(s, &minex_func, x, ss);
+//   cout << "Entering minimisation loop... \n" ;
+//   // do
+//   // {
+//   //   iter++;
+//   //   status = gsl_multimin_fminimizer_iterate(s);
+//   //
+//   //   if (status)
+//   //     break;
+//   //
+//   //   size = gsl_multimin_fminimizer_size(s);
+//   //   status = gsl_multimin_test_size(size, 1e-2);
+//   //
+//   //   if (status == GSL_SUCCESS)
+//   //   {
+//   //     printf ("converged to minimum at\n");
+//   //   }
+//   // }
+//   // while (status == GSL_CONTINUE && iter < 500);
+//   cout << "Minimisation complete! \n" ;
+//   vec optimalParas(x->size, fill::zeros) ;
+//
+//   for (uint i = 0 ; i < x->size ; i++) {
+//     optimalParas(i) = gsl_vector_get(x, i) ;
+//   }
+//
+//   gsl_vector_free(x);
+//   gsl_vector_free(ss);
+//   gsl_multimin_fminimizer_free (s);
+//   cout << "Returning values... \n" ;
+//   return optimalParas ;
+// }
 
-vec AugTree::optimJointHyperMarg(const vec & MRAhyperStart, const double fixedEffSDstart,
-                  const double errorSDstart,  const double hyperAlpha, const double hyperBeta) {
-  cout << "Entered optimJointHyperMarg... \n" ;
-  vec parasToOptim = MRAhyperStart ;
-  parasToOptim.resize(MRAhyperStart.size() + 2) ;
-  parasToOptim(MRAhyperStart.size()) = fixedEffSDstart ;
-  parasToOptim(MRAhyperStart.size()+1) = errorSDstart ;
-  parasToOptim = log(parasToOptim) ;
-
-  uint n = parasToOptim.n_rows ;
-  gridPair par ;
-
-  par.vector.set_size(2) ;
-  par.vector.at(0) = hyperAlpha;
-  par.vector.at(1) = hyperBeta;
-  par.grid = this;
-  gridPair * parPoint = &par ;
-  cout << "Initializing mimimizer... \n" ;
-  const gsl_multimin_fminimizer_type *T = gsl_multimin_fminimizer_nmsimplex2;
-  gsl_multimin_fminimizer *s = NULL;
-  gsl_vector *ss, *x;
-  gsl_multimin_function minex_func;
-
-  size_t iter = 0;
-  int status;
-  double size;
-
-  /* Starting point */
-  x = gsl_vector_alloc(n);
-
-  for (int i = 0 ; i < n ; i++) {
-    gsl_vector_set(x, i, parasToOptim.at(i));
-  }
-
-  /* Set initial step sizes to 0.5 */
-  ss = gsl_vector_alloc(n);
-  gsl_vector_set_all(ss, 0.5);
-
-  /* Initialize method and iterate */
-  minex_func.n = n ;
-  minex_func.f = my_f ;
-  minex_func.params = (void *)parPoint ;
-
-  s = gsl_multimin_fminimizer_alloc(T, n);
-  gsl_multimin_fminimizer_set(s, &minex_func, x, ss);
-  cout << "Entering minimisation loop... \n" ;
-  // do
-  // {
-  //   iter++;
-  //   status = gsl_multimin_fminimizer_iterate(s);
-  //
-  //   if (status)
-  //     break;
-  //
-  //   size = gsl_multimin_fminimizer_size(s);
-  //   status = gsl_multimin_test_size(size, 1e-2);
-  //
-  //   if (status == GSL_SUCCESS)
-  //   {
-  //     printf ("converged to minimum at\n");
-  //   }
-  // }
-  // while (status == GSL_CONTINUE && iter < 500);
-  cout << "Minimisation complete! \n" ;
-  vec optimalParas(x->size, fill::zeros) ;
-
-  for (uint i = 0 ; i < x->size ; i++) {
-    optimalParas(i) = gsl_vector_get(x, i) ;
-  }
-
-  gsl_vector_free(x);
-  gsl_vector_free(ss);
-  gsl_multimin_fminimizer_free (s);
-  cout << "Returning values... \n" ;
-  return optimalParas ;
-}

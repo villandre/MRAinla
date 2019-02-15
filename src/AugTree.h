@@ -3,6 +3,19 @@
 #ifndef MYPROJECT_AUGTREE_H
 #define MYPROJECT_AUGTREE_H
 
+struct IGhyperParas{
+  // Default IG mean is 1 (mean = beta/(alpha - 1)), var is beta^2/[(alpha-1)^2(alpha-2)]
+  // If alpha <= 2, variance is infinite,
+  double m_alpha = 3;
+  double m_beta = 2;
+  IGhyperParas() {}
+  IGhyperParas(double alpha, double beta) : m_alpha(alpha), m_beta(beta) {
+    if (alpha < 2) {
+      std::cout << "Careful: IG distribution for hyperparameter has infinite variance! \n" ;
+    }
+  }
+};
+
 namespace MRAinla {
 
 class AugTree
@@ -12,34 +25,48 @@ public:
 
   std::vector<TreeNode *> GetVertexVector() {return m_vertexVector ;} ;
 
-  double ComputeMRAlogLik(const arma::vec &, const arma::vec &) ;
+  double ComputeMRAlogLik(const arma::vec &) ;
   std::vector<GaussDistParas> ComputeConditionalPrediction(const inputdata &) ;
-  arma::mat ComputePosteriors(spatialcoor &, double &) ;
-  double ComputeLogJointCondTheta(const arma::vec &, const arma::vec &, const arma::vec &, const double) ;
-  double ComputeGlobalLogLik(const arma::vec &, const arma::vec &, const double) ;
-  double ComputeLogFullConditional(const arma::vec &, const arma::vec &) ;
-  double ComputeLogPriors(const arma::vec &, const double, const double, const double, const double) ;
+  double ComputeLogJointCondTheta(const arma::vec &) ;
+  double ComputeGlobalLogLik(const arma::vec &) ;
+  double ComputeLogFullConditional(const arma::vec &) ;
+  double ComputeLogPriors() ;
 
   // double GetMRAlogLik() const {return m_MRAlogLik ;}
   gsl_rng * GetRandomNumGenerator() {return m_randomNumGenerator ;}
   inputdata GetDataset() {return m_dataset;}
   uint GetNumTips() {return m_numTips ;}
   // arma::vec GetCovParameters() {return m_covParameters ;}
+  std::vector<IGhyperParas> GetMRAcovParasIGalphaBeta() { return m_MRAcovParasIGalphaBeta ;}
 
   void SetRNG(gsl_rng * myRNG) { m_randomNumGenerator = myRNG ;}
 
   // void SetCovParameters(arma::vec & covParas) {m_covParameters = covParas ;}
   void SetFixedEffParameters(arma::vec & fixedParas) {m_fixedEffParameters = fixedParas ;}
-  void SetFixedEffSD(const double & fixedEffSD) {m_fixedEffSD = fixedEffSD ;}
-  void SetErrorSD(const double & errorSD) {m_errorSD = errorSD ;}
+  void SetFixedEffSD(const double & fixedEffSD) {
+    if (fixedEffSD != m_fixedEffSD) m_newHyperParas = true ;
+    m_fixedEffSD = fixedEffSD ;
+  }
+  void SetErrorSD(const double & errorSD) {
+    if (errorSD != m_errorSD) m_newHyperParas = true ;
+    m_errorSD = errorSD ;
+  }
+  void SetMRAcovParas(const arma::vec & MRAcovParas) {
+    if (arma::approx_equal(MRAcovParas, m_MRAcovParas, "absdiff", 1e-8)) m_newHyperParas = true ;
+    m_MRAcovParas = MRAcovParas ;
+  }
+  void SetMRAcovParasIGalphaBeta(const std::vector<IGhyperParas> & alphaBeta) {m_MRAcovParasIGalphaBeta = alphaBeta ;}
+  void SetErrorIGalphaBeta(const IGhyperParas & alphaBeta) {m_errorIGalphaBeta = alphaBeta ;}
+  void SetFixedEffIGalphaBeta(const IGhyperParas & alphaBeta) {m_fixedEffIGalphaBeta = alphaBeta ;}
+
   void CleanPredictionComponents() ;
   void CenterResponse() ;
   arma::sp_mat createHstar() ;
   arma::sp_mat createSigmaStarInverse() ;
   arma::sp_mat createQ() ;
 
-  double ComputeJointPsiMarginal(const arma::vec &, const double, const double, const double, const double) ;
-  double ComputeJointPsiMarginalPropConstant(const arma::vec &, const double, const double, const double, const double) ;
+  double ComputeJointPsiMarginal() ;
+  // double ComputeJointPsiMarginalPropConstant(const arma::vec &, const double, const double, const double, const double) ;
 
   ~ AugTree() {
     deallocate_container(m_vertexVector) ;
@@ -49,6 +76,7 @@ private:
 
   std::vector<TreeNode *> m_vertexVector ;
   std::vector<TreeNode *> getLevelNodes(uint & level) ;
+  bool m_newHyperParas ; // When this flag is true, more computations are required to get the log-lik.
 
   double m_MRAlogLik{ 0 } ;
   double m_globalLogLik{ } ;
@@ -59,6 +87,9 @@ private:
   double m_errorSD ;
   double m_fixedEffSD ;
   arma::vec m_spatialComponents ;
+  std::vector<IGhyperParas> m_MRAcovParasIGalphaBeta ;
+  IGhyperParas m_fixedEffIGalphaBeta ;
+  IGhyperParas m_errorIGalphaBeta ;
 
   arma::vec m_MRAcovParas ;
   arma::vec m_fixedEffParameters ;

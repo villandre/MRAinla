@@ -5,7 +5,7 @@ setupGridCpp <- function(responseValues, spCoords, obsTime, covariateMatrix, M, 
     .Call('_MRAinla_setupGridCpp', PACKAGE = 'MRAinla', responseValues, spCoords, obsTime, covariateMatrix, M, lonRange, latRange, timeRange, randomSeed, cutForTimeSplit)
 }
 
-funForOptimJointHyperMarginal <- function(treePointer, MRAhyperparas, fixedEffSD, errorSD, hyperAlpha, hyperBeta) {
-    .Call('_MRAinla_funForOptimJointHyperMarginal', PACKAGE = 'MRAinla', treePointer, MRAhyperparas, fixedEffSD, errorSD, hyperAlpha, hyperBeta)
+funForOptimJointHyperMarginal <- function(treePointer, MRAhyperparas, fixedEffSD, errorSD, MRAcovParasIGalphaBeta, fixedEffIGalphaBeta, errorIGalphaBeta) {
+    .Call('_MRAinla_funForOptimJointHyperMarginal', PACKAGE = 'MRAinla', treePointer, MRAhyperparas, fixedEffSD, errorSD, MRAcovParasIGalphaBeta, fixedEffIGalphaBeta, errorIGalphaBeta)
 }
 
