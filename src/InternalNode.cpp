@@ -19,24 +19,25 @@ void InternalNode::RemoveChild(TreeNode * childToRemove)
 
 void InternalNode::genRandomKnots(inputdata & dataset, uint & numKnots, const gsl_rng * RNG) {
 
-  mat knotsSp(numKnots, 2, fill::zeros) ;
+  fmat knotsSp(numKnots, 2, fill::zeros) ;
 
-  double minLon = min(m_dimensions.longitude) ;
-  double maxLon = max(m_dimensions.longitude) ;
+  float minLon = min(m_dimensions.longitude) ;
+  float maxLon = max(m_dimensions.longitude) ;
 
-  double minLat = min(m_dimensions.latitude) ;
-  double maxLat = max(m_dimensions.latitude) ;
+  float minLat = min(m_dimensions.latitude) ;
+  float maxLat = max(m_dimensions.latitude) ;
 
-  for (mat::iterator iter = knotsSp.begin() ; iter != (knotsSp.begin() + knotsSp.n_rows) ; iter++) {
+  for (fmat::iterator iter = knotsSp.begin() ; iter != (knotsSp.begin() + knotsSp.n_rows) ; iter++) {
     (*iter) = gsl_ran_flat(RNG, minLon, maxLon) ;
-    *(iter + knotsSp.n_rows) = gsl_ran_flat(RNG, minLat, maxLat) ;
+    *(iter + knotsSp.n_rows) = float(gsl_ran_flat(RNG, minLat, maxLat)) ;
   }
 
-  double minTime = (double) min(m_dimensions.time) ;
-  uint timeRangeSize = range(m_dimensions.time) ;
-  uvec time(numKnots) ;
+  float minTime = min(m_dimensions.time) ;
+  float maxTime = max(m_dimensions.time) ;
+  float timeRangeSize = range(m_dimensions.time) ;
+  fvec time(numKnots) ;
 
-  time.imbue( [&]() { return gsl_rng_uniform_int(RNG, timeRangeSize) + minTime; } ) ;
+  time.imbue( [&]() { return float(gsl_ran_flat(RNG, minTime, maxTime)); } ) ;
   m_knotsCoor = spatialcoor(knotsSp, time) ;
 }
 
@@ -130,7 +131,7 @@ void::InternalNode::DeriveD() {
   for (auto & i : m_children) {
     thirdTerm += i->GetD() ;
   }
-  m_d = m_d + thirdTerm ;
+  m_d += thirdTerm ;
 }
 
 void InternalNode::ComputeWmat(const arma::vec & covParas) {

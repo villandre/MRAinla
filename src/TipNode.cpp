@@ -127,8 +127,8 @@ GaussDistParas TipNode::CombineEtaDelta(const inputdata & dataset, const vec & f
 
     // We need to re-add the mean contribution of the fixed effect parameters, which were subtracted in the beginning with AugTree::CenterResponse
 
-    mat subCovar = dataset.covariateValues.rows(m_predictLocIndices) ;
-    vec interceptVec = ones<vec>(m_predictLocIndices.size()) ;
+    fmat subCovar = dataset.covariateValues.rows(m_predictLocIndices) ;
+    fvec interceptVec = ones<fvec>(m_predictLocIndices.size()) ;
     subCovar.insert_cols(0, interceptVec) ;
     meanVec += subCovar * fixedEffParas ;
     //

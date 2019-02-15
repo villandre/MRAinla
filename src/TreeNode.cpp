@@ -15,10 +15,11 @@ arma::uvec TreeNode::deriveObsInNode(const spatialcoor & dataset) {
   return find(lonCheck % latCheck % timeCheck) ; // find is equivalent to which in R
 }
 
+// We assume a squared exponential decay function with sigma^2 = 1
 double TreeNode::covFunction(const Spatiotemprange & distance, const vec & covParameters) {
-  double spExp = -(distance.sp/covParameters.at(0)) ;
-  double timeExp = -(distance.time/covParameters.at(1)) ;
-  return gsl_sf_exp(spExp) * gsl_sf_exp(timeExp) ;
+  double spExp = pow(distance.sp, 2)/(2 * pow(covParameters.at(0), 2)) ;
+  double timeExp = pow(distance.time, 2)/(2 * pow(covParameters.at(1), 2)) ;
+  return exp(-spExp) * exp(-timeExp) ;
 };
 
 arma::mat TreeNode::ComputeCovMatrix(const vec & covParaVec) {

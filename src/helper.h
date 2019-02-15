@@ -17,7 +17,7 @@ Spatiotemprange sptimeDistance(const arma::vec & spCoor1, const unsigned int & t
                                const unsigned int & time2) ;
 
 arma::sp_mat createSparseMatrix(std::vector<arma::mat *>) ;
-std::vector<unsigned int> extractBlockIndices(const arma::sp_mat &) ;
+arma::uvec extractBlockIndices(const arma::sp_mat &) ;
 arma::sp_mat invertSymmBlockDiag(const arma::sp_mat &, const arma::uvec &) ;
 
 // Inlining the function solves the linking issue I encountered. As it turns out, templated functions

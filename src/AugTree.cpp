@@ -1,6 +1,6 @@
 #include <math.h>
 #include <omp.h>
-#include <gsl/gsl_randist.h>
+#include <gsl/gsl_sf_gamma.h>
 #include <gsl/gsl_multimin.h>
 
 #include "AugTree.h"
@@ -10,6 +10,7 @@
 using namespace Rcpp ;
 using namespace arma ;
 using namespace MRAinla ;
+using namespace Eigen ;
 
 struct gridPair{
   AugTree * grid ;
@@ -18,7 +19,7 @@ struct gridPair{
   gridPair(AugTree * gridArg, vec vectorArg) : grid(gridArg), vector(vectorArg) { } ;
 };
 
-AugTree::AugTree(uint & M, vec & lonRange, vec & latRange, uvec & timeRange, vec & observations, mat & obsSp, uvec & obsTime, uint & minObsForTimeSplit, unsigned long int & seed, mat & covariates)
+AugTree::AugTree(uint & M, fvec & lonRange, fvec & latRange, fvec & timeRange, vec & observations, fmat & obsSp, fvec & obsTime, uint & minObsForTimeSplit, unsigned long int & seed, fmat & covariates)
   : m_M(M)
 {
   m_dataset = inputdata(observations, obsSp, obsTime, covariates) ;
@@ -60,14 +61,14 @@ void AugTree::createLevels(TreeNode * parent, const uint & numObsForTimeSplit) {
   if (obsForMedian.n_elem == 0) {
     throw Rcpp::exception("Empty region.") ;
   }
-  mat spMediansMat = median(m_dataset.spatialCoords.rows(obsForMedian), 0) ;
-  rowvec spMedians = spMediansMat.row(0) ;
+  fmat spMediansMat = median(m_dataset.spatialCoords.rows(obsForMedian), 0) ;
+  Row<float> spMedians = spMediansMat.row(0) ;
 
-  uvec sortedTimes = sort(m_dataset.timeCoords.elem(obsForMedian)) ;
-  uint timeMedian = sortedTimes.at(std::ceil((obsForMedian.size()-1)/2));
+  fvec sortedTimes = sort(m_dataset.timeCoords.elem(obsForMedian)) ;
+  float timeMedian = sortedTimes.at(std::ceil((obsForMedian.size()-1)/2));
 
   std::vector<dimensions> dimensionsForChildren ;
-  vec lonRange(2, fill::zeros), latRange(2, fill::zeros) ;
+  fvec lonRange(2, fill::zeros), latRange(2, fill::zeros) ;
 
   if (parent->GetObsInNode().size() < numObsForTimeSplit) {
     for (uint i = 0; i < 2; i++) {
@@ -84,7 +85,7 @@ void AugTree::createLevels(TreeNode * parent, const uint & numObsForTimeSplit) {
       }
     }
   } else {
-    uvec timeRange(2, fill::zeros) ;
+    fvec timeRange(2, fill::zeros) ;
     for (uint i = 0; i < 2; i++) {
       for (uint j = 0; j < 2; j++) {
         for(uint k = 0; k < 2; k++) {
@@ -146,12 +147,10 @@ void AugTree::generateKnots(TreeNode * node) {
 
 double AugTree::ComputeMRAlogLik(const vec & thetaValues, const vec & MRAcovParas)
 {
-  cout << "Entering ComputeLoglik \n" ;
   bool sameCovParametersTest = false ;
   if (MRAcovParas.size() == m_MRAcovParas.size()) {
     sameCovParametersTest = approx_equal(m_MRAcovParas, MRAcovParas, "abs_diff", 1e-06) ;
   }
-  printf("Equality test %i \n", sameCovParametersTest) ;
   if (!sameCovParametersTest) {
     m_MRAcovParas = MRAcovParas ;
     computeWmats() ;
@@ -166,9 +165,8 @@ double AugTree::ComputeMRAlogLik(const vec & thetaValues, const vec & MRAcovPara
   // head of m_vertexVector, since it's the first one we ever created.
 
   double tempLogLik = (m_vertexVector.at(0)->GetD() + m_vertexVector.at(0)->GetU()) ;
-  printf("D and U: %.4e %.4e \n", m_vertexVector.at(0)->GetD(), m_vertexVector.at(0)->GetU()) ;
+
   tempLogLik = -tempLogLik/2 ;
-  cout << "Leaving ComputeMRAlogLik... \n" ;
   return tempLogLik ;
 }
 
@@ -331,8 +329,8 @@ void AugTree::CleanPredictionComponents() {
 }
 
 void AugTree::CenterResponse() {
-  vec intercept = ones<vec>(m_dataset.covariateValues.n_rows) ;
-  mat incrementedCovar = m_dataset.covariateValues ;
+  fvec intercept = ones<fvec>(m_dataset.covariateValues.n_rows) ;
+  fmat incrementedCovar = m_dataset.covariateValues ;
   incrementedCovar.insert_cols(0, intercept) ;
   vec meanVec = vec(m_dataset.covariateValues.n_rows) ;
   meanVec = incrementedCovar * m_fixedEffParameters ;
@@ -342,7 +340,11 @@ void AugTree::CenterResponse() {
 arma::sp_mat AugTree::createSigmaStarInverse() {
   std::vector<mat *> KinverseAndBetaMatrixList = getKmatricesInversePointers() ;
   mat SigmaBetaInverse = eye<mat>(m_fixedEffParameters.size(), m_fixedEffParameters.size())/m_MRAcovParas.at(0) ; // Make sure those parameters are named.
-  KinverseAndBetaMatrixList.push_back(&SigmaBetaInverse) ;
+
+  // KinverseAndBetaMatrixList.push_back(&SigmaBetaInverse) ;
+  // This is because we want the Q matrix to have a block-diagonal component in the lower-right corner,
+  // which prompted us to make H* = [X,F] rather than H* = [F, X], like in Eidsvik.
+  KinverseAndBetaMatrixList.insert(KinverseAndBetaMatrixList.begin(), &SigmaBetaInverse) ;
   sp_mat SigmaStarInverse = createSparseMatrix(KinverseAndBetaMatrixList) ;
   return SigmaStarInverse ;
 }
@@ -351,11 +353,12 @@ arma::sp_mat AugTree::createHstar() {
   sp_mat Fmatrix = createFmatrix() ;
   sp_mat smallFmat = Fmatrix.cols(0, 100) ;
 
-  vec intercept = ones<vec>(m_dataset.covariateValues.n_rows) ;
-  mat covarCopy = m_dataset.covariateValues ;
+  fvec intercept = ones<fvec>(m_dataset.covariateValues.n_rows) ;
+  fmat covarCopy = m_dataset.covariateValues ;
   covarCopy.insert_cols(0, intercept) ;
-  sp_mat incrementedCovar = conv_to<sp_mat>::from(covarCopy) ;
-  sp_mat Hstar = join_rows(Fmatrix, incrementedCovar) ;
+  sp_fmat incrementedCovar = conv_to<sp_fmat>::from(covarCopy) ;
+  // We revert the order of Hstar...
+  sp_mat Hstar = join_rows(conv_to<sp_mat>::from(incrementedCovar), Fmatrix) ;
   return Hstar ;
 }
 
@@ -469,12 +472,18 @@ double AugTree::ComputeLogPriors(const arma::vec & MRAhyperPriorVec, const doubl
   hyperPriorVec.resize(hyperPriorVec.size() + 2) ;
   hyperPriorVec(MRAhyperPriorVec.size()) = errorSD ;
   hyperPriorVec(MRAhyperPriorVec.size() + 1) = fixedParamSD ;
-  vec invertedValues = 1/hyperPriorVec ;
-  vec logContributions(invertedValues.size(), fill::zeros) ;
 
-  std::transform(invertedValues.begin(), invertedValues.end(), logContributions.begin(),
-                 [hyperAlpha, hyperBeta] (double & invertedValue) {return log(gsl_ran_gamma_pdf(invertedValue, hyperAlpha, hyperBeta)) + 2*log(invertedValue) ;}) ;
-  return sum(logContributions) ;
+  hyperPriorVec.print("Hyperparameter values:") ;
+
+  double logPrior = 0 ;
+
+  for (auto & i : hyperPriorVec) {
+    // logPrior += hyperAlpha * log(hyperBeta) - gsl_sf_lngamma(hyperAlpha) -
+    //   (hyperAlpha + 1) * log(i) - hyperBeta/i ;
+    logPrior += -((hyperAlpha + 1) * log(i) + hyperBeta/i) ; // Since hyperAlpha and hyperBeta do not vary, we can ignore them for optimisation purposes.
+  }
+
+  return logPrior ;
 }
 
 double AugTree::ComputeLogJointCondTheta(const arma::vec & MRAvalues, const arma::vec & MRAcovParameters, const arma::vec & fixedEffParams, const double fixedEffSD) {
@@ -495,15 +504,20 @@ double AugTree::ComputeLogFullConditional(const arma::vec & MRAparaValues, const
   sp_mat Hstar = createHstar() ;
   sp_mat SigmaStarInverse = createSigmaStarInverse() ;
   sp_mat TmatrixInverse(m_dataset.timeCoords.size(), m_dataset.timeCoords.size()) ;
-  TmatrixInverse.diag().fill(1/m_MRAcovParas.at(0)) ;
+  TmatrixInverse.diag().fill(1/m_MRAcovParas.at(0)) ; // IS THIS OK?
   sp_mat Qmat = trans(Hstar) * TmatrixInverse * Hstar + SigmaStarInverse ;
   // The formulation for bVec is valid if priors for the eta's and fixed effect coefficients have mean zero, else, a second term comes into play Sigma * mu ;
   sp_mat bVec = trans(Hstar) * TmatrixInverse * conv_to<sp_mat>::from(m_dataset.responseValues) ;
 
-  Eigen::SparseMatrix<double> eigen_s = Rcpp::as<Eigen::SparseMatrix<double>>(Rcpp::wrap(Qmat));
-  Eigen::SparseLU<Eigen::SparseMatrix<double>> solver;
-  solver.compute(eigen_s);
-  double ldet = solver.logAbsDeterminant();
+  // Eigen::SparseMatrix<double> eigen_s = Rcpp::as<Eigen::SparseMatrix<double>>(Rcpp::wrap(Qmat));
+  // Eigen::SparseLU<Eigen::SparseMatrix<double>> solver;
+  // solver.compute(eigen_s);
+  // double ldet = solver.logAbsDeterminant();
+  cout << "Computing log-determinant of Qmat...\n" ;
+
+  double ldet = logDeterminantQmat(Qmat) ;
+  printf("Found log-determinant: %.4e \n", ldet) ;
+
   sp_mat thetaValues= sp_mat(MRAparaValues.size() + m_dataset.covariateValues.n_cols + 1 , 1) ;
 
   sp_mat logKernelResult = - 0.5 * (trans(thetaValues) * Qmat * thetaValues + trans(thetaValues) * bVec) ;
@@ -514,7 +528,7 @@ double AugTree::ComputeLogFullConditional(const arma::vec & MRAparaValues, const
 }
 
 double AugTree::ComputeGlobalLogLik(const arma::vec & MRAvalues, const arma::vec & fixedEffParams, const double errorSD) {
-  mat incrementedCovar = m_dataset.covariateValues ;
+  fmat incrementedCovar = m_dataset.covariateValues ;
   incrementedCovar.insert_cols(0, 1) ;
   incrementedCovar.col(0).fill(1) ;
   vec meanVec(m_dataset.responseValues.size(), fill::zeros) ;
@@ -529,113 +543,85 @@ double AugTree::ComputeGlobalLogLik(const arma::vec & MRAvalues, const arma::vec
 double AugTree::ComputeJointPsiMarginal(const arma::vec & MRAhyperparas, const double fixedEffSD, const double errorSD, const double hyperAlpha, const double hyperBeta) {
   // In theory, this function should not depend on the theta values...
   // We can therefore arbitrarily set them all to 0.
-  cout << "Entering ComputeJointPsiMarginal... \n" ;
+
   vec MRAvalues(m_numKnots, fill::zeros) ;
   vec MRAvaluesInterpolant(m_dataset.timeCoords.n_rows, fill::zeros) ;
   vec fixedParValues(m_dataset.covariateValues.n_cols + 1, fill::zeros) ;
-  cout << "Computing global log-lik... \n" ;
+
   double totalLogLik = ComputeGlobalLogLik(MRAvaluesInterpolant, fixedParValues, errorSD) ;
-  cout << "Computing log-priors... \n" ;
+
   double logPrior = ComputeLogPriors(MRAhyperparas, errorSD, fixedEffSD, hyperAlpha, hyperBeta) ;
-  cout << "Computing log-conditional... \n" ;
+
   double logCondDist = ComputeLogJointCondTheta(MRAvalues, MRAhyperparas, fixedParValues, fixedEffSD) ;
-  cout << "Computing log-full conditional... \n" ;
-  double logFullCond = ComputeLogFullConditional(MRAvalues, fixedParValues) ;
-  cout << "Summing... \n" ;
+
+  double logFullCond = ComputeLogFullConditional(MRAvalues, fixedParValues, errorSD) ;
+
   printf("Prior, conditional, global, full cond: %+.4e %+.4e %+.4e %+.4e \n", logPrior, logCondDist, totalLogLik, logFullCond) ;
-  return logPrior + logCondDist + totalLogLik - logFullCond ;
+  double output = logPrior + logCondDist + totalLogLik - logFullCond ;
+
+  return output ;
 }
 
 // This inversion is based on recursive partitioning of the Q matrix. It is based on the observation that it is
 // possible to form block-diagonal matrices on the diagonal which can be easily inverted.
 // The challenge in inverting Qmat was the very heavy memory burden.
 // This function involves much smaller matrices, which will make the operations easier to handle.
-// mat AugTree::invertQmat(const sp_mat & Qmat) {
-//   // We start in the lower-right corner and use M levels of nesting.
-//   // We find all block diagonal matrices on the diagonal.
-//   std::vector<uvec> blockDiagonalMatricesIndices ;
-//   int lowerBound = Qmat.n_rows - 1 ;
-//   cout << "Detecting block diagonal matrices... \n" ;
-//   do {
-//     uvec indicesInBlock = extractBlockIndicesFromLowerRight(Qmat.submat(0, 0, lowerBound, lowerBound)) ;
-//     blockDiagonalMatricesIndices.push_back(indicesInBlock) ;
-//     lowerBound = indicesInBlock.at(0) - 1 ;
-//   } while (lowerBound >= 0) ;
-//   cout << "Done! \n" ;
-//   printf("Number of block diagonal matrices : %i \n", int(blockDiagonalMatricesIndices.size())) ;
-//   for (auto & i : blockDiagonalMatricesIndices) {
-//     printf("Number of blocks: %i \n" , int(i.size())) ;
-//   }
-//   cout << "Initializing D... \n" ;
-//   uint numRowsD = blockDiagonalMatricesIndices.at(0).tail(1)(0) - blockDiagonalMatricesIndices.at(0)(0) ;
-//   // printf("Indices first/last element in D: %i %i \n", blockDiagonalMatricesIndices.at(0)(0), blockDiagonalMatricesIndices.at(0).tail(1)(0)) ;
-//   // blockDiagonalMatricesIndices.at(0).print("Block indices:") ;
-//   uint shift = blockDiagonalMatricesIndices.at(0).at(0) ;
-//   uvec shiftedBlockIndices(blockDiagonalMatricesIndices.size()) ;
-//   shiftedBlockIndices = blockDiagonalMatricesIndices.at(0) - shift ;
-//   cout << "Initializing Dinv... \n" ;
-//   sp_mat Dinv = invertSymmBlockDiag(Qmat(blockDiagonalMatricesIndices.at(0).at(0),
-//                                          blockDiagonalMatricesIndices.at(0).at(0),
-//                                          size(numRowsD, numRowsD)),
-//                                          shiftedBlockIndices) ;
-//
-//   // int reverseIndexA ;
-//   cout << "Launching the recursion... \n" ;
-//   for (uint index = 2 ; index < blockDiagonalMatricesIndices.size() ; index++) {
-//     // reverseIndexA = blockDiagonalMatricesIndices.size() - index ;
-//     uint nrowA =  blockDiagonalMatricesIndices.at(index).tail(1)(0) -
-//       blockDiagonalMatricesIndices.at(index).at(0) ;
-//     uint nrowD = Dinv.n_rows ;
-//     printf("Number of rows of A and D: %i %i \n", int(nrowA), int(nrowD)) ;
-//     printf("Processing A matrix %i \n", index) ;
-//     shift = blockDiagonalMatricesIndices.at(index).at(0) ;
-//     shiftedBlockIndices = blockDiagonalMatricesIndices.at(index) - shift ;
-//     invFromDecomposition(Qmat(blockDiagonalMatricesIndices.at(index).at(0),
-//                                        blockDiagonalMatricesIndices.at(index).at(0),
-//                                        size(nrowA, nrowA)),
-//                                   Qmat(blockDiagonalMatricesIndices.at(index).at(0),
-//                                         blockDiagonalMatricesIndices.at(index).at(0) + nrowA,
-//                                         size(nrowA, nrowD)),
-//                                   Qmat(blockDiagonalMatricesIndices.at(index).at(0) + nrowA,
-//                                         blockDiagonalMatricesIndices.at(index).at(0) + nrowA,
-//                                         size(nrowD, nrowD)),
-//                                         &Dinv, shiftedBlockIndices) ;
-//     // D = Qmat(blockDiagonalMatricesIndices.at(index).at(0),
-//     //            blockDiagonalMatricesIndices.at(index).at(0),
-//     //            size(nrowA + nrowD, nrowA + nrowD)) ;
-//   }
-//   cout << "Recursion done! Exiting...\n" ;
-//   return mat(1,1, fill::zeros) ; // PLACEHOLDER!!!
-// }
+double AugTree::logDeterminantQmat(const sp_mat & Qmat) {
+  uvec DmatrixBlockIndices = extractBlockIndicesFromLowerRight(Qmat) ;
+  uint numRowsD =DmatrixBlockIndices.tail(1)(0) - DmatrixBlockIndices(0) ;
+  uint shift = DmatrixBlockIndices.at(0) ;
 
-// uvec AugTree::extractBlockIndicesFromLowerRight(const arma::sp_mat & symmSparseMatrix) {
-//   std::vector<uint> blockIndices ;
-//   blockIndices.push_back(symmSparseMatrix.n_rows) ; // We start by adding a bound on the right, although other points in the vector correspond to upper-left corners.
-//   int index = symmSparseMatrix.n_rows - 2 ;
-//   uint lowerBoundary = symmSparseMatrix.n_rows - 1 ;
-//   uvec nonZeros ;
-//   if (any(vec(symmSparseMatrix.diag()) == 0)) {
-//     throw Rcpp::exception("Full conditional has an element with 0 variance! \n") ;
-//   }
-//   // We start the search for blocks in the lower right corner.
-//   // We only do a search in columns because the Q matrix is symmetrical. Hence a search on rows would always yield
-//   // the same result.
-//   do {
-//     nonZeros = find(vec(symmSparseMatrix(index, index, size(symmSparseMatrix.n_rows - index , 1)))) ;
-//     if ((nonZeros.size() == 1)) { // We have entered a new block, this element has to be on the diagonal.
-//       blockIndices.push_back(index+1) ;
-//       lowerBoundary = index ;
-//     }
-//     index = index - 1 ;
-//   } while (((max(nonZeros) + index + 1) <= lowerBoundary) & (index >= 0)) ;
-//   int lastIndex = index + 2;
-//   if (index < 0) {
-//     lastIndex = 0 ;
-//   }
-//   blockIndices.push_back(lastIndex) ; // The last block will not be added in the loop, hence this step.
-//   std::sort(blockIndices.begin(), blockIndices.end()) ;
-//   return conv_to<uvec>::from(blockIndices) ;
-// }
+  uvec shiftedBlockIndices =DmatrixBlockIndices - shift ;
+  sp_mat Dinv = invertSymmBlockDiag(Qmat(DmatrixBlockIndices.at(0),
+                                         DmatrixBlockIndices.at(0),
+                                         size(numRowsD, numRowsD)),
+                                         shiftedBlockIndices) ;
+  double logDeterminantD = 0 ;
+  for (uint i = 0 ; i < (DmatrixBlockIndices.size() - 1) ; i++) {
+    double value = 0 ;
+    double sign = 0 ;
+    uint matSize = DmatrixBlockIndices.at(i+1) - DmatrixBlockIndices.at(i) ;
+    log_det(value, sign, mat(Qmat(DmatrixBlockIndices.at(i), DmatrixBlockIndices.at(i), size(matSize, matSize)))) ;
+    logDeterminantD += sign*value ;
+  }
+  double logDeterminantComposite, sign1 ;
+  uint AmatrixSize = DmatrixBlockIndices.at(0) ;
+  sp_mat compositeMat = Qmat(0, 0, size(AmatrixSize, AmatrixSize)) -
+    Qmat(0, AmatrixSize, size(AmatrixSize, Qmat.n_cols - AmatrixSize)) * Dinv * Qmat(AmatrixSize, 0, size(Qmat.n_rows - AmatrixSize, AmatrixSize)) ;
+
+  log_det(logDeterminantComposite, sign1, mat(compositeMat)) ;
+
+  return logDeterminantD + sign1*logDeterminantComposite ;
+}
+
+uvec AugTree::extractBlockIndicesFromLowerRight(const arma::sp_mat & symmSparseMatrix) {
+  std::vector<uint> blockIndices ;
+  blockIndices.push_back(symmSparseMatrix.n_rows) ; // We start by adding a bound on the right, although other points in the vector correspond to upper-left corners.
+  int index = symmSparseMatrix.n_rows - 2 ;
+  uint lowerBoundary = symmSparseMatrix.n_rows - 1 ;
+  uvec nonZeros ;
+  if (any(vec(symmSparseMatrix.diag()) == 0)) {
+    throw Rcpp::exception("Full conditional has an element with 0 variance! \n") ;
+  }
+  // We start the search for blocks in the lower right corner.
+  // We only do a search in columns because the Q matrix is symmetrical. Hence a search on rows would always yield
+  // the same result.
+  do {
+    nonZeros = find(vec(symmSparseMatrix(index, index, size(symmSparseMatrix.n_rows - index , 1)))) ;
+    if ((nonZeros.size() == 1)) { // We have entered a new block, this element has to be on the diagonal.
+      blockIndices.push_back(index+1) ;
+      lowerBoundary = index ;
+    }
+    index = index - 1 ;
+  } while (((max(nonZeros) + index + 1) <= lowerBoundary) & (index >= 0)) ;
+  int lastIndex = index + 2;
+  if (index < 0) {
+    lastIndex = 0 ;
+  }
+  blockIndices.push_back(lastIndex) ; // The last block will not be added in the loop, hence this step.
+  std::sort(blockIndices.begin(), blockIndices.end()) ;
+  return conv_to<uvec>::from(blockIndices) ;
+}
 
 // void AugTree::invFromDecomposition(const sp_mat & A, const sp_mat & B, const sp_mat & D,
 //                                   sp_mat * Dinv, const uvec & blockDiagAindices) {

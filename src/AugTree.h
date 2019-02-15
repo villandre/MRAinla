@@ -8,7 +8,7 @@ namespace MRAinla {
 class AugTree
 {
 public:
-  AugTree(uint &, arma::vec &, arma::vec &, arma::uvec &, arma::vec &, arma::mat &, arma::uvec &, uint &, unsigned long int &, arma::mat &) ;
+  AugTree(uint &, arma::fvec &, arma::fvec &, arma::fvec &, arma::vec &, arma::fmat &, arma::fvec &, uint &, unsigned long int &, arma::fmat &) ;
 
   std::vector<TreeNode *> GetVertexVector() {return m_vertexVector ;} ;
 
@@ -102,10 +102,12 @@ private:
   }
   arma::sp_mat createFmatrix() ;
   arma::vec optimJointHyperMarg(const arma::vec &, const double, const double, const double, const double) ;
-  // arma::mat invertQmat(const arma::sp_mat &) ;
-  // arma::uvec extractBlockIndicesFromLowerRight(const arma::sp_mat &) ;
+  double logDeterminantQmat(const arma::sp_mat & Qmat) ;
+  arma::uvec extractBlockIndicesFromLowerRight(const arma::sp_mat &) ;
   // void invFromDecomposition(const arma::sp_mat &, const arma::sp_mat &, const arma::sp_mat &, arma::sp_mat *,
   //                                const arma::uvec &) ;
+  template <typename MatrixType>
+  inline typename MatrixType::Scalar logdet(const MatrixType& M, bool use_cholesky = false) ;
 
 };
 }

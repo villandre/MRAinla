@@ -30,28 +30,20 @@
 
 MRA_INLA <- function(spacetimeData, errorSDstart, fixedEffSDstart, MRAhyperparasStart, M, lonRange, latRange, timeRange, randomSeed, cutForTimeSplit = 400, hyperAlpha, hyperBeta) {
   dataCoordinates <- spacetimeData@sp@coords
-  timeValues <- as.integer(time(spacetimeData@time))
+  timeValues <- as.integer(time(spacetimeData@time))/(3600*24) # The division is to obtain values in days.
   covariateMatrix <- as.matrix(spacetimeData@data[, -1, drop = FALSE])
-  gridPointer <- setupGridCpp(spacetimeData@data[, 1], dataCoordinates, timeValues, covariateMatrix, M, lonRange, latRange, timeRange, randomSeed, cutForTimeSplit)
+  gridPointer <- setupGridCpp(spacetimeData@data[, 1], dataCoordinates, timeValues, covariateMatrix, M, lonRange, latRange, as.integer(timeRange)/(3600*24), randomSeed, cutForTimeSplit)
   # First we compute values relating to the hyperprior marginal distribution...
-  # xStartValues <- log(c(MRAhyperparasStart, fixedEffSDstart, errorSDstart))
-  # numMRAhyperparas <- length(MRAhyperparasStart)
-  # funForOptim <- function(x, treePointer, hyperAlpha, hyperBeta) {
-  #   result <- funForOptimJointHyperMarginal(treePointer, exp(x[1:numMRAhyperparas]), exp(x[numMRAhyperparas + 1]), exp(x[numMRAhyperparas + 2]), hyperAlpha, hyperBeta)
-  #   result
-  # }
-  # valeur1 <- funForOptimJointHyperMarginal(gridPointer$gridPointer, MRAhyperparasStart,
-  #                               fixedEffSDstart, errorSDstart, hyperAlpha, hyperBeta)
-  # cat("Obtained valeur1! \n") ;
-  valeur2 <- funForOptimJointHyperMarginal(gridPointer$gridPointer, MRAhyperparasStart,
-                                           fixedEffSDstart, errorSDstart, hyperAlpha, hyperBeta)
-  cat("Valeurs 2: ", valeur2, "\n")
-  # cat("Start values: ", xStartValues, "\n")
-  # optimResult <- optim(par = xStartValues, fn = funForOptim, gr = NULL, treePointer = gridPointer$gridPointer, hyperAlpha = hyperAlpha, hyperBeta = hyperBeta)
-  # optimResult
-  # hyperMode <- optimResult$par
-  # hyperHessian <- optimResult$hessian
-  # list(hyperDistMode = hyperMode, hessianAtMode = hyperHessian)
+  xStartValues <- 2*log(c(MRAhyperparasStart, fixedEffSDstart, errorSDstart))
+  numMRAhyperparas <- length(MRAhyperparasStart)
+  # funForOptimJointHyperMarginal(gridPointer$gridPointer, MRAhyperparasStart, fixedEffSDstart, errorSDstart, hyperAlpha = hyperAlpha, hyperBeta = hyperBeta)
+  funForOptim <- function(x, treePointer, hyperAlpha, hyperBeta) {
+    -funForOptimJointHyperMarginal(treePointer, exp(0.5*x[1:numMRAhyperparas]), exp(0.5*x[numMRAhyperparas + 1]), exp(0.5*x[numMRAhyperparas + 2]), hyperAlpha, hyperBeta)
+  }
+  optimResult <- optim(par = xStartValues, hessian = TRUE, fn = funForOptim, gr = NULL, treePointer = gridPointer$gridPointer, hyperAlpha = hyperAlpha, hyperBeta = hyperBeta)
+  hyperMode <- optimResult$par
+  hyperHessian <- optimResult$hessian
+  list(hyperDistMode = hyperMode, hessianAtMode = hyperHessian)
 }
 
 # MRAprecision will have to be coded as block diagonal to ensure tractability.

@@ -39,7 +39,7 @@ arma::sp_mat createSparseMatrix(std::vector<arma::mat *> listOfMatrices) {
   return X ;
 }
 
-std::vector<unsigned int> extractBlockIndices(const arma::sp_mat & symmSparseMatrix) {
+arma::uvec extractBlockIndices(const arma::sp_mat & symmSparseMatrix) {
   std::vector<unsigned int> blockIndices ;
   blockIndices.push_back(0) ;
   int newPosNextBlock = 0 ;
@@ -60,7 +60,7 @@ std::vector<unsigned int> extractBlockIndices(const arma::sp_mat & symmSparseMat
     blockIndices.push_back(posNextBlock) ;
     posNextBlock = newPosNextBlock ;
   }
-  return blockIndices ;
+  return conv_to<arma::uvec>::from(blockIndices) ;
 }
 
 // The break is below or to the right of each element. For example, putting rowBreak = 0 and colBreak = 0
@@ -126,6 +126,4 @@ sp_mat invertSymmBlockDiag(const sp_mat & blockMatrix, const uvec & blockIndices
 //   bool testResult = newPosNextBlock >= matrixToCheck.n_rows ;
 //   return testResult ;
 // }
-
-
 

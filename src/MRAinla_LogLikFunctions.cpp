@@ -4,7 +4,7 @@
 #include <string>
 #include <algorithm>
 #include <RcppArmadillo.h>
-// #include "gperftools/profiler.h"
+#include "gperftools/profiler.h"
 
 #include "AugTree.h"
 
@@ -30,16 +30,16 @@ typedef unsigned int uint ;
 
 SEXP setupGridCpp(NumericVector responseValues, NumericMatrix spCoords, IntegerVector obsTime,
                   NumericMatrix covariateMatrix, uint M, NumericVector lonRange, NumericVector latRange,
-                  IntegerVector timeRange, uint randomSeed, uint cutForTimeSplit)
+                  NumericVector timeRange, uint randomSeed, uint cutForTimeSplit)
 {
-  vec lonR = as<vec>(lonRange) ;
-  vec latR = as<vec>(latRange) ;
-  uvec timeR = as<uvec>(timeRange) ;
+  fvec lonR = as<fvec>(lonRange) ;
+  fvec latR = as<fvec>(latRange) ;
+  fvec timeR = as<fvec>(timeRange) ;
   vec response = as<vec>(responseValues) ;
-  mat sp = as<mat>(spCoords) ;
-  uvec time = as<uvec>(obsTime) ;
+  fmat sp = as<fmat>(spCoords) ;
+  fvec time = as<fvec>(obsTime) ;
   unsigned long int seedForRNG = randomSeed ;
-  mat covariateMat = as<mat>(covariateMatrix) ;
+  fmat covariateMat = as<fmat>(covariateMatrix) ;
 
   AugTree * MRAgrid = new AugTree(M, lonR, latR, timeR, response, sp, time, cutForTimeSplit, seedForRNG, covariateMat) ;
 
@@ -148,12 +148,15 @@ double funForOptimJointHyperMarginal(SEXP treePointer, Rcpp::NumericVector MRAhy
     XPtr<AugTree> pointedTree(treePointer) ; // Becomes a regular pointer again.
     // outputValue = pointedTree->ComputeJointPsiMarginalPropConstant(as<vec>(MRAhyperparas),
     //                                              fixedEffSD, errorSD, hyperAlpha, hyperBeta) ;
+    // ProfilerStart("/home/luc/Downloads/myprofile.log") ;
     outputValue = pointedTree->ComputeJointPsiMarginal(as<vec>(MRAhyperparas), fixedEffSD, errorSD, hyperAlpha, hyperBeta) ;
+    // ProfilerStop() ;
   }
   else
   {
     throw Rcpp::exception("Pointer to MRA grid is null." ) ;
   }
+  printf("Marginal joint Psi: %.4e \n", outputValue) ;
   return outputValue ;
 }
 
