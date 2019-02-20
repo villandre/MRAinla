@@ -148,13 +148,13 @@ void AugTree::generateKnots(TreeNode * node) {
 
 double AugTree::ComputeMRAlogLik(const vec & thetaValues)
 {
-  if (!m_newHyperParas) {
+  if (m_newHyperParas) {
     computeWmats() ;
     deriveAtildeMatrices() ;
   }
   computeOmegas(thetaValues) ;
   computeU(thetaValues) ;
-  if (!m_newHyperParas) {
+  if (m_newHyperParas) {
     computeD() ;
   }
   // The log-likelihood is a function of d and u computed at the root node, being at the
@@ -490,7 +490,6 @@ double AugTree::ComputeLogJointCondTheta(const arma::vec & MRAvalues) {
   for (auto & i : m_fixedEffParameters) {
     fixedEffLogLik += log(normpdf(i, fixedEffMean, m_fixedEffSD)) ;
   }
-  printf("Log-joint cond. dist., MRA and Cov: %.4e %.4e \n", MRAlogLik, fixedEffLogLik) ;
   return (MRAlogLik + fixedEffLogLik) ;
 }
 
@@ -512,7 +511,6 @@ double AugTree::ComputeLogFullConditional(const arma::vec & MRAparaValues) {
   cout << "Computing log-determinant of Qmat...\n" ;
 
   double ldet = logDeterminantQmat(Qmat) ;
-  printf("Found log-determinant: %.4e \n", ldet) ;
 
   sp_mat thetaValues= sp_mat(MRAparaValues.size() + m_dataset.covariateValues.n_cols + 1 , 1) ;
 
@@ -539,20 +537,19 @@ double AugTree::ComputeGlobalLogLik(const arma::vec & MRAvalues) {
 double AugTree::ComputeJointPsiMarginal() {
   // In theory, this function should not depend on the theta values...
   // We can therefore arbitrarily set them all to 0.
+  arma_rng::set_seed(2) ;
+  vec MRAvaluesAtKnots(m_numKnots) ;
+  MRAvaluesAtKnots.randn() ;
+  vec MRAvaluesAtObservations(m_dataset.timeCoords.n_rows) ;
 
-  vec MRAvalues(m_numKnots, fill::zeros) ;
-  vec MRAvaluesInterpolant(m_dataset.timeCoords.n_rows, fill::zeros) ;
-  vec fixedParValues(m_dataset.covariateValues.n_cols + 1, fill::zeros) ;
-
-  double totalLogLik = ComputeGlobalLogLik(MRAvaluesInterpolant) ;
+  double totalLogLik = ComputeGlobalLogLik(MRAvaluesAtObservations) ;
 
   double logPrior = ComputeLogPriors() ;
 
-  double logCondDist = ComputeLogJointCondTheta(MRAvalues) ;
+  double logCondDist = ComputeLogJointCondTheta(MRAvaluesAtObservations) ;
 
-  double logFullCond = ComputeLogFullConditional(MRAvalues) ;
+  double logFullCond = ComputeLogFullConditional(MRAvaluesAtKnots) ;
 
-  printf("Prior, conditional, global, full cond: %+.4e %+.4e %+.4e %+.4e \n", logPrior, logCondDist, totalLogLik, logFullCond) ;
   double output = logPrior + logCondDist + totalLogLik - logFullCond ;
 
   return output ;
@@ -617,6 +614,22 @@ uvec AugTree::extractBlockIndicesFromLowerRight(const arma::sp_mat & symmSparseM
   blockIndices.push_back(lastIndex) ; // The last block will not be added in the loop, hence this step.
   std::sort(blockIndices.begin(), blockIndices.end()) ;
   return conv_to<uvec>::from(blockIndices) ;
+}
+
+double AugTree::logDeterminantFullConditional(const sp_mat & SigmaMat) {
+  uint n = m_dataset.timeCoords.size() ;
+  sp_mat compositeAmatrix = join_rows(eye<sp_mat>(n,n),
+    join_rows(conv_to<sp_mat>::from(vec(n, fill::ones)),
+      conv_to<sp_mat>::from(conv_to<mat>::from(m_dataset.covariateValues)))) ;
+  sp_mat Bmatrix = 1/pow(m_errorSD,2) * trans(compositeAmatrix) * eye<sp_mat>(n,n) * compositeAmatrix ;
+  sp_mat Cinverse = SigmaMat ;
+  for (uint i = 0 ; i < n ; i++) {
+    sp_mat BkT(n, n) ;
+    BkT.col(i) = Bmatrix.col(i) ;
+    double gk = 1/(1+ trace(Cinverse * trans(BkT))) ;
+    Cinverse = Cinverse - gk * Cinverse * trans(BkT) * Cinverse ;
+  } ;
+  return logDeterminantQmat(Cinverse) ;
 }
 
 // void AugTree::invFromDecomposition(const sp_mat & A, const sp_mat & B, const sp_mat & D,

@@ -137,6 +137,7 @@ private:
   arma::uvec extractBlockIndicesFromLowerRight(const arma::sp_mat &) ;
   // void invFromDecomposition(const arma::sp_mat &, const arma::sp_mat &, const arma::sp_mat &, arma::sp_mat *,
   //                                const arma::uvec &) ;
+  double logDeterminantFullConditional(const arma::sp_mat &) ;
   template <typename MatrixType>
   inline typename MatrixType::Scalar logdet(const MatrixType& M, bool use_cholesky = false) ;
 
