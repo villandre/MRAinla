@@ -62,7 +62,7 @@ public:
   void CleanPredictionComponents() ;
   void CenterResponse() ;
   arma::sp_mat createHstar() ;
-  arma::sp_mat createSigmaStarInverse() ;
+  arma::sp_mat CombineFEandKmatrices() ;
   arma::sp_mat createQ() ;
 
   double ComputeJointPsiMarginal() ;

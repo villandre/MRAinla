@@ -329,16 +329,16 @@ void AugTree::CenterResponse() {
   m_dataset.responseValues -= meanVec ;
 }
 
-arma::sp_mat AugTree::createSigmaStarInverse() {
-  std::vector<mat *> KinverseAndBetaMatrixList = getKmatricesInversePointers() ;
-  mat SigmaBetaInverse = eye<mat>(m_fixedEffParameters.size(), m_fixedEffParameters.size())/m_MRAcovParas.at(0) ; // Make sure those parameters are named.
+arma::sp_mat AugTree::CombineFEandKmatrices() {
+  std::vector<mat *> betaAndKmatrixList = getKmatricesInversePointers() ;
+  mat FEcovMat = eye<mat>(m_fixedEffParameters.size(), m_fixedEffParameters.size()) *
+    pow(m_fixedEffSD, 2) ;
 
-  // KinverseAndBetaMatrixList.push_back(&SigmaBetaInverse) ;
   // This is because we want the Q matrix to have a block-diagonal component in the lower-right corner,
   // which prompted us to make H* = [X,F] rather than H* = [F, X], like in Eidsvik.
-  KinverseAndBetaMatrixList.insert(KinverseAndBetaMatrixList.begin(), &SigmaBetaInverse) ;
-  sp_mat SigmaStarInverse = createSparseMatrix(KinverseAndBetaMatrixList) ;
-  return SigmaStarInverse ;
+  betaAndKmatrixList.insert(betaAndKmatrixList.begin(), &FEcovMat) ;
+  sp_mat FEandKmatrices = createSparseMatrix(betaAndKmatrixList) ;
+  return FEandKmatrices ;
 }
 
 arma::sp_mat AugTree::createHstar() {
@@ -496,29 +496,16 @@ double AugTree::ComputeLogJointCondTheta(const arma::vec & MRAvalues) {
 
 double AugTree::ComputeLogFullConditional(const arma::vec & MRAparaValues) {
 
-  sp_mat Hstar = createHstar() ;
-  sp_mat SigmaStarInverse = createSigmaStarInverse() ;
-  sp_mat TmatrixInverse(m_dataset.timeCoords.size(), m_dataset.timeCoords.size()) ;
-  TmatrixInverse.diag().fill(1/m_errorSD) ;
-  sp_mat Qmat = trans(Hstar) * TmatrixInverse * Hstar + SigmaStarInverse ;
-  // The formulation for bVec is valid if priors for the eta's and fixed effect coefficients have mean zero, else, a second term comes into play Sigma * mu ;
-  sp_mat bVec = trans(Hstar) * TmatrixInverse * conv_to<sp_mat>::from(m_dataset.responseValues) ;
-
-  // Eigen::SparseMatrix<double> eigen_s = Rcpp::as<Eigen::SparseMatrix<double>>(Rcpp::wrap(Qmat));
-  // Eigen::SparseLU<Eigen::SparseMatrix<double>> solver;
-  // solver.compute(eigen_s);
-  // double ldet = solver.logAbsDeterminant();
-  cout << "Computing log-determinant of Qmat...\n" ;
-
-  double ldet = logDeterminantQmat(Qmat) ;
-
-  sp_mat thetaValues= sp_mat(MRAparaValues.size() + m_dataset.covariateValues.n_cols + 1 , 1) ;
-
-  sp_mat logKernelResult = - 0.5 * (trans(thetaValues) * Qmat * thetaValues + trans(thetaValues) * bVec) ;
-
-  double logFullValue = -0.5 * SigmaStarInverse.n_rows * log(2*PI) + 0.5 * ldet + logKernelResult(0,0) ;
-
-  return logFullValue;
+  //
+  // double ldet = logDeterminantQmat(Qmat) ;
+  //
+  // sp_mat thetaValues= sp_mat(MRAparaValues.size() + m_dataset.covariateValues.n_cols + 1 , 1) ;
+  //
+  // sp_mat logKernelResult = - 0.5 * (trans(thetaValues) * Qmat * thetaValues + trans(thetaValues) * bVec) ;
+  //
+  // double logFullValue = -0.5 * SigmaStarInverse.n_rows * log(2*PI) + 0.5 * ldet + logKernelResult(0,0) ;
+  //
+  // return logFullValue;
 }
 
 double AugTree::ComputeGlobalLogLik(const arma::vec & MRAvalues) {
@@ -540,17 +527,34 @@ double AugTree::ComputeJointPsiMarginal() {
   arma_rng::set_seed(2) ;
   vec MRAvaluesAtKnots(m_numKnots) ;
   MRAvaluesAtKnots.randn() ;
+  uint n = m_dataset.responseValues.size() ;
   vec MRAvaluesAtObservations(m_dataset.timeCoords.n_rows) ;
+  double inverseFEvar = 1/pow(m_errorSD, 2) ;
 
   double totalLogLik = ComputeGlobalLogLik(MRAvaluesAtObservations) ;
 
   double logPrior = ComputeLogPriors() ;
 
   double logCondDist = ComputeLogJointCondTheta(MRAvaluesAtObservations) ;
+  sp_fmat sparseCovMatrix = conv_to<sp_fmat>::from(m_dataset.covariateValues) ;
+  sp_mat Amatrix = join_rows(join_rows(conv_to<sp_mat>::from(vec(n, fill::ones)),
+                    conv_to<sp_mat>::from(sparseCovMatrix)),
+                  eye<sp_mat>(n, n)) ;
+  sp_mat vStar = join_cols(conv_to<sp_mat>::from(m_fixedEffParameters),
+                           conv_to<sp_mat>::from(MRAvaluesAtObservations)) ;
+  sp_mat ATinvA =  inverseFEvar * trans(Amatrix) * eye<sp_mat>(n, n) * Amatrix ;
 
-  double logFullCond = ComputeLogFullConditional(MRAvaluesAtKnots) ;
+  sp_mat Fmatrix = createFmatrix() ;
+  sp_mat Hstar = join_rows(conv_to<sp_mat>::from(join_rows(vec(n, fill::ones),
+                    conv_to<mat>::from(m_dataset.covariateValues))), Fmatrix) ;
+  sp_mat FEandMRAcovMatrix = trans(Hstar) * CombineFEandKmatrices() * Hstar ;
+  double fullCondCovMatrixLogDet = logDeterminantFullConditional(FEandMRAcovMatrix) ;
+  double MRAandFElogDet = m_vertexVector.at(0)->GetD() + 2 * m_fixedEffParameters.size() * log(m_fixedEffSD) ;
 
-  double output = logPrior + logCondDist + totalLogLik - logFullCond ;
+  sp_mat firstTerm = trans(vStar) * ATinvA * vStar ;
+
+  sp_mat secondTerm = trans(conv_to<sp_mat>::from(m_dataset.responseValues)) * inverseFEvar * eye<sp_mat>(n, n) * vStar ;
+  double output = logPrior + totalLogLik + 0.5 * (firstTerm(0,0) - fullCondCovMatrixLogDet - MRAandFElogDet) - secondTerm(0,0) ;
 
   return output ;
 }
