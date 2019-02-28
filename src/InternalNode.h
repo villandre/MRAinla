@@ -36,6 +36,7 @@ public:
   arma::mat * GetKmatrixAddress() {return &m_K ;}
   arma::mat * GetKmatrixInverseAddress() { return &(m_Wlist.back()) ;}
   arma::mat GetKmatrixInverse() {return m_Wlist.back() ;}
+  arma::vec GetOmega(const uint & order) { return m_omega.at(order) ;}
 
   void genRandomKnots(inputdata &, uint &, const gsl_rng *) ;
 

@@ -27,10 +27,11 @@ AugTree::AugTree(uint & M, fvec & lonRange, fvec & latRange, fvec & timeRange, v
   m_randomNumGenerator = gsl_rng_alloc(gsl_rng_taus) ;
   m_MRAcovParas.resize(1) ;
   m_MRAcovParas.fill(-1.5e6) ;
-  m_newHyperParas = true ;
+  // m_newHyperParas = true ;
 
   gsl_rng_set(m_randomNumGenerator, seed) ;
   m_fixedEffParameters.resize(m_dataset.covariateValues.n_cols + 1) ; // An extra 1 is added to take into account the intercept.
+  m_fixedEffParameters.randu() ;
 
   BuildTree(minObsForTimeSplit) ;
   m_numKnots = 0 ;
@@ -146,17 +147,17 @@ void AugTree::generateKnots(TreeNode * node) {
   }
 }
 
-double AugTree::ComputeMRAlogLik(const vec & thetaValues)
+void AugTree::ComputeMRAlogLik(const bool WmatsAvailable)
 {
-  if (m_newHyperParas) {
+  if (!WmatsAvailable) {
     computeWmats() ;
-    deriveAtildeMatrices() ;
   }
-  computeOmegas(thetaValues) ;
-  computeU(thetaValues) ;
-  if (m_newHyperParas) {
-    computeD() ;
-  }
+  deriveAtildeMatrices() ;
+
+  computeOmegas() ;
+  computeU() ;
+  computeD() ;
+
   // The log-likelihood is a function of d and u computed at the root node, being at the
   // head of m_vertexVector, since it's the first one we ever created.
 
@@ -165,8 +166,8 @@ double AugTree::ComputeMRAlogLik(const vec & thetaValues)
   tempLogLik = -tempLogLik/2 ;
   // We set m_newHyperParas=false to indicate that covariance computations with the current hyperparameters
   // have been perfomed, and need not be performed again, unless we change the hyperparameters.
-  m_newHyperParas = false ;
-  return tempLogLik ;
+  m_recomputeMRAlogLik = false ;
+  m_MRAlogLik = tempLogLik ;
 }
 
 void AugTree::computeWmats() {
@@ -211,22 +212,22 @@ void AugTree::deriveAtildeMatrices() {
   }
 }
 
-void AugTree::computeOmegas(const vec & responseValues) {
+void AugTree::computeOmegas() {
   for (int level = m_M; level >= 0 ; level--) {
     uint levelRecast = (uint) level ;
     std::vector<TreeNode *> levelNodes = getLevelNodes(levelRecast) ;
     for (auto & i : levelNodes) {
-      i->DeriveOmega(responseValues) ;
+      i->DeriveOmega(m_MRArandomValues) ;
     }
   }
 }
 
-void AugTree::computeU(const vec & responseValues) {
+void AugTree::computeU() {
   for (int level = m_M; level >= 0 ; level--) {
     uint levelRecast = (uint) level ;
     std::vector<TreeNode *> levelNodes = getLevelNodes(levelRecast) ;
     for (auto & i : levelNodes) {
-      i->DeriveU(responseValues) ;
+      i->DeriveU(m_MRArandomValues) ;
     }
   }
 };
@@ -329,16 +330,17 @@ void AugTree::CenterResponse() {
   m_dataset.responseValues -= meanVec ;
 }
 
-arma::sp_mat AugTree::CombineFEandKmatrices() {
-  std::vector<mat *> betaAndKmatrixList = getKmatricesInversePointers() ;
-  mat FEcovMat = eye<mat>(m_fixedEffParameters.size(), m_fixedEffParameters.size()) *
-    pow(m_fixedEffSD, 2) ;
+arma::sp_mat AugTree::CombineKandFEmatrices() {
+  std::vector<mat *> KandFEmatrixList = getKmatricesInversePointers() ;
+  mat FEmatrix = pow(m_fixedEffSD, 2) * eye<mat>(m_fixedEffParameters.size(), m_fixedEffParameters.size()) ;
+  KandFEmatrixList.insert(KandFEmatrixList.begin(), &FEmatrix) ;
 
   // This is because we want the Q matrix to have a block-diagonal component in the lower-right corner,
   // which prompted us to make H* = [X,F] rather than H* = [F, X], like in Eidsvik.
-  betaAndKmatrixList.insert(betaAndKmatrixList.begin(), &FEcovMat) ;
-  sp_mat FEandKmatrices = createSparseMatrix(betaAndKmatrixList) ;
-  return FEandKmatrices ;
+
+  sp_mat Kmatrices = createSparseMatrix(KandFEmatrixList) ;
+
+  return Kmatrices ;
 }
 
 arma::sp_mat AugTree::createHstar() {
@@ -459,7 +461,7 @@ void AugTree::diveAndUpdate(TreeNode * nodePointer, std::vector<TreeNode *> * de
 
 // For now, we assume that all hyperpriors have an inverse gamma distribution with the same parameters.
 
-double AugTree::ComputeLogPriors() {
+void AugTree::ComputeLogPriors() {
   vec hyperPriorVec = m_MRAcovParas ;
   hyperPriorVec.resize(hyperPriorVec.size() + 2) ;
   hyperPriorVec(m_MRAcovParas.size()) = m_fixedEffSD ;
@@ -479,84 +481,104 @@ double AugTree::ComputeLogPriors() {
     logPrior += -((incrementedIG.at(i).m_alpha + 1) * log(hyperPriorVec.at(i)) + incrementedIG.at(i).m_beta/hyperPriorVec.at(i)) ; // Since hyperAlpha and hyperBeta do not vary, we can ignore them for optimisation purposes.
   }
 
-  return logPrior ;
+  m_logPrior = logPrior ;
 }
 
-double AugTree::ComputeLogJointCondTheta(const arma::vec & MRAvalues) {
-
-  double MRAlogLik = ComputeMRAlogLik(MRAvalues) ;
+void AugTree::ComputeLogJointCondTheta() {
+  if (m_recomputeMRAlogLik) {
+    ComputeMRAlogLik(true) ; // Getting the eta values requires computing the K matrices, hence KmatricesAvailable = true.
+  }
   double fixedEffMean = 0 ;
   double fixedEffLogLik = 0 ;
   for (auto & i : m_fixedEffParameters) {
     fixedEffLogLik += log(normpdf(i, fixedEffMean, m_fixedEffSD)) ;
   }
-  return (MRAlogLik + fixedEffLogLik) ;
+  m_logCondDist = m_MRAlogLik + fixedEffLogLik ;
 }
 
 
-double AugTree::ComputeLogFullConditional(const arma::vec & MRAparaValues) {
+void AugTree::ComputeLogFullConditional() {
 
-  //
-  // double ldet = logDeterminantQmat(Qmat) ;
-  //
-  // sp_mat thetaValues= sp_mat(MRAparaValues.size() + m_dataset.covariateValues.n_cols + 1 , 1) ;
-  //
-  // sp_mat logKernelResult = - 0.5 * (trans(thetaValues) * Qmat * thetaValues + trans(thetaValues) * bVec) ;
-  //
-  // double logFullValue = -0.5 * SigmaStarInverse.n_rows * log(2*PI) + 0.5 * ldet + logKernelResult(0,0) ;
-  //
-  // return logFullValue;
+  uint n = m_dataset.responseValues.size() ;
+
+  sp_mat vStar = conv_to<sp_mat>::from(join_cols(m_fixedEffParameters, m_MRAetaValues)) ;
+
+  sp_mat SigmaFEandEta = CombineKandFEmatrices() ;
+  sp_mat SigmaFEandEtaInv = invertSymmBlockDiag(SigmaFEandEta, extractBlockIndices(SigmaFEandEta)) ;
+
+  sp_mat Hstar = createHstar() ;
+  sp_mat TepsilonInverse = 1/pow(m_errorSD, 2) * eye<sp_mat>(n, n) ;
+
+  sp_mat Qmat = SigmaFEandEtaInv + trans(Hstar) * TepsilonInverse * Hstar ;
+
+  vec bVec = trans(trans(m_dataset.responseValues) * TepsilonInverse * Hstar) ;
+  cout << "Obtaining updated mean vector... " ;
+  vec updatedMean = ComputeFullConditionalMean(bVec, Qmat) ;
+  cout << "Done! \n Computing determinant..." ;
+  double detQmat = logDeterminantQmat(Qmat) ;
+  cout << "Done! \n Wrapping up... \n" ;
+  vec recenteredVstar = vStar - updatedMean ;
+  mat distExponential = trans(recenteredVstar) * Qmat * recenteredVstar ;
+
+  double exponential = -0.5 * distExponential.at(0, 0) ;
+  printf("Log-determinant: %.4e \n Exponent contribution: %.4e \n", detQmat, exponential) ;
+  m_logFullCond = 0.5 * detQmat + exponential ;
 }
 
-double AugTree::ComputeGlobalLogLik(const arma::vec & MRAvalues) {
+void AugTree::ComputeGlobalLogLik() {
   fmat incrementedCovar = m_dataset.covariateValues ;
   incrementedCovar.insert_cols(0, 1) ;
   incrementedCovar.col(0).fill(1) ;
   vec meanVec(m_dataset.responseValues.size(), fill::zeros) ;
-  meanVec = incrementedCovar * m_fixedEffParameters + MRAvalues ;
+  meanVec = incrementedCovar * m_fixedEffParameters + m_MRArandomValues ;
+
   vec sdVec(m_dataset.responseValues.size(), fill::zeros) ;
+
   sdVec.fill(m_errorSD) ;
   vec logDensVec(m_dataset.responseValues.size(), fill::zeros) ;
   logDensVec = log(normpdf(m_dataset.responseValues, meanVec, sdVec)) ;
-  return sum(logDensVec) ;
+  m_recomputeGlobalLogLik = false ;
+  m_globalLogLik = sum(logDensVec) ;
 }
 
 double AugTree::ComputeJointPsiMarginal() {
   // In theory, this function should not depend on the theta values...
   // We can therefore arbitrarily set them all to 0.
-  arma_rng::set_seed(2) ;
-  vec MRAvaluesAtKnots(m_numKnots) ;
-  MRAvaluesAtKnots.randn() ;
+  if (m_recomputeMRAlogLik) {
+    computeWmats() ; // This will produce the K matrices required. NOTE: ADD CHECK THAT ENSURES THAT THE MRA LIK. IS ONLY RE-COMPUTED WHEN THE MRA COV. PARAMETERS CHANGE.
+  }
+  if (m_MRAetaValues.size() == 0) {
+    vec correlatedEtas(m_numKnots, fill::zeros) ;
+    uint index = 0 ;
+    arma_rng::set_seed(2) ;
+    for (auto & i: m_vertexVector) {
+      mat cholDecomp = chol(i->GetKmatrix()) ;
+      vec rnormValues(cholDecomp.n_rows) ;
+      rnormValues.randn() ;
+      correlatedEtas.subvec(index, index + rnormValues.size()-1) =  cholDecomp * rnormValues ;
+      index += rnormValues.size() ;
+    }
+    m_MRAetaValues = correlatedEtas ;
+    sp_mat Fmatrix = createFmatrix() ;
+    m_MRArandomValues = Fmatrix * correlatedEtas; // Pretty sure the etas match the order of knots pre-supposed by the F matrix, but would be better to make sure.
+  }
+  ComputeLogJointCondTheta() ;
   uint n = m_dataset.responseValues.size() ;
   vec MRAvaluesAtObservations(m_dataset.timeCoords.n_rows) ;
-  double inverseFEvar = 1/pow(m_errorSD, 2) ;
+  if (m_recomputeGlobalLogLik) {
+    cout << "Computing log-likelihood... \n" ;
+    ComputeGlobalLogLik() ;
+  }
 
-  double totalLogLik = ComputeGlobalLogLik(MRAvaluesAtObservations) ;
+  cout << "Computing log-prior... \n" ;
+  ComputeLogPriors() ;
 
-  double logPrior = ComputeLogPriors() ;
-
-  double logCondDist = ComputeLogJointCondTheta(MRAvaluesAtObservations) ;
-  sp_fmat sparseCovMatrix = conv_to<sp_fmat>::from(m_dataset.covariateValues) ;
-  sp_mat Amatrix = join_rows(join_rows(conv_to<sp_mat>::from(vec(n, fill::ones)),
-                    conv_to<sp_mat>::from(sparseCovMatrix)),
-                  eye<sp_mat>(n, n)) ;
-  sp_mat vStar = join_cols(conv_to<sp_mat>::from(m_fixedEffParameters),
-                           conv_to<sp_mat>::from(MRAvaluesAtObservations)) ;
-  sp_mat ATinvA =  inverseFEvar * trans(Amatrix) * eye<sp_mat>(n, n) * Amatrix ;
-
-  sp_mat Fmatrix = createFmatrix() ;
-  sp_mat Hstar = join_rows(conv_to<sp_mat>::from(join_rows(vec(n, fill::ones),
-                    conv_to<mat>::from(m_dataset.covariateValues))), Fmatrix) ;
-  sp_mat FEandMRAcovMatrix = trans(Hstar) * CombineFEandKmatrices() * Hstar ;
-  double fullCondCovMatrixLogDet = logDeterminantFullConditional(FEandMRAcovMatrix) ;
-  double MRAandFElogDet = m_vertexVector.at(0)->GetD() + 2 * m_fixedEffParameters.size() * log(m_fixedEffSD) ;
-
-  sp_mat firstTerm = trans(vStar) * ATinvA * vStar ;
-
-  sp_mat secondTerm = trans(conv_to<sp_mat>::from(m_dataset.responseValues)) * inverseFEvar * eye<sp_mat>(n, n) * vStar ;
-  double output = logPrior + totalLogLik + 0.5 * (firstTerm(0,0) - fullCondCovMatrixLogDet - MRAandFElogDet) - secondTerm(0,0) ;
-
-  return output ;
+  cout << "Computing log-full conditional... \n" ;
+  ComputeLogFullConditional() ;
+  cout << "Wrapping up... \n" ;
+  printf("Total log-lik: %.4e \n Log-prior: %.4e \n Log-Cond. dist.: %.4e \n Log-full cond.: %.4e \n",
+         m_globalLogLik, m_logPrior, m_logCondDist, m_logFullCond) ;
+  return ( m_globalLogLik + m_logPrior + m_logCondDist - m_logFullCond) ;
 }
 
 // This inversion is based on recursive partitioning of the Q matrix. It is based on the observation that it is
@@ -565,6 +587,7 @@ double AugTree::ComputeJointPsiMarginal() {
 // This function involves much smaller matrices, which will make the operations easier to handle.
 double AugTree::logDeterminantQmat(const sp_mat & Qmat) {
   uvec DmatrixBlockIndices = extractBlockIndicesFromLowerRight(Qmat) ;
+
   uint numRowsD =DmatrixBlockIndices.tail(1)(0) - DmatrixBlockIndices(0) ;
   uint shift = DmatrixBlockIndices.at(0) ;
 
@@ -625,14 +648,23 @@ double AugTree::logDeterminantFullConditional(const sp_mat & SigmaMat) {
   sp_mat compositeAmatrix = join_rows(eye<sp_mat>(n,n),
     join_rows(conv_to<sp_mat>::from(vec(n, fill::ones)),
       conv_to<sp_mat>::from(conv_to<mat>::from(m_dataset.covariateValues)))) ;
+
   sp_mat Bmatrix = 1/pow(m_errorSD,2) * trans(compositeAmatrix) * eye<sp_mat>(n,n) * compositeAmatrix ;
   sp_mat Cinverse = SigmaMat ;
-  for (uint i = 0 ; i < n ; i++) {
-    sp_mat BkT(n, n) ;
-    BkT.col(i) = Bmatrix.col(i) ;
-    double gk = 1/(1+ trace(Cinverse * trans(BkT))) ;
-    Cinverse = Cinverse - gk * Cinverse * trans(BkT) * Cinverse ;
+  sp_mat Bk(Bmatrix.n_rows , Bmatrix.n_cols) ;
+  printf("Cinverse size: %i %i \n", SigmaMat.n_rows, SigmaMat.n_cols) ;
+  cout << "Entering loop... \n" ;
+  for (uint i = 0 ; i < 4 ; i++) {
+    printf("Processing iteration %i. \n", i) ;
+    uint j = Bmatrix.n_cols - i - 1;
+    Bk.col(j) = Bmatrix.col(j) ;
+    // double gk = 1/(1+ trace(Cinverse * trans(BkT))) ;
+    double gk = 1;
+
+    Cinverse = Cinverse - gk * Cinverse * Bk * Cinverse ;
+    Bk.zeros() ;
   } ;
+  throw Rcpp::exception("Stop now!!! \n") ;
   return logDeterminantQmat(Cinverse) ;
 }
 
@@ -798,4 +830,40 @@ double AugTree::logDeterminantFullConditional(const sp_mat & SigmaMat) {
 //   cout << "Returning values... \n" ;
 //   return optimalParas ;
 // }
+
+arma::vec AugTree::ComputeFullConditionalMean(const arma::vec & bVec, const arma::sp_mat & Qmat) {
+
+  uvec blockIndices = extractBlockIndicesFromLowerRight(Qmat) ;
+
+  uint DblockLeftIndex = blockIndices.at(0) ;
+  uint sizeD = Qmat.n_cols - DblockLeftIndex + 1 ;
+  uint sizeA = Qmat.n_cols - sizeD ;
+  vec b1 = bVec.subvec(0, sizeA - 1) ;
+  vec b2 = bVec.subvec(sizeA, bVec.size() - 1) ;
+  sp_mat Bmatrix = Qmat(0, sizeA, size(sizeA, sizeD)) ;
+  sp_mat Amatrix = Qmat(0, 0, size(sizeA, sizeA)) ;
+
+  sp_mat Dinverted = invertSymmBlockDiag(Qmat(sizeA, sizeA, size(sizeD, sizeD)), blockIndices) ;
+
+  mat secondTermInside = conv_to<mat>::from(Bmatrix * Dinverted * trans(Bmatrix)) ;
+
+  mat compositeInverted = inv(Amatrix - secondTermInside) ;
+
+  sp_mat firstElementSecondTerm = Dinverted * conv_to<sp_mat>::from(b2) ;
+  firstElementSecondTerm = Bmatrix * firstElementSecondTerm ;
+  firstElementSecondTerm = compositeInverted * firstElementSecondTerm ;
+  vec firstElementFirstTerm = compositeInverted * b1 ;
+  vec firstElement =  firstElementFirstTerm - firstElementSecondTerm ;
+
+  vec secondElementFirstTerm = trans(Bmatrix) * firstElementFirstTerm ;
+  secondElementFirstTerm = -Dinverted * secondElementFirstTerm ;
+  sp_mat secondElementSecondTerm = trans(Bmatrix) * firstElementSecondTerm ;
+  secondElementSecondTerm = Dinverted * secondElementSecondTerm ;
+  secondElementSecondTerm = Dinverted * b2 + secondElementSecondTerm ;
+  vec secondElement = secondElementFirstTerm + secondElementSecondTerm ;
+
+  vec meanVec = join_cols<vec>(firstElement, secondElement) ;
+
+  return meanVec ;
+}
 

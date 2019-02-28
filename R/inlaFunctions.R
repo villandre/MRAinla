@@ -34,13 +34,15 @@ MRA_INLA <- function(spacetimeData, errorSDstart, fixedEffSDstart, MRAhyperparas
   covariateMatrix <- as.matrix(spacetimeData@data[, -1, drop = FALSE])
   gridPointer <- setupGridCpp(spacetimeData@data[, 1], dataCoordinates, timeValues, covariateMatrix, M, lonRange, latRange, as.integer(timeRange)/(3600*24), randomSeed, cutForTimeSplit)
   # First we compute values relating to the hyperprior marginal distribution...
-  xStartValues <- 2*log(c(MRAhyperparasStart, fixedEffSDstart, errorSDstart))
+  # xStartValues <- 2*log(c(MRAhyperparasStart, fixedEffSDstart, errorSDstart))
+  xStartValues <- c(MRAhyperparasStart, fixedEffSDstart, errorSDstart)
   numMRAhyperparas <- length(MRAhyperparasStart)
-  # funForOptimJointHyperMarginal(gridPointer$gridPointer, MRAhyperparasStart, fixedEffSDstart, errorSDstart, hyperAlpha = hyperAlpha, hyperBeta = hyperBeta)
+  # funForOptimJointHyperMarginal(treePointer = gridPointer$gridPointer, exp(0.5*xStartValues[1:numMRAhyperparas]), exp(0.5*xStartValues[numMRAhyperparas + 1]), exp(0.5*xStartValues[numMRAhyperparas + 2]), MRAcovParasIGalphaBeta = MRAcovParasIGalphaBeta, fixedEffIGalphaBeta = fixedEffIGalphaBeta, errorIGalphaBeta = errorIGalphaBeta)
   funForOptim <- function(x, treePointer, MRAcovParasIGalphaBeta, fixedEffIGalphaBeta, errorIGalphaBeta) {
-    -funForOptimJointHyperMarginal(treePointer, exp(0.5*x[1:numMRAhyperparas]), exp(0.5*x[numMRAhyperparas + 1]), exp(0.5*x[numMRAhyperparas + 2]), MRAcovParasIGalphaBeta, fixedEffIGalphaBeta, errorIGalphaBeta)
+    # -funForOptimJointHyperMarginal(treePointer, exp(0.5*x[1:numMRAhyperparas]), exp(0.5*x[numMRAhyperparas + 1]), exp(0.5*x[numMRAhyperparas + 2]), MRAcovParasIGalphaBeta, fixedEffIGalphaBeta, errorIGalphaBeta)
+    -funForOptimJointHyperMarginal(treePointer, abs(x[1:numMRAhyperparas]), abs(x[numMRAhyperparas + 1]), abs(x[numMRAhyperparas + 2]), MRAcovParasIGalphaBeta, fixedEffIGalphaBeta, errorIGalphaBeta)
   }
-  optimResult <- optim(par = xStartValues, hessian = TRUE, fn = funForOptim, gr = NULL, treePointer = gridPointer$gridPointer, MRAcovParasIGalphaBeta = MRAcovParasIGalphaBeta, fixedEffIGalphaBeta = fixedEffIGalphaBeta, errorIGalphaBeta = errorIGalphaBeta)
+  optimResult <- optim(par = xStartValues, hessian = TRUE, fn = funForOptim, control = list(reltol = 1e-4), gr = NULL, treePointer = gridPointer$gridPointer, MRAcovParasIGalphaBeta = MRAcovParasIGalphaBeta, fixedEffIGalphaBeta = fixedEffIGalphaBeta, errorIGalphaBeta = errorIGalphaBeta)
   hyperMode <- optimResult$par
   hyperHessian <- optimResult$hessian
   list(hyperDistMode = hyperMode, hessianAtMode = hyperHessian)

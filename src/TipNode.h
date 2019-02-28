@@ -73,6 +73,7 @@ public:
   arma::mat * GetKmatrixAddress() {return &m_SigmaInverse ;}
   arma::mat * GetKmatrixInverseAddress() { return &m_Wlist.at(m_depth) ;}
   arma::mat GetKmatrixInverse() {return GetSigma() ;}
+  arma::vec GetOmega(const uint & order) { throw Rcpp::exception("Trying to get omega vector in tip node! \n") ; return arma::vec(1) ;}
 
   void genRandomKnots(inputdata & dataset, uint & numKnots, const gsl_rng * RNG) {
     m_knotsCoor = spatialcoor(dataset.spatialCoords.rows(m_obsInNode),

@@ -47,14 +47,14 @@ arma::uvec extractBlockIndices(const arma::sp_mat & symmSparseMatrix) {
 
   while (posNextBlock < symmSparseMatrix.n_cols) {
     int newPosNextBlock = posNextBlock + 1 ; // Ensures that the for loop starts
-    printf("Processing block starting at %i ... \n", posNextBlock) ;
+    // printf("Processing block starting at %i ... \n", posNextBlock) ;
     for (int i = posNextBlock; i < newPosNextBlock; i++) {
       arma::vec myCol = arma::vec(symmSparseMatrix.col(i)) ;
       arma::uvec nonZeroElements = arma::find(myCol) ;
       arma::uword lastNonZero = nonZeroElements.tail(1)(0) + 1 ;
       if (lastNonZero > newPosNextBlock) {
         newPosNextBlock = lastNonZero ;
-        printf("Moving bound to %i... \n", newPosNextBlock) ;
+        // printf("Moving bound to %i... \n", newPosNextBlock) ;
       }
     }
     blockIndices.push_back(posNextBlock) ;

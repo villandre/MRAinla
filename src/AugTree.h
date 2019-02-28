@@ -25,12 +25,12 @@ public:
 
   std::vector<TreeNode *> GetVertexVector() {return m_vertexVector ;} ;
 
-  double ComputeMRAlogLik(const arma::vec &) ;
+  void ComputeMRAlogLik(const bool WmatsAvailable = false) ;
   std::vector<GaussDistParas> ComputeConditionalPrediction(const inputdata &) ;
-  double ComputeLogJointCondTheta(const arma::vec &) ;
-  double ComputeGlobalLogLik(const arma::vec &) ;
-  double ComputeLogFullConditional(const arma::vec &) ;
-  double ComputeLogPriors() ;
+  void ComputeLogJointCondTheta() ;
+  void ComputeGlobalLogLik() ;
+  void ComputeLogFullConditional() ;
+  void ComputeLogPriors() ;
 
   // double GetMRAlogLik() const {return m_MRAlogLik ;}
   gsl_rng * GetRandomNumGenerator() {return m_randomNumGenerator ;}
@@ -42,17 +42,19 @@ public:
   void SetRNG(gsl_rng * myRNG) { m_randomNumGenerator = myRNG ;}
 
   // void SetCovParameters(arma::vec & covParas) {m_covParameters = covParas ;}
-  void SetFixedEffParameters(arma::vec & fixedParas) {m_fixedEffParameters = fixedParas ;}
+  void SetFixedEffParameters(arma::vec & fixedParas) {
+    if (arma::approx_equal(fixedParas, m_fixedEffParameters, "absdiff", 1e-8)) m_recomputeGlobalLogLik = true ;
+    m_fixedEffParameters = fixedParas ;
+  }
   void SetFixedEffSD(const double & fixedEffSD) {
-    if (fixedEffSD != m_fixedEffSD) m_newHyperParas = true ;
     m_fixedEffSD = fixedEffSD ;
   }
   void SetErrorSD(const double & errorSD) {
-    if (errorSD != m_errorSD) m_newHyperParas = true ;
+    if (errorSD != m_errorSD) m_recomputeGlobalLogLik = true ;
     m_errorSD = errorSD ;
   }
   void SetMRAcovParas(const arma::vec & MRAcovParas) {
-    if (arma::approx_equal(MRAcovParas, m_MRAcovParas, "absdiff", 1e-8)) m_newHyperParas = true ;
+    if (arma::approx_equal(MRAcovParas, m_MRAcovParas, "absdiff", 1e-8)) m_recomputeMRAlogLik = true ;
     m_MRAcovParas = MRAcovParas ;
   }
   void SetMRAcovParasIGalphaBeta(const std::vector<IGhyperParas> & alphaBeta) {m_MRAcovParasIGalphaBeta = alphaBeta ;}
@@ -62,7 +64,7 @@ public:
   void CleanPredictionComponents() ;
   void CenterResponse() ;
   arma::sp_mat createHstar() ;
-  arma::sp_mat CombineFEandKmatrices() ;
+  arma::sp_mat CombineKandFEmatrices() ;
   arma::sp_mat createQ() ;
 
   double ComputeJointPsiMarginal() ;
@@ -76,10 +78,15 @@ private:
 
   std::vector<TreeNode *> m_vertexVector ;
   std::vector<TreeNode *> getLevelNodes(uint & level) ;
-  bool m_newHyperParas ; // When this flag is true, more computations are required to get the log-lik.
+  bool m_recomputeMRAlogLik{ true } ; // When this flag is true, more computations are required to get the log-lik.
+  bool m_recomputeGlobalLogLik{ true } ; // When this flag is true, the global log-likelihood (conditional on all mean parameters) needs to be recomputed.
 
   double m_MRAlogLik{ 0 } ;
-  double m_globalLogLik{ } ;
+  double m_globalLogLik{ 0 } ;
+  double m_fixedEffContrib{ 0 } ;
+  double m_logPrior{ 0 } ;
+  double m_logCondDist{ 0 } ;
+  double m_logFullCond{ 0 } ;
   uint m_numKnots ;
 
   uint m_M{ 0 } ;
@@ -113,9 +120,9 @@ private:
 
   void computeWmats() ;
   void deriveAtildeMatrices() ;
-  void computeOmegas(const arma::vec &) ;
+  void computeOmegas() ;
 
-  void computeU(const arma::vec &) ;
+  void computeU() ;
   void computeD() ;
 
   // Prediction functions
@@ -126,6 +133,8 @@ private:
   spatialcoor m_predictLocations ;
 
   // INLA functions
+  arma::vec m_MRArandomValues ;
+  arma::vec m_MRAetaValues ;
   std::vector<arma::mat *> getKmatricesInversePointers() {
     std::vector<arma::mat *> KmatrixInverseList ;
     for (auto & i : m_vertexVector) KmatrixInverseList.push_back(i->GetKmatrixInverseAddress()) ;
@@ -138,6 +147,7 @@ private:
   // void invFromDecomposition(const arma::sp_mat &, const arma::sp_mat &, const arma::sp_mat &, arma::sp_mat *,
   //                                const arma::uvec &) ;
   double logDeterminantFullConditional(const arma::sp_mat &) ;
+  arma::vec ComputeFullConditionalMean(const arma::vec &, const arma::sp_mat &) ;
   template <typename MatrixType>
   inline typename MatrixType::Scalar logdet(const MatrixType& M, bool use_cholesky = false) ;
 

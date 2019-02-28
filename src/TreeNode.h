@@ -113,6 +113,7 @@ public:
   virtual arma::mat * GetKmatrixAddress()=0 ;
   virtual arma::mat * GetKmatrixInverseAddress()=0 ;
   virtual arma::mat GetKmatrixInverse()=0 ;
+  virtual arma::vec GetOmega(const uint &)=0 ;
 
   virtual void genRandomKnots(inputdata &, uint &, const gsl_rng *) = 0;
 
