@@ -1,6 +1,6 @@
-#include<cmath>
+#include<math.h>
 #include<iostream>
-#include<cstdlib>
+#include<stdlib.h>
 
 #include "helper.h"
 
@@ -126,4 +126,14 @@ sp_mat invertSymmBlockDiag(const sp_mat & blockMatrix, const uvec & blockIndices
 //   bool testResult = newPosNextBlock >= matrixToCheck.n_rows ;
 //   return testResult ;
 // }
+
+double logNormPDF(const arma::vec & x, const arma::vec & mu, const arma::vec & sd) {
+  double logValue = 0;
+  for (unsigned int i = 0 ; i < x.size() ; i++) {
+    logValue += (-log(sd.at(i)) -
+      0.5 * pow((x.at(i) - mu.at(i)), 2)/pow(sd.at(i), 2)) ;
+  }
+  logValue += (-0.5*x.size()*(log(2) + log(PI))) ;
+  return logValue ;
+}
 

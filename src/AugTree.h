@@ -50,7 +50,10 @@ public:
     m_fixedEffSD = fixedEffSD ;
   }
   void SetErrorSD(const double & errorSD) {
-    if (errorSD != m_errorSD) m_recomputeGlobalLogLik = true ;
+    if (errorSD != m_errorSD) {
+      m_recomputeGlobalLogLik = true ;
+      std::cout << "Change in error SD: global log-lik will be recomputed! \n" ;
+    }
     m_errorSD = errorSD ;
   }
   void SetMRAcovParas(const arma::vec & MRAcovParas) {
@@ -135,6 +138,8 @@ private:
   // INLA functions
   arma::vec m_MRArandomValues ;
   arma::vec m_MRAetaValues ;
+  arma::vec m_Vstar ;
+  arma::vec m_MRAvalues ;
   std::vector<arma::mat *> getKmatricesInversePointers() {
     std::vector<arma::mat *> KmatrixInverseList ;
     for (auto & i : m_vertexVector) KmatrixInverseList.push_back(i->GetKmatrixInverseAddress()) ;

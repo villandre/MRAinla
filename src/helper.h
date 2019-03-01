@@ -19,7 +19,7 @@ Spatiotemprange sptimeDistance(const arma::vec & spCoor1, const unsigned int & t
 arma::sp_mat createSparseMatrix(std::vector<arma::mat *>) ;
 arma::uvec extractBlockIndices(const arma::sp_mat &) ;
 arma::sp_mat invertSymmBlockDiag(const arma::sp_mat &, const arma::uvec &) ;
-
+double logNormPDF(const arma::vec &, const arma::vec &, const arma::vec &) ;
 // Inlining the function solves the linking issue I encountered. As it turns out, templated functions
 // must be defined in the header. A simple declaration will lead to a linking error.
 template <typename T> inline void deallocate_container(T& c) {

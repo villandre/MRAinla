@@ -138,7 +138,7 @@ SEXP setupGridCpp(NumericVector responseValues, NumericMatrix spCoords, IntegerV
 
 // [[Rcpp::export]]
 
-double funForOptimJointHyperMarginal(SEXP treePointer, Rcpp::NumericVector MRAhyperparas,
+double jointHyperMarginal(SEXP treePointer, Rcpp::NumericVector MRAhyperparas,
          double fixedEffSD, double errorSD, Rcpp::List MRAcovParasIGalphaBeta,
          NumericVector fixedEffIGalphaBeta, NumericVector errorIGalphaBeta) {
   arma::mat posteriorMatrix ;
@@ -176,7 +176,7 @@ double funForOptimJointHyperMarginal(SEXP treePointer, Rcpp::NumericVector MRAhy
   {
     throw Rcpp::exception("Pointer to MRA grid is null." ) ;
   }
-  printf("Marginal joint Psi: %.4e \n", outputValue) ;
+  printf("Marginal joint Psi: %.4e \n \n \n", outputValue) ;
   return outputValue ;
 }
 

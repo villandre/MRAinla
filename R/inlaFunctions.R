@@ -34,18 +34,19 @@ MRA_INLA <- function(spacetimeData, errorSDstart, fixedEffSDstart, MRAhyperparas
   covariateMatrix <- as.matrix(spacetimeData@data[, -1, drop = FALSE])
   gridPointer <- setupGridCpp(spacetimeData@data[, 1], dataCoordinates, timeValues, covariateMatrix, M, lonRange, latRange, as.integer(timeRange)/(3600*24), randomSeed, cutForTimeSplit)
   # First we compute values relating to the hyperprior marginal distribution...
-  # xStartValues <- 2*log(c(MRAhyperparasStart, fixedEffSDstart, errorSDstart))
+
   xStartValues <- c(MRAhyperparasStart, fixedEffSDstart, errorSDstart)
   numMRAhyperparas <- length(MRAhyperparasStart)
   # funForOptimJointHyperMarginal(treePointer = gridPointer$gridPointer, exp(0.5*xStartValues[1:numMRAhyperparas]), exp(0.5*xStartValues[numMRAhyperparas + 1]), exp(0.5*xStartValues[numMRAhyperparas + 2]), MRAcovParasIGalphaBeta = MRAcovParasIGalphaBeta, fixedEffIGalphaBeta = fixedEffIGalphaBeta, errorIGalphaBeta = errorIGalphaBeta)
   funForOptim <- function(x, treePointer, MRAcovParasIGalphaBeta, fixedEffIGalphaBeta, errorIGalphaBeta) {
-    # -funForOptimJointHyperMarginal(treePointer, exp(0.5*x[1:numMRAhyperparas]), exp(0.5*x[numMRAhyperparas + 1]), exp(0.5*x[numMRAhyperparas + 2]), MRAcovParasIGalphaBeta, fixedEffIGalphaBeta, errorIGalphaBeta)
-    -funForOptimJointHyperMarginal(treePointer, abs(x[1:numMRAhyperparas]), abs(x[numMRAhyperparas + 1]), abs(x[numMRAhyperparas + 2]), MRAcovParasIGalphaBeta, fixedEffIGalphaBeta, errorIGalphaBeta)
+    -jointHyperMarginal(treePointer, abs(x[1:numMRAhyperparas]), abs(x[numMRAhyperparas + 1]), abs(x[numMRAhyperparas + 2]), MRAcovParasIGalphaBeta, fixedEffIGalphaBeta, errorIGalphaBeta)
   }
-  optimResult <- optim(par = xStartValues, hessian = TRUE, fn = funForOptim, control = list(reltol = 1e-4), gr = NULL, treePointer = gridPointer$gridPointer, MRAcovParasIGalphaBeta = MRAcovParasIGalphaBeta, fixedEffIGalphaBeta = fixedEffIGalphaBeta, errorIGalphaBeta = errorIGalphaBeta)
-  hyperMode <- optimResult$par
-  hyperHessian <- optimResult$hessian
-  list(hyperDistMode = hyperMode, hessianAtMode = hyperHessian)
+  optimResult <- optim(par = xStartValues, hessian = TRUE, fn = funForOptim, control = list(reltol = 1e-3), gr = NULL, treePointer = gridPointer$gridPointer, MRAcovParasIGalphaBeta = MRAcovParasIGalphaBeta, fixedEffIGalphaBeta = fixedEffIGalphaBeta, errorIGalphaBeta = errorIGalphaBeta)
+  if (optimResult$convergence > 0) {
+    warning("Nelder-Mead failed to conclusively find a maximum for the marginal hyperpara. posterior. \n Algorithm will keep going using the best value found. \n \n")
+  }
+  hyperParaMatrix <- identifyPointsStandardNorm(stepSize = 0.5, lowerLimit = 0.005)
+
 }
 
 # MRAprecision will have to be coded as block diagonal to ensure tractability.
@@ -147,5 +148,24 @@ covFunctionBiMatern <- function(rangeParaSpace = 10, rangeParaTime = 10) {
     euclidDist <- spDists(spacetime1@sp, spacetime2@sp)
     timeDist <- outer(zoo::index(spacetime2@time), zoo::index(spacetime1@time), function(x, y) as.numeric(abs(difftime(x, y, units = "days"))))
     fields::Exponential(euclidDist, range = 10)*t(fields::Exponential(timeDist, range = 10))
+  }
+}
+
+getIntegrationPointsAndValues <- function(optimObject, gridPointer, stepSize = 0.5, lowerLimitProp = 0.01) {
+  lowerThreshold <- lowerLimitProp * optimObject$value
+  numDims <- length(optimObject$par)
+  decomposition <- eigen(optimObject$hessian, symmetric = TRUE)
+  getPsi <- function(z) {
+    sqrtEigenValueMatrix <- diag(sqrt(decomposition$values))
+    maxValues + decomposition$vectors %*% sqrtEigenValueMatrix %*% z
+  }
+  currentZ <- rep(0, numDims)
+
+  for (dimNumber in 1:numDims) {
+    repeat {
+      jointValue <- jointPsiMarginal(gridPointer, head(z, n = -2), z[length(z)-1], tail(z, n = 1), MRAcovParasIGalphaBeta, fixedEffIGalphaBeta, errorIGalphaBeta)
+      if (jointValue < lowerThreshold) break
+      currentZ[dimNumber] = currentZ[dimNumber] + stepSize
+    }
   }
 }
