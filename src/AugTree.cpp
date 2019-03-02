@@ -552,7 +552,7 @@ void AugTree::ComputeGlobalLogLik() {
   m_globalLogLik = logDensity ;
 }
 
-double AugTree::ComputeJointPsiMarginal() {
+double AugTree::ComputeLogJointPsiMarginal() {
   // In theory, this function should not depend on the theta values...
   // We can therefore arbitrarily set them all to 0.
   cout << "Computing log-prior... \n" ;

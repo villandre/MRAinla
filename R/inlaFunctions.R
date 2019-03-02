@@ -28,7 +28,7 @@
 #' }
 #' @export
 
-MRA_INLA <- function(spacetimeData, errorSDstart, fixedEffSDstart, MRAhyperparasStart, M, lonRange, latRange, timeRange, randomSeed, cutForTimeSplit = 400, MRAcovParasIGalphaBeta, fixedEffIGalphaBeta, errorIGalphaBeta) {
+MRA_INLA <- function(spacetimeData, errorSDstart, fixedEffSDstart, MRAhyperparasStart, M, lonRange, latRange, timeRange, randomSeed, cutForTimeSplit = 400, MRAcovParasIGalphaBeta, fixedEffIGalphaBeta, errorIGalphaBeta, stepSize = 0.5) {
   dataCoordinates <- spacetimeData@sp@coords
   timeValues <- as.integer(time(spacetimeData@time))/(3600*24) # The division is to obtain values in days.
   covariateMatrix <- as.matrix(spacetimeData@data[, -1, drop = FALSE])
@@ -39,13 +39,21 @@ MRA_INLA <- function(spacetimeData, errorSDstart, fixedEffSDstart, MRAhyperparas
   numMRAhyperparas <- length(MRAhyperparasStart)
   # funForOptimJointHyperMarginal(treePointer = gridPointer$gridPointer, exp(0.5*xStartValues[1:numMRAhyperparas]), exp(0.5*xStartValues[numMRAhyperparas + 1]), exp(0.5*xStartValues[numMRAhyperparas + 2]), MRAcovParasIGalphaBeta = MRAcovParasIGalphaBeta, fixedEffIGalphaBeta = fixedEffIGalphaBeta, errorIGalphaBeta = errorIGalphaBeta)
   funForOptim <- function(x, treePointer, MRAcovParasIGalphaBeta, fixedEffIGalphaBeta, errorIGalphaBeta) {
-    -jointHyperMarginal(treePointer, abs(x[1:numMRAhyperparas]), abs(x[numMRAhyperparas + 1]), abs(x[numMRAhyperparas + 2]), MRAcovParasIGalphaBeta, fixedEffIGalphaBeta, errorIGalphaBeta)
+    -logJointHyperMarginal(treePointer, abs(x[1:numMRAhyperparas]), abs(x[numMRAhyperparas + 1]), abs(x[numMRAhyperparas + 2]), MRAcovParasIGalphaBeta, fixedEffIGalphaBeta, errorIGalphaBeta)
   }
   optimResult <- optim(par = xStartValues, hessian = TRUE, fn = funForOptim, control = list(reltol = 1e-3), gr = NULL, treePointer = gridPointer$gridPointer, MRAcovParasIGalphaBeta = MRAcovParasIGalphaBeta, fixedEffIGalphaBeta = fixedEffIGalphaBeta, errorIGalphaBeta = errorIGalphaBeta)
   if (optimResult$convergence > 0) {
     warning("Nelder-Mead failed to conclusively find a maximum for the marginal hyperpara. posterior. \n Algorithm will keep going using the best value found. \n \n")
   }
-  hyperParaMatrix <- identifyPointsStandardNorm(stepSize = 0.5, lowerLimit = 0.005)
+  save(optimResult, file = "~/Documents/optimForTests.R")
+  load("~/Documents/optimForTests.R")
+  cat("LOADING VALUES FOR TESTING PURPOSES. REMOVE THIS ONCE CODE IS COMPLETE.\n \n")
+  hyperparaList <- getIntegrationPointsAndValues(optimObject = optimResult, gridPointer = gridPointer$gridPointer, MRAcovParasIGalphaBeta = MRAcovParasIGalphaBeta, fixedEffIGalphaBeta = fixedEffIGalphaBeta, errorIGalphaBeta = errorIGalphaBeta, stepSize = stepSize, lowerLimitProp = 0.01)
+  standardisingConstant <- sum(sapply(hyperparaList, `$`, "logJointValue"))
+  hyperparaList <- lapply(hyperparaList, function(x) {
+    x$logJointValue <- x$logJointValue - standardisingConstant
+    x
+  })
 
 }
 
@@ -151,21 +159,64 @@ covFunctionBiMatern <- function(rangeParaSpace = 10, rangeParaTime = 10) {
   }
 }
 
-getIntegrationPointsAndValues <- function(optimObject, gridPointer, stepSize = 0.5, lowerLimitProp = 0.01) {
-  lowerThreshold <- lowerLimitProp * optimObject$value
-  numDims <- length(optimObject$par)
+getIntegrationPointsAndValues <- function(optimObject, gridPointer, MRAcovParasIGalphaBeta, fixedEffIGalphaBeta, errorIGalphaBeta, stepSize = 0.25, lowerLimitProp = 0.01) {
+
   decomposition <- eigen(optimObject$hessian, symmetric = TRUE)
+
   getPsi <- function(z) {
     sqrtEigenValueMatrix <- diag(sqrt(decomposition$values))
-    maxValues + decomposition$vectors %*% sqrtEigenValueMatrix %*% z
+    optimObject$value + decomposition$vectors %*% sqrtEigenValueMatrix %*% z
   }
-  currentZ <- rep(0, numDims)
+
+  getContainerElement <- function(z) {
+    Psis <- getPsi(z) ;
+    aList <- vector(1, 'list')
+    aList$z <- z
+    aList$MRAhyperparas <- head(Psis, n = -2)
+    aList$fixedEffSD <- Psis[length(Psis) - 1]
+    aList$errorSD <- tail(Psis, n = 1)
+    aList$logJointValue <- with(aList, expr = jointPsiMarginal(gridPointer, MRAhyperparas, fixedEffSD = fixedEffSD, errorSD = errorSD, MRAcovParasIGalphaBeta, fixedEffIGalphaBeta, errorIGalphaBeta))
+    aList
+  }
+
+  lowerThreshold <- lowerLimitProp * optimObject$value
+  numDims <- length(optimObject$par)
+  centerList <- vector(5000, 'list') # We should not need more than a few hundred points, so 5000 should be ok.
+  counter <- 1
 
   for (dimNumber in 1:numDims) {
-    repeat {
-      jointValue <- jointPsiMarginal(gridPointer, head(z, n = -2), z[length(z)-1], tail(z, n = 1), MRAcovParasIGalphaBeta, fixedEffIGalphaBeta, errorIGalphaBeta)
-      if (jointValue < lowerThreshold) break
-      currentZ[dimNumber] = currentZ[dimNumber] + stepSize
+    currentZ <- rep(0, numDims)
+    for (direction in c(-1, 1)) {
+      repeat {
+        centerList[[counter]] <- getContainerElement(currentZ)
+        counter = counter + 1
+        if (centerList[[counter]]$jointValue < lowerThreshold) break
+        currentZ[dimNumber] = currentZ[dimNumber] + direction*stepSize ;
+      }
     }
   }
+  zMatrix <- t(sapply(centerList, `$`, "z"))
+  containerList <- centerList
+  for (centerIndex in 2:length(centerList)) {
+    for (dimNumber in 1:numDims) {
+      for (direction in c(-1, 1)) {
+        currentZ <- centerList[[centerIndex]]$z
+        repeat {
+          currentZ[[dimNumber]] <- currentZ[[dimNumber]] + direction*stepSize
+          # First, check if value is available
+          rowNumber <- which(apply(zMatrix, MARGIN = 1, all.equal, currentZ))
+          if (length(rowNumber) == 0) {
+            containerElement <- getContainerElement(currentZ)
+            containerList[[counter]] <- containerElement
+            zMatrix <- rbind(zMatrix, currentZ)
+            counter <- counter + 1
+          } else {
+            containerElement <- containerList[[rowNumber]]$logJointValue
+          }
+          if (containerElement < lowerThreshold) break
+        }
+      }
+    }
+  }
+  containerList[1:counter]
 }

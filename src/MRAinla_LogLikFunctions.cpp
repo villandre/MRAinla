@@ -138,7 +138,7 @@ SEXP setupGridCpp(NumericVector responseValues, NumericMatrix spCoords, IntegerV
 
 // [[Rcpp::export]]
 
-double jointHyperMarginal(SEXP treePointer, Rcpp::NumericVector MRAhyperparas,
+double LogJointHyperMarginal(SEXP treePointer, Rcpp::NumericVector MRAhyperparas,
          double fixedEffSD, double errorSD, Rcpp::List MRAcovParasIGalphaBeta,
          NumericVector fixedEffIGalphaBeta, NumericVector errorIGalphaBeta) {
   arma::mat posteriorMatrix ;
@@ -169,7 +169,7 @@ double jointHyperMarginal(SEXP treePointer, Rcpp::NumericVector MRAhyperparas,
     pointedTree->SetFixedEffSD(fixedEffSD) ;
     pointedTree->SetMRAcovParas(MRAhyperparas) ;
 
-    outputValue = pointedTree->ComputeJointPsiMarginal() ;
+    outputValue = pointedTree->ComputeLogJointPsiMarginal() ;
     // ProfilerStop() ;
   }
   else

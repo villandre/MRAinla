@@ -70,7 +70,7 @@ public:
   arma::sp_mat CombineKandFEmatrices() ;
   arma::sp_mat createQ() ;
 
-  double ComputeJointPsiMarginal() ;
+  double ComputeLogJointPsiMarginal() ;
   // double ComputeJointPsiMarginalPropConstant(const arma::vec &, const double, const double, const double, const double) ;
 
   ~ AugTree() {

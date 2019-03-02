@@ -27,9 +27,9 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
-// funForOptimJointHyperMarginal
-double funForOptimJointHyperMarginal(SEXP treePointer, Rcpp::NumericVector MRAhyperparas, double fixedEffSD, double errorSD, Rcpp::List MRAcovParasIGalphaBeta, NumericVector fixedEffIGalphaBeta, NumericVector errorIGalphaBeta);
-RcppExport SEXP _MRAinla_funForOptimJointHyperMarginal(SEXP treePointerSEXP, SEXP MRAhyperparasSEXP, SEXP fixedEffSDSEXP, SEXP errorSDSEXP, SEXP MRAcovParasIGalphaBetaSEXP, SEXP fixedEffIGalphaBetaSEXP, SEXP errorIGalphaBetaSEXP) {
+// LogJointHyperMarginal
+double LogJointHyperMarginal(SEXP treePointer, Rcpp::NumericVector MRAhyperparas, double fixedEffSD, double errorSD, Rcpp::List MRAcovParasIGalphaBeta, NumericVector fixedEffIGalphaBeta, NumericVector errorIGalphaBeta);
+RcppExport SEXP _MRAinla_LogJointHyperMarginal(SEXP treePointerSEXP, SEXP MRAhyperparasSEXP, SEXP fixedEffSDSEXP, SEXP errorSDSEXP, SEXP MRAcovParasIGalphaBetaSEXP, SEXP fixedEffIGalphaBetaSEXP, SEXP errorIGalphaBetaSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -40,14 +40,14 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< Rcpp::List >::type MRAcovParasIGalphaBeta(MRAcovParasIGalphaBetaSEXP);
     Rcpp::traits::input_parameter< NumericVector >::type fixedEffIGalphaBeta(fixedEffIGalphaBetaSEXP);
     Rcpp::traits::input_parameter< NumericVector >::type errorIGalphaBeta(errorIGalphaBetaSEXP);
-    rcpp_result_gen = Rcpp::wrap(funForOptimJointHyperMarginal(treePointer, MRAhyperparas, fixedEffSD, errorSD, MRAcovParasIGalphaBeta, fixedEffIGalphaBeta, errorIGalphaBeta));
+    rcpp_result_gen = Rcpp::wrap(LogJointHyperMarginal(treePointer, MRAhyperparas, fixedEffSD, errorSD, MRAcovParasIGalphaBeta, fixedEffIGalphaBeta, errorIGalphaBeta));
     return rcpp_result_gen;
 END_RCPP
 }
 
 static const R_CallMethodDef CallEntries[] = {
     {"_MRAinla_setupGridCpp", (DL_FUNC) &_MRAinla_setupGridCpp, 10},
-    {"_MRAinla_funForOptimJointHyperMarginal", (DL_FUNC) &_MRAinla_funForOptimJointHyperMarginal, 7},
+    {"_MRAinla_LogJointHyperMarginal", (DL_FUNC) &_MRAinla_LogJointHyperMarginal, 7},
     {NULL, NULL, 0}
 };
 
