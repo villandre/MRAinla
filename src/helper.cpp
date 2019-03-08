@@ -102,6 +102,7 @@ sp_mat invertSymmBlockDiag(const sp_mat & blockMatrix, const uvec & blockIndices
   sp_mat inverted(numRows, numRows) ;
   unsigned int diagElement = 0 ;
   unsigned int blockSize ;
+  blockIndices.print("Block indices:") ;
 
   for (unsigned int i = 0; i < (blockIndices.size()-1); i++) {
     blockSize = blockIndices.at(i+1) - blockIndices.at(i) ;

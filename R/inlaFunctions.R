@@ -28,7 +28,7 @@
 #' }
 #' @export
 
-MRA_INLA <- function(spacetimeData, errorSDstart, fixedEffSDstart, MRAhyperparasStart, M, lonRange, latRange, timeRange, randomSeed, cutForTimeSplit = 400, MRAcovParasIGalphaBeta, fixedEffIGalphaBeta, errorIGalphaBeta, stepSize = 0.5) {
+MRA_INLA <- function(spacetimeData, errorSDstart, fixedEffSDstart, MRAhyperparasStart, M, lonRange, latRange, timeRange, randomSeed, cutForTimeSplit = 400, MRAcovParasIGalphaBeta, fixedEffIGalphaBeta, errorIGalphaBeta, stepSize = 1, lowerThreshold = 10) {
   dataCoordinates <- spacetimeData@sp@coords
   timeValues <- as.integer(time(spacetimeData@time))/(3600*24) # The division is to obtain values in days.
   covariateMatrix <- as.matrix(spacetimeData@data[, -1, drop = FALSE])
@@ -39,22 +39,26 @@ MRA_INLA <- function(spacetimeData, errorSDstart, fixedEffSDstart, MRAhyperparas
   numMRAhyperparas <- length(MRAhyperparasStart)
   # funForOptimJointHyperMarginal(treePointer = gridPointer$gridPointer, exp(0.5*xStartValues[1:numMRAhyperparas]), exp(0.5*xStartValues[numMRAhyperparas + 1]), exp(0.5*xStartValues[numMRAhyperparas + 2]), MRAcovParasIGalphaBeta = MRAcovParasIGalphaBeta, fixedEffIGalphaBeta = fixedEffIGalphaBeta, errorIGalphaBeta = errorIGalphaBeta)
   funForOptim <- function(x, treePointer, MRAcovParasIGalphaBeta, fixedEffIGalphaBeta, errorIGalphaBeta) {
-    -logJointHyperMarginal(treePointer, abs(x[1:numMRAhyperparas]), abs(x[numMRAhyperparas + 1]), abs(x[numMRAhyperparas + 2]), MRAcovParasIGalphaBeta, fixedEffIGalphaBeta, errorIGalphaBeta)
+    -LogJointHyperMarginal(treePointer, x[1:numMRAhyperparas], x[numMRAhyperparas + 1], x[numMRAhyperparas + 2], MRAcovParasIGalphaBeta, fixedEffIGalphaBeta, errorIGalphaBeta)
   }
-  optimResult <- optim(par = xStartValues, hessian = TRUE, fn = funForOptim, control = list(reltol = 1e-3), gr = NULL, treePointer = gridPointer$gridPointer, MRAcovParasIGalphaBeta = MRAcovParasIGalphaBeta, fixedEffIGalphaBeta = fixedEffIGalphaBeta, errorIGalphaBeta = errorIGalphaBeta)
+  optimResult <- optim(par = xStartValues, method = "L-BFGS-B", hessian = TRUE, fn = funForOptim, lower = rep(0,4), control = list(factr = 1e-4, gamma = 4, trace = 1), gr = NULL, treePointer = gridPointer$gridPointer, MRAcovParasIGalphaBeta = MRAcovParasIGalphaBeta, fixedEffIGalphaBeta = fixedEffIGalphaBeta, errorIGalphaBeta = errorIGalphaBeta)
+  cat("Best vector: ", optimResult$par, "\n")
+  cat("Optimal value: ", optimResult$value, "\n")
   if (optimResult$convergence > 0) {
     warning("Nelder-Mead failed to conclusively find a maximum for the marginal hyperpara. posterior. \n Algorithm will keep going using the best value found. \n \n")
   }
-  save(optimResult, file = "~/Documents/optimForTests.R")
-  load("~/Documents/optimForTests.R")
-  cat("LOADING VALUES FOR TESTING PURPOSES. REMOVE THIS ONCE CODE IS COMPLETE.\n \n")
-  hyperparaList <- getIntegrationPointsAndValues(optimObject = optimResult, gridPointer = gridPointer$gridPointer, MRAcovParasIGalphaBeta = MRAcovParasIGalphaBeta, fixedEffIGalphaBeta = fixedEffIGalphaBeta, errorIGalphaBeta = errorIGalphaBeta, stepSize = stepSize, lowerLimitProp = 0.01)
-  standardisingConstant <- sum(sapply(hyperparaList, `$`, "logJointValue"))
-  hyperparaList <- lapply(hyperparaList, function(x) {
-    x$logJointValue <- x$logJointValue - standardisingConstant
-    x
-  })
-
+  # save(optimResult, file = "~/Documents/optimForTests.R")
+  # load("~/Documents/optimForTests.R")
+  # cat("LOADING VALUES FOR TESTING PURPOSES. REMOVE THIS ONCE CODE IS COMPLETE.\n \n")
+  # hyperparaList <- getIntegrationPointsAndValues(optimObject = optimResult, gridPointer = gridPointer$gridPointer, MRAcovParasIGalphaBeta = MRAcovParasIGalphaBeta, fixedEffIGalphaBeta = fixedEffIGalphaBeta, errorIGalphaBeta = errorIGalphaBeta, stepSize = stepSize, lowerThreshold = lowerThreshold)
+  # standardisingConstant <- sum(sapply(hyperparaList, `$`, "logJointValue"))
+  # # The following normalises the joint distribution.
+  # hyperparaList <- lapply(hyperparaList, function(x) {
+  #   x$logJointValue <- x$logJointValue - standardisingConstant
+  #   x
+  # })
+  # # Now, we obtain the marginal distribution of all mean parameters.
+  # ComputeMarginals(hyperparaList)
 }
 
 # MRAprecision will have to be coded as block diagonal to ensure tractability.
@@ -159,9 +163,9 @@ covFunctionBiMatern <- function(rangeParaSpace = 10, rangeParaTime = 10) {
   }
 }
 
-getIntegrationPointsAndValues <- function(optimObject, gridPointer, MRAcovParasIGalphaBeta, fixedEffIGalphaBeta, errorIGalphaBeta, stepSize = 0.25, lowerLimitProp = 0.01) {
+getIntegrationPointsAndValues <- function(optimObject, gridPointer, MRAcovParasIGalphaBeta, fixedEffIGalphaBeta, errorIGalphaBeta, stepSize = 1, lowerThreshold = 10) {
 
-  decomposition <- eigen(optimObject$hessian, symmetric = TRUE)
+  decomposition <- eigen(solve(-optimObject$hessian), symmetric = TRUE)
 
   getPsi <- function(z) {
     sqrtEigenValueMatrix <- diag(sqrt(decomposition$values))
@@ -170,37 +174,43 @@ getIntegrationPointsAndValues <- function(optimObject, gridPointer, MRAcovParasI
 
   getContainerElement <- function(z) {
     Psis <- getPsi(z) ;
-    aList <- vector(1, 'list')
+    aList <- vector(mode = 'list', length = 1)
     aList$z <- z
     aList$MRAhyperparas <- head(Psis, n = -2)
     aList$fixedEffSD <- Psis[length(Psis) - 1]
     aList$errorSD <- tail(Psis, n = 1)
-    aList$logJointValue <- with(aList, expr = jointPsiMarginal(gridPointer, MRAhyperparas, fixedEffSD = fixedEffSD, errorSD = errorSD, MRAcovParasIGalphaBeta, fixedEffIGalphaBeta, errorIGalphaBeta))
+    aList$logJointValue <- with(aList, expr = LogJointHyperMarginal(gridPointer, MRAhyperparas, fixedEffSD = fixedEffSD, errorSD = errorSD, MRAcovParasIGalphaBeta, fixedEffIGalphaBeta, errorIGalphaBeta))
     aList
   }
 
-  lowerThreshold <- lowerLimitProp * optimObject$value
   numDims <- length(optimObject$par)
-  centerList <- vector(5000, 'list') # We should not need more than a few hundred points, so 5000 should be ok.
-  counter <- 1
+  centerList <- vector(mode = 'list', length = 5000) # We should not need more than a few hundred points, so 5000 should be ok.
 
+  centerList[[1]] <- getContainerElement(rep(0,numDims))
+  counter <- 2
+  previousValue <- centerList[[1]]
   for (dimNumber in 1:numDims) {
-    currentZ <- rep(0, numDims)
     for (direction in c(-1, 1)) {
+      currentZ <- rep(0, numDims)
+      currentZ[dimNumber] <- stepSize*direction
       repeat {
         centerList[[counter]] <- getContainerElement(currentZ)
         counter = counter + 1
-        if (centerList[[counter]]$jointValue < lowerThreshold) break
+        if (abs(centerList[[counter]]$jointValue - previousValue) < lowerThreshold) break
+
+        previousValue <- centerList[[counter]]$jointValue
         currentZ[dimNumber] = currentZ[dimNumber] + direction*stepSize ;
       }
     }
   }
   zMatrix <- t(sapply(centerList, `$`, "z"))
   containerList <- centerList
+
   for (centerIndex in 2:length(centerList)) {
     for (dimNumber in 1:numDims) {
       for (direction in c(-1, 1)) {
         currentZ <- centerList[[centerIndex]]$z
+        previousValue <- centerList[[centerIndex]]$logJointValue
         repeat {
           currentZ[[dimNumber]] <- currentZ[[dimNumber]] + direction*stepSize
           # First, check if value is available
@@ -213,10 +223,45 @@ getIntegrationPointsAndValues <- function(optimObject, gridPointer, MRAcovParasI
           } else {
             containerElement <- containerList[[rowNumber]]$logJointValue
           }
-          if (containerElement < lowerThreshold) break
+          if (abs(containerElement - previousValue) < lowerThreshold) break
+          previousValue <- containerElement
         }
       }
     }
   }
   containerList[1:counter]
+}
+
+ComputeMarginals <- function(hyperparameterDistList) {
+  dfsfsd
+}
+
+SimulateSpacetimeData <- function(numObsPerTimeSlice = 2025, covFunction, lonRange, latRange, timeValuesInPOSIXct, covariateDistributionList, errorSD, distFun = dist, FEvalues) {
+  numSlotsPerRow <- ceiling(sqrt(numObsPerTimeSlice))
+  slotCoordinates <- sapply(list(longitude = lonRange, latitude = latRange), FUN = function(x) {
+    width <- abs(diff(x)/numSlotsPerRow)
+    seq(from = min(x) + width/2, to = max(x) - width/2, length.out = numSlotsPerRow)
+  }, USE.NAMES = TRUE)
+
+  allSpaceCoordinates <- as.data.frame(expand.grid(as.data.frame(slotCoordinates)))
+
+  timeLayerFct <- function(timeValue) {
+    selectedRows <- sample.int(n = nrow(allSpaceCoordinates), size = numObsPerTimeSlice, replace = FALSE)
+    layerCoordinates <- allSpaceCoordinates[selectedRows, ]
+    layerCoordinates$time <- rep(timeValue, nrow(layerCoordinates))
+    covariateFrame <- as.data.frame(sapply(covariateDistributionList, function(x) sample(x[[1]], size = nrow(layerCoordinates), prob = x[[2]], replace = TRUE)))
+    colnames(covariateFrame) <- paste("Covariate", seq_along(covariateFrame), sep = "")
+    cbind(layerCoordinates, covariateFrame)
+  }
+
+  coordinates <- lapply(timeValuesInPOSIXct, FUN = timeLayerFct)
+  coordinates <- do.call("rbind", coordinates)
+
+  spatialDistMatrix <- dist(coordinates[, c("longitude", "latitude")])
+  timeDistMatrix <- dist(coordinates[, "time"])/(3600*24) # Distances in days
+  covarianceMat <- covFunction(spatialDistMatrix, timeDistMatrix)
+  meanVector <- cbind(1, as.matrix(coordinates[ , grep(pattern = "Covariate", colnames(coordinates))])) %*% FEvalues
+  fieldValues <- mvtnorm::rmvnorm(n = 1, mean = as.numeric(meanVector), sigma = covarianceMat) + rnorm(n = length(meanVector), mean = 0, sd = errorSD)
+  dataForObject <- cbind(data.frame(y = fieldValues[1, ]), coordinates[ , grep(pattern = "Covariate", colnames(coordinates))])
+  spacetime::STIDF(sp = sp::SpatialPoints(coordinates[, c("longitude", "latitude")]), data = dataForObject, time = coordinates$time)
 }

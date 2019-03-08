@@ -477,7 +477,8 @@ void AugTree::ComputeLogPriors() {
   for (uint i = 0 ; i < hyperPriorVec.size() ; i++){
     // logPrior += hyperAlpha * log(hyperBeta) - gsl_sf_lngamma(hyperAlpha) -
     //   (hyperAlpha + 1) * log(i) - hyperBeta/i ;
-    logPrior += -((incrementedIG.at(i).m_alpha + 1) * log(hyperPriorVec.at(i)) + incrementedIG.at(i).m_beta/hyperPriorVec.at(i)) ; // Since hyperAlpha and hyperBeta do not vary, we can ignore them for optimisation purposes.
+    // logPrior += -((incrementedIG.at(i).m_alpha + 1) * log(hyperPriorVec.at(i)) + incrementedIG.at(i).m_beta/hyperPriorVec.at(i)) ; // Since hyperAlpha and hyperBeta do not vary, we can ignore them for optimisation purposes.
+    logPrior += (incrementedIG.at(i).m_alpha - 1) * log(hyperPriorVec.at(i)) - incrementedIG.at(i).m_beta * hyperPriorVec.at(i) ;
   }
 
   m_logPrior = logPrior ;
@@ -524,7 +525,7 @@ void AugTree::ComputeLogFullConditional() {
   vec fixedEffMeans = updatedMean.head(m_fixedEffParameters.size()) ;
   SetFixedEffParameters(fixedEffMeans) ;
 
-  double detQmat = logDeterminantQmat(Qmat) ;
+  double logDetQmat = logDeterminantQmat(Qmat) ;
 
   // vec recenteredVstar = m_Vstar - updatedMean ;
   // mat distExponential = trans(recenteredVstar) * Qmat * recenteredVstar ;
@@ -532,7 +533,7 @@ void AugTree::ComputeLogFullConditional() {
 
   // printf("Log-determinant: %.4e \n Exponent contribution: %.4e \n", detQmat, exponential) ;
   // m_logFullCond = 0.5 * detQmat + exponential ;
-  m_logFullCond = 0.5 * detQmat ; // Since we arbitrarily evaluate always at the full-conditional mean, the exponential part of the distribution reduces to 0.
+  m_logFullCond = 0.5 * logDetQmat ; // Since we arbitrarily evaluate always at the full-conditional mean, the exponential part of the distribution reduces to 0.
 }
 
 void AugTree::ComputeGlobalLogLik() {
@@ -598,10 +599,10 @@ double AugTree::ComputeLogJointPsiMarginal() {
 double AugTree::logDeterminantQmat(const sp_mat & Qmat) {
   uvec DmatrixBlockIndices = extractBlockIndicesFromLowerRight(Qmat) ;
 
-  uint numRowsD =DmatrixBlockIndices.tail(1)(0) - DmatrixBlockIndices(0) ;
+  uint numRowsD = DmatrixBlockIndices.tail(1)(0) - DmatrixBlockIndices(0) ;
   uint shift = DmatrixBlockIndices.at(0) ;
 
-  uvec shiftedBlockIndices =DmatrixBlockIndices - shift ;
+  uvec shiftedBlockIndices = DmatrixBlockIndices - shift ;
   sp_mat Dinv = invertSymmBlockDiag(Qmat(DmatrixBlockIndices.at(0),
                                          DmatrixBlockIndices.at(0),
                                          size(numRowsD, numRowsD)),
