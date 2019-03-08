@@ -42,23 +42,24 @@ arma::sp_mat createSparseMatrix(std::vector<arma::mat *> listOfMatrices) {
 arma::uvec extractBlockIndices(const arma::sp_mat & symmSparseMatrix) {
   std::vector<unsigned int> blockIndices ;
   blockIndices.push_back(0) ;
-  int newPosNextBlock = 0 ;
+
   int posNextBlock = 0 ;
+  int newPosNextBlock = 0 ;
 
   while (posNextBlock < symmSparseMatrix.n_cols) {
-    int newPosNextBlock = posNextBlock + 1 ; // Ensures that the for loop starts
     // printf("Processing block starting at %i ... \n", posNextBlock) ;
+    newPosNextBlock = posNextBlock + 1 ;
     for (int i = posNextBlock; i < newPosNextBlock; i++) {
       arma::vec myCol = arma::vec(symmSparseMatrix.col(i)) ;
       arma::uvec nonZeroElements = arma::find(myCol) ;
-      arma::uword lastNonZero = nonZeroElements.tail(1)(0) + 1 ;
-      if (lastNonZero > newPosNextBlock) {
-        newPosNextBlock = lastNonZero ;
+      arma::uword lastNonZero = nonZeroElements.tail(1)(0) ;
+      if ((lastNonZero + 1) > newPosNextBlock) {
+        newPosNextBlock = lastNonZero + 1;
         // printf("Moving bound to %i... \n", newPosNextBlock) ;
       }
     }
-    blockIndices.push_back(posNextBlock) ;
     posNextBlock = newPosNextBlock ;
+    blockIndices.push_back(posNextBlock) ;
   }
   return conv_to<arma::uvec>::from(blockIndices) ;
 }
@@ -102,7 +103,6 @@ sp_mat invertSymmBlockDiag(const sp_mat & blockMatrix, const uvec & blockIndices
   sp_mat inverted(numRows, numRows) ;
   unsigned int diagElement = 0 ;
   unsigned int blockSize ;
-  blockIndices.print("Block indices:") ;
 
   for (unsigned int i = 0; i < (blockIndices.size()-1); i++) {
     blockSize = blockIndices.at(i+1) - blockIndices.at(i) ;

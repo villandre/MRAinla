@@ -474,7 +474,7 @@ void AugTree::ComputeLogPriors() {
 
   double logPrior = 0 ;
 
-  for (uint i = 0 ; i < hyperPriorVec.size() ; i++){
+  for (uint i = 0 ; i < hyperPriorVec.size() ; i++) {
     // logPrior += hyperAlpha * log(hyperBeta) - gsl_sf_lngamma(hyperAlpha) -
     //   (hyperAlpha + 1) * log(i) - hyperBeta/i ;
     // logPrior += -((incrementedIG.at(i).m_alpha + 1) * log(hyperPriorVec.at(i)) + incrementedIG.at(i).m_beta/hyperPriorVec.at(i)) ; // Since hyperAlpha and hyperBeta do not vary, we can ignore them for optimisation purposes.
@@ -504,6 +504,7 @@ void AugTree::ComputeLogFullConditional() {
   // sp_mat vStar = conv_to<sp_mat>::from(join_cols(m_fixedEffParameters, m_MRAetaValues)) ;
 
   sp_mat SigmaFEandEta = CombineKandFEmatrices() ;
+
   sp_mat SigmaFEandEtaInv = invertSymmBlockDiag(SigmaFEandEta, extractBlockIndices(SigmaFEandEta)) ;
 
   // sp_mat Hstar = createHstar() ;
