@@ -28,7 +28,7 @@ typedef unsigned int uint ;
 
 // [[Rcpp::export]]
 
-SEXP setupGridCpp(NumericVector responseValues, NumericMatrix spCoords, IntegerVector obsTime,
+SEXP setupGridCpp(NumericVector responseValues, NumericMatrix spCoords, NumericVector obsTime,
                   NumericMatrix covariateMatrix, uint M, NumericVector lonRange, NumericVector latRange,
                   NumericVector timeRange, uint randomSeed, uint cutForTimeSplit)
 {

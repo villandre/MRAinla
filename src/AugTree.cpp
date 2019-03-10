@@ -149,6 +149,7 @@ void AugTree::generateKnots(TreeNode * node) {
 
 void AugTree::ComputeMRAlogLik(const bool WmatsAvailable)
 {
+  cout << "Entered ComputeMRAlogLik... \n" ;
   if (!WmatsAvailable) {
     computeWmats() ;
   }
@@ -179,7 +180,7 @@ void AugTree::computeWmats() {
     //   i->ComputeWmat() ;
     // }
     // Trying openmp. We need to have a standard looping structure.
-    #pragma omp parallel for
+    // #pragma omp parallel for
     for (std::vector<TreeNode *>::iterator it = levelNodes.begin(); it < levelNodes.end(); it++)
     {
       (*it)->ComputeWmat(m_MRAcovParas) ;
@@ -205,7 +206,7 @@ void AugTree::deriveAtildeMatrices() {
     // for (auto & i : levelNodes) {
     //   i->DeriveAtilde() ;
     // }
-    #pragma omp parallel for
+    // #pragma omp parallel for
     for (std::vector<TreeNode *>::iterator it = levelNodes.begin(); it < levelNodes.end(); it++) {
       (*it)->DeriveAtilde() ;
     }
@@ -239,7 +240,7 @@ void AugTree::computeD() {
 
     // Trying openmp. We need to have a standard looping structure.
 
-    #pragma omp parallel for
+    // #pragma omp parallel for
     for (std::vector<TreeNode *>::iterator it = levelNodes.begin(); it < levelNodes.end(); it++) {
       (*it)->DeriveD() ;
     }
@@ -252,7 +253,7 @@ std::vector<GaussDistParas> AugTree::ComputeConditionalPrediction(const inputdat
   for (int level = m_M; level >= 0 ; level--) {
     uint levelRecast = (uint) level ;
     std::vector<TreeNode *> levelNodes = GetLevel(levelRecast) ;
-    #pragma omp parallel for
+    // #pragma omp parallel for
     for (std::vector<TreeNode *>::iterator it = levelNodes.begin(); it < levelNodes.end(); it++) {
     // for (auto & i : levelNodes) {
       (*it)->ComputeParasEtaDeltaTilde(predictionData, m_dataset, m_MRAcovParas) ;
@@ -264,7 +265,7 @@ std::vector<GaussDistParas> AugTree::ComputeConditionalPrediction(const inputdat
   std::vector<TreeNode *> tipNodes = GetLevel(m_M) ;
 
   std::vector<GaussDistParas> distParasFromEachZone ;
-  #pragma omp parallel for
+  // #pragma omp parallel for
   for (std::vector<TreeNode *>::iterator it = tipNodes.begin(); it < tipNodes.end(); it++) {
   // for (auto & i : tipNodes) {
     distParasFromEachZone.push_back((*it)->CombineEtaDelta(predictionData, m_fixedEffParameters)) ;
@@ -505,8 +506,10 @@ void AugTree::ComputeLogFullConditional() {
 
   sp_mat SigmaFEandEta = CombineKandFEmatrices() ;
 
-  sp_mat SigmaFEandEtaInv = invertSymmBlockDiag(SigmaFEandEta, extractBlockIndices(SigmaFEandEta)) ;
+  cout << "Computing inverted Ks... \n" ;
 
+  sp_mat SigmaFEandEtaInv = invertSymmBlockDiag(SigmaFEandEta, extractBlockIndices(SigmaFEandEta)) ;
+  cout << "Done! \n" ;
   // sp_mat Hstar = createHstar() ;
   sp_mat Fmatrix = createFmatrix() ;
 
@@ -519,15 +522,16 @@ void AugTree::ComputeLogFullConditional() {
   sp_mat Qmat = SigmaFEandEtaInv + trans(Hstar) * TepsilonInverse * Hstar ;
 
   vec bVec = trans(trans(m_dataset.responseValues) * TepsilonInverse * Hstar) ;
-
+  cout << "Computing mean vector... \n" ;
   vec updatedMean = ComputeFullConditionalMean(bVec, Qmat) ;
+  cout << "Done! \n" ;
   m_Vstar = updatedMean ;
   m_MRAvalues = Fmatrix * updatedMean.tail(m_numKnots) ;
   vec fixedEffMeans = updatedMean.head(m_fixedEffParameters.size()) ;
   SetFixedEffParameters(fixedEffMeans) ;
-
+  cout << "Computing determinant... \n" ;
   double logDetQmat = logDeterminantQmat(Qmat) ;
-
+  cout << "Done! \n" ;
   // vec recenteredVstar = m_Vstar - updatedMean ;
   // mat distExponential = trans(recenteredVstar) * Qmat * recenteredVstar ;
   // double exponential = -0.5 * distExponential.at(0, 0) ;
@@ -581,7 +585,7 @@ double AugTree::ComputeLogJointPsiMarginal() {
   //   m_MRArandomValues = Fmatrix * correlatedEtas; // Pretty sure the etas match the order of knots pre-supposed by the F matrix, but would be better to make sure.
   // }
   ComputeLogJointCondTheta() ;
-  uint n = m_dataset.responseValues.size() ;
+
   vec MRAvaluesAtObservations(m_dataset.timeCoords.n_rows) ;
   if (m_recomputeGlobalLogLik) {
     cout << "Computing log-likelihood... \n" ;

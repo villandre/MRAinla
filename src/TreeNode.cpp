@@ -19,7 +19,7 @@ arma::uvec TreeNode::deriveObsInNode(const spatialcoor & dataset) {
 double TreeNode::covFunction(const Spatiotemprange & distance, const vec & covParameters) {
   double spExp = pow(distance.sp, 2)/(2 * pow(covParameters.at(0), 2)) ;
   double timeExp = pow(distance.time, 2)/(2 * pow(covParameters.at(1), 2)) ;
-  return exp(-spExp) * exp(-timeExp) ;
+  return exp(-spExp - timeExp) ;
 };
 
 arma::mat TreeNode::ComputeCovMatrix(const vec & covParaVec) {
@@ -39,7 +39,7 @@ arma::mat TreeNode::ComputeCovMatrix(const vec & covParaVec) {
 }
 
 void TreeNode::baseComputeWmat(const vec & covParas) {
-  uint M = GetM() ;
+
   std::vector<TreeNode *> brickList = getAncestors() ;
   m_Wlist.at(0) = computeCovMat(m_knotsCoor, brickList.at(0)->GetKnotsCoor(), covParas) ;
 
@@ -57,15 +57,16 @@ void TreeNode::baseComputeWmat(const vec & covParas) {
 
 std::vector<TreeNode *> TreeNode::getAncestors() {
   TreeNode * currentAddress = this ;
-  std::vector<TreeNode *> ancestorsList(m_depth+1) ;
-  ancestorsList.at(m_depth) = currentAddress ;
+  std::vector<TreeNode *> ancestorsList ;
+  ancestorsList.push_back(currentAddress) ;
   if (m_parent == currentAddress) {
     return ancestorsList ;
   }
   for(uint i = 0; i < m_depth; i++) {
     currentAddress = currentAddress->GetParent() ;
-    ancestorsList.at(currentAddress->GetDepth()) = currentAddress ;
+    ancestorsList.push_back(currentAddress) ;
   }
+  std::reverse(ancestorsList.begin(), ancestorsList.end()) ;
   return ancestorsList ;
 }
 

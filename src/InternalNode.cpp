@@ -34,7 +34,7 @@ void InternalNode::genRandomKnots(inputdata & dataset, uint & numKnots, const gs
 
   float minTime = min(m_dimensions.time) ;
   float maxTime = max(m_dimensions.time) ;
-  float timeRangeSize = range(m_dimensions.time) ;
+
   fvec time(numKnots) ;
 
   time.imbue( [&]() { return float(gsl_ran_flat(RNG, minTime, maxTime)); } ) ;
@@ -42,12 +42,11 @@ void InternalNode::genRandomKnots(inputdata & dataset, uint & numKnots, const gs
 }
 
 void InternalNode::DeriveAtilde() {
-  mat containerMat ;
+
   for (uint k = 0; k <= m_depth ; k++) {
     for (uint l = 0; l <= k ; l++) {
-      containerMat.reshape(m_children.at(0)->GetAtildeList(k, l).n_rows,
-                           m_children.at(0)->GetAtildeList(k, l).n_cols) ;
-      containerMat.fill(0) ;
+      mat containerMat(m_children.at(0)->GetAtildeList(k, l).n_rows,
+                           m_children.at(0)->GetAtildeList(k, l).n_cols, fill::zeros) ;
 
       for (auto & i : m_children) {
         containerMat += i->GetAtildeList(k,l) ;
@@ -59,17 +58,14 @@ void InternalNode::DeriveAtilde() {
   //   i->clearAtildeList() ;
   // }
   m_KtildeInverse = GetKmatrixInverse() + m_Alist.at(m_depth).at(m_depth) ;
-  // if (!m_KtildeInverse.is_symmetric(1e-4)) {
-  //   throw Rcpp::exception("KtildeInverse is a precision matrix and should be symmetric.\n") ;
-  // }
+
   m_Ktilde = inv_sympd(m_KtildeInverse) ;
 
   for (uint k = 0; k <= m_depth ; k++) {
     for (uint l = 0; l <= k ; l++) {
-      mat secondTerm = trans(m_Alist.at(m_depth).at(k)) * m_Ktilde *
-        m_Alist.at(m_depth).at(l) ;
-      mat Atilde = m_Alist.at(k).at(l) - secondTerm ;
-      m_AtildeList.at(k).at(l) = Atilde ;
+
+      m_AtildeList.at(k).at(l) = m_Alist.at(k).at(l) -
+        trans(m_Alist.at(m_depth).at(k)) * m_Ktilde * m_Alist.at(m_depth).at(l) ;
     }
   }
 }

@@ -30,7 +30,7 @@
 
 MRA_INLA <- function(spacetimeData, errorSDstart, fixedEffSDstart, MRAhyperparasStart, M, lonRange, latRange, timeRange, randomSeed, cutForTimeSplit = 400, MRAcovParasIGalphaBeta, fixedEffIGalphaBeta, errorIGalphaBeta, stepSize = 1, lowerThreshold = 10) {
   dataCoordinates <- spacetimeData@sp@coords
-  timeValues <- as.integer(time(spacetimeData@time))/(3600*24) # The division is to obtain values in days.
+  timeValues <- (as.integer(time(spacetimeData@time)) - min(as.integer(time(spacetimeData@time))))/(3600*24) + 1 # The division is to obtain values in days.
   covariateMatrix <- as.matrix(spacetimeData@data[, -1, drop = FALSE])
   gridPointer <- setupGridCpp(spacetimeData@data[, 1], dataCoordinates, timeValues, covariateMatrix, M, lonRange, latRange, as.integer(timeRange)/(3600*24), randomSeed, cutForTimeSplit)
   # First we compute values relating to the hyperprior marginal distribution...
@@ -41,7 +41,7 @@ MRA_INLA <- function(spacetimeData, errorSDstart, fixedEffSDstart, MRAhyperparas
   funForOptim <- function(x, treePointer, MRAcovParasIGalphaBeta, fixedEffIGalphaBeta, errorIGalphaBeta) {
     -LogJointHyperMarginal(treePointer, x[1:numMRAhyperparas], x[numMRAhyperparas + 1], x[numMRAhyperparas + 2], MRAcovParasIGalphaBeta, fixedEffIGalphaBeta, errorIGalphaBeta)
   }
-  optimResult <- optim(par = xStartValues, method = "L-BFGS-B", hessian = TRUE, fn = funForOptim, lower = rep(0,4), control = list(factr = 1e-4, gamma = 4, trace = 1), gr = NULL, treePointer = gridPointer$gridPointer, MRAcovParasIGalphaBeta = MRAcovParasIGalphaBeta, fixedEffIGalphaBeta = fixedEffIGalphaBeta, errorIGalphaBeta = errorIGalphaBeta)
+  optimResult <- optim(par = xStartValues, method = "L-BFGS-B", hessian = TRUE, fn = funForOptim, lower = rep(0,4), gr = NULL, treePointer = gridPointer$gridPointer, MRAcovParasIGalphaBeta = MRAcovParasIGalphaBeta, fixedEffIGalphaBeta = fixedEffIGalphaBeta, errorIGalphaBeta = errorIGalphaBeta)
   cat("Best vector: ", optimResult$par, "\n")
   cat("Optimal value: ", optimResult$value, "\n")
   if (optimResult$convergence > 0) {
