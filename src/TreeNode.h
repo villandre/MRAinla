@@ -133,7 +133,7 @@ public:
   double GetD() {return m_d ;}
   void SetNodeId(const uint i) { m_nodeId = i ;}
 
-  ~ TreeNode() { } ;
+  virtual ~ TreeNode() { } ;
 
   // void SetAtildeList(arma::mat & matrix, uint &i, uint &j) {m_AtildeList.at(i).at(j) = matrix ;}
   void SetPredictLocations(const spatialcoor & predictLocations) ;
@@ -199,7 +199,7 @@ protected:
     }
     m_omegaTilde.resize(m_depth + 1) ;
   }
-  arma::mat ComputeCovMatrix(const arma::vec &) ;
+  // arma::mat ComputeCovMatrix(const arma::vec &) ;
 
   // For prediction
   void computeBknots() ;

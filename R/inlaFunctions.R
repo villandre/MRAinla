@@ -28,7 +28,7 @@
 #' }
 #' @export
 
-MRA_INLA <- function(spacetimeData, errorSDstart, fixedEffSDstart, MRAhyperparasStart, M, lonRange, latRange, timeRange, randomSeed, cutForTimeSplit = 400, MRAcovParasIGalphaBeta, fixedEffIGalphaBeta, errorIGalphaBeta, stepSize = 1, lowerThreshold = 10) {
+MRA_INLA <- function(spacetimeData, errorSDstart, fixedEffSDstart, MRAhyperparasStart, M, lonRange, latRange, timeRange, randomSeed, cutForTimeSplit = 400, MRAcovParasIGalphaBeta, FEmuVec, fixedEffIGalphaBeta, errorIGalphaBeta, stepSize = 1, lowerThreshold = 10) {
   dataCoordinates <- spacetimeData@sp@coords
   timeValues <- (as.integer(time(spacetimeData@time)) - min(as.integer(time(spacetimeData@time))))/(3600*24) + 1 # The division is to obtain values in days.
   covariateMatrix <- as.matrix(spacetimeData@data[, -1, drop = FALSE])
@@ -38,10 +38,10 @@ MRA_INLA <- function(spacetimeData, errorSDstart, fixedEffSDstart, MRAhyperparas
   xStartValues <- c(MRAhyperparasStart, fixedEffSDstart, errorSDstart)
   numMRAhyperparas <- length(MRAhyperparasStart)
   # funForOptimJointHyperMarginal(treePointer = gridPointer$gridPointer, exp(0.5*xStartValues[1:numMRAhyperparas]), exp(0.5*xStartValues[numMRAhyperparas + 1]), exp(0.5*xStartValues[numMRAhyperparas + 2]), MRAcovParasIGalphaBeta = MRAcovParasIGalphaBeta, fixedEffIGalphaBeta = fixedEffIGalphaBeta, errorIGalphaBeta = errorIGalphaBeta)
-  funForOptim <- function(x, treePointer, MRAcovParasIGalphaBeta, fixedEffIGalphaBeta, errorIGalphaBeta) {
-    -LogJointHyperMarginal(treePointer, x[1:numMRAhyperparas], x[numMRAhyperparas + 1], x[numMRAhyperparas + 2], MRAcovParasIGalphaBeta, fixedEffIGalphaBeta, errorIGalphaBeta)
+  funForOptim <- function(x, treePointer, MRAcovParasIGalphaBeta, fixedEffIGalphaBeta, errorIGalphaBeta, FEmuVec) {
+    -LogJointHyperMarginal(treePointer, x[1:numMRAhyperparas], x[numMRAhyperparas + 1], x[numMRAhyperparas + 2], MRAcovParasIGalphaBeta, FEmuVec, fixedEffIGalphaBeta, errorIGalphaBeta)
   }
-  optimResult <- optim(par = xStartValues, method = "L-BFGS-B", hessian = TRUE, fn = funForOptim, lower = rep(0,4), gr = NULL, treePointer = gridPointer$gridPointer, MRAcovParasIGalphaBeta = MRAcovParasIGalphaBeta, fixedEffIGalphaBeta = fixedEffIGalphaBeta, errorIGalphaBeta = errorIGalphaBeta)
+  optimResult <- optim(par = xStartValues, method = "L-BFGS-B", control = list(factr = 1e6), hessian = TRUE, fn = funForOptim, lower = rep(0.1, 4), gr = NULL, treePointer = gridPointer$gridPointer, MRAcovParasIGalphaBeta = MRAcovParasIGalphaBeta, FEmuVec = FEmuVec, fixedEffIGalphaBeta = fixedEffIGalphaBeta, errorIGalphaBeta = errorIGalphaBeta)
   cat("Best vector: ", optimResult$par, "\n")
   cat("Optimal value: ", optimResult$value, "\n")
   if (optimResult$convergence > 0) {

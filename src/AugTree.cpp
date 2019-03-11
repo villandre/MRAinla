@@ -171,6 +171,30 @@ void AugTree::ComputeMRAlogLik(const bool WmatsAvailable)
   m_MRAlogLik = tempLogLik ;
 }
 
+void AugTree::ComputeMRAlogLikAlt(const bool WmatsAvailable)
+{
+  cout << "Entered ComputeMRAlogLik... \n" ;
+  if (!WmatsAvailable) {
+    computeWmats() ;
+  }
+  double MRAlogLik = 0 ;
+  int currentIndex = m_fixedEffParameters.size() ;
+
+  for (auto & i : m_vertexVector) {
+    int lastIndex = currentIndex + i->GetNumKnots() - 1 ;
+    vec etas = m_Vstar.subvec(currentIndex, lastIndex) ;
+    etas.print("Eta vector:") ;
+
+    double logDeterminantValue = 0 ;
+    double sign = 0 ;
+    log_det(logDeterminantValue, sign, i->GetKmatrix()) ;
+    mat exponentTerm = -0.5 * trans(etas) * i->GetKmatrixInverse() * etas ;
+    MRAlogLik += -0.5*logDeterminantValue + exponentTerm(0,0) ;
+    currentIndex = lastIndex + 1 ;
+  }
+  m_MRAlogLik = MRAlogLik ;
+}
+
 void AugTree::computeWmats() {
   m_vertexVector.at(0)->ComputeWmat(m_MRAcovParas) ;
 
@@ -486,14 +510,19 @@ void AugTree::ComputeLogPriors() {
 }
 
 void AugTree::ComputeLogJointCondTheta() {
-  if (m_recomputeMRAlogLik) {
-    ComputeMRAlogLik(true) ; // Getting the eta values requires computing the K matrices, hence KmatricesAvailable = true.
-  }
-  double fixedEffMean = 0 ;
+  // if (m_recomputeMRAlogLik) {
+    ComputeMRAlogLikAlt(true) ; // Getting the eta values requires computing the K matrices, hence KmatricesAvailable = true.
+  // }
+  printf("MRA log-lik: %.4e \n", m_MRAlogLik) ;
+
   double fixedEffLogLik = 0 ;
-  for (auto & i : m_fixedEffParameters) {
-    fixedEffLogLik += log(normpdf(i, fixedEffMean, m_fixedEffSD)) ;
+  // m_FEmu.print("FE means:") ;
+  // m_fixedEffParameters.print("Fixed effect parameters:") ;
+  // printf("Fixed effects SDs: %.4e \n", m_fixedEffSD) ;
+  for (uint i = 0; i < m_fixedEffParameters.size(); i++) {
+    fixedEffLogLik += log(normpdf(m_fixedEffParameters.at(i), m_FEmu.at(i), m_fixedEffSD)) ;
   }
+
   m_logCondDist = m_MRAlogLik + fixedEffLogLik ;
 }
 
@@ -506,10 +535,8 @@ void AugTree::ComputeLogFullConditional() {
 
   sp_mat SigmaFEandEta = CombineKandFEmatrices() ;
 
-  cout << "Computing inverted Ks... \n" ;
-
   sp_mat SigmaFEandEtaInv = invertSymmBlockDiag(SigmaFEandEta, extractBlockIndices(SigmaFEandEta)) ;
-  cout << "Done! \n" ;
+
   // sp_mat Hstar = createHstar() ;
   sp_mat Fmatrix = createFmatrix() ;
 
@@ -522,16 +549,16 @@ void AugTree::ComputeLogFullConditional() {
   sp_mat Qmat = SigmaFEandEtaInv + trans(Hstar) * TepsilonInverse * Hstar ;
 
   vec bVec = trans(trans(m_dataset.responseValues) * TepsilonInverse * Hstar) ;
-  cout << "Computing mean vector... \n" ;
+
   vec updatedMean = ComputeFullConditionalMean(bVec, Qmat) ;
-  cout << "Done! \n" ;
+
   m_Vstar = updatedMean ;
   m_MRAvalues = Fmatrix * updatedMean.tail(m_numKnots) ;
   vec fixedEffMeans = updatedMean.head(m_fixedEffParameters.size()) ;
   SetFixedEffParameters(fixedEffMeans) ;
-  cout << "Computing determinant... \n" ;
+
   double logDetQmat = logDeterminantQmat(Qmat) ;
-  cout << "Done! \n" ;
+
   // vec recenteredVstar = m_Vstar - updatedMean ;
   // mat distExponential = trans(recenteredVstar) * Qmat * recenteredVstar ;
   // double exponential = -0.5 * distExponential.at(0, 0) ;
@@ -563,9 +590,9 @@ double AugTree::ComputeLogJointPsiMarginal() {
   // We can therefore arbitrarily set them all to 0.
   cout << "Computing log-prior... \n" ;
   ComputeLogPriors() ;
-  if (m_recomputeMRAlogLik) {
+  // if (m_recomputeMRAlogLik) {
     computeWmats() ; // This will produce the K matrices required. NOTE: ADD CHECK THAT ENSURES THAT THE MRA LIK. IS ONLY RE-COMPUTED WHEN THE MRA COV. PARAMETERS CHANGE.
-  }
+  // }
   cout << "Computing log-full conditional... \n" ;
   ComputeLogFullConditional() ;
   // if (m_MRAetaValues.size() == 0) {
@@ -591,7 +618,7 @@ double AugTree::ComputeLogJointPsiMarginal() {
     cout << "Computing log-likelihood... \n" ;
     ComputeGlobalLogLik() ;
   }
-  cout << "Wrapping up... \n" ;
+
   printf("Total log-lik: %.4e \n Log-prior: %.4e \n Log-Cond. dist.: %.4e \n Log-full cond.: %.4e \n \n \n",
          m_globalLogLik, m_logPrior, m_logCondDist, m_logFullCond) ;
   return ( m_globalLogLik + m_logPrior + m_logCondDist - m_logFullCond) ;
@@ -668,10 +695,9 @@ double AugTree::logDeterminantFullConditional(const sp_mat & SigmaMat) {
   sp_mat Bmatrix = 1/pow(m_errorSD,2) * trans(compositeAmatrix) * eye<sp_mat>(n,n) * compositeAmatrix ;
   sp_mat Cinverse = SigmaMat ;
   sp_mat Bk(Bmatrix.n_rows , Bmatrix.n_cols) ;
-  printf("Cinverse size: %i %i \n", SigmaMat.n_rows, SigmaMat.n_cols) ;
-  cout << "Entering loop... \n" ;
+
   for (uint i = 0 ; i < 4 ; i++) {
-    printf("Processing iteration %i. \n", i) ;
+
     uint j = Bmatrix.n_cols - i - 1;
     Bk.col(j) = Bmatrix.col(j) ;
     // double gk = 1/(1+ trace(Cinverse * trans(BkT))) ;

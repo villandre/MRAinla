@@ -22,21 +22,21 @@ double TreeNode::covFunction(const Spatiotemprange & distance, const vec & covPa
   return exp(-spExp - timeExp) ;
 };
 
-arma::mat TreeNode::ComputeCovMatrix(const vec & covParaVec) {
-  Spatiotemprange container ;
-  mat covMatrix(m_knotsCoor.timeCoords.size(), m_knotsCoor.timeCoords.size(), fill::zeros) ;
-  for (uint rowIndex = 0 ; rowIndex < m_knotsCoor.timeCoords.size() ; rowIndex++) {
-    for (uint colIndex = 0 ; colIndex <= rowIndex ; colIndex++) {
-      vec space1 = conv_to<vec>::from(m_knotsCoor.spatialCoords.row(rowIndex)) ;
-      uint time1 = m_knotsCoor.timeCoords.at(rowIndex) ;
-      vec space2 = conv_to<vec>::from(m_knotsCoor.spatialCoords.row(colIndex)) ;
-      uint time2 = m_knotsCoor.timeCoords.at(colIndex) ;
-      container = sptimeDistance(space1, time1, space2, time2) ;
-      covMatrix.at(rowIndex, colIndex) = covFunction(container, covParaVec) ;
-    }
-  }
-  return covMatrix ;
-}
+// arma::mat TreeNode::ComputeCovMatrix(const vec & covParaVec) {
+//   Spatiotemprange container ;
+//   mat covMatrix(m_knotsCoor.timeCoords.size(), m_knotsCoor.timeCoords.size(), fill::zeros) ;
+//   for (uint rowIndex = 0 ; rowIndex < m_knotsCoor.timeCoords.size() ; rowIndex++) {
+//     for (uint colIndex = 0 ; colIndex <= rowIndex ; colIndex++) {
+//       vec space1 = conv_to<vec>::from(m_knotsCoor.spatialCoords.row(rowIndex)) ;
+//       uint time1 = m_knotsCoor.timeCoords.at(rowIndex) ;
+//       vec space2 = conv_to<vec>::from(m_knotsCoor.spatialCoords.row(colIndex)) ;
+//       uint time2 = m_knotsCoor.timeCoords.at(colIndex) ;
+//       container = sptimeDistance(space1, time1, space2, time2) ;
+//       covMatrix.at(rowIndex, colIndex) = covFunction(container, covParaVec) ;
+//     }
+//   }
+//   return covMatrix ;
+// }
 
 void TreeNode::baseComputeWmat(const vec & covParas) {
 

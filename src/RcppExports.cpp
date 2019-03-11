@@ -8,14 +8,14 @@
 using namespace Rcpp;
 
 // setupGridCpp
-SEXP setupGridCpp(NumericVector responseValues, NumericMatrix spCoords, IntegerVector obsTime, NumericMatrix covariateMatrix, uint M, NumericVector lonRange, NumericVector latRange, NumericVector timeRange, uint randomSeed, uint cutForTimeSplit);
+SEXP setupGridCpp(NumericVector responseValues, NumericMatrix spCoords, NumericVector obsTime, NumericMatrix covariateMatrix, uint M, NumericVector lonRange, NumericVector latRange, NumericVector timeRange, uint randomSeed, uint cutForTimeSplit);
 RcppExport SEXP _MRAinla_setupGridCpp(SEXP responseValuesSEXP, SEXP spCoordsSEXP, SEXP obsTimeSEXP, SEXP covariateMatrixSEXP, SEXP MSEXP, SEXP lonRangeSEXP, SEXP latRangeSEXP, SEXP timeRangeSEXP, SEXP randomSeedSEXP, SEXP cutForTimeSplitSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
     Rcpp::traits::input_parameter< NumericVector >::type responseValues(responseValuesSEXP);
     Rcpp::traits::input_parameter< NumericMatrix >::type spCoords(spCoordsSEXP);
-    Rcpp::traits::input_parameter< IntegerVector >::type obsTime(obsTimeSEXP);
+    Rcpp::traits::input_parameter< NumericVector >::type obsTime(obsTimeSEXP);
     Rcpp::traits::input_parameter< NumericMatrix >::type covariateMatrix(covariateMatrixSEXP);
     Rcpp::traits::input_parameter< uint >::type M(MSEXP);
     Rcpp::traits::input_parameter< NumericVector >::type lonRange(lonRangeSEXP);
@@ -28,8 +28,8 @@ BEGIN_RCPP
 END_RCPP
 }
 // LogJointHyperMarginal
-double LogJointHyperMarginal(SEXP treePointer, Rcpp::NumericVector MRAhyperparas, double fixedEffSD, double errorSD, Rcpp::List MRAcovParasIGalphaBeta, NumericVector fixedEffIGalphaBeta, NumericVector errorIGalphaBeta);
-RcppExport SEXP _MRAinla_LogJointHyperMarginal(SEXP treePointerSEXP, SEXP MRAhyperparasSEXP, SEXP fixedEffSDSEXP, SEXP errorSDSEXP, SEXP MRAcovParasIGalphaBetaSEXP, SEXP fixedEffIGalphaBetaSEXP, SEXP errorIGalphaBetaSEXP) {
+double LogJointHyperMarginal(SEXP treePointer, Rcpp::NumericVector MRAhyperparas, double fixedEffSD, double errorSD, Rcpp::List MRAcovParasIGalphaBeta, Rcpp::NumericVector FEmuVec, NumericVector fixedEffIGalphaBeta, NumericVector errorIGalphaBeta);
+RcppExport SEXP _MRAinla_LogJointHyperMarginal(SEXP treePointerSEXP, SEXP MRAhyperparasSEXP, SEXP fixedEffSDSEXP, SEXP errorSDSEXP, SEXP MRAcovParasIGalphaBetaSEXP, SEXP FEmuVecSEXP, SEXP fixedEffIGalphaBetaSEXP, SEXP errorIGalphaBetaSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -38,16 +38,17 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< double >::type fixedEffSD(fixedEffSDSEXP);
     Rcpp::traits::input_parameter< double >::type errorSD(errorSDSEXP);
     Rcpp::traits::input_parameter< Rcpp::List >::type MRAcovParasIGalphaBeta(MRAcovParasIGalphaBetaSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericVector >::type FEmuVec(FEmuVecSEXP);
     Rcpp::traits::input_parameter< NumericVector >::type fixedEffIGalphaBeta(fixedEffIGalphaBetaSEXP);
     Rcpp::traits::input_parameter< NumericVector >::type errorIGalphaBeta(errorIGalphaBetaSEXP);
-    rcpp_result_gen = Rcpp::wrap(LogJointHyperMarginal(treePointer, MRAhyperparas, fixedEffSD, errorSD, MRAcovParasIGalphaBeta, fixedEffIGalphaBeta, errorIGalphaBeta));
+    rcpp_result_gen = Rcpp::wrap(LogJointHyperMarginal(treePointer, MRAhyperparas, fixedEffSD, errorSD, MRAcovParasIGalphaBeta, FEmuVec, fixedEffIGalphaBeta, errorIGalphaBeta));
     return rcpp_result_gen;
 END_RCPP
 }
 
 static const R_CallMethodDef CallEntries[] = {
     {"_MRAinla_setupGridCpp", (DL_FUNC) &_MRAinla_setupGridCpp, 10},
-    {"_MRAinla_LogJointHyperMarginal", (DL_FUNC) &_MRAinla_LogJointHyperMarginal, 7},
+    {"_MRAinla_LogJointHyperMarginal", (DL_FUNC) &_MRAinla_LogJointHyperMarginal, 8},
     {NULL, NULL, 0}
 };
 

@@ -10,9 +10,9 @@ struct IGhyperParas{
   double m_beta = 2;
   IGhyperParas() {}
   IGhyperParas(double alpha, double beta) : m_alpha(alpha), m_beta(beta) {
-    if (alpha < 2) {
-      std::cout << "Careful: IG distribution for hyperparameter has infinite variance! \n" ;
-    }
+    // if (alpha < 2) {
+    //   std::cout << "Careful: IG distribution for hyperparameter has infinite variance! \n" ;
+    // }
   }
 };
 
@@ -26,6 +26,7 @@ public:
   std::vector<TreeNode *> GetVertexVector() {return m_vertexVector ;} ;
 
   void ComputeMRAlogLik(const bool WmatsAvailable = false) ;
+  void ComputeMRAlogLikAlt(const bool WmatsAvailable = false) ;
   std::vector<GaussDistParas> ComputeConditionalPrediction(const inputdata &) ;
   void ComputeLogJointCondTheta() ;
   void ComputeGlobalLogLik() ;
@@ -52,7 +53,6 @@ public:
   void SetErrorSD(const double & errorSD) {
     if (errorSD != m_errorSD) {
       m_recomputeGlobalLogLik = true ;
-      std::cout << "Change in error SD: global log-lik will be recomputed! \n" ;
     }
     m_errorSD = errorSD ;
   }
@@ -63,6 +63,7 @@ public:
   void SetMRAcovParasIGalphaBeta(const std::vector<IGhyperParas> & alphaBeta) {m_MRAcovParasIGalphaBeta = alphaBeta ;}
   void SetErrorIGalphaBeta(const IGhyperParas & alphaBeta) {m_errorIGalphaBeta = alphaBeta ;}
   void SetFixedEffIGalphaBeta(const IGhyperParas & alphaBeta) {m_fixedEffIGalphaBeta = alphaBeta ;}
+  void SetFEmu(const arma::vec & muVec) {m_FEmu = muVec ;}
 
   void CleanPredictionComponents() ;
   void CenterResponse() ;
@@ -103,6 +104,7 @@ private:
 
   arma::vec m_MRAcovParas ;
   arma::vec m_fixedEffParameters ;
+  arma::vec m_FEmu ;
 
   dimensions m_mapDimensions;
 
