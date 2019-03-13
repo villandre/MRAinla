@@ -19,7 +19,12 @@ arma::uvec TreeNode::deriveObsInNode(const spatialcoor & dataset) {
 double TreeNode::covFunction(const Spatiotemprange & distance, const vec & covParameters) {
   double spExp = pow(distance.sp, 2)/(2 * pow(covParameters.at(0), 2)) ;
   double timeExp = pow(distance.time, 2)/(2 * pow(covParameters.at(1), 2)) ;
+  if (m_depth == 2) {
+   // printf("Spatial distance between observation and knot: %.4e \n",  distance.sp) ;
+   // printf("Time distance between observation and knot: %.4e \n",  distance.time) ;
+  }
   return exp(-spExp - timeExp) ;
+
 };
 
 // arma::mat TreeNode::ComputeCovMatrix(const vec & covParaVec) {
@@ -42,8 +47,12 @@ void TreeNode::baseComputeWmat(const vec & covParas) {
 
   std::vector<TreeNode *> brickList = getAncestors() ;
   m_Wlist.at(0) = computeCovMat(m_knotsCoor, brickList.at(0)->GetKnotsCoor(), covParas) ;
+  // if (m_depth == 2) {
+  //   covParas.print("CovParas in tip node:") ;
+  //   m_Wlist.at(0)(0, 0, size(25,5)).print("Starting matrix for recursion:") ;
+  // }
 
-  for (uint l = 1; l < m_depth+1; l++) {
+  for (uint l = 1; l <= m_depth; l++) {
     mat firstMat = computeCovMat(m_knotsCoor, brickList.at(l)->GetKnotsCoor(), covParas) ;
     mat secondMat(firstMat.n_rows, firstMat.n_cols, fill::zeros) ;
     for (uint k = 0; k < l ; k++) {
@@ -75,9 +84,9 @@ mat TreeNode::computeCovMat(const spatialcoor & spTime1, const spatialcoor & spT
   for (uint rowIndex = 0; rowIndex < spTime1.timeCoords.size() ; rowIndex++) {
     for (uint colIndex = 0; colIndex < spTime2.timeCoords.size() ; colIndex++) {
       vec space1 = conv_to<vec>::from(spTime1.spatialCoords.row(rowIndex)) ;
-      uint time1 = spTime1.timeCoords.at(rowIndex) ;
+      float time1 = spTime1.timeCoords.at(rowIndex) ;
       vec space2 = conv_to<vec>::from(spTime2.spatialCoords.row(colIndex)) ;
-      uint time2 = spTime2.timeCoords.at(colIndex) ;
+      float time2 = spTime2.timeCoords.at(colIndex) ;
       Spatiotemprange rangeValue = sptimeDistance(space1, time1, space2, time2) ;
       covMat.at(rowIndex, colIndex) = covFunction(rangeValue, covParas) ;
     }

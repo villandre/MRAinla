@@ -183,7 +183,7 @@ void AugTree::ComputeMRAlogLikAlt(const bool WmatsAvailable)
   for (auto & i : m_vertexVector) {
     int lastIndex = currentIndex + i->GetNumKnots() - 1 ;
     vec etas = m_Vstar.subvec(currentIndex, lastIndex) ;
-    etas.print("Eta vector:") ;
+    // etas.print("Eta vector:") ;
 
     double logDeterminantValue = 0 ;
     double sign = 0 ;
@@ -196,9 +196,10 @@ void AugTree::ComputeMRAlogLikAlt(const bool WmatsAvailable)
 }
 
 void AugTree::computeWmats() {
+  // m_MRAcovParas.print("Trying MRA cov paras:") ;
   m_vertexVector.at(0)->ComputeWmat(m_MRAcovParas) ;
 
-  for (uint level = 1; level < (m_M+1); level++) {
+  for (uint level = 1; level <= m_M; level++) {
     std::vector<TreeNode *> levelNodes = getLevelNodes(level) ;
     // for (auto & i : levelNodes) {
     //   i->ComputeWmat() ;
@@ -397,17 +398,13 @@ arma::sp_mat AugTree::createHstar() {
 // The algorithm ends when resolution 0 is reached.
 
 arma::sp_mat AugTree::createFmatrix() {
-  uint numKnotsTotal = 0 ;
 
-  for (auto & i : m_vertexVector) {
-    numKnotsTotal += i->GetNumKnots() ;
-  }
-  sp_mat Fmat(m_dataset.timeCoords.size(), numKnotsTotal) ;
+  sp_mat Fmat(m_dataset.timeCoords.size(), m_numKnots) ;
   std::vector<TreeNode *> tipNodes = getLevelNodes(m_M) ;
   std::vector<std::pair<TreeNode *, mat>> currentLevelMatrices ;
   std::vector<std::pair<TreeNode *, mat>> parentLevelMatrices ;
   uint horizontalBoundary ;
-  uint verticalBoundary = numKnotsTotal ; // Vertical boundary starts on the right of the very last knot.
+  uint verticalBoundary = m_numKnots ; // Vertical boundary starts on the right of the very last knot.
   std::vector<TreeNode *> nodeSiblings ;
   std::pair<TreeNode *, mat> siblingParentPair ;
 
@@ -422,7 +419,7 @@ arma::sp_mat AugTree::createFmatrix() {
     uint numKnotsAtLevel = 0 ;
     for (auto & j : GetLevel(resolution)) numKnotsAtLevel += j->GetNumKnots() ;
     numProcessedKnots += numKnotsAtLevel ;
-    verticalBoundary = numKnotsTotal - numProcessedKnots ;
+    verticalBoundary = m_numKnots - numProcessedKnots ;
 
     while (currentLevelMatrices.size() > 0) { // currentLevelMatrices contains matrices that have not been added to Fmat yet. Once it is empty, it means they have all been added.
       if (resolution > 0) {
@@ -442,7 +439,12 @@ arma::sp_mat AugTree::createFmatrix() {
           index += 1 ;
         }
         // Update Fmat
+        // printf("Placing matrix corresponding to node %i \n", currentLevelMatrices.at(index).first->GetNodeId()) ; // The ordering does match that of the nodes in m_vertexVector.
         Fmat(horizontalBoundary, verticalBoundary, size(currentLevelMatrices.at(index).second)) = currentLevelMatrices.at(index).second ;
+        if (resolution == 0) {
+          cout << "Creating F mat at resolution 0... \n" ;
+          // currentLevelMatrices.at(index).second(0,0, size(75, 10)).print("Block to go in F:") ;
+        }
         // Update placement indices for the blocks in Fmat.
         horizontalBoundary += i->GetObsInNode().size() ;
         verticalBoundary += i->GetNumKnots() ;
@@ -455,7 +457,7 @@ arma::sp_mat AugTree::createFmatrix() {
         siblingParentPair.second = mat(siblingParentPair.first->GetNumKnots(), 0) ; // We'll transpose the result of binding matrices columnwise. This is faster than binding rowwise.
         for (auto & i : descendedTips) {
           // Matrices in Armadillo are column-major. Horizontal joins are therefore faster than vertical joins.
-          siblingParentPair.second = join_horiz(siblingParentPair.second, trans(i->GetB(resolution - 1))) ; // Vertical join, like cbind in R, join_horiz would be faster, since matrix are column-based in Armadillo.
+          siblingParentPair.second = join_horiz(siblingParentPair.second, trans(i->GetB(resolution - 1))) ;
         }
         siblingParentPair.second = trans(siblingParentPair.second) ; // Transposing is fast.
         parentLevelMatrices.push_back(siblingParentPair) ;
@@ -539,6 +541,8 @@ void AugTree::ComputeLogFullConditional() {
 
   // sp_mat Hstar = createHstar() ;
   sp_mat Fmatrix = createFmatrix() ;
+  // Fmatrix.print("Fmatrix:") ;
+
 
   sp_fmat incrementedCovar = conv_to<sp_fmat>::from(join_rows(ones<fvec>(n), m_dataset.covariateValues)) ;
   // We revert the order of Hstar...
@@ -551,8 +555,9 @@ void AugTree::ComputeLogFullConditional() {
   vec bVec = trans(trans(m_dataset.responseValues) * TepsilonInverse * Hstar) ;
 
   vec updatedMean = ComputeFullConditionalMean(bVec, Qmat) ;
-
+  // bVec.subvec(0,100).print("bVec:") ;
   m_Vstar = updatedMean ;
+  // m_Vstar.subvec(0, 600).print("vStar:") ;
   m_MRAvalues = Fmatrix * updatedMean.tail(m_numKnots) ;
   vec fixedEffMeans = updatedMean.head(m_fixedEffParameters.size()) ;
   SetFixedEffParameters(fixedEffMeans) ;
@@ -591,8 +596,16 @@ double AugTree::ComputeLogJointPsiMarginal() {
   cout << "Computing log-prior... \n" ;
   ComputeLogPriors() ;
   // if (m_recomputeMRAlogLik) {
+    cout << "Entering computeWmats... \n" ;
     computeWmats() ; // This will produce the K matrices required. NOTE: ADD CHECK THAT ENSURES THAT THE MRA LIK. IS ONLY RE-COMPUTED WHEN THE MRA COV. PARAMETERS CHANGE.
+    cout << "Leaving computeWmats... \n" ;
   // }
+  std::vector<TreeNode *> tipNodes = getLevelNodes(m_M) ;
+
+  // for(auto & i : tipNodes) {
+  //   i->GetB(0)(0,0,size(4,4)).print("Sub B:") ;
+  // }
+
   cout << "Computing log-full conditional... \n" ;
   ComputeLogFullConditional() ;
   // if (m_MRAetaValues.size() == 0) {
@@ -878,7 +891,7 @@ arma::vec AugTree::ComputeFullConditionalMean(const arma::vec & bVec, const arma
   uvec blockIndices = extractBlockIndicesFromLowerRight(Qmat) ;
 
   uint DblockLeftIndex = blockIndices.at(0) ;
-  uint sizeD = Qmat.n_cols - DblockLeftIndex + 1 ;
+  uint sizeD = Qmat.n_cols - DblockLeftIndex ;
   uint sizeA = Qmat.n_cols - sizeD ;
   vec b1 = bVec.subvec(0, sizeA - 1) ;
   vec b2 = bVec.subvec(sizeA, bVec.size() - 1) ;

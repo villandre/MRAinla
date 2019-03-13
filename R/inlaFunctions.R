@@ -30,9 +30,9 @@
 
 MRA_INLA <- function(spacetimeData, errorSDstart, fixedEffSDstart, MRAhyperparasStart, M, lonRange, latRange, timeRange, randomSeed, cutForTimeSplit = 400, MRAcovParasIGalphaBeta, FEmuVec, fixedEffIGalphaBeta, errorIGalphaBeta, stepSize = 1, lowerThreshold = 10) {
   dataCoordinates <- spacetimeData@sp@coords
-  timeValues <- (as.integer(time(spacetimeData@time)) - min(as.integer(time(spacetimeData@time))))/(3600*24) + 1 # The division is to obtain values in days.
+  timeValues <- as.integer(time(spacetimeData@time))/(3600*24) # The division is to obtain values in days.
   covariateMatrix <- as.matrix(spacetimeData@data[, -1, drop = FALSE])
-  gridPointer <- setupGridCpp(spacetimeData@data[, 1], dataCoordinates, timeValues, covariateMatrix, M, lonRange, latRange, as.integer(timeRange)/(3600*24), randomSeed, cutForTimeSplit)
+  gridPointer <- setupGridCpp(spacetimeData@data[, 1], dataCoordinates, timeValues, covariateMatrix, M, lonRange, latRange, as.integer(timeRange)/(3600*24) + 1, randomSeed, cutForTimeSplit)
   # First we compute values relating to the hyperprior marginal distribution...
 
   xStartValues <- c(MRAhyperparasStart, fixedEffSDstart, errorSDstart)

@@ -6,16 +6,15 @@
 
 using namespace arma ;
 
-Spatiotemprange sptimeDistance(const arma::vec & spCoor1, const unsigned int & time1, const arma::vec & spCoor2,
-                               const unsigned int & time2) {
+Spatiotemprange sptimeDistance(const arma::vec & spCoor1, const float & time1, const arma::vec & spCoor2,
+                               const float & time2) {
   arma::vec diffVec = spCoor1 - spCoor2 ;
   arma::vec scaledVec = arma::pow(diffVec, 2) ;
   double sp = arma::sum(scaledVec) ;
   sp = std::sqrt(sp) ;
-  int timeDiff = time2 - time1 ;
-  timeDiff = abs(timeDiff) ;
-  unsigned int timeDiffUint = (unsigned int) timeDiff ;
-  return Spatiotemprange(sp, timeDiffUint) ;
+  float timeDiff = abs(time2 - time1) ;
+  // printf("Time coordinates and time difference: %.4e  %.4e %.4e \n", time1, time2, timeDiff) ;
+  return Spatiotemprange(sp, timeDiff) ;
 };
 
 arma::sp_mat createSparseMatrix(std::vector<arma::mat *> listOfMatrices) {
