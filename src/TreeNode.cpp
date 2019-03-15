@@ -19,10 +19,6 @@ arma::uvec TreeNode::deriveObsInNode(const spatialcoor & dataset) {
 double TreeNode::covFunction(const Spatiotemprange & distance, const vec & covParameters) {
   double spExp = pow(distance.sp, 2)/(2 * pow(covParameters.at(0), 2)) ;
   double timeExp = pow(distance.time, 2)/(2 * pow(covParameters.at(1), 2)) ;
-  if (m_depth == 2) {
-   // printf("Spatial distance between observation and knot: %.4e \n",  distance.sp) ;
-   // printf("Time distance between observation and knot: %.4e \n",  distance.time) ;
-  }
   return exp(-spExp - timeExp) ;
 
 };
@@ -44,8 +40,14 @@ double TreeNode::covFunction(const Spatiotemprange & distance, const vec & covPa
 // }
 
 void TreeNode::baseComputeWmat(const vec & covParas) {
-
+  printf("Processing node %i at depth %i. \n", m_nodeId, m_depth) ;
+  covParas.print("Covariance parameters:") ;
   std::vector<TreeNode *> brickList = getAncestors() ;
+  cout << "Processing brick list... \n" ;
+  for (auto & i : brickList) {
+    printf("%i ", i->GetNodeId()) ;
+  }
+  cout << "\n" ;
   m_Wlist.at(0) = computeCovMat(m_knotsCoor, brickList.at(0)->GetKnotsCoor(), covParas) ;
   // if (m_depth == 2) {
   //   covParas.print("CovParas in tip node:") ;
@@ -80,13 +82,15 @@ std::vector<TreeNode *> TreeNode::getAncestors() {
 }
 
 mat TreeNode::computeCovMat(const spatialcoor & spTime1, const spatialcoor & spTime2, const vec & covParas) {
+
   mat covMat(spTime1.timeCoords.size(), spTime2.timeCoords.size(), fill::zeros) ;
   for (uint rowIndex = 0; rowIndex < spTime1.timeCoords.size() ; rowIndex++) {
     for (uint colIndex = 0; colIndex < spTime2.timeCoords.size() ; colIndex++) {
       vec space1 = conv_to<vec>::from(spTime1.spatialCoords.row(rowIndex)) ;
-      float time1 = spTime1.timeCoords.at(rowIndex) ;
+      double time1 = spTime1.timeCoords.at(rowIndex) ;
       vec space2 = conv_to<vec>::from(spTime2.spatialCoords.row(colIndex)) ;
-      float time2 = spTime2.timeCoords.at(colIndex) ;
+      double time2 = spTime2.timeCoords.at(colIndex) ;
+
       Spatiotemprange rangeValue = sptimeDistance(space1, time1, space2, time2) ;
       covMat.at(rowIndex, colIndex) = covFunction(rangeValue, covParas) ;
     }

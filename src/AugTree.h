@@ -21,7 +21,7 @@ namespace MRAinla {
 class AugTree
 {
 public:
-  AugTree(uint &, arma::fvec &, arma::fvec &, arma::fvec &, arma::vec &, arma::fmat &, arma::fvec &, uint &, unsigned long int &, arma::fmat &) ;
+  AugTree(uint &, arma::vec &, arma::vec &, arma::vec &, arma::vec &, arma::mat &, arma::vec &, uint &, unsigned long int &, arma::mat &) ;
 
   std::vector<TreeNode *> GetVertexVector() {return m_vertexVector ;} ;
 
@@ -68,7 +68,7 @@ public:
   void CleanPredictionComponents() ;
   void CenterResponse() ;
   arma::sp_mat createHstar() ;
-  arma::sp_mat CombineKandFEmatrices() ;
+  arma::sp_mat CombineFEinvAndKinvMatrices() ;
   arma::sp_mat createQ() ;
 
   double ComputeLogJointPsiMarginal() ;
@@ -146,6 +146,11 @@ private:
     std::vector<arma::mat *> KmatrixInverseList ;
     for (auto & i : m_vertexVector) KmatrixInverseList.push_back(i->GetKmatrixInverseAddress()) ;
     return KmatrixInverseList ;
+  }
+  std::vector<arma::mat *> getKmatricesPointers() {
+    std::vector<arma::mat *> KmatrixList ;
+    for (auto & i : m_vertexVector) KmatrixList.push_back(i->GetKmatrixAddress()) ;
+    return KmatrixList ;
   }
   arma::sp_mat createFmatrix() ;
   arma::vec optimJointHyperMarg(const arma::vec &, const double, const double, const double, const double) ;

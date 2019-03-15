@@ -5,16 +5,16 @@
 
 struct Spatiotemprange{
   double sp ;
-  float time ;
+  double time ;
 
-  Spatiotemprange(double & sp, float & time) : sp(sp), time(time) { } ;
+  Spatiotemprange(double & sp, double & time) : sp(sp), time(time) { } ;
   Spatiotemprange() { } ;
 };
 
 // To prevent multiple definitions, I DECLARE the function in the header only. I then define them
 // in the cpp file.
-Spatiotemprange sptimeDistance(const arma::vec & spCoor1, const float & time1, const arma::vec & spCoor2,
-                               const float & time2) ;
+Spatiotemprange sptimeDistance(const arma::vec & spCoor1, const double & time1, const arma::vec & spCoor2,
+                               const double & time2) ;
 
 arma::sp_mat createSparseMatrix(std::vector<arma::mat *>) ;
 arma::uvec extractBlockIndices(const arma::sp_mat &) ;

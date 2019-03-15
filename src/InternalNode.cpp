@@ -19,7 +19,7 @@ void InternalNode::RemoveChild(TreeNode * childToRemove)
 
 void InternalNode::genRandomKnots(inputdata & dataset, uint & numKnots, const gsl_rng * RNG) {
 
-  fmat knotsSp(numKnots, 2, fill::zeros) ;
+  mat knotsSp(numKnots, 2, fill::zeros) ;
 
   float minLon = min(m_dimensions.longitude) ;
   float maxLon = max(m_dimensions.longitude) ;
@@ -27,7 +27,7 @@ void InternalNode::genRandomKnots(inputdata & dataset, uint & numKnots, const gs
   float minLat = min(m_dimensions.latitude) ;
   float maxLat = max(m_dimensions.latitude) ;
 
-  for (fmat::iterator iter = knotsSp.begin() ; iter != (knotsSp.begin() + knotsSp.n_rows) ; iter++) {
+  for (mat::iterator iter = knotsSp.begin() ; iter != (knotsSp.begin() + knotsSp.n_rows) ; iter++) {
     (*iter) = gsl_ran_flat(RNG, minLon, maxLon) ;
     *(iter + knotsSp.n_rows) = float(gsl_ran_flat(RNG, minLat, maxLat)) ;
   }
@@ -35,9 +35,9 @@ void InternalNode::genRandomKnots(inputdata & dataset, uint & numKnots, const gs
   float minTime = min(m_dimensions.time) ;
   float maxTime = max(m_dimensions.time) ;
 
-  fvec time(numKnots) ;
+  vec time(numKnots) ;
 
-  time.imbue( [&]() { return float(gsl_ran_flat(RNG, minTime, maxTime)); } ) ;
+  time.imbue( [&]() { return double(gsl_ran_flat(RNG, minTime, maxTime)); } ) ;
   m_knotsCoor = spatialcoor(knotsSp, time) ;
 }
 

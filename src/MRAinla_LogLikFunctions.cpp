@@ -32,14 +32,14 @@ SEXP setupGridCpp(NumericVector responseValues, NumericMatrix spCoords, NumericV
                   NumericMatrix covariateMatrix, uint M, NumericVector lonRange, NumericVector latRange,
                   NumericVector timeRange, uint randomSeed, uint cutForTimeSplit)
 {
-  fvec lonR = as<fvec>(lonRange) ;
-  fvec latR = as<fvec>(latRange) ;
-  fvec timeR = as<fvec>(timeRange) ;
+  vec lonR = as<vec>(lonRange) ;
+  vec latR = as<vec>(latRange) ;
+  vec timeR = as<vec>(timeRange) ;
   vec response = as<vec>(responseValues) ;
-  fmat sp = as<fmat>(spCoords) ;
-  fvec time = as<fvec>(obsTime) ;
+  mat sp = as<mat>(spCoords) ;
+  vec time = as<vec>(obsTime) ;
   unsigned long int seedForRNG = randomSeed ;
-  fmat covariateMat = as<fmat>(covariateMatrix) ;
+  mat covariateMat = as<mat>(covariateMatrix) ;
 
   AugTree * MRAgrid = new AugTree(M, lonR, latR, timeR, response, sp, time, cutForTimeSplit, seedForRNG, covariateMat) ;
 
@@ -55,7 +55,7 @@ SEXP setupGridCpp(NumericVector responseValues, NumericMatrix spCoords, NumericV
 // {
 //   //omp_set_num_threads(numOpenMP) ;
 //   double logLikVal = 0;
-//   vec fixedEffVec = as<vec>(fixedEffectParameters) ;
+//   vec fixedEfvec = as<vec>(fixedEffectParameters) ;
 //   vec covParVec = as<vec>(covParameters) ;
 //   vec fieldValuesVec = as<vec>(fieldValues) ;
 //   if (!(treePointer == NULL))

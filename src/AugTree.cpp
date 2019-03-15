@@ -19,7 +19,7 @@ struct gridPair{
   gridPair(AugTree * gridArg, vec vectorArg) : grid(gridArg), vector(vectorArg) { } ;
 };
 
-AugTree::AugTree(uint & M, fvec & lonRange, fvec & latRange, fvec & timeRange, vec & observations, fmat & obsSp, fvec & obsTime, uint & minObsForTimeSplit, unsigned long int & seed, fmat & covariates)
+AugTree::AugTree(uint & M, vec & lonRange, vec & latRange, vec & timeRange, vec & observations, mat & obsSp, vec & obsTime, uint & minObsForTimeSplit, unsigned long int & seed, mat & covariates)
   : m_M(M)
 {
   m_dataset = inputdata(observations, obsSp, obsTime, covariates) ;
@@ -63,14 +63,14 @@ void AugTree::createLevels(TreeNode * parent, const uint & numObsForTimeSplit) {
   if (obsForMedian.n_elem == 0) {
     throw Rcpp::exception("Empty region.") ;
   }
-  fmat spMediansMat = median(m_dataset.spatialCoords.rows(obsForMedian), 0) ;
-  Row<float> spMedians = spMediansMat.row(0) ;
+  mat spMediansMat = median(m_dataset.spatialCoords.rows(obsForMedian), 0) ;
+  Row<double> spMedians = spMediansMat.row(0) ;
 
-  fvec sortedTimes = sort(m_dataset.timeCoords.elem(obsForMedian)) ;
-  float timeMedian = sortedTimes.at(std::ceil((obsForMedian.size()-1)/2));
+  vec sortedTimes = sort(m_dataset.timeCoords.elem(obsForMedian)) ;
+  double timeMedian = sortedTimes.at(std::ceil((obsForMedian.size()-1)/2));
 
   std::vector<dimensions> dimensionsForChildren ;
-  fvec lonRange(2, fill::zeros), latRange(2, fill::zeros) ;
+  vec lonRange(2, fill::zeros), latRange(2, fill::zeros) ;
 
   if (parent->GetObsInNode().size() < numObsForTimeSplit) {
     for (uint i = 0; i < 2; i++) {
@@ -87,7 +87,7 @@ void AugTree::createLevels(TreeNode * parent, const uint & numObsForTimeSplit) {
       }
     }
   } else {
-    fvec timeRange(2, fill::zeros) ;
+    vec timeRange(2, fill::zeros) ;
     for (uint i = 0; i < 2; i++) {
       for (uint j = 0; j < 2; j++) {
         for(uint k = 0; k < 2; k++) {
@@ -131,14 +131,16 @@ void AugTree::createLevels(TreeNode * parent, const uint & numObsForTimeSplit) {
 }
 
 void AugTree::generateKnots(TreeNode * node) {
-  // float scaledRespSize =  0.05 ;
-  // float depthContribution = 19*node->GetDepth() ;
+  // double scaledRespSize =  0.05 ;
+  // double depthContribution = 19*node->GetDepth() ;
   // depthContribution = depthContribution/60 ;
-  // float expToRound = depthContribution + scaledRespSize ; // Why is it that we have to store every term separately for expToRound to not evaluate to 0?
-  // float numKnots = expToRound * node->GetObsInNode().size() ;
+  // double expToRound = depthContribution + scaledRespSize ; // Why is it that we have to store every term separately for expToRound to not evaluate to 0?
+  // double numKnots = expToRound * node->GetObsInNode().size() ;
   //// CAREFUL: THIS IS HARD-CODED, THERE MIGHT BE A BETTER WAY /////////////
-  float numKnots = sqrt((float) node->GetObsInNode().size()) ;
-  uint numKnotsToGen = uint (std::ceil(numKnots)) ;
+  uint baseNumberOfKnots = 30 ;
+  uint numKnotsToGen = baseNumberOfKnots * pow(2, node->GetDepth()) ;
+  // double numKnots = sqrt((double) node->GetObsInNode().size()) ;
+  // uint numKnotsToGen = uint (std::ceil(numKnots)) ;
   node->genRandomKnots(m_dataset, numKnotsToGen, m_randomNumGenerator) ;
   if (node->GetChildren().at(0) != NULL) {
     for (auto &i : node->GetChildren()) {
@@ -188,15 +190,19 @@ void AugTree::ComputeMRAlogLikAlt(const bool WmatsAvailable)
     double logDeterminantValue = 0 ;
     double sign = 0 ;
     log_det(logDeterminantValue, sign, i->GetKmatrix()) ;
+
+    // i->GetKmatrixInverse()(0,0,size(6,6)).print("Small K matrix inverse:") ;
+
     mat exponentTerm = -0.5 * trans(etas) * i->GetKmatrixInverse() * etas ;
-    MRAlogLik += -0.5*logDeterminantValue + exponentTerm(0,0) ;
+    MRAlogLik += (-0.5*logDeterminantValue + exponentTerm(0,0)) ;
     currentIndex = lastIndex + 1 ;
   }
+
   m_MRAlogLik = MRAlogLik ;
 }
 
 void AugTree::computeWmats() {
-  // m_MRAcovParas.print("Trying MRA cov paras:") ;
+  m_MRAcovParas.print("Trying MRA cov paras:") ;
   m_vertexVector.at(0)->ComputeWmat(m_MRAcovParas) ;
 
   for (uint level = 1; level <= m_M; level++) {
@@ -348,34 +354,34 @@ void AugTree::CleanPredictionComponents() {
 }
 
 void AugTree::CenterResponse() {
-  fvec intercept = ones<fvec>(m_dataset.covariateValues.n_rows) ;
-  fmat incrementedCovar = m_dataset.covariateValues ;
+  vec intercept = ones<vec>(m_dataset.covariateValues.n_rows) ;
+  mat incrementedCovar = m_dataset.covariateValues ;
   incrementedCovar.insert_cols(0, intercept) ;
   vec meanVec = vec(m_dataset.covariateValues.n_rows) ;
   meanVec = incrementedCovar * m_fixedEffParameters ;
   m_dataset.responseValues -= meanVec ;
 }
 
-arma::sp_mat AugTree::CombineKandFEmatrices() {
-  std::vector<mat *> KandFEmatrixList = getKmatricesInversePointers() ;
-  mat FEmatrix = pow(m_fixedEffSD, 2) * eye<mat>(m_fixedEffParameters.size(), m_fixedEffParameters.size()) ;
-  KandFEmatrixList.insert(KandFEmatrixList.begin(), &FEmatrix) ;
+arma::sp_mat AugTree::CombineFEinvAndKinvMatrices() {
+  std::vector<mat *> FEinvAndKinvMatrixList = getKmatricesInversePointers() ;
+  mat FEinvMatrix = pow(m_fixedEffSD, -2) * eye<mat>(m_fixedEffParameters.size(), m_fixedEffParameters.size()) ;
+  FEinvAndKinvMatrixList.insert(FEinvAndKinvMatrixList.begin(), &FEinvMatrix) ;
 
   // This is because we want the Q matrix to have a block-diagonal component in the lower-right corner,
   // which prompted us to make H* = [X,F] rather than H* = [F, X], like in Eidsvik.
 
-  sp_mat Kmatrices = createSparseMatrix(KandFEmatrixList) ;
+  sp_mat FEinvAndKinvMatrices = createSparseMatrix(FEinvAndKinvMatrixList) ;
 
-  return Kmatrices ;
+  return FEinvAndKinvMatrices ;
 }
 
 arma::sp_mat AugTree::createHstar() {
   sp_mat Fmatrix = createFmatrix() ;
 
-  fvec intercept = ones<fvec>(m_dataset.covariateValues.n_rows) ;
-  fmat covarCopy = m_dataset.covariateValues ;
+  vec intercept = ones<vec>(m_dataset.covariateValues.n_rows) ;
+  mat covarCopy = m_dataset.covariateValues ;
   covarCopy.insert_cols(0, intercept) ;
-  sp_fmat incrementedCovar = conv_to<sp_fmat>::from(covarCopy) ;
+  sp_mat incrementedCovar = conv_to<sp_mat>::from(covarCopy) ;
   // We revert the order of Hstar...
   sp_mat Hstar = join_rows(conv_to<sp_mat>::from(incrementedCovar), Fmatrix) ;
   return Hstar ;
@@ -384,7 +390,7 @@ arma::sp_mat AugTree::createHstar() {
 // Very long fonction. Should probably be shortened...
 // The F mat is a huge sparse matrix with number of rows (columns) equal to the total
 // number of observations (knots).
-// The function starts by inputting in Fmat matrices at resolution M (in a block-diagonal fashion).
+// The function starts by inputting in mat matrices at resolution M (in a block-diagonal fashion).
 // All matrices added to F are taken from m_BmatList(resolution) in the tip nodes,
 // with resolution = M at this point.
 // To make sure there's correspondence in rows between matrices inputted at all resolutions
@@ -421,7 +427,7 @@ arma::sp_mat AugTree::createFmatrix() {
     numProcessedKnots += numKnotsAtLevel ;
     verticalBoundary = m_numKnots - numProcessedKnots ;
 
-    while (currentLevelMatrices.size() > 0) { // currentLevelMatrices contains matrices that have not been added to Fmat yet. Once it is empty, it means they have all been added.
+    while (currentLevelMatrices.size() > 0) { // currentLevelMatrices contains matrices that have not been added to mat yet. Once it is empty, it means they have all been added.
       if (resolution > 0) {
         nodeSiblings = currentLevelMatrices.at(0).first->Siblings() ;
         siblingParentPair = std::make_pair(nodeSiblings.at(0)->GetParent(),
@@ -439,12 +445,8 @@ arma::sp_mat AugTree::createFmatrix() {
           index += 1 ;
         }
         // Update Fmat
-        // printf("Placing matrix corresponding to node %i \n", currentLevelMatrices.at(index).first->GetNodeId()) ; // The ordering does match that of the nodes in m_vertexVector.
         Fmat(horizontalBoundary, verticalBoundary, size(currentLevelMatrices.at(index).second)) = currentLevelMatrices.at(index).second ;
-        if (resolution == 0) {
-          cout << "Creating F mat at resolution 0... \n" ;
-          // currentLevelMatrices.at(index).second(0,0, size(75, 10)).print("Block to go in F:") ;
-        }
+
         // Update placement indices for the blocks in Fmat.
         horizontalBoundary += i->GetObsInNode().size() ;
         verticalBoundary += i->GetNumKnots() ;
@@ -535,46 +537,60 @@ void AugTree::ComputeLogFullConditional() {
 
   // sp_mat vStar = conv_to<sp_mat>::from(join_cols(m_fixedEffParameters, m_MRAetaValues)) ;
 
-  sp_mat SigmaFEandEta = CombineKandFEmatrices() ;
+  sp_mat SigmaFEandEtaInv = CombineFEinvAndKinvMatrices() ;
 
-  sp_mat SigmaFEandEtaInv = invertSymmBlockDiag(SigmaFEandEta, extractBlockIndices(SigmaFEandEta)) ;
+  // sp_mat SigmaFEandEtaInv = invertSymmBlockDiag(SigmaFEandEta, extractBlockIndices(SigmaFEandEta)) ;
 
-  // sp_mat Hstar = createHstar() ;
   sp_mat Fmatrix = createFmatrix() ;
-  // Fmatrix.print("Fmatrix:") ;
 
-
-  sp_fmat incrementedCovar = conv_to<sp_fmat>::from(join_rows(ones<fvec>(n), m_dataset.covariateValues)) ;
+  sp_mat incrementedCovar = conv_to<sp_mat>::from(join_rows(ones<vec>(n), m_dataset.covariateValues)) ;
   // We revert the order of Hstar...
   sp_mat Hstar = join_rows(conv_to<sp_mat>::from(incrementedCovar), Fmatrix) ;
 
-  sp_mat TepsilonInverse = 1/pow(m_errorSD, 2) * eye<sp_mat>(n, n) ;
+  sp_mat TepsilonInverse = pow(m_errorSD, -2) * eye<sp_mat>(n, n) ;
 
   sp_mat Qmat = SigmaFEandEtaInv + trans(Hstar) * TepsilonInverse * Hstar ;
 
   vec bVec = trans(trans(m_dataset.responseValues) * TepsilonInverse * Hstar) ;
 
   vec updatedMean = ComputeFullConditionalMean(bVec, Qmat) ;
-  // bVec.subvec(0,100).print("bVec:") ;
+
+  updatedMean.save("/home/luc/Documents/means.info", arma_ascii) ;
+
   m_Vstar = updatedMean ;
-  // m_Vstar.subvec(0, 600).print("vStar:") ;
+
+  // vec fieldContribs = Fmatrix * m_Vstar.subvec(3, m_Vstar.size()-1) ;
+  // fieldContribs.subvec(0, 49).print("Field contributions:") ;
+  // mat recentered = Hstar * m_Vstar ;
+  // fieldContribs.save("/home/luc/Documents/fieldValues.info", arma_ascii) ;
+  // recentered.save("/home/luc/Documents/recentered.info", arma_ascii) ;
+  // m_Vstar.save("/home/luc/Documents/vstar.info", arma_ascii) ;
   m_MRAvalues = Fmatrix * updatedMean.tail(m_numKnots) ;
   vec fixedEffMeans = updatedMean.head(m_fixedEffParameters.size()) ;
   SetFixedEffParameters(fixedEffMeans) ;
 
   double logDetQmat = logDeterminantQmat(Qmat) ;
 
+  // std::vector<mat *> KmatrixList = getKmatricesPointers() ;
+  //
+  // // This is because we want the Q matrix to have a block-diagonal component in the lower-right corner,
+  // // which prompted us to make H* = [X,F] rather than H* = [F, X], like in Eidsvik.
+  //
+  // sp_mat Kmatrices = createSparseMatrix(KmatrixList) ;
+  //
+  // mat covMatrix = conv_to<mat>::from(Fmatrix * Kmatrices * trans(Fmatrix)) ;
+  // covMatrix.save("/home/luc/Documents/covMatrix.info", arma_ascii) ;
+  // throw Rcpp::exception("Stop here for now... \n") ;
   // vec recenteredVstar = m_Vstar - updatedMean ;
   // mat distExponential = trans(recenteredVstar) * Qmat * recenteredVstar ;
   // double exponential = -0.5 * distExponential.at(0, 0) ;
 
-  // printf("Log-determinant: %.4e \n Exponent contribution: %.4e \n", detQmat, exponential) ;
-  // m_logFullCond = 0.5 * detQmat + exponential ;
+  // m_logFullCond = 0.5 * logDetQmat + exponential ;
   m_logFullCond = 0.5 * logDetQmat ; // Since we arbitrarily evaluate always at the full-conditional mean, the exponential part of the distribution reduces to 0.
 }
 
 void AugTree::ComputeGlobalLogLik() {
-  fmat incrementedCovar = m_dataset.covariateValues ;
+  mat incrementedCovar = m_dataset.covariateValues ;
   incrementedCovar.insert_cols(0, 1) ;
   incrementedCovar.col(0).fill(1) ;
   vec meanVec(m_dataset.responseValues.size(), fill::zeros) ;
@@ -644,7 +660,8 @@ double AugTree::ComputeLogJointPsiMarginal() {
 double AugTree::logDeterminantQmat(const sp_mat & Qmat) {
   uvec DmatrixBlockIndices = extractBlockIndicesFromLowerRight(Qmat) ;
 
-  uint numRowsD = DmatrixBlockIndices.tail(1)(0) - DmatrixBlockIndices(0) ;
+  uint numRowsD = Qmat.n_rows - DmatrixBlockIndices(0) ;
+
   uint shift = DmatrixBlockIndices.at(0) ;
 
   uvec shiftedBlockIndices = DmatrixBlockIndices - shift ;
@@ -663,7 +680,7 @@ double AugTree::logDeterminantQmat(const sp_mat & Qmat) {
   double logDeterminantComposite, sign1 ;
   uint AmatrixSize = DmatrixBlockIndices.at(0) ;
   sp_mat compositeMat = Qmat(0, 0, size(AmatrixSize, AmatrixSize)) -
-    Qmat(0, AmatrixSize, size(AmatrixSize, Qmat.n_cols - AmatrixSize)) * Dinv * Qmat(AmatrixSize, 0, size(Qmat.n_rows - AmatrixSize, AmatrixSize)) ;
+    Qmat(0, AmatrixSize, size(AmatrixSize, numRowsD)) * Dinv * Qmat(AmatrixSize, 0, size(numRowsD, AmatrixSize)) ;
 
   log_det(logDeterminantComposite, sign1, mat(compositeMat)) ;
 
@@ -747,7 +764,7 @@ double AugTree::logDeterminantFullConditional(const sp_mat & SigmaMat) {
 //   cout << "Obtained M12... \n" ;
 //   printf("M12 size: %i %i \n", M12.n_rows, M12.n_cols) ;
 //   printf("trans(B) size: %i %i \n", B.n_cols, B.n_rows) ;
-//   sp_fmat identity = sp_fmat((*Dinv).n_rows, (*Dinv).n_cols) ;
+//   sp_mat identity = sp_mat((*Dinv).n_rows, (*Dinv).n_cols) ;
 //   identity.diag().ones() ;
 //   sp_mat difference((*Dinv).n_rows, (*Dinv).n_cols) ;
 //   sp_mat difference1 = (*Dinv) * trans(B) ;
@@ -921,4 +938,3 @@ arma::vec AugTree::ComputeFullConditionalMean(const arma::vec & bVec, const arma
 
   return meanVec ;
 }
-

@@ -6,13 +6,13 @@
 
 using namespace arma ;
 
-Spatiotemprange sptimeDistance(const arma::vec & spCoor1, const float & time1, const arma::vec & spCoor2,
-                               const float & time2) {
+Spatiotemprange sptimeDistance(const arma::vec & spCoor1, const double & time1, const arma::vec & spCoor2,
+                               const double & time2) {
   arma::vec diffVec = spCoor1 - spCoor2 ;
   arma::vec scaledVec = arma::pow(diffVec, 2) ;
   double sp = arma::sum(scaledVec) ;
   sp = std::sqrt(sp) ;
-  float timeDiff = abs(time2 - time1) ;
+  double timeDiff = abs(time2 - time1) ;
   // printf("Time coordinates and time difference: %.4e  %.4e %.4e \n", time1, time2, timeDiff) ;
   return Spatiotemprange(sp, timeDiff) ;
 };

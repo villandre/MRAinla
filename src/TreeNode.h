@@ -26,44 +26,44 @@ namespace MRAinla
 typedef unsigned int uint ;
 
 struct spatialcoor {
-  arma::fmat spatialCoords = arma::fmat(1, 2, arma::fill::zeros) ;
-  arma::fvec timeCoords = arma::fvec(1, arma::fill::zeros) ;
+  arma::mat spatialCoords = arma::mat(1, 2, arma::fill::zeros) ;
+  arma::vec timeCoords = arma::vec(1, arma::fill::zeros) ;
 
   spatialcoor() { } ;
-  spatialcoor(arma::fmat f_sp, arma::fvec f_time) : spatialCoords(f_sp), timeCoords(f_time) { } ;
+  spatialcoor(arma::mat f_sp, arma::vec f_time) : spatialCoords(f_sp), timeCoords(f_time) { } ;
 
   spatialcoor subset(arma::uvec & indices)  const {
-    arma::fmat subSpatialCoords = spatialCoords.rows(indices) ;
-    arma::fvec subTimeCoords = timeCoords.rows(indices) ;
+    arma::mat subSpatialCoords = spatialCoords.rows(indices) ;
+    arma::vec subTimeCoords = timeCoords.rows(indices) ;
     return spatialcoor(subSpatialCoords, subTimeCoords) ;
   };
 };
 
 struct inputdata : public spatialcoor {
   arma::vec responseValues = arma::vec(1, arma::fill::zeros) ;
-  arma::fmat covariateValues = arma::fmat(1, 1, arma::fill::zeros) ;
+  arma::mat covariateValues = arma::mat(1, 1, arma::fill::zeros) ;
 
   inputdata() : spatialcoor() {};
-  inputdata(arma::vec f_responses, arma::fmat f_sp, arma::fvec f_time, arma::fmat f_covariates)
+  inputdata(arma::vec f_responses, arma::mat f_sp, arma::vec f_time, arma::mat f_covariates)
     : spatialcoor(f_sp, f_time), responseValues(f_responses), covariateValues(f_covariates) {  } ;
 
   inputdata subset(arma::uvec & indices)  const {
-    arma::fmat subSpatialCoords = spatialCoords.rows(indices) ;
-    arma::fvec subTimeCoords = timeCoords.elem(indices) ;
+    arma::mat subSpatialCoords = spatialCoords.rows(indices) ;
+    arma::vec subTimeCoords = timeCoords.elem(indices) ;
     arma::vec subResponseValues = responseValues.elem(indices) ;
-    arma::fmat subCovariates = covariateValues.rows(indices) ;
+    arma::mat subCovariates = covariateValues.rows(indices) ;
     return inputdata(subResponseValues, subSpatialCoords, subTimeCoords, subCovariates) ;
   };
 };
 
 struct dimensions {
-  arma::fvec longitude{arma::fvec(2, arma::fill::zeros)} ;
-  arma::fvec latitude{arma::fvec(2, arma::fill::zeros)} ;
-  arma::fvec time{arma::fvec(2, arma::fill::zeros)} ;
+  arma::vec longitude{arma::vec(2, arma::fill::zeros)} ;
+  arma::vec latitude{arma::vec(2, arma::fill::zeros)} ;
+  arma::vec time{arma::vec(2, arma::fill::zeros)} ;
 
   dimensions() { } ;
 
-  dimensions(arma::fvec f_lon, arma::fvec f_lat, arma::fvec f_time)
+  dimensions(arma::vec f_lon, arma::vec f_lat, arma::vec f_time)
     : longitude(f_lon), latitude(f_lat), time(f_time) {
     uint firstCompare = (arma::size(f_lon) == arma::size(f_lat)) ;
     uint secondCompare = (arma::size(f_lat) == arma::size(f_time)) ;
@@ -74,9 +74,9 @@ struct dimensions {
 };
 
 struct SpatiotempCoor{
-  arma::fvec sp = arma::fvec(2, arma::fill::zeros) ;
-  float time = 0 ;
-  SpatiotempCoor(arma::fvec & sp, float & time) : sp(sp), time(time) { } ;
+  arma::vec sp = arma::vec(2, arma::fill::zeros) ;
+  double time = 0 ;
+  SpatiotempCoor(arma::vec & sp, double & time) : sp(sp), time(time) { } ;
   SpatiotempCoor() { } ;
 };
 

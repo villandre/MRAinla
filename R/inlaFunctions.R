@@ -30,22 +30,28 @@
 
 MRA_INLA <- function(spacetimeData, errorSDstart, fixedEffSDstart, MRAhyperparasStart, M, lonRange, latRange, timeRange, randomSeed, cutForTimeSplit = 400, MRAcovParasIGalphaBeta, FEmuVec, fixedEffIGalphaBeta, errorIGalphaBeta, stepSize = 1, lowerThreshold = 10) {
   dataCoordinates <- spacetimeData@sp@coords
-  timeValues <- as.integer(time(spacetimeData@time))/(3600*24) # The division is to obtain values in days.
+  timeRangeReshaped <- as.integer(timeRange)/(3600*24)
+  timeValues <- as.integer(time(spacetimeData@time))/(3600*24) - min(timeRangeReshaped) # The division is to obtain values in days.
+  timeRangeReshaped <- timeRangeReshaped - min(timeRangeReshaped)
+
   covariateMatrix <- as.matrix(spacetimeData@data[, -1, drop = FALSE])
-  gridPointer <- setupGridCpp(spacetimeData@data[, 1], dataCoordinates, timeValues, covariateMatrix, M, lonRange, latRange, as.integer(timeRange)/(3600*24) + 1, randomSeed, cutForTimeSplit)
+  gridPointer <- setupGridCpp(spacetimeData@data[, 1], dataCoordinates, timeValues, covariateMatrix, M, lonRange, latRange, timeRangeReshaped, randomSeed, cutForTimeSplit)
   # First we compute values relating to the hyperprior marginal distribution...
 
   xStartValues <- c(MRAhyperparasStart, fixedEffSDstart, errorSDstart)
   numMRAhyperparas <- length(MRAhyperparasStart)
   # funForOptimJointHyperMarginal(treePointer = gridPointer$gridPointer, exp(0.5*xStartValues[1:numMRAhyperparas]), exp(0.5*xStartValues[numMRAhyperparas + 1]), exp(0.5*xStartValues[numMRAhyperparas + 2]), MRAcovParasIGalphaBeta = MRAcovParasIGalphaBeta, fixedEffIGalphaBeta = fixedEffIGalphaBeta, errorIGalphaBeta = errorIGalphaBeta)
   funForOptim <- function(x, treePointer, MRAcovParasIGalphaBeta, fixedEffIGalphaBeta, errorIGalphaBeta, FEmuVec) {
-    -LogJointHyperMarginal(treePointer, x[1:numMRAhyperparas], x[numMRAhyperparas + 1], x[numMRAhyperparas + 2], MRAcovParasIGalphaBeta, FEmuVec, fixedEffIGalphaBeta, errorIGalphaBeta)
+    -LogJointHyperMarginal(treePointer = treePointer, MRAhyperparas = x[1:numMRAhyperparas], fixedEffSD = x[numMRAhyperparas + 1], errorSD = x[numMRAhyperparas + 2], MRAcovParasIGalphaBeta = MRAcovParasIGalphaBeta, FEmuVec = FEmuVec, fixedEffIGalphaBeta = fixedEffIGalphaBeta, errorIGalphaBeta)
   }
   optimResult <- optim(par = xStartValues, method = "L-BFGS-B", control = list(factr = 1e6), hessian = TRUE, fn = funForOptim, lower = rep(0.1, 4), gr = NULL, treePointer = gridPointer$gridPointer, MRAcovParasIGalphaBeta = MRAcovParasIGalphaBeta, FEmuVec = FEmuVec, fixedEffIGalphaBeta = fixedEffIGalphaBeta, errorIGalphaBeta = errorIGalphaBeta)
   cat("Best vector: ", optimResult$par, "\n")
   cat("Optimal value: ", optimResult$value, "\n")
   if (optimResult$convergence > 0) {
-    warning("Nelder-Mead failed to conclusively find a maximum for the marginal hyperpara. posterior. \n Algorithm will keep going using the best value found. \n \n")
+    warning("Procedure failed to conclusively find a maximum for the marginal hyperpara. posterior. \n Algorithm will keep going using the best value found. \n \n")
+  }
+  if (det(optimResult$hessian) <= 0) {
+    warning("Non-positive definite Hessian matrix... \n \n")
   }
   # save(optimResult, file = "~/Documents/optimForTests.R")
   # load("~/Documents/optimForTests.R")
