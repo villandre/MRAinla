@@ -238,11 +238,7 @@ getIntegrationPointsAndValues <- function(optimObject, gridPointer, MRAcovParasI
   containerList[1:counter]
 }
 
-ComputeMarginals <- function(hyperparameterDistList) {
-  dfsfsd
-}
-
-SimulateSpacetimeData <- function(numObsPerTimeSlice = 2025, covFunction, lonRange, latRange, timeValuesInPOSIXct, covariateDistributionList, errorSD, distFun = dist, FEvalues) {
+SimulateSpacetimeData <- function(numObsPerTimeSlice = 2025, covFunction, lonRange, latRange, timeValuesInPOSIXct, covariateDistributionList, errorSD, distFun = dist, FEvalues, tiltSpaceSD = 0, tiltTimeRadius = 7200) {
   numSlotsPerRow <- ceiling(sqrt(numObsPerTimeSlice))
   slotCoordinates <- sapply(list(longitude = lonRange, latitude = latRange), FUN = function(x) {
     width <- abs(diff(x)/numSlotsPerRow)
@@ -251,10 +247,14 @@ SimulateSpacetimeData <- function(numObsPerTimeSlice = 2025, covFunction, lonRan
 
   allSpaceCoordinates <- as.data.frame(expand.grid(as.data.frame(slotCoordinates)))
 
+  if (tiltSpaceSD > 0) {
+    allSpaceCoordinates <- as.data.frame(lapply(allSpaceCoordinates, function(spaceCoor) spaceCoor + rnorm(length(spaceCoor), 0, tiltSpaceSD)))
+  }
+
   timeLayerFct <- function(timeValue) {
     selectedRows <- sample.int(n = nrow(allSpaceCoordinates), size = numObsPerTimeSlice, replace = FALSE)
     layerCoordinates <- allSpaceCoordinates[selectedRows, ]
-    layerCoordinates$time <- rep(timeValue, nrow(layerCoordinates))
+    layerCoordinates$time <- rep(timeValue, nrow(layerCoordinates)) + sample(((-tiltTimeRadius):tiltTimeRadius), size = nrow(layerCoordinates), replace = FALSE)
     covariateFrame <- as.data.frame(sapply(covariateDistributionList, function(x) sample(x[[1]], size = nrow(layerCoordinates), prob = x[[2]], replace = TRUE)))
     colnames(covariateFrame) <- paste("Covariate", seq_along(covariateFrame), sep = "")
     cbind(layerCoordinates, covariateFrame)
@@ -264,7 +264,7 @@ SimulateSpacetimeData <- function(numObsPerTimeSlice = 2025, covFunction, lonRan
   coordinates <- do.call("rbind", coordinates)
 
   spatialDistMatrix <- dist(coordinates[, c("longitude", "latitude")])
-  timeDistMatrix <- dist(coordinates[, "time"])/(3600*24) # Distances in days
+  timeDistMatrix <- dist(coordinates[, "time"])/(3600*24)
   covarianceMat <- covFunction(spatialDistMatrix, timeDistMatrix)
   meanVector <- cbind(1, as.matrix(coordinates[ , grep(pattern = "Covariate", colnames(coordinates))])) %*% FEvalues
   fieldValues <- mvtnorm::rmvnorm(n = 1, mean = as.numeric(meanVector), sigma = covarianceMat) + rnorm(n = length(meanVector), mean = 0, sd = errorSD)

@@ -190,6 +190,9 @@ void AugTree::ComputeMRAlogLikAlt(const bool WmatsAvailable)
     double logDeterminantValue = 0 ;
     double sign = 0 ;
     log_det(logDeterminantValue, sign, i->GetKmatrix()) ;
+    if (sign < 0) {
+      throw Rcpp::exception("Error in ComputeMRAlogLikAlt! sign should be positive. \n") ;
+    }
 
     // i->GetKmatrixInverse()(0,0,size(6,6)).print("Small K matrix inverse:") ;
 
@@ -675,7 +678,10 @@ double AugTree::logDeterminantQmat(const sp_mat & Qmat) {
     double sign = 0 ;
     uint matSize = DmatrixBlockIndices.at(i+1) - DmatrixBlockIndices.at(i) ;
     log_det(value, sign, mat(Qmat(DmatrixBlockIndices.at(i), DmatrixBlockIndices.at(i), size(matSize, matSize)))) ;
-    logDeterminantD += sign*value ;
+    if (sign < 0) {
+      throw Rcpp::exception("Error in logDeterminantQmat! sign should be positive. \n") ;
+    }
+    logDeterminantD += value ;
   }
   double logDeterminantComposite, sign1 ;
   uint AmatrixSize = DmatrixBlockIndices.at(0) ;
@@ -683,8 +689,11 @@ double AugTree::logDeterminantQmat(const sp_mat & Qmat) {
     Qmat(0, AmatrixSize, size(AmatrixSize, numRowsD)) * Dinv * Qmat(AmatrixSize, 0, size(numRowsD, AmatrixSize)) ;
 
   log_det(logDeterminantComposite, sign1, mat(compositeMat)) ;
+  if (sign1 < 0) {
+    throw Rcpp::exception("Error in logDeterminantQmat! sign1 should be positive. \n") ;
+  }
 
-  return logDeterminantD + sign1*logDeterminantComposite ;
+  return logDeterminantD + logDeterminantComposite ;
 }
 
 uvec AugTree::extractBlockIndicesFromLowerRight(const arma::sp_mat & symmSparseMatrix) {

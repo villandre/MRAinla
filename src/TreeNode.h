@@ -186,6 +186,7 @@ protected:
   double m_d ;
 
   double covFunction(const Spatiotemprange &, const arma::vec &) ;
+  double MaternCovFunction(const Spatiotemprange &, const arma::vec &) ;
   std::vector<TreeNode *> getAncestors() ;
   arma::mat computeCovMat(const spatialcoor &, const spatialcoor &, const arma::vec &) ;
   void baseInitialise(const dimensions & dims, const uint & depth, TreeNode * parent, const inputdata & dataset) {

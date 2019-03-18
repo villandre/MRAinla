@@ -1,9 +1,11 @@
 #include <gsl/gsl_sf_exp.h>
+#include <math.h>
 
 #include "TreeNode.h"
 
 using namespace arma ;
 using namespace MRAinla ;
+using namespace std ;
 
 arma::uvec TreeNode::deriveObsInNode(const spatialcoor & dataset) {
   uvec lonCheck = (dataset.spatialCoords.col(0) > min(m_dimensions.longitude)) %
@@ -16,12 +18,18 @@ arma::uvec TreeNode::deriveObsInNode(const spatialcoor & dataset) {
 }
 
 // We assume a squared exponential decay function with sigma^2 = 1
-double TreeNode::covFunction(const Spatiotemprange & distance, const vec & covParameters) {
-  double spExp = pow(distance.sp, 2)/(2 * pow(covParameters.at(0), 2)) ;
-  double timeExp = pow(distance.time, 2)/(2 * pow(covParameters.at(1), 2)) ;
-  return exp(-spExp - timeExp) ;
+// double TreeNode::covFunction(const Spatiotemprange & distance, const vec & covParameters) {
+//   double spExp = pow(distance.sp, 2)/(2 * pow(covParameters.at(0), 2)) ;
+//   double timeExp = pow(distance.time, 2)/(2 * pow(covParameters.at(1), 2)) ;
+//   return exp(-spExp - timeExp) ;
+// }
 
-};
+double TreeNode::MaternCovFunction(const Spatiotemprange & distance, const vec & covParameters) {
+  // Matern covariance with smoothness 1 and scaling 1.
+  double spExp = maternCov(distance.sp, covParameters.at(0), 1 , 1, 1.5) ;
+  double timeExp = maternCov(distance.sp, covParameters.at(1), 1 , 1, 1.5) ;
+  return spExp * timeExp ;
+}
 
 // arma::mat TreeNode::ComputeCovMatrix(const vec & covParaVec) {
 //   Spatiotemprange container ;
@@ -40,19 +48,9 @@ double TreeNode::covFunction(const Spatiotemprange & distance, const vec & covPa
 // }
 
 void TreeNode::baseComputeWmat(const vec & covParas) {
-  printf("Processing node %i at depth %i. \n", m_nodeId, m_depth) ;
-  covParas.print("Covariance parameters:") ;
   std::vector<TreeNode *> brickList = getAncestors() ;
-  cout << "Processing brick list... \n" ;
-  for (auto & i : brickList) {
-    printf("%i ", i->GetNodeId()) ;
-  }
-  cout << "\n" ;
+
   m_Wlist.at(0) = computeCovMat(m_knotsCoor, brickList.at(0)->GetKnotsCoor(), covParas) ;
-  // if (m_depth == 2) {
-  //   covParas.print("CovParas in tip node:") ;
-  //   m_Wlist.at(0)(0, 0, size(25,5)).print("Starting matrix for recursion:") ;
-  // }
 
   for (uint l = 1; l <= m_depth; l++) {
     mat firstMat = computeCovMat(m_knotsCoor, brickList.at(l)->GetKnotsCoor(), covParas) ;
@@ -63,6 +61,12 @@ void TreeNode::baseComputeWmat(const vec & covParas) {
         trans(brickList.at(l)->GetWlist().at(k)) ;
     }
     m_Wlist.at(l) = firstMat - secondMat ;
+    if (l == m_depth) {
+      double sign1, sign2 ;
+      double value1, value2 ;
+      log_det(value1, sign1, firstMat) ;
+      log_det(value2, sign2, secondMat) ;
+    }
   }
 }
 
@@ -92,7 +96,7 @@ mat TreeNode::computeCovMat(const spatialcoor & spTime1, const spatialcoor & spT
       double time2 = spTime2.timeCoords.at(colIndex) ;
 
       Spatiotemprange rangeValue = sptimeDistance(space1, time1, space2, time2) ;
-      covMat.at(rowIndex, colIndex) = covFunction(rangeValue, covParas) ;
+      covMat.at(rowIndex, colIndex) = MaternCovFunction(rangeValue, covParas) ;
     }
   }
 

@@ -1,10 +1,15 @@
 #include<math.h>
 #include<iostream>
 #include<stdlib.h>
+#include<gsl/gsl_sf_gamma.h>
+#include <boost/math/special_functions/bessel.hpp>
 
 #include "helper.h"
 
 using namespace arma ;
+using namespace boost ;
+using namespace std ;
+using namespace math ;
 
 Spatiotemprange sptimeDistance(const arma::vec & spCoor1, const double & time1, const arma::vec & spCoor2,
                                const double & time2) {
@@ -31,7 +36,8 @@ arma::sp_mat createSparseMatrix(std::vector<arma::mat *> listOfMatrices) {
 
   int idx=0;
   for(int i = 0; i < numMatrices; i++) {
-    X(idx, idx, size(*(listOfMatrices.at(i)))) = *(listOfMatrices.at(i)) ;
+    sp_mat dereferencedMatrix = conv_to<sp_mat>::from(*(listOfMatrices.at(i))) ;
+    X(idx, idx, arma::size(dereferencedMatrix.n_rows, dereferencedMatrix.n_cols)) = dereferencedMatrix ;
     idx = idx + dimvec[i] ;
   }
 
@@ -137,3 +143,17 @@ double logNormPDF(const arma::vec & x, const arma::vec & mu, const arma::vec & s
   return logValue ;
 }
 
+// The notation is borrowed from the Wikipedia entry.
+
+double maternCov(const double & distance, const double & rho,
+                    const double & smoothness, const double & scale, const double & nugget) {
+  double maternValue ;
+  if (distance > 0) {
+    double base = pow(2 * smoothness, 0.5) * distance / rho ;
+    maternValue = pow(scale, 2) * pow(2, 1 - smoothness) / gsl_sf_gamma(smoothness) *
+    pow(base, smoothness) * cyl_bessel_k(smoothness, base) ;
+  } else {
+    maternValue = pow(nugget, 2) ;
+  }
+  return maternValue ;
+}

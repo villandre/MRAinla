@@ -1,4 +1,5 @@
 // [[Rcpp::depends(RcppArmadillo)]]
+// [[Rcpp::depends(BH)]]
 
 #include <iostream>
 #include <string>

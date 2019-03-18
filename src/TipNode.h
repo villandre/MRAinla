@@ -46,9 +46,6 @@ public:
 
   void ComputeWmat(const arma::vec & covParas) {
     baseComputeWmat(covParas) ;
-    std::printf("Number of observations: %i \n", m_obsInNode.size()) ;
-    std::cout << "Inverting Sigma... \n" ;
-    GetSigma().save("/home/luc/Documents/Sigma.info", arma::arma_ascii) ;
     m_SigmaInverse = arma::inv_sympd(GetSigma()) ;
   }
 
