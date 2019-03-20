@@ -28,8 +28,8 @@ BEGIN_RCPP
 END_RCPP
 }
 // LogJointHyperMarginal
-double LogJointHyperMarginal(SEXP treePointer, Rcpp::NumericVector MRAhyperparas, double fixedEffSD, double errorSD, Rcpp::List MRAcovParasIGalphaBeta, Rcpp::NumericVector FEmuVec, NumericVector fixedEffIGalphaBeta, NumericVector errorIGalphaBeta);
-RcppExport SEXP _MRAinla_LogJointHyperMarginal(SEXP treePointerSEXP, SEXP MRAhyperparasSEXP, SEXP fixedEffSDSEXP, SEXP errorSDSEXP, SEXP MRAcovParasIGalphaBetaSEXP, SEXP FEmuVecSEXP, SEXP fixedEffIGalphaBetaSEXP, SEXP errorIGalphaBetaSEXP) {
+double LogJointHyperMarginal(SEXP treePointer, Rcpp::NumericVector MRAhyperparas, double fixedEffSD, double errorSD, Rcpp::List MRAcovParasIGalphaBeta, Rcpp::NumericVector FEmuVec, NumericVector fixedEffIGalphaBeta, NumericVector errorIGalphaBeta, bool matern, double spaceNuggetSD, double timeNuggetSD);
+RcppExport SEXP _MRAinla_LogJointHyperMarginal(SEXP treePointerSEXP, SEXP MRAhyperparasSEXP, SEXP fixedEffSDSEXP, SEXP errorSDSEXP, SEXP MRAcovParasIGalphaBetaSEXP, SEXP FEmuVecSEXP, SEXP fixedEffIGalphaBetaSEXP, SEXP errorIGalphaBetaSEXP, SEXP maternSEXP, SEXP spaceNuggetSDSEXP, SEXP timeNuggetSDSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -41,14 +41,17 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< Rcpp::NumericVector >::type FEmuVec(FEmuVecSEXP);
     Rcpp::traits::input_parameter< NumericVector >::type fixedEffIGalphaBeta(fixedEffIGalphaBetaSEXP);
     Rcpp::traits::input_parameter< NumericVector >::type errorIGalphaBeta(errorIGalphaBetaSEXP);
-    rcpp_result_gen = Rcpp::wrap(LogJointHyperMarginal(treePointer, MRAhyperparas, fixedEffSD, errorSD, MRAcovParasIGalphaBeta, FEmuVec, fixedEffIGalphaBeta, errorIGalphaBeta));
+    Rcpp::traits::input_parameter< bool >::type matern(maternSEXP);
+    Rcpp::traits::input_parameter< double >::type spaceNuggetSD(spaceNuggetSDSEXP);
+    Rcpp::traits::input_parameter< double >::type timeNuggetSD(timeNuggetSDSEXP);
+    rcpp_result_gen = Rcpp::wrap(LogJointHyperMarginal(treePointer, MRAhyperparas, fixedEffSD, errorSD, MRAcovParasIGalphaBeta, FEmuVec, fixedEffIGalphaBeta, errorIGalphaBeta, matern, spaceNuggetSD, timeNuggetSD));
     return rcpp_result_gen;
 END_RCPP
 }
 
 static const R_CallMethodDef CallEntries[] = {
     {"_MRAinla_setupGridCpp", (DL_FUNC) &_MRAinla_setupGridCpp, 10},
-    {"_MRAinla_LogJointHyperMarginal", (DL_FUNC) &_MRAinla_LogJointHyperMarginal, 8},
+    {"_MRAinla_LogJointHyperMarginal", (DL_FUNC) &_MRAinla_LogJointHyperMarginal, 11},
     {NULL, NULL, 0}
 };
 

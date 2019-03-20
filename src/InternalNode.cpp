@@ -130,15 +130,15 @@ void::InternalNode::DeriveD() {
   m_d += thirdTerm ;
 }
 
-void InternalNode::ComputeWmat(const arma::vec & covParas) {
-  baseComputeWmat(covParas) ;
+void InternalNode::ComputeWmat(const arma::vec & covParas, const bool matern, const double & spaceNuggetSD, const double & timeNuggetSD) {
+  baseComputeWmat(covParas, matern, spaceNuggetSD, timeNuggetSD) ;
   m_K = inv_sympd(GetKmatrixInverse()) ; // The K matrix is some sort of covariance matrix, so it should always be symmetrical..
 }
 
-void InternalNode::ComputeParasEtaDeltaTilde(const spatialcoor & predictLocations, const inputdata & dataset, const arma::vec & covParas) {
-  m_etaTilde.meanPara = m_Ktilde * m_omega.at(m_depth) ;
-  m_etaTilde.covPara = m_Ktilde ; // This is repetition. It should not harm memory too much though.
-}
+// void InternalNode::ComputeParasEtaDeltaTilde(const spatialcoor & predictLocations, const inputdata & dataset, const arma::vec & covParas) {
+//   m_etaTilde.meanPara = m_Ktilde * m_omega.at(m_depth) ;
+//   m_etaTilde.covPara = m_Ktilde ; // This is repetition. It should not harm memory too much though.
+// }
 
 // void InternalNode::ComputeBaseKmat(const vec & covParaVec) {
 //   mat covMatrix = ComputeCovMatrix(covParaVec) ;

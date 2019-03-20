@@ -206,7 +206,7 @@ void AugTree::ComputeMRAlogLikAlt(const bool WmatsAvailable)
 
 void AugTree::computeWmats() {
   m_MRAcovParas.print("Trying MRA cov paras:") ;
-  m_vertexVector.at(0)->ComputeWmat(m_MRAcovParas) ;
+  m_vertexVector.at(0)->ComputeWmat(m_MRAcovParas, m_matern, m_spaceNuggetSD, m_timeNuggetSD) ;
 
   for (uint level = 1; level <= m_M; level++) {
     std::vector<TreeNode *> levelNodes = getLevelNodes(level) ;
@@ -217,7 +217,7 @@ void AugTree::computeWmats() {
     // #pragma omp parallel for
     for (std::vector<TreeNode *>::iterator it = levelNodes.begin(); it < levelNodes.end(); it++)
     {
-      (*it)->ComputeWmat(m_MRAcovParas) ;
+      (*it)->ComputeWmat(m_MRAcovParas, m_matern, m_spaceNuggetSD, m_timeNuggetSD) ;
     }
   }
 }
@@ -281,62 +281,62 @@ void AugTree::computeD() {
   }
 }
 
-std::vector<GaussDistParas> AugTree::ComputeConditionalPrediction(const inputdata & predictionData) {
-  distributePredictionData(predictionData) ;
+// std::vector<GaussDistParas> AugTree::ComputeConditionalPrediction(const inputdata & predictionData) {
+//   distributePredictionData(predictionData) ;
+//
+//   for (int level = m_M; level >= 0 ; level--) {
+//     uint levelRecast = (uint) level ;
+//     std::vector<TreeNode *> levelNodes = GetLevel(levelRecast) ;
+//     // #pragma omp parallel for
+//     for (std::vector<TreeNode *>::iterator it = levelNodes.begin(); it < levelNodes.end(); it++) {
+//     // for (auto & i : levelNodes) {
+//       (*it)->ComputeParasEtaDeltaTilde(predictionData, m_dataset, m_MRAcovParas) ;
+//     }
+//   }
+//   computeBtildeInTips() ;
+//
+//   std::vector<vec> predictionsFromEachSection ;
+//   std::vector<TreeNode *> tipNodes = GetLevel(m_M) ;
+//
+//   std::vector<GaussDistParas> distParasFromEachZone ;
+//   // #pragma omp parallel for
+//   for (std::vector<TreeNode *>::iterator it = tipNodes.begin(); it < tipNodes.end(); it++) {
+//   // for (auto & i : tipNodes) {
+//     distParasFromEachZone.push_back((*it)->CombineEtaDelta(predictionData, m_fixedEffParameters)) ;
+//   }
+//
+//   return distParasFromEachZone ;
+// }
 
-  for (int level = m_M; level >= 0 ; level--) {
-    uint levelRecast = (uint) level ;
-    std::vector<TreeNode *> levelNodes = GetLevel(levelRecast) ;
-    // #pragma omp parallel for
-    for (std::vector<TreeNode *>::iterator it = levelNodes.begin(); it < levelNodes.end(); it++) {
-    // for (auto & i : levelNodes) {
-      (*it)->ComputeParasEtaDeltaTilde(predictionData, m_dataset, m_MRAcovParas) ;
-    }
-  }
-  computeBtildeInTips() ;
-
-  std::vector<vec> predictionsFromEachSection ;
-  std::vector<TreeNode *> tipNodes = GetLevel(m_M) ;
-
-  std::vector<GaussDistParas> distParasFromEachZone ;
-  // #pragma omp parallel for
-  for (std::vector<TreeNode *>::iterator it = tipNodes.begin(); it < tipNodes.end(); it++) {
-  // for (auto & i : tipNodes) {
-    distParasFromEachZone.push_back((*it)->CombineEtaDelta(predictionData, m_fixedEffParameters)) ;
-  }
-
-  return distParasFromEachZone ;
-}
-
-void AugTree::distributePredictionData(const spatialcoor & predictLocations) {
-  m_predictLocations = predictLocations ;
-
-  for (auto & i : m_vertexVector) {
-    i->SetPredictLocations(predictLocations) ;
-  }
-}
-
-void AugTree::computeBtildeInTips() {
-  std::vector<std::vector<TreeNode *>> nodesAtLevels(m_M+1) ;
-  for (uint i = 0 ; i <= m_M ; i++) {
-    nodesAtLevels.at(i) = GetLevel(i) ;
-  }
-  // The two following loops cannot be joined.
-  for (uint level = 1; level <= m_M ; level++) {
-    for (auto & i : nodesAtLevels.at(level)) {
-      i->initiateBknots(m_MRAcovParas) ;
-    }
-  }
-  for (uint level = 1; level < m_M ; level++) {
-    for (auto & i : nodesAtLevels.at(level+1)) {
-      i->completeBknots(m_MRAcovParas, level) ;
-    }
-  }
-  for (auto & i : nodesAtLevels.at(m_M)) {
-    i->computeBpred(m_predictLocations, m_MRAcovParas) ;
-    i->deriveBtilde(m_predictLocations) ;
-  }
-}
+// void AugTree::distributePredictionData(const spatialcoor & predictLocations) {
+//   m_predictLocations = predictLocations ;
+//
+//   for (auto & i : m_vertexVector) {
+//     i->SetPredictLocations(predictLocations) ;
+//   }
+// }
+//
+// void AugTree::computeBtildeInTips() {
+//   std::vector<std::vector<TreeNode *>> nodesAtLevels(m_M+1) ;
+//   for (uint i = 0 ; i <= m_M ; i++) {
+//     nodesAtLevels.at(i) = GetLevel(i) ;
+//   }
+//   // The two following loops cannot be joined.
+//   for (uint level = 1; level <= m_M ; level++) {
+//     for (auto & i : nodesAtLevels.at(level)) {
+//       i->initiateBknots(m_MRAcovParas) ;
+//     }
+//   }
+//   for (uint level = 1; level < m_M ; level++) {
+//     for (auto & i : nodesAtLevels.at(level+1)) {
+//       i->completeBknots(m_MRAcovParas, level) ;
+//     }
+//   }
+//   for (auto & i : nodesAtLevels.at(m_M)) {
+//     i->computeBpred(m_predictLocations, m_MRAcovParas) ;
+//     i->deriveBtilde(m_predictLocations) ;
+//   }
+// }
 
 std::vector<TreeNode *> AugTree::GetLevel(const uint level) {
   std::vector<TreeNode *> nodesAtLevel;

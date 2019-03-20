@@ -99,14 +99,14 @@ public:
   virtual void DeriveOmega(const arma::vec &)=0 ;
   virtual void DeriveU(const arma::vec &)=0 ;
   virtual void DeriveD()=0 ;
-  virtual void ComputeWmat(const arma::vec &)=0 ;
-  virtual void ComputeParasEtaDeltaTilde(const spatialcoor &, const inputdata &, const arma::vec &)=0 ;
+  virtual void ComputeWmat(const arma::vec &, const bool, const double &, const double &)=0 ;
+  // virtual void ComputeParasEtaDeltaTilde(const spatialcoor &, const inputdata &, const arma::vec &)=0 ;
   virtual std::vector<std::vector<arma::mat>> GetAlist() const = 0;
   virtual arma::mat GetKtilde() const = 0;
-  virtual void deriveBtilde(const spatialcoor & )=0 ;
-  virtual void computeBpred(const spatialcoor &, const arma::vec &)=0 ;
-  virtual GaussDistParas CombineEtaDelta(const inputdata &, const arma::vec &)=0 ;
-  virtual GaussDistParas GetEtaDelta() const =0 ;
+  // virtual void deriveBtilde(const spatialcoor & )=0 ;
+  // virtual void computeBpred(const spatialcoor &, const arma::vec &)=0 ;
+  // virtual GaussDistParas CombineEtaDelta(const inputdata &, const arma::vec &)=0 ;
+  // virtual GaussDistParas GetEtaDelta() const =0 ;
   virtual arma::mat GetB(const uint & l)=0 ;
   virtual arma::mat GetSigma()=0 ;
   virtual arma::mat GetKmatrix()=0 ;
@@ -176,7 +176,7 @@ protected:
   uint m_nodeId ;
 
   std::vector<std::vector<arma::mat>>& GetAtildeList() {return m_AtildeList ;}
-  void baseComputeWmat(const arma::vec &) ;
+  void baseComputeWmat(const arma::vec &, const bool, const double &, const double &) ;
   void SetParent(TreeNode * vertexParentPoint) {m_parent = vertexParentPoint ;}
 
   std::vector<std::vector<arma::mat>> m_AtildeList ;
@@ -185,10 +185,10 @@ protected:
   double m_u ;
   double m_d ;
 
-  double covFunction(const Spatiotemprange &, const arma::vec &) ;
-  double MaternCovFunction(const Spatiotemprange &, const arma::vec &) ;
+  double SqExpCovFunction(const Spatiotemprange &, const arma::vec &, const double &, const double &) ;
+  double MaternCovFunction(const Spatiotemprange &, const arma::vec &, const double &, const double &) ;
   std::vector<TreeNode *> getAncestors() ;
-  arma::mat computeCovMat(const spatialcoor &, const spatialcoor &, const arma::vec &) ;
+  arma::mat computeCovMat(const spatialcoor &, const spatialcoor &, const arma::vec &, const bool, const double &, const double &) ;
   void baseInitialise(const dimensions & dims, const uint & depth, TreeNode * parent, const inputdata & dataset) {
     m_dimensions = dims;
     m_depth = depth ;

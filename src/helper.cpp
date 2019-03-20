@@ -150,8 +150,10 @@ double maternCov(const double & distance, const double & rho,
   double maternValue ;
   if (distance > 0) {
     double base = pow(2 * smoothness, 0.5) * distance / rho ;
+    double bessel = cyl_bessel_k(smoothness, base) ;
     maternValue = pow(scale, 2) * pow(2, 1 - smoothness) / gsl_sf_gamma(smoothness) *
-    pow(base, smoothness) * cyl_bessel_k(smoothness, base) ;
+    pow(base, smoothness) * bessel ;
+
   } else {
     maternValue = pow(nugget, 2) ;
   }

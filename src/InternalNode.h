@@ -22,14 +22,14 @@ public:
   void DeriveOmega(const arma::vec &) ;
   void DeriveU(const arma::vec &) ;
   void DeriveD() ;
-  void ComputeWmat(const arma::vec &) ;
+  void ComputeWmat(const arma::vec &, const bool, const double &, const double &) ;
   void ComputeParasEtaDeltaTilde(const spatialcoor &, const inputdata &, const arma::vec &) ;
   std::vector<std::vector<arma::mat>> GetAlist() const {return m_Alist ;};
   arma::mat GetKtilde() const {return m_Ktilde ;}
-  void deriveBtilde(const spatialcoor & x1) { throw Rcpp::exception("Btilde are only needed for tips. \n") ;}
-  void computeBpred(const spatialcoor & x1, const arma::vec & x2) { throw Rcpp::exception("Bpred should only be computed in tips. \n") ;}
-  GaussDistParas CombineEtaDelta(const inputdata &, const arma::vec &) { throw Rcpp::exception("Combination should only occur in tip nodes. \n") ;}
-  GaussDistParas GetEtaDelta() const { return m_etaTilde ;}
+  // void deriveBtilde(const spatialcoor & x1) { throw Rcpp::exception("Btilde are only needed for tips. \n") ;}
+  // void computeBpred(const spatialcoor & x1, const arma::vec & x2) { throw Rcpp::exception("Bpred should only be computed in tips. \n") ;}
+  // GaussDistParas CombineEtaDelta(const inputdata &, const arma::vec &) { throw Rcpp::exception("Combination should only occur in tip nodes. \n") ;}
+  // GaussDistParas GetEtaDelta() const { return m_etaTilde ;}
   arma::mat GetB(const uint & l) { throw Rcpp::exception("Trying to get B matrix in internal node.\n") ;}
   arma::mat GetSigma() { throw Rcpp::exception("Trying to get Sigma matrix in internal node.\n") ;}
   arma::mat GetKmatrix() {return m_K ;}

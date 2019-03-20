@@ -142,7 +142,7 @@ SEXP setupGridCpp(NumericVector responseValues, NumericMatrix spCoords, NumericV
 double LogJointHyperMarginal(SEXP treePointer, Rcpp::NumericVector MRAhyperparas,
          double fixedEffSD, double errorSD, Rcpp::List MRAcovParasIGalphaBeta,
          Rcpp::NumericVector FEmuVec, NumericVector fixedEffIGalphaBeta,
-         NumericVector errorIGalphaBeta) {
+         NumericVector errorIGalphaBeta, bool matern, double spaceNuggetSD, double timeNuggetSD) {
   arma::mat posteriorMatrix ;
   double outputValue = 0 ;
 
@@ -168,6 +168,8 @@ double LogJointHyperMarginal(SEXP treePointer, Rcpp::NumericVector MRAhyperparas
       pointedTree->SetFixedEffIGalphaBeta(IGhyperParas(fixedEffAlphaBeta.at(0), fixedEffAlphaBeta.at(1))) ;
       pointedTree->SetErrorIGalphaBeta(IGhyperParas(errorAlphaBeta.at(0), errorAlphaBeta.at(1))) ;
       pointedTree->SetFEmu(FEmu) ;
+      pointedTree->SetMatern(matern) ;
+      pointedTree->SetSpaceAndTimeNuggetSD(spaceNuggetSD, timeNuggetSD) ;
     }
     pointedTree->SetErrorSD(errorSD) ;
     pointedTree->SetFixedEffSD(fixedEffSD) ;

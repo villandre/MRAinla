@@ -18,42 +18,37 @@ arma::uvec TreeNode::deriveObsInNode(const spatialcoor & dataset) {
 }
 
 // We assume a squared exponential decay function with sigma^2 = 1
-// double TreeNode::covFunction(const Spatiotemprange & distance, const vec & covParameters) {
-//   double spExp = pow(distance.sp, 2)/(2 * pow(covParameters.at(0), 2)) ;
-//   double timeExp = pow(distance.time, 2)/(2 * pow(covParameters.at(1), 2)) ;
-//   return exp(-spExp - timeExp) ;
-// }
 
-double TreeNode::MaternCovFunction(const Spatiotemprange & distance, const vec & covParameters) {
-  // Matern covariance with smoothness 1 and scaling 1.
-  double spExp = maternCov(distance.sp, covParameters.at(0), 1 , 1, 1.5) ;
-  double timeExp = maternCov(distance.sp, covParameters.at(1), 1 , 1, 1.5) ;
+double TreeNode::SqExpCovFunction(const Spatiotemprange & distance, const vec & covParameters, const double & spaceNuggetSD, const double & timeNuggetSD) {
+  double spExp, timeExp ;
+  if (distance.sp == 0) {
+    spExp = pow(spaceNuggetSD, 2) ;
+  } else {
+    spExp = exp(-pow(distance.sp, 2)/(2 * pow(covParameters.at(0), 2))) ;
+  }
+
+  if (distance.time == 0) {
+    timeExp = pow(timeNuggetSD, 2) ;
+  } else {
+    timeExp = exp(-pow(distance.time, 2)/(2 * pow(covParameters.at(1), 2))) ;
+  }
   return spExp * timeExp ;
 }
 
-// arma::mat TreeNode::ComputeCovMatrix(const vec & covParaVec) {
-//   Spatiotemprange container ;
-//   mat covMatrix(m_knotsCoor.timeCoords.size(), m_knotsCoor.timeCoords.size(), fill::zeros) ;
-//   for (uint rowIndex = 0 ; rowIndex < m_knotsCoor.timeCoords.size() ; rowIndex++) {
-//     for (uint colIndex = 0 ; colIndex <= rowIndex ; colIndex++) {
-//       vec space1 = conv_to<vec>::from(m_knotsCoor.spatialCoords.row(rowIndex)) ;
-//       uint time1 = m_knotsCoor.timeCoords.at(rowIndex) ;
-//       vec space2 = conv_to<vec>::from(m_knotsCoor.spatialCoords.row(colIndex)) ;
-//       uint time2 = m_knotsCoor.timeCoords.at(colIndex) ;
-//       container = sptimeDistance(space1, time1, space2, time2) ;
-//       covMatrix.at(rowIndex, colIndex) = covFunction(container, covParaVec) ;
-//     }
-//   }
-//   return covMatrix ;
-// }
+double TreeNode::MaternCovFunction(const Spatiotemprange & distance, const vec & covParameters, const double & spaceNuggetSD, const double & timeNuggetSD) {
+  // Matern covariance with smoothness 1 and scaling 1.
+  double spExp = maternCov(distance.sp, covParameters.at(0), 1 , 1, spaceNuggetSD) ;
+  double timeExp = maternCov(distance.sp, covParameters.at(1), 1 , 1, timeNuggetSD) ;
+  return spExp * timeExp ;
+}
 
-void TreeNode::baseComputeWmat(const vec & covParas) {
+void TreeNode::baseComputeWmat(const vec & covParas, const bool matern, const double & spaceNuggetSD, const double & timeNuggetSD) {
   std::vector<TreeNode *> brickList = getAncestors() ;
 
-  m_Wlist.at(0) = computeCovMat(m_knotsCoor, brickList.at(0)->GetKnotsCoor(), covParas) ;
+  m_Wlist.at(0) = computeCovMat(m_knotsCoor, brickList.at(0)->GetKnotsCoor(), covParas, matern, spaceNuggetSD, timeNuggetSD) ;
 
   for (uint l = 1; l <= m_depth; l++) {
-    mat firstMat = computeCovMat(m_knotsCoor, brickList.at(l)->GetKnotsCoor(), covParas) ;
+    mat firstMat = computeCovMat(m_knotsCoor, brickList.at(l)->GetKnotsCoor(), covParas, matern, spaceNuggetSD, timeNuggetSD) ;
     mat secondMat(firstMat.n_rows, firstMat.n_cols, fill::zeros) ;
     for (uint k = 0; k < l ; k++) {
       secondMat += m_Wlist.at(k) *
@@ -85,7 +80,7 @@ std::vector<TreeNode *> TreeNode::getAncestors() {
   return ancestorsList ;
 }
 
-mat TreeNode::computeCovMat(const spatialcoor & spTime1, const spatialcoor & spTime2, const vec & covParas) {
+mat TreeNode::computeCovMat(const spatialcoor & spTime1, const spatialcoor & spTime2, const vec & covParas, const bool matern, const double & spaceNuggetSD, const double & timeNuggetSD) {
 
   mat covMat(spTime1.timeCoords.size(), spTime2.timeCoords.size(), fill::zeros) ;
   for (uint rowIndex = 0; rowIndex < spTime1.timeCoords.size() ; rowIndex++) {
@@ -96,7 +91,11 @@ mat TreeNode::computeCovMat(const spatialcoor & spTime1, const spatialcoor & spT
       double time2 = spTime2.timeCoords.at(colIndex) ;
 
       Spatiotemprange rangeValue = sptimeDistance(space1, time1, space2, time2) ;
-      covMat.at(rowIndex, colIndex) = MaternCovFunction(rangeValue, covParas) ;
+      if (matern) {
+        covMat.at(rowIndex, colIndex) = MaternCovFunction(rangeValue, covParas, spaceNuggetSD, timeNuggetSD) ;
+      } else {
+        covMat.at(rowIndex, colIndex) = SqExpCovFunction(rangeValue, covParas, spaceNuggetSD, timeNuggetSD) ;
+      }
     }
   }
 
@@ -113,26 +112,26 @@ void TreeNode::SetPredictLocations(const spatialcoor & predictLocations) {
   m_predictLocIndices = find(lonCheck % latCheck % timeCheck) ; // find is equivalent to which in R
 }
 
-void TreeNode::initiateBknots(const vec & covParas) {
-  std::vector<TreeNode *> brickList = getAncestors() ;
-  if (m_depth > 0) {
-    m_bKnots.resize(m_depth) ;
-    m_bKnots.at(0) = computeCovMat(m_knotsCoor, brickList.at(0)->GetKnotsCoor(), covParas) ;
-  }
-}
+// void TreeNode::initiateBknots(const vec & covParas) {
+//   std::vector<TreeNode *> brickList = getAncestors() ;
+//   if (m_depth > 0) {
+//     m_bKnots.resize(m_depth) ;
+//     m_bKnots.at(0) = computeCovMat(m_knotsCoor, brickList.at(0)->GetKnotsCoor(), covParas) ;
+//   }
+// }
 
-void TreeNode::completeBknots(const vec & covParas, const uint level) {
-  std::vector<TreeNode *> brickList = getAncestors() ;
-  mat currentV = computeCovMat(m_knotsCoor, brickList.at(level)->GetKnotsCoor(), covParas) ;
-  if (level > 0) {
-    for (uint i = 0; i < level ; i++) {
-      currentV -= m_bKnots.at(i) * brickList.at(i)->GetKmatrix() * trans(brickList.at(level)->GetBknots().at(i)) ;
-    }
-  }
-  m_bKnots.at(level) = currentV ;
-  if (GetChildren().at(0) != NULL) {
-    for (auto & i : GetChildren()) {
-      i->completeBknots(covParas, level) ;
-    }
-  }
-}
+// void TreeNode::completeBknots(const vec & covParas, const uint level) {
+//   std::vector<TreeNode *> brickList = getAncestors() ;
+//   mat currentV = computeCovMat(m_knotsCoor, brickList.at(level)->GetKnotsCoor(), covParas) ;
+//   if (level > 0) {
+//     for (uint i = 0; i < level ; i++) {
+//       currentV -= m_bKnots.at(i) * brickList.at(i)->GetKmatrix() * trans(brickList.at(level)->GetBknots().at(i)) ;
+//     }
+//   }
+//   m_bKnots.at(level) = currentV ;
+//   if (GetChildren().at(0) != NULL) {
+//     for (auto & i : GetChildren()) {
+//       i->completeBknots(covParas, level) ;
+//     }
+//   }
+// }

@@ -28,7 +28,7 @@
 #' }
 #' @export
 
-MRA_INLA <- function(spacetimeData, errorSDstart, fixedEffSDstart, MRAhyperparasStart, M, lonRange, latRange, timeRange, randomSeed, cutForTimeSplit = 400, MRAcovParasIGalphaBeta, FEmuVec, fixedEffIGalphaBeta, errorIGalphaBeta, stepSize = 1, lowerThreshold = 10) {
+MRA_INLA <- function(spacetimeData, errorSDstart, fixedEffSDstart, MRAhyperparasStart, M, lonRange, latRange, timeRange, randomSeed, cutForTimeSplit = 400, MRAcovParasIGalphaBeta, FEmuVec, fixedEffIGalphaBeta, errorIGalphaBeta, stepSize = 1, lowerThreshold = 10, maternCov = FALSE, spaceNuggetSD, timeNuggetSD) {
   dataCoordinates <- spacetimeData@sp@coords
   timeRangeReshaped <- as.integer(timeRange)/(3600*24)
   timeValues <- as.integer(time(spacetimeData@time))/(3600*24) - min(timeRangeReshaped) # The division is to obtain values in days.
@@ -42,9 +42,9 @@ MRA_INLA <- function(spacetimeData, errorSDstart, fixedEffSDstart, MRAhyperparas
   numMRAhyperparas <- length(MRAhyperparasStart)
   # funForOptimJointHyperMarginal(treePointer = gridPointer$gridPointer, exp(0.5*xStartValues[1:numMRAhyperparas]), exp(0.5*xStartValues[numMRAhyperparas + 1]), exp(0.5*xStartValues[numMRAhyperparas + 2]), MRAcovParasIGalphaBeta = MRAcovParasIGalphaBeta, fixedEffIGalphaBeta = fixedEffIGalphaBeta, errorIGalphaBeta = errorIGalphaBeta)
   funForOptim <- function(x, treePointer, MRAcovParasIGalphaBeta, fixedEffIGalphaBeta, errorIGalphaBeta, FEmuVec) {
-    -LogJointHyperMarginal(treePointer = treePointer, MRAhyperparas = x[1:numMRAhyperparas], fixedEffSD = x[numMRAhyperparas + 1], errorSD = x[numMRAhyperparas + 2], MRAcovParasIGalphaBeta = MRAcovParasIGalphaBeta, FEmuVec = FEmuVec, fixedEffIGalphaBeta = fixedEffIGalphaBeta, errorIGalphaBeta)
+    -LogJointHyperMarginal(treePointer = treePointer, MRAhyperparas = x[1:numMRAhyperparas], fixedEffSD = x[numMRAhyperparas + 1], errorSD = x[numMRAhyperparas + 2], MRAcovParasIGalphaBeta = MRAcovParasIGalphaBeta, FEmuVec = FEmuVec, fixedEffIGalphaBeta = fixedEffIGalphaBeta, errorIGalphaBeta, matern = as.logical(maternCov), spaceNuggetSD = spaceNuggetSD, timeNuggetSD = timeNuggetSD)
   }
-  optimResult <- optim(par = xStartValues, method = "L-BFGS-B", control = list(factr = 1e6), hessian = TRUE, fn = funForOptim, lower = rep(0.1, 4), gr = NULL, treePointer = gridPointer$gridPointer, MRAcovParasIGalphaBeta = MRAcovParasIGalphaBeta, FEmuVec = FEmuVec, fixedEffIGalphaBeta = fixedEffIGalphaBeta, errorIGalphaBeta = errorIGalphaBeta)
+  optimResult <- optim(par = xStartValues, method = "L-BFGS-B", control = list(factr = 1e4), hessian = TRUE, fn = funForOptim, lower = rep(0.1, 4), gr = NULL, treePointer = gridPointer$gridPointer, MRAcovParasIGalphaBeta = MRAcovParasIGalphaBeta, FEmuVec = FEmuVec, fixedEffIGalphaBeta = fixedEffIGalphaBeta, errorIGalphaBeta = errorIGalphaBeta)
   cat("Best vector: ", optimResult$par, "\n")
   cat("Optimal value: ", optimResult$value, "\n")
   if (optimResult$convergence > 0) {
@@ -65,6 +65,7 @@ MRA_INLA <- function(spacetimeData, errorSDstart, fixedEffSDstart, MRAhyperparas
   # })
   # # Now, we obtain the marginal distribution of all mean parameters.
   # ComputeMarginals(hyperparaList)
+  optimResult
 }
 
 # MRAprecision will have to be coded as block diagonal to ensure tractability.
@@ -238,7 +239,7 @@ getIntegrationPointsAndValues <- function(optimObject, gridPointer, MRAcovParasI
   containerList[1:counter]
 }
 
-SimulateSpacetimeData <- function(numObsPerTimeSlice = 2025, covFunction, lonRange, latRange, timeValuesInPOSIXct, covariateDistributionList, errorSD, distFun = dist, FEvalues, tiltSpaceSD = 0, tiltTimeRadius = 7200) {
+SimulateSpacetimeData <- function(numObsPerTimeSlice = 2025, covFunction, lonRange, latRange, timeValuesInPOSIXct, covariateDistributionList, errorSD, distFun = dist, FEvalues, tiltSpaceSD = 0, tiltTime = FALSE) {
   numSlotsPerRow <- ceiling(sqrt(numObsPerTimeSlice))
   slotCoordinates <- sapply(list(longitude = lonRange, latitude = latRange), FUN = function(x) {
     width <- abs(diff(x)/numSlotsPerRow)
@@ -247,14 +248,15 @@ SimulateSpacetimeData <- function(numObsPerTimeSlice = 2025, covFunction, lonRan
 
   allSpaceCoordinates <- as.data.frame(expand.grid(as.data.frame(slotCoordinates)))
 
-  if (tiltSpaceSD > 0) {
-    allSpaceCoordinates <- as.data.frame(lapply(allSpaceCoordinates, function(spaceCoor) spaceCoor + rnorm(length(spaceCoor), 0, tiltSpaceSD)))
-  }
-
   timeLayerFct <- function(timeValue) {
     selectedRows <- sample.int(n = nrow(allSpaceCoordinates), size = numObsPerTimeSlice, replace = FALSE)
     layerCoordinates <- allSpaceCoordinates[selectedRows, ]
-    layerCoordinates$time <- rep(timeValue, nrow(layerCoordinates)) + sample(((-tiltTimeRadius):tiltTimeRadius), size = nrow(layerCoordinates), replace = FALSE)
+    layerCoordinates$time <- rep(timeValue, nrow(layerCoordinates))
+    if (tiltTime) {
+      numObs <- length(selectedRows)
+      numObsDiv2 <- floor(numObs/2)
+      layerCoordinates$time <- layerCoordinates$time +  seq(from = -numObsDiv2, to = numObsDiv2 - ((numObs %% 2) == 0))
+    }
     covariateFrame <- as.data.frame(sapply(covariateDistributionList, function(x) sample(x[[1]], size = nrow(layerCoordinates), prob = x[[2]], replace = TRUE)))
     colnames(covariateFrame) <- paste("Covariate", seq_along(covariateFrame), sep = "")
     cbind(layerCoordinates, covariateFrame)
@@ -269,5 +271,9 @@ SimulateSpacetimeData <- function(numObsPerTimeSlice = 2025, covFunction, lonRan
   meanVector <- cbind(1, as.matrix(coordinates[ , grep(pattern = "Covariate", colnames(coordinates))])) %*% FEvalues
   fieldValues <- mvtnorm::rmvnorm(n = 1, mean = as.numeric(meanVector), sigma = covarianceMat) + rnorm(n = length(meanVector), mean = 0, sd = errorSD)
   dataForObject <- cbind(data.frame(y = fieldValues[1, ]), coordinates[ , grep(pattern = "Covariate", colnames(coordinates))])
-  spacetime::STIDF(sp = sp::SpatialPoints(coordinates[, c("longitude", "latitude")]), data = dataForObject, time = coordinates$time)
+  spacetimeObj <- spacetime::STIDF(sp = sp::SpatialPoints(coordinates[, c("longitude", "latitude")]), data = dataForObject, time = coordinates$time)
+  if (tiltSpaceSD > 0) {
+    spacetimeObj@sp@coords <- spacetimeObj@sp@coords + rnorm(length(spacetimeObj@sp@coords), 0, tiltSpaceSD)
+  }
+  spacetimeObj
 }

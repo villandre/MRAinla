@@ -64,7 +64,13 @@ public:
   void SetErrorIGalphaBeta(const IGhyperParas & alphaBeta) {m_errorIGalphaBeta = alphaBeta ;}
   void SetFixedEffIGalphaBeta(const IGhyperParas & alphaBeta) {m_fixedEffIGalphaBeta = alphaBeta ;}
   void SetFEmu(const arma::vec & muVec) {m_FEmu = muVec ;}
-
+  void SetSpaceAndTimeNuggetSD(const double & spaceNuggetSD, const double & timeNuggetSD) {
+    m_spaceNuggetSD = spaceNuggetSD ;
+    m_timeNuggetSD = timeNuggetSD ;
+  }
+  void SetMatern(const bool matern) {
+    m_matern = matern ;
+  }
   void CleanPredictionComponents() ;
   void CenterResponse() ;
   arma::sp_mat createHstar() ;
@@ -92,6 +98,9 @@ private:
   double m_logCondDist{ 0 } ;
   double m_logFullCond{ 0 } ;
   uint m_numKnots ;
+  bool m_matern ;
+  double m_spaceNuggetSD ;
+  double m_timeNuggetSD ;
 
   uint m_M{ 0 } ;
   uint m_numTips{ 0 } ;

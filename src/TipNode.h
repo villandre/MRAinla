@@ -44,18 +44,20 @@ public:
     m_d = val ;
   }
 
-  void ComputeWmat(const arma::vec & covParas) {
-    baseComputeWmat(covParas) ;
+  void ComputeWmat(const arma::vec & covParas, const bool matern, const double & spaceNuggetSD, const double & timeNuggetSD) {
+    baseComputeWmat(covParas, matern, spaceNuggetSD, timeNuggetSD) ;
+    // std::cout << "Saving Sigma matrix... \n" ;
+    // GetSigma().save("/home/luc/Documents/SigmaMat.info", arma::raw_ascii) ;
     m_SigmaInverse = arma::inv_sympd(GetSigma()) ;
   }
 
-  void ComputeParasEtaDeltaTilde(const spatialcoor &, const inputdata &, const arma::vec &) ;
+  // void ComputeParasEtaDeltaTilde(const spatialcoor &, const inputdata &, const arma::vec &) ;
   std::vector<std::vector<arma::mat>> GetAlist() const {throw Rcpp::exception("Trying to get an A matrix in a tip node! \n") ;}
   arma::mat GetKtilde() const {throw Rcpp::exception("Trying to get Ktilde in a tip node! \n") ;}
-  void deriveBtilde(const spatialcoor & ) ;
-  void computeBpred(const spatialcoor &, const arma::vec &) ;
-  GaussDistParas CombineEtaDelta(const inputdata &, const arma::vec &) ;
-  GaussDistParas GetEtaDelta() const { return m_deltaTilde ;}
+  // void deriveBtilde(const spatialcoor & ) ;
+  // void computeBpred(const spatialcoor &, const arma::vec &) ;
+  // GaussDistParas CombineEtaDelta(const inputdata &, const arma::vec &) ;
+  // GaussDistParas GetEtaDelta() const { return m_deltaTilde ;}
 
   arma::mat GetB(const uint & l) {
     if (l > m_depth) {
