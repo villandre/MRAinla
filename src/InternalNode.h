@@ -37,6 +37,7 @@ public:
   arma::mat * GetKmatrixInverseAddress() { return &(m_Wlist.back()) ;}
   arma::mat GetKmatrixInverse() {return m_Wlist.back() ;}
   arma::vec GetOmega(const uint & order) { return m_omega.at(order) ;}
+  void SetUncorrSD(const double &) {throw Rcpp::exception("Trying to add uncorrelated error for internal nodes! \n") ;}
 
   void genRandomKnots(inputdata &, uint &, const gsl_rng *) ;
 

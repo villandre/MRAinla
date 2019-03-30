@@ -21,17 +21,17 @@ arma::uvec TreeNode::deriveObsInNode(const spatialcoor & dataset) {
 
 double TreeNode::SqExpCovFunction(const Spatiotemprange & distance, const vec & covParameters, const double & spaceNuggetSD, const double & timeNuggetSD) {
   double spExp, timeExp ;
-  if (distance.sp == 0) {
-    spExp = pow(spaceNuggetSD, 2) ;
-  } else {
+  // if (distance.sp == 0) {
+  //   spExp = pow(spaceNuggetSD, 2) ;
+  // } else {
     spExp = exp(-pow(distance.sp, 2)/(2 * pow(covParameters.at(0), 2))) ;
-  }
+  // }
 
-  if (distance.time == 0) {
-    timeExp = pow(timeNuggetSD, 2) ;
-  } else {
+  // if (distance.time == 0) {
+  //   timeExp = pow(timeNuggetSD, 2) ;
+  // } else {
     timeExp = exp(-pow(distance.time, 2)/(2 * pow(covParameters.at(1), 2))) ;
-  }
+  // }
   return spExp * timeExp ;
 }
 

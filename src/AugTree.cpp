@@ -209,7 +209,7 @@ void AugTree::computeWmats() {
   m_vertexVector.at(0)->ComputeWmat(m_MRAcovParas, m_matern, m_spaceNuggetSD, m_timeNuggetSD) ;
 
   for (uint level = 1; level <= m_M; level++) {
-    std::vector<TreeNode *> levelNodes = getLevelNodes(level) ;
+    std::vector<TreeNode *> levelNodes = GetLevelNodes(level) ;
     // for (auto & i : levelNodes) {
     //   i->ComputeWmat() ;
     // }
@@ -222,7 +222,7 @@ void AugTree::computeWmats() {
   }
 }
 
-std::vector<TreeNode *> AugTree::getLevelNodes(uint & level) {
+std::vector<TreeNode *> AugTree::GetLevelNodes(const uint & level) {
   std::vector<TreeNode *> nodesInLevel ;
   for (auto & i : m_vertexVector) {
     if (i->GetDepth() == level) {
@@ -235,7 +235,7 @@ std::vector<TreeNode *> AugTree::getLevelNodes(uint & level) {
 void AugTree::deriveAtildeMatrices() {
   for (int level = m_M; level >= 0 ; level--) {
     uint levelRecast = (uint) level ;
-    std::vector<TreeNode *> levelNodes = getLevelNodes(levelRecast) ;
+    std::vector<TreeNode *> levelNodes = GetLevelNodes(levelRecast) ;
 
     // for (auto & i : levelNodes) {
     //   i->DeriveAtilde() ;
@@ -250,7 +250,7 @@ void AugTree::deriveAtildeMatrices() {
 void AugTree::computeOmegas() {
   for (int level = m_M; level >= 0 ; level--) {
     uint levelRecast = (uint) level ;
-    std::vector<TreeNode *> levelNodes = getLevelNodes(levelRecast) ;
+    std::vector<TreeNode *> levelNodes = GetLevelNodes(levelRecast) ;
     for (auto & i : levelNodes) {
       i->DeriveOmega(m_MRAvalues) ;
     }
@@ -260,7 +260,7 @@ void AugTree::computeOmegas() {
 void AugTree::computeU() {
   for (int level = m_M; level >= 0 ; level--) {
     uint levelRecast = (uint) level ;
-    std::vector<TreeNode *> levelNodes = getLevelNodes(levelRecast) ;
+    std::vector<TreeNode *> levelNodes = GetLevelNodes(levelRecast) ;
     for (auto & i : levelNodes) {
       i->DeriveU(m_MRAvalues) ;
     }
@@ -270,7 +270,7 @@ void AugTree::computeU() {
 void AugTree::computeD() {
   for (int level = m_M; level >= 0 ; level--) {
     uint levelRecast = (uint) level ;
-    std::vector<TreeNode *> levelNodes = getLevelNodes(levelRecast) ;
+    std::vector<TreeNode *> levelNodes = GetLevelNodes(levelRecast) ;
 
     // Trying openmp. We need to have a standard looping structure.
 
@@ -379,7 +379,8 @@ arma::sp_mat AugTree::CombineFEinvAndKinvMatrices() {
 }
 
 arma::sp_mat AugTree::createHstar() {
-  sp_mat Fmatrix = createFmatrix() ;
+  // sp_mat Fmatrix = createFmatrix() ;
+  sp_mat Fmatrix = createFmatrixAlt() ;
 
   vec intercept = ones<vec>(m_dataset.covariateValues.n_rows) ;
   mat covarCopy = m_dataset.covariateValues ;
@@ -407,9 +408,8 @@ arma::sp_mat AugTree::createHstar() {
 // The algorithm ends when resolution 0 is reached.
 
 arma::sp_mat AugTree::createFmatrix() {
-
   sp_mat Fmat(m_dataset.timeCoords.size(), m_numKnots) ;
-  std::vector<TreeNode *> tipNodes = getLevelNodes(m_M) ;
+  std::vector<TreeNode *> tipNodes = GetLevelNodes(m_M) ;
   std::vector<std::pair<TreeNode *, mat>> currentLevelMatrices ;
   std::vector<std::pair<TreeNode *, mat>> parentLevelMatrices ;
   uint horizontalBoundary ;
@@ -449,7 +449,12 @@ arma::sp_mat AugTree::createFmatrix() {
         }
         // Update Fmat
         Fmat(horizontalBoundary, verticalBoundary, size(currentLevelMatrices.at(index).second)) = currentLevelMatrices.at(index).second ;
-
+        if (resolution == m_M) {
+          uint nodeNum = currentLevelMatrices.at(index).first->GetNodeId() ;
+          printf("Adding matrix for node %i... \n", nodeNum) ;
+          printf("Adding at row index %i \n", horizontalBoundary) ;
+          currentLevelMatrices.at(index).first->GetObsInNode().print("Observations in node:") ;
+        }
         // Update placement indices for the blocks in Fmat.
         horizontalBoundary += i->GetObsInNode().size() ;
         verticalBoundary += i->GetNumKnots() ;
@@ -472,6 +477,70 @@ arma::sp_mat AugTree::createFmatrix() {
     currentLevelMatrices = parentLevelMatrices ;
     parentLevelMatrices.clear() ; // parentLevelMatrices will be re-populated from scratch, hence the need to empty it.
   }
+  return Fmat ;
+}
+
+arma::sp_mat AugTree::createFmatrixAlt() {
+  uint numObs = m_dataset.spatialCoords.n_rows ;
+  sp_mat Fmat(numObs, m_numKnots) ;
+  std::vector<uvec> FmatNodeOrder(m_M) ;
+  uvec FmatObsOrder(numObs, fill::zeros) ;
+  uint rowIndex = 0 ;
+  uvec colIndicesPerNodeId(m_vertexVector.size(), fill::zeros) ;
+
+  uint colIndex = 0 ;
+  for (uint i = 0 ; i < m_vertexVector.size() ; i++) {
+    colIndicesPerNodeId.at(i) = colIndex ;
+    colIndex += m_vertexVector.at(i)->GetNumKnots() ;
+  }
+  colIndicesPerNodeId.print("Column indices for each tree node:") ;
+
+  std::vector<TreeNode *> tipNodes = GetLevelNodes(m_M) ;
+  uint numTips = tipNodes.size() ;
+
+  uvec indicesForReording(numTips, fill::zeros) ;
+
+  std::vector<uvec> ancestorIdsVec(numTips) ;
+
+  for (uint i = 0 ; i < tipNodes.size(); i++) {
+    uvec idVec = tipNodes.at(i)->GetAncestorIds() ; // Last element is tip node.
+    ancestorIdsVec.at(i) = idVec ;
+  }
+
+  std::sort(tipNodes.begin(), tipNodes.end(), [] (TreeNode * first, TreeNode * second) {
+    uvec firstAncestorIds = first->GetAncestorIds() ;
+    uvec secondAncestorIds = second->GetAncestorIds() ;
+    bool firstSmallerThanSecond = false ;
+    for (uint i = 1 ; i < firstAncestorIds.size() ; i++) { // The ultimate ancestor is always node 0, hence the loop starting at 1.
+      bool test = (firstAncestorIds.at(i) == secondAncestorIds.at(i)) ;
+      if (!test) {
+        firstSmallerThanSecond = (firstAncestorIds.at(i) < secondAncestorIds.at(i)) ;
+        break ;
+      }
+    }
+    return firstSmallerThanSecond ;
+  }) ; // This is supposed to reorder the tip nodes in such a way that the F matrix has contiguous blocks.
+
+  for (auto & i : tipNodes) {
+    i->GetAncestorIds().print("Ancestor ids:") ;
+  }
+
+  for (auto & nodeToProcess : tipNodes) {
+
+    FmatObsOrder.subvec(rowIndex, size(nodeToProcess->GetObsInNode())) = nodeToProcess->GetObsInNode() ;
+
+    std::vector<TreeNode *> brickList = nodeToProcess->getAncestors() ;
+
+    for (uint resolution = 0; resolution <= m_M; resolution++) {
+      uint nodeId = brickList.at(resolution)->GetNodeId() ;
+      mat matToAdd = nodeToProcess->GetB(resolution) ;
+      Fmat(rowIndex, colIndicesPerNodeId.at(nodeId), size(matToAdd)) = matToAdd ;
+    }
+    rowIndex += nodeToProcess->GetB(0).n_rows ; // The B(0), B(1), ..., B(M) all have the same number of rows.
+  }
+  FmatObsOrder.print("Order of observations in F matrix:") ;
+  // conv_to<mat>::from(Fmat).save("/home/luc/Documents/Fmatrix.info", raw_ascii) ;
+  m_obsOrderForFmat = FmatObsOrder ;
   return Fmat ;
 }
 
@@ -520,7 +589,6 @@ void AugTree::ComputeLogJointCondTheta() {
   // if (m_recomputeMRAlogLik) {
     ComputeMRAlogLikAlt(true) ; // Getting the eta values requires computing the K matrices, hence KmatricesAvailable = true.
   // }
-  printf("MRA log-lik: %.4e \n", m_MRAlogLik) ;
 
   double fixedEffLogLik = 0 ;
   // m_FEmu.print("FE means:") ;
@@ -544,10 +612,22 @@ void AugTree::ComputeLogFullConditional() {
 
   // sp_mat SigmaFEandEtaInv = invertSymmBlockDiag(SigmaFEandEta, extractBlockIndices(SigmaFEandEta)) ;
 
-  sp_mat Fmatrix = createFmatrix() ;
+  // sp_mat Fmatrix = createFmatrix() ;
+  sp_mat Fmatrix = createFmatrixAlt() ;
+  //
+  std::vector<mat *> KmatrixList = getKmatricesPointers() ;
+  sp_mat Kmatrices = createSparseMatrix(KmatrixList) ;
+  sp_mat covMatrix = Fmatrix * Kmatrices * trans(Fmatrix) ;
+  conv_to<mat>::from(covMatrix).save("/home/luc/Documents/covarianceMatrix.info", raw_ascii) ;
+  throw Rcpp::exception("Stop!!!! \n") ;
+  //
 
   sp_mat incrementedCovar = conv_to<sp_mat>::from(join_rows(ones<vec>(n), m_dataset.covariateValues)) ;
   // We revert the order of Hstar...
+
+ ///TO_DO: RE-SHUFFLE THE X matrix in such a way that the lines match those in the F matrix, based on
+ // m_obsOrderForFmat.
+ // Check ComputeFullConditionalMean as well...
   sp_mat Hstar = join_rows(conv_to<sp_mat>::from(incrementedCovar), Fmatrix) ;
 
   sp_mat TepsilonInverse = pow(m_errorSD, -2) * eye<sp_mat>(n, n) ;
@@ -557,8 +637,6 @@ void AugTree::ComputeLogFullConditional() {
   vec bVec = trans(trans(m_dataset.responseValues) * TepsilonInverse * Hstar) ;
 
   vec updatedMean = ComputeFullConditionalMean(bVec, Qmat) ;
-
-  updatedMean.save("/home/luc/Documents/means.info", arma_ascii) ;
 
   m_Vstar = updatedMean ;
 
@@ -584,12 +662,12 @@ void AugTree::ComputeLogFullConditional() {
   // mat covMatrix = conv_to<mat>::from(Fmatrix * Kmatrices * trans(Fmatrix)) ;
   // covMatrix.save("/home/luc/Documents/covMatrix.info", arma_ascii) ;
   // throw Rcpp::exception("Stop here for now... \n") ;
-  // vec recenteredVstar = m_Vstar - updatedMean ;
-  // mat distExponential = trans(recenteredVstar) * Qmat * recenteredVstar ;
-  // double exponential = -0.5 * distExponential.at(0, 0) ;
+  vec recenteredVstar = m_Vstar - updatedMean ;
+  mat distExponential = trans(recenteredVstar) * Qmat * recenteredVstar ;
+  double exponential = -0.5 * distExponential.at(0, 0) ;
 
-  // m_logFullCond = 0.5 * logDetQmat + exponential ;
-  m_logFullCond = 0.5 * logDetQmat ; // Since we arbitrarily evaluate always at the full-conditional mean, the exponential part of the distribution reduces to 0.
+  m_logFullCond = 0.5 * logDetQmat + exponential ;
+  // m_logFullCond = 0.5 * logDetQmat ; // Since we arbitrarily evaluate always at the full-conditional mean, the exponential part of the distribution reduces to 0.
 }
 
 void AugTree::ComputeGlobalLogLik() {
@@ -598,7 +676,8 @@ void AugTree::ComputeGlobalLogLik() {
   incrementedCovar.col(0).fill(1) ;
   vec meanVec(m_dataset.responseValues.size(), fill::zeros) ;
   meanVec = incrementedCovar * m_fixedEffParameters + m_MRAvalues ;
-
+  double stdDeviation = stddev(m_dataset.responseValues - meanVec) ;
+  printf("Std.dev. for residual terms: %.2e \n", stdDeviation) ;
   vec sdVec(m_dataset.responseValues.size(), fill::zeros) ;
 
   sdVec.fill(m_errorSD) ;
@@ -619,7 +698,7 @@ double AugTree::ComputeLogJointPsiMarginal() {
     computeWmats() ; // This will produce the K matrices required. NOTE: ADD CHECK THAT ENSURES THAT THE MRA LIK. IS ONLY RE-COMPUTED WHEN THE MRA COV. PARAMETERS CHANGE.
     cout << "Leaving computeWmats... \n" ;
   // }
-  std::vector<TreeNode *> tipNodes = getLevelNodes(m_M) ;
+  std::vector<TreeNode *> tipNodes = GetLevelNodes(m_M) ;
 
   // for(auto & i : tipNodes) {
   //   i->GetB(0)(0,0,size(4,4)).print("Sub B:") ;

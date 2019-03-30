@@ -67,15 +67,18 @@ public:
   }
 
   arma::mat GetSigma() {
-    return m_Wlist.at(m_depth) ;
+    return m_Wlist.at(m_depth) + std::pow(m_uncorrSD, 2) * eye(size(m_Wlist.at(m_depth))) ;
   }
   // The following Kmatrix-related functions work because of the correspondence between knots
   // and observations at the finest resolution.
   arma::mat GetKmatrix() {return m_SigmaInverse ;}
   arma::mat * GetKmatrixAddress() {return &m_SigmaInverse ;}
   arma::mat * GetKmatrixInverseAddress() { return &m_Wlist.at(m_depth) ;}
-  arma::mat GetKmatrixInverse() {return GetSigma() ;}
+  arma::mat GetKmatrixInverse() {return GetSigma() - std::pow(m_uncorrSD, 2) * eye(size(GetSigma()));}
   arma::vec GetOmega(const uint & order) { throw Rcpp::exception("Trying to get omega vector in tip node! \n") ; return arma::vec(1) ;}
+  void SetUncorrSD(const double & sd) {
+    m_uncorrSD = sd ;
+  }
 
   void genRandomKnots(inputdata & dataset, uint & numKnots, const gsl_rng * RNG) {
     m_knotsCoor = spatialcoor(dataset.spatialCoords.rows(m_obsInNode),
@@ -95,6 +98,7 @@ protected:
   };
 
   arma::mat m_SigmaInverse ;
+  double m_uncorrSD ;
 
   // Prediction components (should probably be freed once computations are done)
 

@@ -114,6 +114,7 @@ public:
   virtual arma::mat * GetKmatrixInverseAddress()=0 ;
   virtual arma::mat GetKmatrixInverse()=0 ;
   virtual arma::vec GetOmega(const uint &)=0 ;
+  virtual void SetUncorrSD(const double &)=0 ;
 
   virtual void genRandomKnots(inputdata &, uint &, const gsl_rng *) = 0;
 
@@ -147,10 +148,12 @@ public:
   void clearAtildeList() {m_AtildeList.clear() ;}
   void clearOmegaTilde() {m_omegaTilde.clear() ;}
 
-  std::vector<uint> GetAncestorIds() {
+  arma::uvec GetAncestorIds() {
     std::vector<TreeNode *> ancestorsList = getAncestors() ;
-    std::vector<uint> ancestorIds(ancestorsList.size()) ;
-    std::transform(ancestorsList.begin(), ancestorsList.end(), ancestorIds.begin(), [] (TreeNode * treeNode) {return treeNode->GetNodeId() ;}) ;
+    arma::uvec ancestorIds(ancestorsList.size()) ;
+    for (uint i = 0 ; i < ancestorsList.size() ; i++) {
+      ancestorIds.at(i) = ancestorsList.at(i)->GetNodeId() ;
+    }
     return ancestorIds ;
   }
   TreeNode * GetParent() {return m_parent ;}
@@ -165,6 +168,7 @@ public:
     return siblingVec ;
   }
   uint GetNumKnots() {return m_knotsCoor.timeCoords.size() ;}
+  std::vector<TreeNode *> getAncestors() ;
 
 protected:
 
@@ -187,7 +191,7 @@ protected:
 
   double SqExpCovFunction(const Spatiotemprange &, const arma::vec &, const double &, const double &) ;
   double MaternCovFunction(const Spatiotemprange &, const arma::vec &, const double &, const double &) ;
-  std::vector<TreeNode *> getAncestors() ;
+
   arma::mat computeCovMat(const spatialcoor &, const spatialcoor &, const arma::vec &, const bool, const double &, const double &) ;
   void baseInitialise(const dimensions & dims, const uint & depth, TreeNode * parent, const inputdata & dataset) {
     m_dimensions = dims;

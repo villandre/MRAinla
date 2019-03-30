@@ -33,14 +33,16 @@ public:
   void ComputeLogFullConditional() ;
   void ComputeLogPriors() ;
 
-  // double GetMRAlogLik() const {return m_MRAlogLik ;}
+  double GetMRAlogLik() const {return m_MRAlogLik ;}
   gsl_rng * GetRandomNumGenerator() {return m_randomNumGenerator ;}
   inputdata GetDataset() {return m_dataset;}
   uint GetNumTips() {return m_numTips ;}
   // arma::vec GetCovParameters() {return m_covParameters ;}
   std::vector<IGhyperParas> GetMRAcovParasIGalphaBeta() { return m_MRAcovParasIGalphaBeta ;}
+  uint GetM() { return m_M ;}
 
   void SetRNG(gsl_rng * myRNG) { m_randomNumGenerator = myRNG ;}
+  void IncrementVstar(const double & increment) {m_Vstar += increment ;}
 
   // void SetCovParameters(arma::vec & covParas) {m_covParameters = covParas ;}
   void SetFixedEffParameters(arma::vec & fixedParas) {
@@ -60,6 +62,7 @@ public:
     if (arma::approx_equal(MRAcovParas, m_MRAcovParas, "absdiff", 1e-8)) m_recomputeMRAlogLik = true ;
     m_MRAcovParas = MRAcovParas ;
   }
+  std::vector<TreeNode *> GetLevelNodes(const uint & level) ;
   void SetMRAcovParasIGalphaBeta(const std::vector<IGhyperParas> & alphaBeta) {m_MRAcovParasIGalphaBeta = alphaBeta ;}
   void SetErrorIGalphaBeta(const IGhyperParas & alphaBeta) {m_errorIGalphaBeta = alphaBeta ;}
   void SetFixedEffIGalphaBeta(const IGhyperParas & alphaBeta) {m_fixedEffIGalphaBeta = alphaBeta ;}
@@ -87,7 +90,7 @@ public:
 private:
 
   std::vector<TreeNode *> m_vertexVector ;
-  std::vector<TreeNode *> getLevelNodes(uint & level) ;
+
   bool m_recomputeMRAlogLik{ true } ; // When this flag is true, more computations are required to get the log-lik.
   bool m_recomputeGlobalLogLik{ true } ; // When this flag is true, the global log-likelihood (conditional on all mean parameters) needs to be recomputed.
 
@@ -145,6 +148,7 @@ private:
   void distributePredictionData(const spatialcoor &) ;
   void computeBtildeInTips() ;
   spatialcoor m_predictLocations ;
+  arma::uvec m_obsOrderForFmat ;
 
   // INLA functions
   arma::vec m_MRArandomValues ;
@@ -162,6 +166,7 @@ private:
     return KmatrixList ;
   }
   arma::sp_mat createFmatrix() ;
+  arma::sp_mat createFmatrixAlt() ;
   arma::vec optimJointHyperMarg(const arma::vec &, const double, const double, const double, const double) ;
   double logDeterminantQmat(const arma::sp_mat & Qmat) ;
   arma::uvec extractBlockIndicesFromLowerRight(const arma::sp_mat &) ;

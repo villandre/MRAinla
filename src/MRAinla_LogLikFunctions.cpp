@@ -170,12 +170,33 @@ double LogJointHyperMarginal(SEXP treePointer, Rcpp::NumericVector MRAhyperparas
       pointedTree->SetFEmu(FEmu) ;
       pointedTree->SetMatern(matern) ;
       pointedTree->SetSpaceAndTimeNuggetSD(spaceNuggetSD, timeNuggetSD) ;
+      std::vector<TreeNode *> tipNodes = pointedTree->GetLevelNodes(pointedTree->GetM()) ;
+      for (auto & i : tipNodes) {
+        i->SetUncorrSD(0.05) ;
+      }
     }
     pointedTree->SetErrorSD(errorSD) ;
     pointedTree->SetFixedEffSD(fixedEffSD) ;
     pointedTree->SetMRAcovParas(MRAhyperparas) ;
 
     outputValue = pointedTree->ComputeLogJointPsiMarginal() ;
+
+    // double sumTerm = 0.1 ;
+    // mat container(20, 20, fill::zeros) ;
+    // vec newMRAhyperparas = MRAhyperparas ;
+    // vec newMRAhyperparasSpace = linspace<vec>(MRAhyperparas.at(0), MRAhyperparas.at(0)+1, 20) ;
+    // vec newMRAhyperparasTime = linspace<vec>(MRAhyperparas.at(1), MRAhyperparas.at(1)+1, 20) ;
+    // for (uint i = 0 ; i < 20; i++) {
+    //   for (uint j = 0 ; j < 20; j++) {
+    //     newMRAhyperparas.at(0) = newMRAhyperparasSpace.at(i) ;
+    //     newMRAhyperparas.at(1) = newMRAhyperparasTime.at(j) ;
+    //     pointedTree->SetMRAcovParas(newMRAhyperparas) ;
+    //     container.at(i,j) = pointedTree->ComputeLogJointPsiMarginal() ;
+    //   }
+    // }
+    // container.save("/home/luc/Documents/logLikValues.info", raw_ascii) ;
+    // pointedTree->GetVertexVector().at(0)->GetKmatrixInverse()(0,0, size(5,5)).print("Root Kinverse: ") ;
+    // throw Rcpp::exception("Stop here... \n") ;
     // ProfilerStop() ;
   }
   else
