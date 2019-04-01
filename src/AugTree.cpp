@@ -205,7 +205,7 @@ void AugTree::ComputeMRAlogLikAlt(const bool WmatsAvailable)
 }
 
 void AugTree::computeWmats() {
-  m_MRAcovParas.print("Trying MRA cov paras:") ;
+
   m_vertexVector.at(0)->ComputeWmat(m_MRAcovParas, m_matern, m_spaceNuggetSD, m_timeNuggetSD) ;
 
   for (uint level = 1; level <= m_M; level++) {
@@ -493,7 +493,7 @@ arma::sp_mat AugTree::createFmatrixAlt() {
     colIndicesPerNodeId.at(i) = colIndex ;
     colIndex += m_vertexVector.at(i)->GetNumKnots() ;
   }
-  colIndicesPerNodeId.print("Column indices for each tree node:") ;
+  // colIndicesPerNodeId.print("Column indices for each tree node:") ;
 
   std::vector<TreeNode *> tipNodes = GetLevelNodes(m_M) ;
   uint numTips = tipNodes.size() ;
@@ -521,9 +521,9 @@ arma::sp_mat AugTree::createFmatrixAlt() {
     return firstSmallerThanSecond ;
   }) ; // This is supposed to reorder the tip nodes in such a way that the F matrix has contiguous blocks.
 
-  for (auto & i : tipNodes) {
-    i->GetAncestorIds().print("Ancestor ids:") ;
-  }
+  // for (auto & i : tipNodes) {
+  //   i->GetAncestorIds().print("Ancestor ids:") ;
+  // }
 
   for (auto & nodeToProcess : tipNodes) {
 
@@ -538,7 +538,7 @@ arma::sp_mat AugTree::createFmatrixAlt() {
     }
     rowIndex += nodeToProcess->GetB(0).n_rows ; // The B(0), B(1), ..., B(M) all have the same number of rows.
   }
-  FmatObsOrder.print("Order of observations in F matrix:") ;
+  // FmatObsOrder.print("Order of observations in F matrix:") ;
   // conv_to<mat>::from(Fmat).save("/home/luc/Documents/Fmatrix.info", raw_ascii) ;
   m_obsOrderForFmat = FmatObsOrder ;
   return Fmat ;
@@ -615,20 +615,22 @@ void AugTree::ComputeLogFullConditional() {
   // sp_mat Fmatrix = createFmatrix() ;
   sp_mat Fmatrix = createFmatrixAlt() ;
   //
-  std::vector<mat *> KmatrixList = getKmatricesPointers() ;
-  sp_mat Kmatrices = createSparseMatrix(KmatrixList) ;
-  sp_mat covMatrix = Fmatrix * Kmatrices * trans(Fmatrix) ;
-  conv_to<mat>::from(covMatrix).save("/home/luc/Documents/covarianceMatrix.info", raw_ascii) ;
-  throw Rcpp::exception("Stop!!!! \n") ;
+  // std::vector<mat *> KmatrixList = getKmatricesPointers() ;
+  // sp_mat Kmatrices = createSparseMatrix(KmatrixList) ;
+  // sp_mat covMatrix = Fmatrix * Kmatrices * trans(Fmatrix) ;
+  // conv_to<mat>::from(covMatrix).save("/home/luc/Documents/covarianceMatrix.info", raw_ascii) ;
+  // throw Rcpp::exception("Stop!!!! \n") ;
   //
 
-  sp_mat incrementedCovar = conv_to<sp_mat>::from(join_rows(ones<vec>(n), m_dataset.covariateValues)) ;
+  mat transIncrementedCovar = trans(join_rows(ones<vec>(n), m_dataset.covariateValues)) ;
   // We revert the order of Hstar...
 
- ///TO_DO: RE-SHUFFLE THE X matrix in such a way that the lines match those in the F matrix, based on
+ ///We re-shuffle the X matrix in such a way that the lines match those in the F matrix, based on
  // m_obsOrderForFmat.
- // Check ComputeFullConditionalMean as well...
-  sp_mat Hstar = join_rows(conv_to<sp_mat>::from(incrementedCovar), Fmatrix) ;
+
+  mat incrementedCovarReshuffled = trans(transIncrementedCovar.cols(m_obsOrderForFmat)) ;
+
+  sp_mat Hstar = join_rows(conv_to<sp_mat>::from(incrementedCovarReshuffled), Fmatrix) ;
 
   sp_mat TepsilonInverse = pow(m_errorSD, -2) * eye<sp_mat>(n, n) ;
 
@@ -645,8 +647,11 @@ void AugTree::ComputeLogFullConditional() {
   // mat recentered = Hstar * m_Vstar ;
   // fieldContribs.save("/home/luc/Documents/fieldValues.info", arma_ascii) ;
   // recentered.save("/home/luc/Documents/recentered.info", arma_ascii) ;
-  // m_Vstar.save("/home/luc/Documents/vstar.info", arma_ascii) ;
+  m_Vstar.save("/home/luc/Documents/vstar.info", raw_ascii) ;
+  m_obsOrderForFmat.save("/home/luc/Documents/obsOrder.info", raw_ascii) ;
   m_MRAvalues = Fmatrix * updatedMean.tail(m_numKnots) ;
+  m_MRAvalues.save("/home/luc/Documents/MRAvalues.info", raw_ascii) ;
+  throw Rcpp::exception("Stop now... \n \n") ;
   vec fixedEffMeans = updatedMean.head(m_fixedEffParameters.size()) ;
   SetFixedEffParameters(fixedEffMeans) ;
 
@@ -662,12 +667,12 @@ void AugTree::ComputeLogFullConditional() {
   // mat covMatrix = conv_to<mat>::from(Fmatrix * Kmatrices * trans(Fmatrix)) ;
   // covMatrix.save("/home/luc/Documents/covMatrix.info", arma_ascii) ;
   // throw Rcpp::exception("Stop here for now... \n") ;
-  vec recenteredVstar = m_Vstar - updatedMean ;
-  mat distExponential = trans(recenteredVstar) * Qmat * recenteredVstar ;
-  double exponential = -0.5 * distExponential.at(0, 0) ;
+  // vec recenteredVstar = m_Vstar - updatedMean ;
+  // mat distExponential = trans(recenteredVstar) * Qmat * recenteredVstar ;
+  // double exponential = -0.5 * distExponential.at(0, 0) ;
 
-  m_logFullCond = 0.5 * logDetQmat + exponential ;
-  // m_logFullCond = 0.5 * logDetQmat ; // Since we arbitrarily evaluate always at the full-conditional mean, the exponential part of the distribution reduces to 0.
+  // m_logFullCond = 0.5 * logDetQmat + exponential ;
+  m_logFullCond = 0.5 * logDetQmat ; // Since we arbitrarily evaluate always at the full-conditional mean, the exponential part of the distribution reduces to 0.
 }
 
 void AugTree::ComputeGlobalLogLik() {

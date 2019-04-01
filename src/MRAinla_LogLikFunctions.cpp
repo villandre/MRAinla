@@ -180,7 +180,7 @@ double LogJointHyperMarginal(SEXP treePointer, Rcpp::NumericVector MRAhyperparas
     pointedTree->SetMRAcovParas(MRAhyperparas) ;
 
     outputValue = pointedTree->ComputeLogJointPsiMarginal() ;
-
+    // throw Rcpp::exception("Stop for now... \n") ;
     // double sumTerm = 0.1 ;
     // mat container(20, 20, fill::zeros) ;
     // vec newMRAhyperparas = MRAhyperparas ;
