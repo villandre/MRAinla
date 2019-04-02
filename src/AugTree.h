@@ -25,12 +25,11 @@ public:
 
   std::vector<TreeNode *> GetVertexVector() {return m_vertexVector ;} ;
 
-  void ComputeMRAlogLik(const bool WmatsAvailable = false) ;
+  // void ComputeMRAlogLik(const bool WmatsAvailable = false) ;
   void ComputeMRAlogLikAlt(const bool WmatsAvailable = false) ;
   std::vector<GaussDistParas> ComputeConditionalPrediction(const inputdata &) ;
-  void ComputeLogJointCondTheta() ;
-  void ComputeGlobalLogLik() ;
-  void ComputeLogFullConditionalAndLogCondDist() ;
+
+  void ComputeLogFCandLogCDandDataLL() ;
   void ComputeLogPriors() ;
 
   double GetMRAlogLik() const {return m_MRAlogLik ;}

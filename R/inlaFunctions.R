@@ -44,17 +44,14 @@ MRA_INLA <- function(spacetimeData, errorSDstart, fixedEffSDstart, MRAhyperparas
   funForOptim <- function(x, treePointer, MRAcovParasIGalphaBeta, fixedEffIGalphaBeta, errorIGalphaBeta, FEmuVec) {
     -LogJointHyperMarginal(treePointer = treePointer, MRAhyperparas = x[1:numMRAhyperparas], fixedEffSD = x[numMRAhyperparas + 1], errorSD = x[numMRAhyperparas + 2], MRAcovParasIGalphaBeta = MRAcovParasIGalphaBeta, FEmuVec = FEmuVec, fixedEffIGalphaBeta = fixedEffIGalphaBeta, errorIGalphaBeta, matern = as.logical(maternCov), spaceNuggetSD = spaceNuggetSD, timeNuggetSD = timeNuggetSD)
   }
-  # optimResult <- optim(par = xStartValues, method = "L-BFGS-B", control = list(factr = 1e4), hessian = TRUE, fn = funForOptim, lower = rep(0.1, 4), gr = NULL, treePointer = gridPointer$gridPointer, MRAcovParasIGalphaBeta = MRAcovParasIGalphaBeta, FEmuVec = FEmuVec, fixedEffIGalphaBeta = fixedEffIGalphaBeta, errorIGalphaBeta = errorIGalphaBeta)
+
   nloptrOpts <-  list(maxeval = 1000, xtol_rel = 1e-8)
-  # optimResult <- nloptr::nloptr(xStartValues, eval_f = funForOptim, lb = rep(0, length(xStartValues)), ub = rep(Inf, length(xStartValues)), opts = nloptrOpts, treePointer = gridPointer$gridPointer, MRAcovParasIGalphaBeta = MRAcovParasIGalphaBeta, FEmuVec = FEmuVec, fixedEffIGalphaBeta = fixedEffIGalphaBeta, errorIGalphaBeta = errorIGalphaBeta)
+
   optimResult <- nloptr::lbfgs(x0 = xStartValues, fn = funForOptim, lower = rep(0.01, length(xStartValues)), upper = 20*xStartValues, control = nloptrOpts, treePointer = gridPointer$gridPointer, MRAcovParasIGalphaBeta = MRAcovParasIGalphaBeta, FEmuVec = FEmuVec, fixedEffIGalphaBeta = fixedEffIGalphaBeta, errorIGalphaBeta = errorIGalphaBeta)
   # optimResult <- nloptr::directL(fn = funForOptim, lower = rep(0.5, length(xStartValues)), upper = rep(3, length(xStartValues)), control = nloptrOpts, treePointer = gridPointer$gridPointer, MRAcovParasIGalphaBeta = MRAcovParasIGalphaBeta, FEmuVec = FEmuVec, fixedEffIGalphaBeta = fixedEffIGalphaBeta, errorIGalphaBeta = errorIGalphaBeta)
   hessianMat <- nlme::fdHess(pars = optimResult$par, fun = funForOptim, treePointer = gridPointer$gridPointer, MRAcovParasIGalphaBeta = MRAcovParasIGalphaBeta, FEmuVec = FEmuVec, fixedEffIGalphaBeta = fixedEffIGalphaBeta, errorIGalphaBeta = errorIGalphaBeta)
-  # cat("Best vector: ", optimResult$par, "\n")
-  # cat("Optimal value: ", optimResult$value, "\n")
-  # if (optimResult$convergence > 0) {
-  #   warning("Procedure failed to conclusively find a maximum for the marginal hyperpara. posterior. \n Algorithm will keep going using the best value found. \n \n")
-  # }
+
+
   # if (det(optimResult$hessian) <= 0) {
   #   warning("Non-positive definite Hessian matrix... \n \n")
   # }

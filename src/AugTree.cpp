@@ -27,21 +27,12 @@ AugTree::AugTree(uint & M, vec & lonRange, vec & latRange, vec & timeRange, vec 
   m_randomNumGenerator = gsl_rng_alloc(gsl_rng_taus) ;
   m_MRAcovParas.resize(1) ;
   m_MRAcovParas.fill(-1.5e6) ;
-  // m_newHyperParas = true ;
 
   gsl_rng_set(m_randomNumGenerator, seed) ;
   m_fixedEffParameters.resize(m_dataset.covariateValues.n_cols + 1) ; // An extra 1 is added to take into account the intercept.
   m_fixedEffParameters.randu() ;
 
   BuildTree(minObsForTimeSplit) ;
-  // uvec newOrder ;
-  // std::vector<TreeNode *> tipNodes = GetLevelNodes(m_M) ;
-  //
-  // for (auto & i : tipNodes) {
-  //   newOrder = join_cols(newOrder, i->GetObsInNode()) ;
-  // }
-  // m_obsOrderForFmat = newOrder ;
-  // m_dataset.reshuffle(newOrder) ;
 
   m_numKnots = 0 ;
   for (uint i = 0 ; i < m_vertexVector.size() ; i++) {
@@ -158,29 +149,29 @@ void AugTree::generateKnots(TreeNode * node) {
   }
 }
 
-void AugTree::ComputeMRAlogLik(const bool WmatsAvailable)
-{
-  cout << "Entered ComputeMRAlogLik... \n" ;
-  if (!WmatsAvailable) {
-    computeWmats() ;
-  }
-  deriveAtildeMatrices() ;
-
-  computeOmegas() ;
-  computeU() ;
-  computeD() ;
-
-  // The log-likelihood is a function of d and u computed at the root node, being at the
-  // head of m_vertexVector, since it's the first one we ever created.
-
-  double tempLogLik = (m_vertexVector.at(0)->GetD() + m_vertexVector.at(0)->GetU()) ;
-
-  tempLogLik = -tempLogLik/2 ;
-  // We set m_newHyperParas=false to indicate that covariance computations with the current hyperparameters
-  // have been perfomed, and need not be performed again, unless we change the hyperparameters.
-  m_recomputeMRAlogLik = false ;
-  m_MRAlogLik = tempLogLik ;
-}
+// void AugTree::ComputeMRAlogLik(const bool WmatsAvailable)
+// {
+//   cout << "Entered ComputeMRAlogLik... \n" ;
+//   if (!WmatsAvailable) {
+//     computeWmats() ;
+//   }
+//   deriveAtildeMatrices() ;
+//
+//   computeOmegas() ;
+//   computeU() ;
+//   computeD() ;
+//
+//   // The log-likelihood is a function of d and u computed at the root node, being at the
+//   // head of m_vertexVector, since it's the first one we ever created.
+//
+//   double tempLogLik = (m_vertexVector.at(0)->GetD() + m_vertexVector.at(0)->GetU()) ;
+//
+//   tempLogLik = -tempLogLik/2 ;
+//   // We set m_newHyperParas=false to indicate that covariance computations with the current hyperparameters
+//   // have been perfomed, and need not be performed again, unless we change the hyperparameters.
+//   m_recomputeMRAlogLik = false ;
+//   m_MRAlogLik = tempLogLik ;
+// }
 
 void AugTree::ComputeMRAlogLikAlt(const bool WmatsAvailable)
 {
@@ -203,8 +194,6 @@ void AugTree::ComputeMRAlogLikAlt(const bool WmatsAvailable)
       throw Rcpp::exception("Error in ComputeMRAlogLikAlt! sign should be positive. \n") ;
     }
 
-    // i->GetKmatrixInverse()(0,0,size(6,6)).print("Small K matrix inverse:") ;
-
     mat exponentTerm = -0.5 * trans(etas) * i->GetKmatrixInverse() * etas ;
     MRAlogLik += (-0.5*logDeterminantValue + exponentTerm(0,0)) ;
     currentIndex = lastIndex + 1 ;
@@ -219,9 +208,7 @@ void AugTree::computeWmats() {
 
   for (uint level = 1; level <= m_M; level++) {
     std::vector<TreeNode *> levelNodes = GetLevelNodes(level) ;
-    // for (auto & i : levelNodes) {
-    //   i->ComputeWmat() ;
-    // }
+
     // Trying openmp. We need to have a standard looping structure.
     // #pragma omp parallel for
     for (std::vector<TreeNode *>::iterator it = levelNodes.begin(); it < levelNodes.end(); it++)
@@ -388,14 +375,12 @@ arma::sp_mat AugTree::CombineFEinvAndKinvMatrices() {
 }
 
 arma::sp_mat AugTree::createHstar() {
-  // sp_mat Fmatrix = createFmatrix() ;
   sp_mat Fmatrix = createFmatrixAlt() ;
 
   vec intercept = ones<vec>(m_dataset.covariateValues.n_rows) ;
   mat covarCopy = m_dataset.covariateValues ;
   covarCopy.insert_cols(0, intercept) ;
   sp_mat incrementedCovar = conv_to<sp_mat>::from(covarCopy) ;
-  // We revert the order of Hstar...
   sp_mat Hstar = join_rows(conv_to<sp_mat>::from(incrementedCovar), Fmatrix) ;
   return Hstar ;
 }
@@ -494,25 +479,24 @@ void AugTree::ComputeLogPriors() {
   m_logPrior = logPrior ;
 }
 
-void AugTree::ComputeLogJointCondTheta() {
-  // if (m_recomputeMRAlogLik) {
-    ComputeMRAlogLikAlt(true) ; // Getting the eta values requires computing the K matrices, hence KmatricesAvailable = true.
-  // }
+// void AugTree::ComputeLogJointCondTheta() {
+//   // if (m_recomputeMRAlogLik) {
+//     ComputeMRAlogLikAlt(true) ; // Getting the eta values requires computing the K matrices, hence KmatricesAvailable = true.
+//   // }
+//
+//   double fixedEffLogLik = 0 ;
+//
+//   for (uint i = 0; i < m_fixedEffParameters.size(); i++) {
+//     fixedEffLogLik += std::log(normpdf(m_fixedEffParameters.at(i), m_FEmu.at(i), m_fixedEffSD)) ;
+//   }
+//
+//   m_logCondDist = m_MRAlogLik + fixedEffLogLik ;
+// }
 
-  double fixedEffLogLik = 0 ;
 
-  for (uint i = 0; i < m_fixedEffParameters.size(); i++) {
-    fixedEffLogLik += log(normpdf(m_fixedEffParameters.at(i), m_FEmu.at(i), m_fixedEffSD)) ;
-  }
-
-  m_logCondDist = m_MRAlogLik + fixedEffLogLik ;
-}
-
-
-void AugTree::ComputeLogFullConditionalAndLogCondDist() {
+void AugTree::ComputeLogFCandLogCDandDataLL() {
 
   int n = m_dataset.responseValues.size() ;
-
 
   sp_mat SigmaFEandEtaInv = CombineFEinvAndKinvMatrices() ;
 
@@ -546,49 +530,40 @@ void AugTree::ComputeLogFullConditionalAndLogCondDist() {
 
   double logDetQmat = logDeterminantQmat(Qmat) ;
 
-  // This is because we want the Q matrix to have a block-diagonal component in the lower-right corner,
-  // which prompted us to make H* = [X,F] rather than H* = [F, X], like in Eidsvik.
-
   // sp_mat Kmatrices = createSparseMatrix(KmatrixList) ;
 
-  // mat covMatrix = conv_to<mat>::from(Fmatrix * Kmatrices * trans(Fmatrix)) ;
-  // covMatrix.save("/home/luc/Documents/covMatrix.info", arma_ascii) ;
-  // throw Rcpp::exception("Stop here for now... \n") ;
-  // vec recenteredVstar = m_Vstar - updatedMean ;
-  // mat distExponential = trans(recenteredVstar) * Qmat * recenteredVstar ;
-  // double exponential = -0.5 * distExponential.at(0, 0) ;
-  //
-  // m_logFullCond = 0.5 * logDetQmat + exponential ;
   m_logFullCond = 0.5 * logDetQmat ; // Since we arbitrarily evaluate always at the full-conditional mean, the exponential part of the distribution reduces to 0.
-  mat logLikTerm = -0.5 * trans(m_Vstar) * SigmaFEandEtaInv * m_Vstar ;
 
+  // Computing p(v* | Psi)
+  mat logLikTerm = -0.5 * trans(m_Vstar) * SigmaFEandEtaInv * m_Vstar ;
   double logDetSigmaKFEinv = logDetBlockMatrix(SigmaFEandEtaInv) ;
   m_logCondDist = logLikTerm(0,0) + 0.5 * logDetSigmaKFEinv ;
+
+  // Computing p(y | v*, Psi)
   double errorLogDet = -2 * n * std::log(m_errorSD) ;
   vec recenteredY = responsesReshuffled - Hstar * m_Vstar ;
-
   vec globalLogLikExp = -0.5 * (trans(recenteredY) * TepsilonInverse * recenteredY) ;
-  m_globalLogLik = -n/2 * std::log(2 * PI) + 0.5 * errorLogDet + globalLogLikExp(0) ;
+  m_globalLogLik = 0.5 * errorLogDet + globalLogLikExp(0) ;
 }
 
-void AugTree::ComputeGlobalLogLik() {
-  mat incrementedCovar = m_dataset.covariateValues ;
-  incrementedCovar.insert_cols(0, 1) ;
-  incrementedCovar.col(0).fill(1) ;
-  mat incrementedCovarTrans = trans(incrementedCovar) ;
-  incrementedCovar = trans(incrementedCovarTrans.cols(m_obsOrderForFmat)) ;
-  vec meanVec(m_dataset.responseValues.size(), fill::zeros) ;
-  meanVec = incrementedCovar * m_fixedEffParameters + m_MRAvalues ;
-
-  vec sdVec(m_dataset.responseValues.size(), fill::zeros) ;
-
-  sdVec.fill(m_errorSD) ;
-  vec logDensVec(m_dataset.responseValues.size(), fill::zeros) ;
-  // logDensVec = log(normpdf(m_dataset.responseValues, meanVec, sdVec)) ;
-  double logDensity = logNormPDF(m_dataset.responseValues.elem(m_obsOrderForFmat), meanVec, sdVec) ;
-  m_recomputeGlobalLogLik = false ;
-  m_globalLogLik = logDensity ;
-}
+// void AugTree::ComputeGlobalLogLik() {
+//   mat incrementedCovar = m_dataset.covariateValues ;
+//   incrementedCovar.insert_cols(0, 1) ;
+//   incrementedCovar.col(0).fill(1) ;
+//   mat incrementedCovarTrans = trans(incrementedCovar) ;
+//   incrementedCovar = trans(incrementedCovarTrans.cols(m_obsOrderForFmat)) ;
+//   vec meanVec(m_dataset.responseValues.size(), fill::zeros) ;
+//   meanVec = incrementedCovar * m_fixedEffParameters + m_MRAvalues ;
+//
+//   vec sdVec(m_dataset.responseValues.size(), fill::zeros) ;
+//
+//   sdVec.fill(m_errorSD) ;
+//   vec logDensVec(m_dataset.responseValues.size(), fill::zeros) ;
+//   // logDensVec = log(normpdf(m_dataset.responseValues, meanVec, sdVec)) ;
+//   double logDensity = logNormPDF(m_dataset.responseValues.elem(m_obsOrderForFmat), meanVec, sdVec) ;
+//   m_recomputeGlobalLogLik = false ;
+//   m_globalLogLik = logDensity ;
+// }
 
 double AugTree::ComputeLogJointPsiMarginal() {
   // In theory, this function should not depend on the theta values...
@@ -607,7 +582,7 @@ double AugTree::ComputeLogJointPsiMarginal() {
   // }
 
   cout << "Computing log-full conditional... \n" ;
-  ComputeLogFullConditionalAndLogCondDist() ;
+  ComputeLogFCandLogCDandDataLL() ;
   // if (m_MRAetaValues.size() == 0) {
   //   cout << "Setting etas... \n" ;
   //   vec correlatedEtas(m_numKnots, fill::zeros) ;
