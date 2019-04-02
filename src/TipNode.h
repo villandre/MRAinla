@@ -16,7 +16,7 @@ public:
   } // An input node returns a null pointer when it is asked to provide the address of a child.
 
   void RemoveChildren() {}
-  uint GetM() {return m_depth ;}
+  int GetM() {return m_depth ;}
 
   void DeriveAtilde() {
     for (uint k = 0; k < m_depth; k++) {
@@ -80,7 +80,7 @@ public:
     m_uncorrSD = sd ;
   }
 
-  void genRandomKnots(inputdata & dataset, uint & numKnots, const gsl_rng * RNG) {
+  void genRandomKnots(inputdata & dataset, const uint & numKnots, const gsl_rng * RNG) {
     m_knotsCoor = spatialcoor(dataset.spatialCoords.rows(m_obsInNode),
                               dataset.timeCoords.elem(m_obsInNode)) ;
   }

@@ -204,6 +204,7 @@ double LogJointHyperMarginal(SEXP treePointer, Rcpp::NumericVector MRAhyperparas
     throw Rcpp::exception("Pointer to MRA grid is null." ) ;
   }
   printf("Marginal joint Psi: %.4e \n \n \n", outputValue) ;
+
   return outputValue ;
 }
 

@@ -17,7 +17,7 @@ void InternalNode::RemoveChild(TreeNode * childToRemove)
   }
 }
 
-void InternalNode::genRandomKnots(inputdata & dataset, uint & numKnots, const gsl_rng * RNG) {
+void InternalNode::genRandomKnots(inputdata & dataset, const uint & numKnots, const gsl_rng * RNG) {
 
   mat knotsSp(numKnots, 2, fill::zeros) ;
 

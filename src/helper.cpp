@@ -22,15 +22,11 @@ Spatiotemprange sptimeDistance(const arma::vec & spCoor1, const double & time1, 
   return Spatiotemprange(sp, timeDiff) ;
 };
 
-arma::sp_mat createSparseMatrix(std::vector<arma::mat *> listOfMatrices) {
+arma::sp_mat createBlockMatrix(std::vector<arma::mat *> listOfMatrices) {
   int numMatrices = listOfMatrices.size() ;
   int dimen = 0 ;
+  for (auto & i : listOfMatrices) dimen += i->n_rows ;
   arma::ivec dimvec(numMatrices) ;
-
-  for(int i = 0; i < numMatrices; i++) {
-    dimvec[i] = listOfMatrices.at(i)->n_rows ;
-    dimen += dimvec[i] ;
-  }
 
   arma::sp_mat X(dimen, dimen);
 
@@ -38,9 +34,8 @@ arma::sp_mat createSparseMatrix(std::vector<arma::mat *> listOfMatrices) {
   for(int i = 0; i < numMatrices; i++) {
     sp_mat dereferencedMatrix = conv_to<sp_mat>::from(*(listOfMatrices.at(i))) ;
     X(idx, idx, arma::size(dereferencedMatrix.n_rows, dereferencedMatrix.n_cols)) = dereferencedMatrix ;
-    idx = idx + dimvec[i] ;
+    idx += dereferencedMatrix.n_rows ;
   }
-
   return X ;
 }
 
@@ -148,14 +143,30 @@ double logNormPDF(const arma::vec & x, const arma::vec & mu, const arma::vec & s
 double maternCov(const double & distance, const double & rho,
                     const double & smoothness, const double & scale, const double & nugget) {
   double maternValue ;
-  // if (distance > 0) {
+  if (distance > 0) {
     double base = pow(2 * smoothness, 0.5) * distance / rho ;
     double bessel = cyl_bessel_k(smoothness, base) ;
     maternValue = pow(scale, 2) * pow(2, 1 - smoothness) / gsl_sf_gamma(smoothness) *
     pow(base, smoothness) * bessel ;
 
-  // } else {
-  //   maternValue = pow(nugget, 2) ;
-  // }
+  } else {
+    maternValue = pow(nugget, 2) ;
+  }
   return maternValue ;
+}
+
+double logDetBlockMatrix(const arma::sp_mat & blockMatrix) {
+  uvec blockIndices = extractBlockIndices(blockMatrix) ;
+  double logDeterminant = 0 ;
+  for (unsigned int i = 0 ; i < (blockIndices.size() - 1) ; i++) {
+    double value = 0 ;
+    double sign = 0 ;
+    unsigned int matSize = blockIndices.at(i+1) - blockIndices.at(i) ;
+    log_det(value, sign, mat(blockMatrix(blockIndices.at(i), blockIndices.at(i), size(matSize, matSize)))) ;
+    if (sign < 0) {
+      throw Rcpp::exception("Error in logDeterminantQmat! sign should be positive. \n") ;
+    }
+    logDeterminant += value ;
+  }
+  return logDeterminant ;
 }

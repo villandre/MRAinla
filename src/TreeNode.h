@@ -53,7 +53,16 @@ struct inputdata : public spatialcoor {
     arma::vec subResponseValues = responseValues.elem(indices) ;
     arma::mat subCovariates = covariateValues.rows(indices) ;
     return inputdata(subResponseValues, subSpatialCoords, subTimeCoords, subCovariates) ;
-  };
+  }
+
+  void reshuffle(arma::uvec indices) {
+    arma::mat spatialCoordsTrans = trans(spatialCoords) ;
+    spatialCoords = trans(spatialCoordsTrans.cols(indices)) ;
+    timeCoords = timeCoords.elem(indices) ;
+    arma::mat covariateValuesTrans = trans(covariateValues) ;
+    covariateValues = trans(covariateValuesTrans.cols(indices)) ;
+    responseValues = responseValues.elem(indices) ;
+  }
 };
 
 struct dimensions {
@@ -94,7 +103,7 @@ public:
   virtual void RemoveChild(TreeNode *)=0;
   virtual std::vector<TreeNode *> GetChildren()=0;
   virtual void RemoveChildren()=0;
-  virtual uint GetM()=0;
+  virtual int GetM()=0;
   virtual void DeriveAtilde()=0 ;
   virtual void DeriveOmega(const arma::vec &)=0 ;
   virtual void DeriveU(const arma::vec &)=0 ;
@@ -116,11 +125,11 @@ public:
   virtual arma::vec GetOmega(const uint &)=0 ;
   virtual void SetUncorrSD(const double &)=0 ;
 
-  virtual void genRandomKnots(inputdata &, uint &, const gsl_rng *) = 0;
+  virtual void genRandomKnots(inputdata &, const uint &, const gsl_rng *) = 0;
 
   arma::uvec GetObsInNode() {return m_obsInNode ;}
   dimensions GetDimensions() {return m_dimensions;}
-  uint GetDepth() {return m_depth ;}
+  int GetDepth() {return m_depth ;}
 
   arma::mat GetAtildeList(uint & i, uint & j) {return m_AtildeList.at(i).at(j) ;}
   std::vector<arma::vec> GetOmegaTilde() {return m_omegaTilde ;}
@@ -167,17 +176,17 @@ public:
     }
     return siblingVec ;
   }
-  uint GetNumKnots() {return m_knotsCoor.timeCoords.size() ;}
+  int GetNumKnots() {return m_knotsCoor.timeCoords.size() ;}
   std::vector<TreeNode *> getAncestors() ;
 
 protected:
 
   TreeNode * m_parent ;
   arma::uvec m_obsInNode ;
-  uint m_depth ;
+  int m_depth ;
   dimensions m_dimensions ; // First dimension is longitude, second is latitude, last is time.
   spatialcoor m_knotsCoor ;  // First element is spatial coordinates (longitude, latitude), second is time.
-  uint m_nodeId ;
+  int m_nodeId ;
 
   std::vector<std::vector<arma::mat>>& GetAtildeList() {return m_AtildeList ;}
   void baseComputeWmat(const arma::vec &, const bool, const double &, const double &) ;

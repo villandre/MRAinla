@@ -16,8 +16,9 @@ struct Spatiotemprange{
 Spatiotemprange sptimeDistance(const arma::vec & spCoor1, const double & time1, const arma::vec & spCoor2,
                                const double & time2) ;
 
-arma::sp_mat createSparseMatrix(std::vector<arma::mat *>) ;
+arma::sp_mat createBlockMatrix(std::vector<arma::mat *>) ;
 arma::uvec extractBlockIndices(const arma::sp_mat &) ;
+double logDetBlockMatrix(const arma::sp_mat &) ;
 arma::sp_mat invertSymmBlockDiag(const arma::sp_mat &, const arma::uvec &) ;
 double logNormPDF(const arma::vec &, const arma::vec &, const arma::vec &) ;
 double maternCov(const double &, const double &, const double &, const double &, const double &) ;

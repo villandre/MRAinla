@@ -30,16 +30,16 @@ public:
   std::vector<GaussDistParas> ComputeConditionalPrediction(const inputdata &) ;
   void ComputeLogJointCondTheta() ;
   void ComputeGlobalLogLik() ;
-  void ComputeLogFullConditional() ;
+  void ComputeLogFullConditionalAndLogCondDist() ;
   void ComputeLogPriors() ;
 
   double GetMRAlogLik() const {return m_MRAlogLik ;}
   gsl_rng * GetRandomNumGenerator() {return m_randomNumGenerator ;}
   inputdata GetDataset() {return m_dataset;}
-  uint GetNumTips() {return m_numTips ;}
+  int GetNumTips() {return m_numTips ;}
   // arma::vec GetCovParameters() {return m_covParameters ;}
   std::vector<IGhyperParas> GetMRAcovParasIGalphaBeta() { return m_MRAcovParasIGalphaBeta ;}
-  uint GetM() { return m_M ;}
+  int GetM() { return m_M ;}
 
   void SetRNG(gsl_rng * myRNG) { m_randomNumGenerator = myRNG ;}
   void IncrementVstar(const double & increment) {m_Vstar += increment ;}
@@ -100,13 +100,13 @@ private:
   double m_logPrior{ 0 } ;
   double m_logCondDist{ 0 } ;
   double m_logFullCond{ 0 } ;
-  uint m_numKnots ;
+  int m_numKnots ;
   bool m_matern ;
   double m_spaceNuggetSD ;
   double m_timeNuggetSD ;
 
-  uint m_M{ 0 } ;
-  uint m_numTips{ 0 } ;
+  int m_M{ 0 } ;
+  int m_numTips{ 0 } ;
   double m_errorSD ;
   double m_fixedEffSD ;
   arma::vec m_spatialComponents ;

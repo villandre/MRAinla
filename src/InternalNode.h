@@ -11,7 +11,7 @@ public:
   void RemoveChild(TreeNode *) ;
   std::vector<TreeNode *> GetChildren() {return m_children;};
   void RemoveChildren()  {m_children.clear() ;} ;
-  uint GetM() {
+  int GetM() {
     TreeNode * currentAddress = this ;
     while (currentAddress->GetChildren().at(0) != NULL) {
       currentAddress = currentAddress->GetChildren().at(0) ;
@@ -39,7 +39,7 @@ public:
   arma::vec GetOmega(const uint & order) { return m_omega.at(order) ;}
   void SetUncorrSD(const double &) {throw Rcpp::exception("Trying to add uncorrelated error for internal nodes! \n") ;}
 
-  void genRandomKnots(inputdata &, uint &, const gsl_rng *) ;
+  void genRandomKnots(inputdata &, const uint &, const gsl_rng *) ;
 
   InternalNode(const dimensions & dims, const uint & depth, TreeNode * parent,
                const inputdata & dataset) {
@@ -54,7 +54,7 @@ public:
 
   InternalNode(const dimensions & dims, const inputdata & dataset) {
     baseInitialise(dims, 0, this, dataset) ;
-    uint numObs = dataset.responseValues.size() ;
+    int numObs = dataset.responseValues.size() ;
     m_obsInNode = arma::regspace<arma::uvec>(0, numObs - 1) ;
     m_omega.resize(m_depth + 1) ;
     m_Alist.resize(m_depth+1) ;
