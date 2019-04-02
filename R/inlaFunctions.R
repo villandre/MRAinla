@@ -45,26 +45,29 @@ MRA_INLA <- function(spacetimeData, errorSDstart, fixedEffSDstart, MRAhyperparas
     -LogJointHyperMarginal(treePointer = treePointer, MRAhyperparas = x[1:numMRAhyperparas], fixedEffSD = x[numMRAhyperparas + 1], errorSD = x[numMRAhyperparas + 2], MRAcovParasIGalphaBeta = MRAcovParasIGalphaBeta, FEmuVec = FEmuVec, fixedEffIGalphaBeta = fixedEffIGalphaBeta, errorIGalphaBeta, matern = as.logical(maternCov), spaceNuggetSD = spaceNuggetSD, timeNuggetSD = timeNuggetSD)
   }
 
-  nloptrOpts <-  list(maxeval = 1000, xtol_rel = 1e-8)
-
-  optimResult <- nloptr::lbfgs(x0 = xStartValues, fn = funForOptim, lower = rep(0.01, length(xStartValues)), upper = 20*xStartValues, control = nloptrOpts, treePointer = gridPointer$gridPointer, MRAcovParasIGalphaBeta = MRAcovParasIGalphaBeta, FEmuVec = FEmuVec, fixedEffIGalphaBeta = fixedEffIGalphaBeta, errorIGalphaBeta = errorIGalphaBeta)
-  # optimResult <- nloptr::directL(fn = funForOptim, lower = rep(0.5, length(xStartValues)), upper = rep(3, length(xStartValues)), control = nloptrOpts, treePointer = gridPointer$gridPointer, MRAcovParasIGalphaBeta = MRAcovParasIGalphaBeta, FEmuVec = FEmuVec, fixedEffIGalphaBeta = fixedEffIGalphaBeta, errorIGalphaBeta = errorIGalphaBeta)
-  hessianMat <- nlme::fdHess(pars = optimResult$par, fun = funForOptim, treePointer = gridPointer$gridPointer, MRAcovParasIGalphaBeta = MRAcovParasIGalphaBeta, FEmuVec = FEmuVec, fixedEffIGalphaBeta = fixedEffIGalphaBeta, errorIGalphaBeta = errorIGalphaBeta)
-
-
-  # if (det(optimResult$hessian) <= 0) {
-  #   warning("Non-positive definite Hessian matrix... \n \n")
+  # nloptrOpts <-  list(maxeval = 1000, xtol_rel = 1e-8)
+  # optimResult <- nloptr::lbfgs(x0 = xStartValues, fn = funForOptim, lower = rep(0.01, length(xStartValues)), upper = 20*xStartValues, control = nloptrOpts, treePointer = gridPointer$gridPointer, MRAcovParasIGalphaBeta = MRAcovParasIGalphaBeta, FEmuVec = FEmuVec, fixedEffIGalphaBeta = fixedEffIGalphaBeta, errorIGalphaBeta = errorIGalphaBeta)
+  # if (optimResult$convergence < 0) {
+  #   stop("Optimisation algorithm did not converge! \n \n")
   # }
   # save(optimResult, file = "~/Documents/optimForTests.R")
-  # load("~/Documents/optimForTests.R")
-  # cat("LOADING VALUES FOR TESTING PURPOSES. REMOVE THIS ONCE CODE IS COMPLETE.\n \n")
-  # hyperparaList <- getIntegrationPointsAndValues(optimObject = optimResult, gridPointer = gridPointer$gridPointer, MRAcovParasIGalphaBeta = MRAcovParasIGalphaBeta, fixedEffIGalphaBeta = fixedEffIGalphaBeta, errorIGalphaBeta = errorIGalphaBeta, stepSize = stepSize, lowerThreshold = lowerThreshold)
-  # standardisingConstant <- sum(sapply(hyperparaList, `$`, "logJointValue"))
+  cat("LOADING VALUES FOR TESTING PURPOSES. REMOVE THIS ONCE CODE IS COMPLETE.\n \n")
+  load("~/Documents/optimForTests.R")
+
+  hessianMat <- nlme::fdHess(pars = optimResult$par, fun = funForOptim, treePointer = gridPointer$gridPointer, MRAcovParasIGalphaBeta = MRAcovParasIGalphaBeta, FEmuVec = FEmuVec, fixedEffIGalphaBeta = fixedEffIGalphaBeta, errorIGalphaBeta = errorIGalphaBeta)$Hessian
+
+  if (det(hessianMat) <= 0) {
+    warning("Non-positive definite Hessian matrix... \n \n")
+  }
+  optimResult$hessian <- -hessianMat # The "-" is necessary because we performed a minimisation rather than a maximisation.
+  hyperparaList <- getIntegrationPointsAndValues(optimObject = optimResult, gridPointer = gridPointer$gridPointer, MRAcovParasIGalphaBeta = MRAcovParasIGalphaBeta, FEmuVec = FEmuVec, fixedEffIGalphaBeta = fixedEffIGalphaBeta, errorIGalphaBeta = errorIGalphaBeta, stepSize = stepSize, lowerThreshold = lowerThreshold, matern = maternCov)
+
+  standardisingConstant <- sum(sapply(hyperparaList, `$`, "logJointValue"))
   # # The following normalises the joint distribution.
-  # hyperparaList <- lapply(hyperparaList, function(x) {
-  #   x$logJointValue <- x$logJointValue - standardisingConstant
-  #   x
-  # })
+  hyperparaList <- lapply(hyperparaList, function(x) {
+    x$logJointValue <- x$logJointValue - standardisingConstant
+    x
+  })
   # # Now, we obtain the marginal distribution of all mean parameters.
   # ComputeMarginals(hyperparaList)
   list(optimResult = optimResult, hessian = hessianMat)
@@ -172,13 +175,17 @@ covFunctionBiMatern <- function(rangeParaSpace = 10, rangeParaTime = 10) {
   }
 }
 
-getIntegrationPointsAndValues <- function(optimObject, gridPointer, MRAcovParasIGalphaBeta, fixedEffIGalphaBeta, errorIGalphaBeta, stepSize = 1, lowerThreshold = 10) {
+getIntegrationPointsAndValues <- function(optimObject, gridPointer, MRAcovParasIGalphaBeta, FEmuVec, fixedEffIGalphaBeta, errorIGalphaBeta, stepSize = 1, lowerThreshold = 10, matern = FALSE) {
 
   decomposition <- eigen(solve(-optimObject$hessian), symmetric = TRUE)
 
+  if (any(decomposition$values < 0)) {
+    stop("Error: The Hessian matrix has negative eigenvalues. The values found in the optimisation is not a maximum. \n \n")
+  }
+
   getPsi <- function(z) {
     sqrtEigenValueMatrix <- diag(sqrt(decomposition$values))
-    optimObject$value + decomposition$vectors %*% sqrtEigenValueMatrix %*% z
+    optimObject$par + decomposition$vectors %*% sqrtEigenValueMatrix %*% z
   }
 
   getContainerElement <- function(z) {
@@ -188,7 +195,7 @@ getIntegrationPointsAndValues <- function(optimObject, gridPointer, MRAcovParasI
     aList$MRAhyperparas <- head(Psis, n = -2)
     aList$fixedEffSD <- Psis[length(Psis) - 1]
     aList$errorSD <- tail(Psis, n = 1)
-    aList$logJointValue <- with(aList, expr = LogJointHyperMarginal(gridPointer, MRAhyperparas, fixedEffSD = fixedEffSD, errorSD = errorSD, MRAcovParasIGalphaBeta, fixedEffIGalphaBeta, errorIGalphaBeta))
+    aList$logJointValue <- with(aList, expr = LogJointHyperMarginal(treePointer = gridPointer, MRAhyperparas = MRAhyperparas, fixedEffSD = fixedEffSD, errorSD = errorSD, MRAcovParasIGalphaBeta = MRAcovParasIGalphaBeta, FEmuVec = FEmuVec, fixedEffIGalphaBeta =  fixedEffIGalphaBeta, errorIGalphaBeta = errorIGalphaBeta, matern = matern, spaceNuggetSD = spaceNuggetSD, timeNuggetSD = timeNuggetSD))
     aList
   }
 

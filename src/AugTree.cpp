@@ -566,48 +566,15 @@ void AugTree::ComputeLogFCandLogCDandDataLL() {
 // }
 
 double AugTree::ComputeLogJointPsiMarginal() {
-  // In theory, this function should not depend on the theta values...
-  // We can therefore arbitrarily set them all to 0.
-  cout << "Computing log-prior... \n" ;
+
   ComputeLogPriors() ;
   // if (m_recomputeMRAlogLik) {
-    cout << "Entering computeWmats... \n" ;
     computeWmats() ; // This will produce the K matrices required. NOTE: ADD CHECK THAT ENSURES THAT THE MRA LIK. IS ONLY RE-COMPUTED WHEN THE MRA COV. PARAMETERS CHANGE.
-    cout << "Leaving computeWmats... \n" ;
-  // }
-  std::vector<TreeNode *> tipNodes = GetLevelNodes(m_M) ;
-
-  // for(auto & i : tipNodes) {
-  //   i->GetB(0)(0,0,size(4,4)).print("Sub B:") ;
   // }
 
-  cout << "Computing log-full conditional... \n" ;
   ComputeLogFCandLogCDandDataLL() ;
-  // if (m_MRAetaValues.size() == 0) {
-  //   cout << "Setting etas... \n" ;
-  //   vec correlatedEtas(m_numKnots, fill::zeros) ;
-  //   uint index = 0 ;
-  //   arma_rng::set_seed(2) ;
-  //   for (auto & i: m_vertexVector) {
-  //     mat cholDecomp = chol(i->GetKmatrix()) ;
-  //     vec rnormValues(cholDecomp.n_rows) ;
-  //     rnormValues.randn() ;
-  //     correlatedEtas.subvec(index, index + rnormValues.size()-1) =  cholDecomp * rnormValues ;
-  //     index += rnormValues.size() ;
-  //   }
-  //   m_MRAetaValues = correlatedEtas ;
-  //   sp_mat Fmatrix = createFmatrix() ;
-  //   m_MRArandomValues = Fmatrix * correlatedEtas; // Pretty sure the etas match the order of knots pre-supposed by the F matrix, but would be better to make sure.
-  // }
-  // ComputeLogJointCondTheta() ;
 
-  // vec MRAvaluesAtObservations(m_dataset.timeCoords.n_rows) ;
-  // if (m_recomputeGlobalLogLik) {
-  //   cout << "Computing log-likelihood... \n" ;
-  //   ComputeGlobalLogLik() ;
-  // }
-
-  printf("Total log-lik: %.4e \n Log-prior: %.4e \n Log-Cond. dist.: %.4e \n Log-full cond.: %.4e \n \n \n",
+  printf("Observations log-lik: %.4e \n Log-prior: %.4e \n Log-Cond. dist.: %.4e \n Log-full cond.: %.4e \n \n \n",
          m_globalLogLik, m_logPrior, m_logCondDist, m_logFullCond) ;
   return ( m_globalLogLik + m_logPrior + m_logCondDist - m_logFullCond) ;
 }
