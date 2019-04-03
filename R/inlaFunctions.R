@@ -28,7 +28,7 @@
 #' }
 #' @export
 
-MRA_INLA <- function(spacetimeData, errorSDstart, fixedEffSDstart, MRAhyperparasStart, M, lonRange, latRange, timeRange, randomSeed, cutForTimeSplit = 400, MRAcovParasIGalphaBeta, FEmuVec, fixedEffIGalphaBeta, errorIGalphaBeta, stepSize = 1, lowerThreshold = 10, maternCov = FALSE, spaceNuggetSD, timeNuggetSD) {
+MRA_INLA <- function(spacetimeData, errorSDstart, fixedEffSDstart, MRAhyperparasStart, M, lonRange, latRange, timeRange, randomSeed, cutForTimeSplit = 400, MRAcovParasIGalphaBeta, FEmuVec, fixedEffIGalphaBeta, errorIGalphaBeta, stepSize = 1, lowerThreshold = 3, maternCov = FALSE, spaceNuggetSD, timeNuggetSD) {
   dataCoordinates <- spacetimeData@sp@coords
   timeRangeReshaped <- as.integer(timeRange)/(3600*24)
   timeValues <- as.integer(time(spacetimeData@time))/(3600*24) - min(timeRangeReshaped) # The division is to obtain values in days.
@@ -62,15 +62,22 @@ MRA_INLA <- function(spacetimeData, errorSDstart, fixedEffSDstart, MRAhyperparas
   optimResult$hessian <- -hessianMat # The "-" is necessary because we performed a minimisation rather than a maximisation.
   hyperparaList <- getIntegrationPointsAndValues(optimObject = optimResult, gridPointer = gridPointer$gridPointer, MRAcovParasIGalphaBeta = MRAcovParasIGalphaBeta, FEmuVec = FEmuVec, fixedEffIGalphaBeta = fixedEffIGalphaBeta, errorIGalphaBeta = errorIGalphaBeta, stepSize = stepSize, lowerThreshold = lowerThreshold, matern = maternCov)
 
-  standardisingConstant <- sum(sapply(hyperparaList, `$`, "logJointValue"))
+  standardisingConstant <- sapply(hyperparaList, '[[', "logJointValue")
   # # The following normalises the joint distribution.
   hyperparaList <- lapply(hyperparaList, function(x) {
     x$logJointValue <- x$logJointValue - standardisingConstant
     x
   })
   # # Now, we obtain the marginal distribution of all mean parameters.
-  # ComputeMarginals(hyperparaList)
-  list(optimResult = optimResult, hessian = hessianMat)
+  hyperMarginalMoments <- ComputeHyperMarginalMoments(hyperparaList)
+  list(optimResult = optimResult, hessian = hessianMat, hyperMarginalMoments = hyperMarginalMoments)
+}
+
+ComputeHyperMarginalMoments <- function(hyperparaList) {
+  psiAndMargDistMatrix <- t(sapply(hyperparaList, function(x) c(x$MRAhyperparas, x$fixedEffSD, x$errorSD, x$logJointValue)))
+  lapply(1:ncol(psiAndMargDistMatrix), FUN = function(hyperparaIndex) {
+    by(psiAndMargDistMatrix, INDICES = sort(unique(psiAndMargDistMatrix[, hyperparaIndex])), FUN = function(block) sum(block[, ncol(block)]))
+  })
 }
 
 # MRAprecision will have to be coded as block diagonal to ensure tractability.
@@ -175,7 +182,8 @@ covFunctionBiMatern <- function(rangeParaSpace = 10, rangeParaTime = 10) {
   }
 }
 
-getIntegrationPointsAndValues <- function(optimObject, gridPointer, MRAcovParasIGalphaBeta, FEmuVec, fixedEffIGalphaBeta, errorIGalphaBeta, stepSize = 1, lowerThreshold = 4, matern = FALSE) {
+# When lowerThreshold is 3, the exploration stops if the value being tested is at least 20 times smaller than the value at the peak of the hyperparameter marginal a posteriori distribution.
+getIntegrationPointsAndValues <- function(optimObject, gridPointer, MRAcovParasIGalphaBeta, FEmuVec, fixedEffIGalphaBeta, errorIGalphaBeta, stepSize = 1, lowerThreshold = 3, matern = FALSE) {
 
   decomposition <- eigen(solve(-optimObject$hessian), symmetric = TRUE)
 
@@ -196,7 +204,8 @@ getIntegrationPointsAndValues <- function(optimObject, gridPointer, MRAcovParasI
   }
 
   numDims <- length(optimObject$par)
-  centerList <- vector(mode = 'list', length = 5000) # We should not need more than a few hundred points, so 5000 should be ok.
+  # centerList <- vector(mode = 'list', length = 5000) # We should not need more than a few hundred points, so 5000 should be ok.
+  centerList <- list() ; # We'll be growing this list, but considering that we'll be having only a few hundred elements in final, this should be inconsequential.
 
   centerList[[1]] <- getContainerElement(rep(0,numDims))
   counter <- 1
@@ -206,16 +215,17 @@ getIntegrationPointsAndValues <- function(optimObject, gridPointer, MRAcovParasI
       currentZ <- rep(0, numDims)
       currentZ[dimNumber] <- stepSize*direction
       repeat {
-        counter = counter + 1
-        centerList[[counter]] <- getContainerElement(currentZ)
+        elementToAdd <- getContainerElement(currentZ)
         # The following check compares the value at the peak of the distribution with that at the current location. Since values are on the log-scale, the criterion is multiplicative: if the log of the ratio of the two density values is greater than the threshold, it means there was a steep enough drop, and that the density at the point considered is low enough that it won't matter much in the computation of the normalizing constant.
-        if ((centerList[[1]]$logJointValue - centerList[[counter]]$logJointValue) > lowerThreshold) break
+        if ((centerList[[1]]$logJointValue - elementToAdd$logJointValue) > lowerThreshold) break
 
+        counter <- counter + 1
+        centerList[[counter]] <- elementToAdd
         currentZ[dimNumber] <- currentZ[dimNumber] + direction*stepSize
       }
     }
   }
-  zMatrix <- t(sapply(centerList, `$`, "z"))
+  zMatrix <- t(sapply(centerList, '[[', "z"))
   containerList <- centerList
   # The following explores the distribution at points not found on the axes.
   for (centerIndex in 2:length(centerList)) {
@@ -223,25 +233,28 @@ getIntegrationPointsAndValues <- function(optimObject, gridPointer, MRAcovParasI
       for (direction in c(-1, 1)) {
         currentZ <- centerList[[centerIndex]]$z
         repeat {
-
           currentZ[[dimNumber]] <- currentZ[[dimNumber]] + direction*stepSize
           # First, check if value is available
-          rowNumber <- which(apply(zMatrix, MARGIN = 1, all.equal, currentZ))
-          if (length(rowNumber) == 0) {
-            counter <- counter + 1
+          rowNumber <- which(apply(zMatrix, MARGIN = 1, identical, currentZ))
+
+          if (test <- length(rowNumber) == 0) { # This syntax actually works...
             containerElement <- getContainerElement(currentZ)
-            containerList[[counter]] <- containerElement
-            zMatrix <- rbind(zMatrix, currentZ)
           } else {
-            containerElement <- containerList[[rowNumber]]$logJointValue
+            containerElement <- containerList[[rowNumber]]
           }
 
           if ((centerList[[1]]$logJointValue - containerElement$logJointValue) > lowerThreshold) break
+
+          if (test) {
+            counter <- counter + 1
+            containerList[[counter]] <- containerElement
+            zMatrix <- rbind(zMatrix, currentZ)
+          }
         }
       }
     }
   }
-  containerList[1:counter]
+  containerList
 }
 
 SimulateSpacetimeData <- function(numObsPerTimeSlice = 2025, covFunction, lonRange, latRange, timeValuesInPOSIXct, covariateDistributionList, errorSD, distFun = dist, FEvalues, tiltSpaceSD = 0, tiltTime = FALSE) {
