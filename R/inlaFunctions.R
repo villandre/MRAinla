@@ -175,7 +175,7 @@ covFunctionBiMatern <- function(rangeParaSpace = 10, rangeParaTime = 10) {
   }
 }
 
-getIntegrationPointsAndValues <- function(optimObject, gridPointer, MRAcovParasIGalphaBeta, FEmuVec, fixedEffIGalphaBeta, errorIGalphaBeta, stepSize = 1, lowerThreshold = 10, matern = FALSE) {
+getIntegrationPointsAndValues <- function(optimObject, gridPointer, MRAcovParasIGalphaBeta, FEmuVec, fixedEffIGalphaBeta, errorIGalphaBeta, stepSize = 1, lowerThreshold = 4, matern = FALSE) {
 
   decomposition <- eigen(solve(-optimObject$hessian), symmetric = TRUE)
 
@@ -184,17 +184,13 @@ getIntegrationPointsAndValues <- function(optimObject, gridPointer, MRAcovParasI
   }
 
   getPsi <- function(z) {
-    sqrtEigenValueMatrix <- diag(sqrt(decomposition$values))
-    optimObject$par + decomposition$vectors %*% sqrtEigenValueMatrix %*% z
+    sqrtEigenValueMatrix <- base::diag(sqrt(decomposition$values))
+    drop(optimObject$par + decomposition$vectors %*% sqrtEigenValueMatrix %*% z)
   }
 
   getContainerElement <- function(z) {
-    Psis <- getPsi(z) ;
-    aList <- vector(mode = 'list', length = 1)
-    aList$z <- z
-    aList$MRAhyperparas <- head(Psis, n = -2)
-    aList$fixedEffSD <- Psis[length(Psis) - 1]
-    aList$errorSD <- tail(Psis, n = 1)
+    Psis <- getPsi(z)
+    aList <- list(z = z, MRAhyperparas = head(Psis, n = -2), fixedEffSD = Psis[length(Psis) - 1], errorSD = tail(Psis, n = 1))
     aList$logJointValue <- with(aList, expr = LogJointHyperMarginal(treePointer = gridPointer, MRAhyperparas = MRAhyperparas, fixedEffSD = fixedEffSD, errorSD = errorSD, MRAcovParasIGalphaBeta = MRAcovParasIGalphaBeta, FEmuVec = FEmuVec, fixedEffIGalphaBeta =  fixedEffIGalphaBeta, errorIGalphaBeta = errorIGalphaBeta, matern = matern, spaceNuggetSD = spaceNuggetSD, timeNuggetSD = timeNuggetSD))
     aList
   }
@@ -203,44 +199,44 @@ getIntegrationPointsAndValues <- function(optimObject, gridPointer, MRAcovParasI
   centerList <- vector(mode = 'list', length = 5000) # We should not need more than a few hundred points, so 5000 should be ok.
 
   centerList[[1]] <- getContainerElement(rep(0,numDims))
-  counter <- 2
-  previousValue <- centerList[[1]]
+  counter <- 1
+  # This explores the distribution strictly along the axes defining centers for exploration at points not on the axes.
   for (dimNumber in 1:numDims) {
     for (direction in c(-1, 1)) {
       currentZ <- rep(0, numDims)
       currentZ[dimNumber] <- stepSize*direction
       repeat {
-        centerList[[counter]] <- getContainerElement(currentZ)
         counter = counter + 1
-        if (abs(centerList[[counter]]$jointValue - previousValue) < lowerThreshold) break
+        centerList[[counter]] <- getContainerElement(currentZ)
+        # The following check compares the value at the peak of the distribution with that at the current location. Since values are on the log-scale, the criterion is multiplicative: if the log of the ratio of the two density values is greater than the threshold, it means there was a steep enough drop, and that the density at the point considered is low enough that it won't matter much in the computation of the normalizing constant.
+        if ((centerList[[1]]$logJointValue - centerList[[counter]]$logJointValue) > lowerThreshold) break
 
-        previousValue <- centerList[[counter]]$jointValue
-        currentZ[dimNumber] = currentZ[dimNumber] + direction*stepSize ;
+        currentZ[dimNumber] <- currentZ[dimNumber] + direction*stepSize
       }
     }
   }
   zMatrix <- t(sapply(centerList, `$`, "z"))
   containerList <- centerList
-
+  # The following explores the distribution at points not found on the axes.
   for (centerIndex in 2:length(centerList)) {
     for (dimNumber in 1:numDims) {
       for (direction in c(-1, 1)) {
         currentZ <- centerList[[centerIndex]]$z
-        previousValue <- centerList[[centerIndex]]$logJointValue
         repeat {
+
           currentZ[[dimNumber]] <- currentZ[[dimNumber]] + direction*stepSize
           # First, check if value is available
           rowNumber <- which(apply(zMatrix, MARGIN = 1, all.equal, currentZ))
           if (length(rowNumber) == 0) {
+            counter <- counter + 1
             containerElement <- getContainerElement(currentZ)
             containerList[[counter]] <- containerElement
             zMatrix <- rbind(zMatrix, currentZ)
-            counter <- counter + 1
           } else {
             containerElement <- containerList[[rowNumber]]$logJointValue
           }
-          if (abs(containerElement - previousValue) < lowerThreshold) break
-          previousValue <- containerElement
+
+          if ((centerList[[1]]$logJointValue - containerElement$logJointValue) > lowerThreshold) break
         }
       }
     }
