@@ -142,17 +142,17 @@ SEXP setupGridCpp(NumericVector responseValues, NumericMatrix spCoords, NumericV
 double LogJointHyperMarginal(SEXP treePointer, Rcpp::NumericVector MRAhyperparas,
          double fixedEffSD, double errorSD, Rcpp::List MRAcovParasIGalphaBeta,
          Rcpp::NumericVector FEmuVec, NumericVector fixedEffIGalphaBeta,
-         NumericVector errorIGalphaBeta, bool matern, double spaceNuggetSD, double timeNuggetSD) {
+         NumericVector errorIGalphaBeta, bool matern, double spaceNuggetSD, double timeNuggetSD,
+         bool recordFullConditional) {
   arma::mat posteriorMatrix ;
   double outputValue = 0 ;
 
   if (!(treePointer == NULL))
   {
     XPtr<AugTree> pointedTree(treePointer) ; // Becomes a regular pointer again.
-    // outputValue = pointedTree->ComputeJointPsiMarginalPropConstant(as<vec>(MRAhyperparas),
-    //                                              fixedEffSD, errorSD, hyperAlpha, hyperBeta) ;
+
     // ProfilerStart("/home/luc/Downloads/myprofile.log") ;
-    // The alpha's and beta's for the IG distribution of the hyperparameters do not change.
+    // The alpha's and beta's for the gamma distribution of the hyperparameters do not change.
     if (pointedTree->GetMRAcovParasIGalphaBeta().size() == 0) {
       std::vector<IGhyperParas> MRAalphaBeta ;
       for (auto & i : MRAcovParasIGalphaBeta) {
@@ -178,25 +178,9 @@ double LogJointHyperMarginal(SEXP treePointer, Rcpp::NumericVector MRAhyperparas
     pointedTree->SetErrorSD(errorSD) ;
     pointedTree->SetFixedEffSD(fixedEffSD) ;
     pointedTree->SetMRAcovParas(MRAhyperparas) ;
+    pointedTree->SetRecordFullConditional(recordFullConditional) ;
 
     outputValue = pointedTree->ComputeLogJointPsiMarginal() ;
-    // throw Rcpp::exception("Stop for now... \n") ;
-    // double sumTerm = 0.1 ;
-    // mat container(20, 20, fill::zeros) ;
-    // vec newMRAhyperparas = MRAhyperparas ;
-    // vec newMRAhyperparasSpace = linspace<vec>(MRAhyperparas.at(0), MRAhyperparas.at(0)+1, 20) ;
-    // vec newMRAhyperparasTime = linspace<vec>(MRAhyperparas.at(1), MRAhyperparas.at(1)+1, 20) ;
-    // for (uint i = 0 ; i < 20; i++) {
-    //   for (uint j = 0 ; j < 20; j++) {
-    //     newMRAhyperparas.at(0) = newMRAhyperparasSpace.at(i) ;
-    //     newMRAhyperparas.at(1) = newMRAhyperparasTime.at(j) ;
-    //     pointedTree->SetMRAcovParas(newMRAhyperparas) ;
-    //     container.at(i,j) = pointedTree->ComputeLogJointPsiMarginal() ;
-    //   }
-    // }
-    // container.save("/home/luc/Documents/logLikValues.info", raw_ascii) ;
-    // pointedTree->GetVertexVector().at(0)->GetKmatrixInverse()(0,0, size(5,5)).print("Root Kinverse: ") ;
-    // throw Rcpp::exception("Stop here... \n") ;
     // ProfilerStop() ;
   }
   else

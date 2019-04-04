@@ -73,6 +73,8 @@ public:
   void SetMatern(const bool matern) {
     m_matern = matern ;
   }
+  void SetRecordFullConditional(const bool recordIt) { m_recordFullConditional = recordIt ;}
+
   void CleanPredictionComponents() ;
   void CenterResponse() ;
   arma::sp_mat createHstar() ;
@@ -81,7 +83,8 @@ public:
 
   double ComputeLogJointPsiMarginal() ;
   // double ComputeJointPsiMarginalPropConstant(const arma::vec &, const double, const double, const double, const double) ;
-
+  arma::vec GetFullCondMean() { return m_FullCondMean ;}
+  arma::vec GetFullCondSDs() { return m_FullCondSDs ;}
   ~ AugTree() {
     deallocate_container(m_vertexVector) ;
     gsl_rng_free(m_randomNumGenerator) ;};
@@ -154,6 +157,9 @@ private:
   arma::vec m_MRAetaValues ;
   arma::vec m_Vstar ;
   arma::vec m_MRAvalues ;
+  arma::vec m_FullCondMean ;
+  arma::vec m_FullCondSDs ;
+  bool m_recordFullConditional{ false } ;
   std::vector<arma::mat *> getKmatricesInversePointers() {
     std::vector<arma::mat *> KmatrixInverseList ;
     for (auto & i : m_vertexVector) KmatrixInverseList.push_back(i->GetKmatrixInverseAddress()) ;
