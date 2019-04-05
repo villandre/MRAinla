@@ -1,6 +1,5 @@
 // [[Rcpp::depends(RcppGSL)]]
 // [[Rcpp::depends(RcppArmadillo)]]
-// [[Rcpp::depends(RcppEigen)]]
 
 #include <algorithm>
 #include <vector>
@@ -14,7 +13,6 @@
 
 #include <RcppArmadillo.h>
 #include <RcppGSL.h>
-#include <RcppEigen.h>
 
 #include "helper.h"
 

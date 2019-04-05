@@ -180,15 +180,47 @@ double LogJointHyperMarginal(SEXP treePointer, Rcpp::NumericVector MRAhyperparas
     pointedTree->SetMRAcovParas(MRAhyperparas) ;
     pointedTree->SetRecordFullConditional(recordFullConditional) ;
 
-    outputValue = pointedTree->ComputeLogJointPsiMarginal() ;
+    pointedTree->ComputeLogJointPsiMarginal() ;
     // ProfilerStop() ;
+    outputValue = pointedTree->GetLogJointPsiMarginal() ;
+    printf("Marginal joint Psi: %.4e \n \n \n", pointedTree->GetLogJointPsiMarginal()) ;
   }
   else
   {
     throw Rcpp::exception("Pointer to MRA grid is null." ) ;
   }
-  printf("Marginal joint Psi: %.4e \n \n \n", outputValue) ;
 
   return outputValue ;
 }
 
+// [[Rcpp::export]]
+
+Rcpp::NumericVector GetFullCondMean(SEXP treePointer) {
+  vec outputVec ;
+  if (!(treePointer == NULL))
+  {
+    XPtr<AugTree> pointedTree(treePointer) ; // Becomes a regular pointer again.
+    outputVec = pointedTree->GetFullCondMean() ;
+  }
+  else
+  {
+    throw Rcpp::exception("Pointer to MRA grid is null." ) ;
+  }
+  return Rcpp::wrap(outputVec) ;
+}
+
+// [[Rcpp::export]]
+
+Rcpp::NumericVector GetFullCondSDs(SEXP treePointer) {
+  vec outputVec ;
+  if (!(treePointer == NULL))
+  {
+    XPtr<AugTree> pointedTree(treePointer) ; // Becomes a regular pointer again.
+    outputVec = pointedTree->GetFullCondSDs() ;
+  }
+  else
+  {
+    throw Rcpp::exception("Pointer to MRA grid is null." ) ;
+  }
+  return Rcpp::wrap(outputVec) ;
+}

@@ -10,7 +10,6 @@
 using namespace Rcpp ;
 using namespace arma ;
 using namespace MRAinla ;
-using namespace Eigen ;
 
 struct gridPair{
   AugTree * grid ;
@@ -39,6 +38,8 @@ AugTree::AugTree(uint & M, vec & lonRange, vec & latRange, vec & timeRange, vec 
     m_vertexVector.at(i)->SetNodeId(i) ;
     m_numKnots += m_vertexVector.at(i)->GetKnotsCoor().timeCoords.size() ;
   }
+  m_FullCondMean = vec(m_numKnots + m_fixedEffParameters.size(), fill::zeros) ;
+  m_FullCondSDs = vec(m_numKnots + m_fixedEffParameters.size(), fill::zeros) ;
 }
 
 void AugTree::BuildTree(const uint & minObsForTimeSplit)
@@ -565,7 +566,7 @@ void AugTree::ComputeLogFCandLogCDandDataLL() {
 //   m_globalLogLik = logDensity ;
 // }
 
-double AugTree::ComputeLogJointPsiMarginal() {
+void AugTree::ComputeLogJointPsiMarginal() {
 
   ComputeLogPriors() ;
   // if (m_recomputeMRAlogLik) {
@@ -576,7 +577,7 @@ double AugTree::ComputeLogJointPsiMarginal() {
 
   printf("Observations log-lik: %.4e \n Log-prior: %.4e \n Log-Cond. dist.: %.4e \n Log-full cond.: %.4e \n \n \n",
          m_globalLogLik, m_logPrior, m_logCondDist, m_logFullCond) ;
-  return ( m_globalLogLik + m_logPrior + m_logCondDist - m_logFullCond) ;
+  m_logJointPsiMarginal = m_globalLogLik + m_logPrior + m_logCondDist - m_logFullCond ;
 }
 
 // This inversion is based on recursive partitioning of the Q matrix. It is based on the observation that it is

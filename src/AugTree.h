@@ -39,6 +39,7 @@ public:
   // arma::vec GetCovParameters() {return m_covParameters ;}
   std::vector<IGhyperParas> GetMRAcovParasIGalphaBeta() { return m_MRAcovParasIGalphaBeta ;}
   int GetM() { return m_M ;}
+  double GetLogJointPsiMarginal() { return m_logJointPsiMarginal ;}
 
   void SetRNG(gsl_rng * myRNG) { m_randomNumGenerator = myRNG ;}
   void IncrementVstar(const double & increment) {m_Vstar += increment ;}
@@ -81,7 +82,7 @@ public:
   arma::sp_mat CombineFEinvAndKinvMatrices() ;
   arma::sp_mat createQ() ;
 
-  double ComputeLogJointPsiMarginal() ;
+  void ComputeLogJointPsiMarginal() ;
   // double ComputeJointPsiMarginalPropConstant(const arma::vec &, const double, const double, const double, const double) ;
   arma::vec GetFullCondMean() { return m_FullCondMean ;}
   arma::vec GetFullCondSDs() { return m_FullCondSDs ;}
@@ -102,6 +103,7 @@ private:
   double m_logPrior{ 0 } ;
   double m_logCondDist{ 0 } ;
   double m_logFullCond{ 0 } ;
+  double m_logJointPsiMarginal{ 0 } ;
   int m_numKnots ;
   bool m_matern ;
   double m_spaceNuggetSD ;

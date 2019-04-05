@@ -2,7 +2,6 @@
 // Generator token: 10BE3573-1514-4C36-9D1C-5A225CD40393
 
 #include <RcppArmadillo.h>
-#include <RcppEigen.h>
 #include <Rcpp.h>
 
 using namespace Rcpp;
@@ -28,8 +27,8 @@ BEGIN_RCPP
 END_RCPP
 }
 // LogJointHyperMarginal
-double LogJointHyperMarginal(SEXP treePointer, Rcpp::NumericVector MRAhyperparas, double fixedEffSD, double errorSD, Rcpp::List MRAcovParasIGalphaBeta, Rcpp::NumericVector FEmuVec, NumericVector fixedEffIGalphaBeta, NumericVector errorIGalphaBeta, bool matern, double spaceNuggetSD, double timeNuggetSD);
-RcppExport SEXP _MRAinla_LogJointHyperMarginal(SEXP treePointerSEXP, SEXP MRAhyperparasSEXP, SEXP fixedEffSDSEXP, SEXP errorSDSEXP, SEXP MRAcovParasIGalphaBetaSEXP, SEXP FEmuVecSEXP, SEXP fixedEffIGalphaBetaSEXP, SEXP errorIGalphaBetaSEXP, SEXP maternSEXP, SEXP spaceNuggetSDSEXP, SEXP timeNuggetSDSEXP) {
+double LogJointHyperMarginal(SEXP treePointer, Rcpp::NumericVector MRAhyperparas, double fixedEffSD, double errorSD, Rcpp::List MRAcovParasIGalphaBeta, Rcpp::NumericVector FEmuVec, NumericVector fixedEffIGalphaBeta, NumericVector errorIGalphaBeta, bool matern, double spaceNuggetSD, double timeNuggetSD, bool recordFullConditional);
+RcppExport SEXP _MRAinla_LogJointHyperMarginal(SEXP treePointerSEXP, SEXP MRAhyperparasSEXP, SEXP fixedEffSDSEXP, SEXP errorSDSEXP, SEXP MRAcovParasIGalphaBetaSEXP, SEXP FEmuVecSEXP, SEXP fixedEffIGalphaBetaSEXP, SEXP errorIGalphaBetaSEXP, SEXP maternSEXP, SEXP spaceNuggetSDSEXP, SEXP timeNuggetSDSEXP, SEXP recordFullConditionalSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -44,14 +43,39 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< bool >::type matern(maternSEXP);
     Rcpp::traits::input_parameter< double >::type spaceNuggetSD(spaceNuggetSDSEXP);
     Rcpp::traits::input_parameter< double >::type timeNuggetSD(timeNuggetSDSEXP);
-    rcpp_result_gen = Rcpp::wrap(LogJointHyperMarginal(treePointer, MRAhyperparas, fixedEffSD, errorSD, MRAcovParasIGalphaBeta, FEmuVec, fixedEffIGalphaBeta, errorIGalphaBeta, matern, spaceNuggetSD, timeNuggetSD));
+    Rcpp::traits::input_parameter< bool >::type recordFullConditional(recordFullConditionalSEXP);
+    rcpp_result_gen = Rcpp::wrap(LogJointHyperMarginal(treePointer, MRAhyperparas, fixedEffSD, errorSD, MRAcovParasIGalphaBeta, FEmuVec, fixedEffIGalphaBeta, errorIGalphaBeta, matern, spaceNuggetSD, timeNuggetSD, recordFullConditional));
+    return rcpp_result_gen;
+END_RCPP
+}
+// GetFullCondMean
+Rcpp::NumericVector GetFullCondMean(SEXP treePointer);
+RcppExport SEXP _MRAinla_GetFullCondMean(SEXP treePointerSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< SEXP >::type treePointer(treePointerSEXP);
+    rcpp_result_gen = Rcpp::wrap(GetFullCondMean(treePointer));
+    return rcpp_result_gen;
+END_RCPP
+}
+// GetFullCondSDs
+Rcpp::NumericVector GetFullCondSDs(SEXP treePointer);
+RcppExport SEXP _MRAinla_GetFullCondSDs(SEXP treePointerSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< SEXP >::type treePointer(treePointerSEXP);
+    rcpp_result_gen = Rcpp::wrap(GetFullCondSDs(treePointer));
     return rcpp_result_gen;
 END_RCPP
 }
 
 static const R_CallMethodDef CallEntries[] = {
     {"_MRAinla_setupGridCpp", (DL_FUNC) &_MRAinla_setupGridCpp, 10},
-    {"_MRAinla_LogJointHyperMarginal", (DL_FUNC) &_MRAinla_LogJointHyperMarginal, 11},
+    {"_MRAinla_LogJointHyperMarginal", (DL_FUNC) &_MRAinla_LogJointHyperMarginal, 12},
+    {"_MRAinla_GetFullCondMean", (DL_FUNC) &_MRAinla_GetFullCondMean, 1},
+    {"_MRAinla_GetFullCondSDs", (DL_FUNC) &_MRAinla_GetFullCondSDs, 1},
     {NULL, NULL, 0}
 };
 
