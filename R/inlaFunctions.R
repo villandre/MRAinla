@@ -60,8 +60,8 @@ MRA_INLA <- function(spacetimeData, errorSDstart, fixedEffSDstart, MRAhyperparas
     warning("Non-positive definite Hessian matrix... \n \n")
   }
   optimResult$hessian <- -hessianMat # The "-" is necessary because we performed a minimisation rather than a maximisation.
-  hyperparaList <- getIntegrationPointsAndValues(optimObject = optimResult, gridPointer = gridPointer$gridPointer, MRAcovParasIGalphaBeta = MRAcovParasIGalphaBeta, FEmuVec = FEmuVec, fixedEffIGalphaBeta = fixedEffIGalphaBeta, errorIGalphaBeta = errorIGalphaBeta, stepSize = stepSize, lowerThreshold = lowerThreshold, matern = maternCov)
-  # load("~/Documents/hyperparaList.Rdata")
+  # hyperparaList <- getIntegrationPointsAndValues(optimObject = optimResult, gridPointer = gridPointer$gridPointer, MRAcovParasIGalphaBeta = MRAcovParasIGalphaBeta, FEmuVec = FEmuVec, fixedEffIGalphaBeta = fixedEffIGalphaBeta, errorIGalphaBeta = errorIGalphaBeta, stepSize = stepSize, lowerThreshold = lowerThreshold, matern = maternCov)
+  load("~/Documents/hyperparaList.Rdata")
   discreteLogJointValues <- sapply(hyperparaList, '[[', "logJointValue")
   maxLogJointValues <- max(discreteLogJointValues)
   logStandardisingConstant <- maxLogJointValues + log(sum(exp(discreteLogJointValues - maxLogJointValues)))
@@ -73,21 +73,40 @@ MRA_INLA <- function(spacetimeData, errorSDstart, fixedEffSDstart, MRAhyperparas
   })
   # # Now, we obtain the marginal distribution of all mean parameters.
   hyperMarginalMoments <- ComputeHyperMarginalMoments(hyperparaList)
-  list(hyperMarginalMoments = hyperMarginalMoments)
+  meanMarginalMoments <- ComputeMeanMarginalMoments(hyperparaList)
+  list(hyperMarginalMoments = hyperMarginalMoments, meanMarginalMoments = meanMarginalMoments)
 }
 
 ComputeHyperMarginalMoments <- function(hyperparaList) {
   psiAndMargDistMatrix <- t(sapply(hyperparaList, function(x) c(x$MRAhyperparas, x$fixedEffSD, x$errorSD, exp(x$logJointValue))))
-  paraMoments <- t(sapply(1:(ncol(psiAndMargDistMatrix) - 1), FUN = function(hyperparaIndex) {
+  funToGetParaMoments <- function(hyperparaIndex) {
     variableValues <- sort(unique(psiAndMargDistMatrix[, hyperparaIndex]))
     massValues <- do.call("c", by(psiAndMargDistMatrix, INDICES = variableValues, FUN = function(block) sum(block[, ncol(block)]), simplify = FALSE))
     meanValue <- sum(variableValues * massValues)
     sdValue <- sqrt(sum(variableValues^2 * massValues) - meanValue^2)
     c(mean = meanValue, StdDev = sdValue)
-  }))
+  }
+  paraMoments <- t(sapply(1:(ncol(psiAndMargDistMatrix) - 1), FUN = funToGetParaMoments))
 
   colnames(paraMoments) <- c("Mean", "StdDev")
   as.data.frame(paraMoments)
+}
+
+ComputeMeanMarginalMoments <- function(hyperparaList) {
+  numMeanParas <- length(hyperparaList[[1]]$FullCondMean)
+  weights <- exp(sapply(hyperparaList, "[[", "logJointValue"))
+  marginalMeans <- sapply(1:numMeanParas, function(paraIndex) {
+    meanVector <- sapply(hyperparaList, function(x) x$FullCondMean[[paraIndex]])
+    sum(meanVector * weights)
+  })
+  marginalSecondMoments <- sapply(1:numMeanParas, function(paraIndex) {
+    meanVector <- sapply(hyperparaList, function(x) x$FullCondMean[[paraIndex]])
+    sdVector <- sapply(hyperparaList, function(x) x$FullCondSDs[[paraIndex]])
+    secondMomentVec <- sdVector^2 + meanVector^2
+    sum(secondMomentVec * weights)
+  })
+  marginalSDs <- marginalSecondMoments - marginalMeans^2
+  data.frame(Mean = marginalMeans, StdDev = marginalSDs)
 }
 
 covFunctionBiMatern <- function(rangeParaSpace = 10, rangeParaTime = 10) {

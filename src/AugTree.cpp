@@ -870,15 +870,15 @@ arma::vec AugTree::ComputeFullConditionalMean(const arma::vec & bVec, const arma
   vec meanVec = join_cols<vec>(firstElement, secondElement) ;
 
   if (m_recordFullConditional) {
-    m_FullCondSDs.set_size(Qmat.n_rows) ;
-    m_FullCondSDs.subvec(0, size(compositeInverted.diag())) = sqrt(compositeInverted) ;
+    vec firstDiag = sqrt(compositeInverted.diag()) ;
+    m_FullCondSDs.subvec(0, size(firstDiag)) = firstDiag ;
 
     for (uint i = 0 ; i < Dinverted.n_rows ; i++) {
       sp_mat firstExp = Bmatrix * Dinverted.col(i) ;
       mat secondExp = compositeInverted * conv_to<mat>::from(firstExp) ;
       mat thirdExp = trans(Bmatrix) * secondExp ;
       mat finalExp = Dinverted.col(i) + Dinverted * thirdExp ;
-      m_FullCondSDs.at(i + compositeInverted.n_rows) = std::sqrt(finalExp.at(i)) ;
+      m_FullCondSDs.at(i + compositeInverted.n_rows) = std::sqrt(finalExp(i, 0)) ;
     }
 
     m_FullCondMean = meanVec ;
