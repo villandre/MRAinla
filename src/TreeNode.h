@@ -122,6 +122,10 @@ public:
   virtual arma::mat GetKmatrixInverse()=0 ;
   virtual arma::vec GetOmega(const uint &)=0 ;
   virtual void SetUncorrSD(const double &)=0 ;
+  virtual arma::mat GetUpred(const uint & l)=0 ;
+  virtual void SetPredictLocations(const inputdata &)=0 ;
+  virtual arma::uvec GetPredIndices()=0 ;
+  virtual void computeUpred(const arma::vec &, const spatialcoor &, const bool, const double &, const double &)=0 ;
 
   virtual void genRandomKnots(inputdata &, const uint &, const gsl_rng *) = 0;
 
@@ -151,7 +155,7 @@ public:
   void completeBknots(const arma::vec &, const uint) ;
   std::vector<arma::mat> GetBknots() const { return m_bKnots ;}
 
-  arma::uvec GetPredictLocIndices() const {return m_predictLocIndices ;}
+
   void clearAtildeList() {m_AtildeList.clear() ;}
   void clearOmegaTilde() {m_omegaTilde.clear() ;}
 
@@ -216,7 +220,6 @@ protected:
   // For prediction
   void computeBknots() ;
 
-  arma::uvec m_predictLocIndices ;
   std::vector<arma::mat> m_bKnots ;
 };
 }

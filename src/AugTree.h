@@ -76,6 +76,12 @@ public:
   }
   void SetRecordFullConditional(const bool recordIt) { m_recordFullConditional = recordIt ;}
 
+  void SetPredictData(const arma::mat & spCoords, const arma::vec & timeValues, const arma::mat covariates) {
+    arma::vec placeholder(covariates.n_rows, arma::fill::zeros) ;
+    inputdata dataObject(placeholder, spCoords, timeValues, covariates) ;
+    m_predictData = dataObject ;
+  }
+
   void CleanPredictionComponents() ;
   void CenterResponse() ;
   arma::sp_mat createHstar() ;
@@ -86,6 +92,10 @@ public:
   // double ComputeJointPsiMarginalPropConstant(const arma::vec &, const double, const double, const double, const double) ;
   arma::vec GetFullCondMean() { return m_FullCondMean ;}
   arma::vec GetFullCondSDs() { return m_FullCondSDs ;}
+
+  arma::sp_mat ComputeHpred(const arma::mat &, const arma::vec &, const arma::mat &) ;
+  arma::vec ComputeEvar(const arma::sp_mat &) ;
+
   ~ AugTree() {
     deallocate_container(m_vertexVector) ;
     gsl_rng_free(m_randomNumGenerator) ;};
@@ -146,12 +156,13 @@ private:
   void computeU() ;
   void computeD() ;
 
+  std::vector<TreeNode *> GetLevel(const uint) ;
+
   // Prediction functions
 
-  std::vector<TreeNode *> GetLevel(const uint) ;
-  void distributePredictionData(const spatialcoor &) ;
+  void distributePredictionData() ;
   void computeBtildeInTips() ;
-  spatialcoor m_predictLocations ;
+  inputdata m_predictData ;
   arma::uvec m_obsOrderForFmat ;
 
   // INLA functions
@@ -161,6 +172,7 @@ private:
   arma::vec m_MRAvalues ;
   arma::vec m_FullCondMean ;
   arma::vec m_FullCondSDs ;
+  arma::sp_mat m_FullCondPrecision{ 0 } ;
   bool m_recordFullConditional{ false } ;
   std::vector<arma::mat *> getKmatricesInversePointers() {
     std::vector<arma::mat *> KmatrixInverseList ;
@@ -172,15 +184,15 @@ private:
     for (auto & i : m_vertexVector) KmatrixList.push_back(i->GetKmatrixAddress()) ;
     return KmatrixList ;
   }
-  arma::sp_mat createFmatrix() ;
-  arma::sp_mat createFmatrixAlt() ;
+  // arma::sp_mat createFmatrix() ;
+  arma::sp_mat createFmatrixAlt(const bool) ;
   arma::vec optimJointHyperMarg(const arma::vec &, const double, const double, const double, const double) ;
-  double logDeterminantQmat(const arma::sp_mat & Qmat) ;
+  double logDeterminantQmat() ;
   arma::uvec extractBlockIndicesFromLowerRight(const arma::sp_mat &) ;
   // void invFromDecomposition(const arma::sp_mat &, const arma::sp_mat &, const arma::sp_mat &, arma::sp_mat *,
   //                                const arma::uvec &) ;
-  double logDeterminantFullConditional(const arma::sp_mat &) ;
-  arma::vec ComputeFullConditionalMean(const arma::vec &, const arma::sp_mat &) ;
+  double logDeterminantFullConditional() ;
+  arma::vec ComputeFullConditionalMean(const arma::vec &) ;
   template <typename MatrixType>
   inline typename MatrixType::Scalar logdet(const MatrixType& M, bool use_cholesky = false) ;
 

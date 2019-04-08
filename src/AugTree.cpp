@@ -305,13 +305,7 @@ void AugTree::computeD() {
 //   return distParasFromEachZone ;
 // }
 
-// void AugTree::distributePredictionData(const spatialcoor & predictLocations) {
-//   m_predictLocations = predictLocations ;
-//
-//   for (auto & i : m_vertexVector) {
-//     i->SetPredictLocations(predictLocations) ;
-//   }
-// }
+
 //
 // void AugTree::computeBtildeInTips() {
 //   std::vector<std::vector<TreeNode *>> nodesAtLevels(m_M+1) ;
@@ -375,19 +369,22 @@ arma::sp_mat AugTree::CombineFEinvAndKinvMatrices() {
   return FEinvAndKinvMatrices ;
 }
 
-arma::sp_mat AugTree::createHstar() {
-  sp_mat Fmatrix = createFmatrixAlt() ;
+// arma::sp_mat AugTree::createHstar() {
+//   sp_mat Fmatrix = createFmatrixAlt() ;
+//
+//   vec intercept = ones<vec>(m_dataset.covariateValues.n_rows) ;
+//   mat covarCopy = m_dataset.covariateValues ;
+//   covarCopy.insert_cols(0, intercept) ;
+//   sp_mat incrementedCovar = conv_to<sp_mat>::from(covarCopy) ;
+//   sp_mat Hstar = join_rows(conv_to<sp_mat>::from(incrementedCovar), Fmatrix) ;
+//   return Hstar ;
+// }
 
-  vec intercept = ones<vec>(m_dataset.covariateValues.n_rows) ;
-  mat covarCopy = m_dataset.covariateValues ;
-  covarCopy.insert_cols(0, intercept) ;
-  sp_mat incrementedCovar = conv_to<sp_mat>::from(covarCopy) ;
-  sp_mat Hstar = join_rows(conv_to<sp_mat>::from(incrementedCovar), Fmatrix) ;
-  return Hstar ;
-}
-
-arma::sp_mat AugTree::createFmatrixAlt() {
+arma::sp_mat AugTree::createFmatrixAlt(const bool predictionMode) {
   int numObs = m_dataset.spatialCoords.n_rows ;
+  if (predictionMode) {
+    numObs = m_predictData.spatialCoords.n_rows ;
+  }
   sp_mat Fmat(numObs, m_numKnots) ;
   std::vector<uvec> FmatNodeOrder(m_M) ;
   uvec FmatObsOrder(numObs, fill::zeros) ;
@@ -426,16 +423,30 @@ arma::sp_mat AugTree::createFmatrixAlt() {
 
   for (auto & nodeToProcess : tipNodes) {
 
-    FmatObsOrder.subvec(rowIndex, size(nodeToProcess->GetObsInNode())) = nodeToProcess->GetObsInNode() ;
+    bool test = nodeToProcess->GetObsInNode().size() > 0 ;
 
-    std::vector<TreeNode *> brickList = nodeToProcess->getAncestors() ;
-
-    for (uint resolution = 0; resolution <= m_M; resolution++) {
-      uint nodeId = brickList.at(resolution)->GetNodeId() ;
-      mat matToAdd = nodeToProcess->GetB(resolution) ;
-      Fmat(rowIndex, colIndicesPerNodeId.at(nodeId), size(matToAdd)) = matToAdd ;
+    if (predictionMode) {
+      test = nodeToProcess->GetPredIndices().size() > 0 ;
     }
-    rowIndex += nodeToProcess->GetB(0).n_rows ; // The B(0), B(1), ..., B(M) all have the same number of rows.
+
+    if (test) {
+      FmatObsOrder.subvec(rowIndex, size(nodeToProcess->GetObsInNode())) = nodeToProcess->GetObsInNode() ;
+
+      std::vector<TreeNode *> brickList = nodeToProcess->getAncestors() ;
+
+      for (uint resolution = 0; resolution <= m_M; resolution++) {
+        uint nodeId = brickList.at(resolution)->GetNodeId() ;
+        mat matToAdd ;
+        if (predictionMode) {
+          matToAdd = nodeToProcess->GetUpred(resolution) ;
+        } else {
+          matToAdd = nodeToProcess->GetB(resolution) ;
+        }
+
+        Fmat(rowIndex, colIndicesPerNodeId.at(nodeId), size(matToAdd)) = matToAdd ;
+      }
+      rowIndex += nodeToProcess->GetB(0).n_rows ; // The B(0), B(1), ..., B(M) all have the same number of rows.
+    }
   }
 
   m_obsOrderForFmat = FmatObsOrder ;
@@ -501,7 +512,7 @@ void AugTree::ComputeLogFCandLogCDandDataLL() {
 
   sp_mat SigmaFEandEtaInv = CombineFEinvAndKinvMatrices() ;
 
-  sp_mat Fmatrix = createFmatrixAlt() ;
+  sp_mat Fmatrix = createFmatrixAlt(false) ;
 
   mat transIncrementedCovar = trans(join_rows(ones<vec>(n), m_dataset.covariateValues)) ;
 
@@ -514,13 +525,13 @@ void AugTree::ComputeLogFCandLogCDandDataLL() {
 
   sp_mat TepsilonInverse = std::pow(m_errorSD, -2) * eye<sp_mat>(n, n) ;
 
-  sp_mat Qmat = SigmaFEandEtaInv + trans(Hstar) * TepsilonInverse * Hstar ;
+  m_FullCondPrecision = SigmaFEandEtaInv + trans(Hstar) * TepsilonInverse * Hstar ;
 
   vec responsesReshuffled = m_dataset.responseValues.elem(m_obsOrderForFmat) ;
 
   vec bVec = trans(trans(responsesReshuffled) * TepsilonInverse * Hstar) ;
 
-  vec updatedMean = ComputeFullConditionalMean(bVec, Qmat) ;
+  vec updatedMean = ComputeFullConditionalMean(bVec) ;
 
   m_Vstar = updatedMean ;
 
@@ -529,7 +540,7 @@ void AugTree::ComputeLogFCandLogCDandDataLL() {
   vec fixedEffMeans = updatedMean.head(m_fixedEffParameters.size()) ;
   SetFixedEffParameters(fixedEffMeans) ;
 
-  double logDetQmat = logDeterminantQmat(Qmat) ;
+  double logDetQmat = logDeterminantQmat() ;
 
   // sp_mat Kmatrices = createSparseMatrix(KmatrixList) ;
 
@@ -584,15 +595,15 @@ void AugTree::ComputeLogJointPsiMarginal() {
 // possible to form block-diagonal matrices on the diagonal which can be easily inverted.
 // The challenge in inverting Qmat was the very heavy memory burden.
 // This function involves much smaller matrices, which will make the operations easier to handle.
-double AugTree::logDeterminantQmat(const sp_mat & Qmat) {
-  uvec DmatrixBlockIndices = extractBlockIndicesFromLowerRight(Qmat) ;
+double AugTree::logDeterminantQmat() {
+  uvec DmatrixBlockIndices = extractBlockIndicesFromLowerRight(m_FullCondPrecision) ;
 
-  int numRowsD = Qmat.n_rows - DmatrixBlockIndices(0) ;
+  int numRowsD = m_FullCondPrecision.n_rows - DmatrixBlockIndices(0) ;
 
   int shift = DmatrixBlockIndices.at(0) ;
 
   uvec shiftedBlockIndices = DmatrixBlockIndices - shift ;
-  sp_mat Dinv = invertSymmBlockDiag(Qmat(DmatrixBlockIndices.at(0),
+  sp_mat Dinv = invertSymmBlockDiag(m_FullCondPrecision(DmatrixBlockIndices.at(0),
                                          DmatrixBlockIndices.at(0),
                                          size(numRowsD, numRowsD)),
                                          shiftedBlockIndices) ;
@@ -601,7 +612,7 @@ double AugTree::logDeterminantQmat(const sp_mat & Qmat) {
     double value = 0 ;
     double sign = 0 ;
     uint matSize = DmatrixBlockIndices.at(i+1) - DmatrixBlockIndices.at(i) ;
-    log_det(value, sign, mat(Qmat(DmatrixBlockIndices.at(i), DmatrixBlockIndices.at(i), size(matSize, matSize)))) ;
+    log_det(value, sign, mat(m_FullCondPrecision(DmatrixBlockIndices.at(i), DmatrixBlockIndices.at(i), size(matSize, matSize)))) ;
     if (sign < 0) {
       throw Rcpp::exception("Error in logDeterminantQmat! sign should be positive. \n") ;
     }
@@ -609,8 +620,8 @@ double AugTree::logDeterminantQmat(const sp_mat & Qmat) {
   }
   double logDeterminantComposite, sign1 ;
   uint AmatrixSize = DmatrixBlockIndices.at(0) ;
-  sp_mat compositeMat = Qmat(0, 0, size(AmatrixSize, AmatrixSize)) -
-    Qmat(0, AmatrixSize, size(AmatrixSize, numRowsD)) * Dinv * Qmat(AmatrixSize, 0, size(numRowsD, AmatrixSize)) ;
+  sp_mat compositeMat = m_FullCondPrecision(0, 0, size(AmatrixSize, AmatrixSize)) -
+    m_FullCondPrecision(0, AmatrixSize, size(AmatrixSize, numRowsD)) * Dinv * m_FullCondPrecision(AmatrixSize, 0, size(numRowsD, AmatrixSize)) ;
 
   log_det(logDeterminantComposite, sign1, mat(compositeMat)) ;
   if (sign1 < 0) {
@@ -836,19 +847,19 @@ uvec AugTree::extractBlockIndicesFromLowerRight(const arma::sp_mat & symmSparseM
 //   return optimalParas ;
 // }
 
-arma::vec AugTree::ComputeFullConditionalMean(const arma::vec & bVec, const arma::sp_mat & Qmat) {
+arma::vec AugTree::ComputeFullConditionalMean(const arma::vec & bVec) {
 
-  uvec blockIndices = extractBlockIndicesFromLowerRight(Qmat) ;
+  uvec blockIndices = extractBlockIndicesFromLowerRight(m_FullCondPrecision) ;
 
   uint DblockLeftIndex = blockIndices.at(0) ;
-  uint sizeD = Qmat.n_cols - DblockLeftIndex ;
-  uint sizeA = Qmat.n_cols - sizeD ;
+  uint sizeD = m_FullCondPrecision.n_cols - DblockLeftIndex ;
+  uint sizeA = m_FullCondPrecision.n_cols - sizeD ;
   vec b1 = bVec.subvec(0, sizeA - 1) ;
   vec b2 = bVec.subvec(sizeA, bVec.size() - 1) ;
-  sp_mat Bmatrix = Qmat(0, sizeA, size(sizeA, sizeD)) ;
-  sp_mat Amatrix = Qmat(0, 0, size(sizeA, sizeA)) ;
+  sp_mat Bmatrix = m_FullCondPrecision(0, sizeA, size(sizeA, sizeD)) ;
+  sp_mat Amatrix = m_FullCondPrecision(0, 0, size(sizeA, sizeA)) ;
 
-  sp_mat Dinverted = invertSymmBlockDiag(Qmat(sizeA, sizeA, size(sizeD, sizeD)), blockIndices) ;
+  sp_mat Dinverted = invertSymmBlockDiag(m_FullCondPrecision(sizeA, sizeA, size(sizeD, sizeD)), blockIndices) ;
 
   mat secondTermInside = conv_to<mat>::from(Bmatrix * Dinverted * trans(Bmatrix)) ;
 
@@ -885,4 +896,58 @@ arma::vec AugTree::ComputeFullConditionalMean(const arma::vec & bVec, const arma
   }
 
   return meanVec ;
+}
+
+sp_mat AugTree::ComputeHpred(const mat & spCoords, const vec & time, const mat & covariateMatrix) {
+  SetPredictData(spCoords, time, covariateMatrix) ;
+  std::vector<TreeNode *> tipNodes = GetLevelNodes(m_M) ;
+
+  for (auto & i : tipNodes) {
+    i->SetPredictLocations(m_predictData) ;
+    uvec predictionsInLeaf = i->GetPredIndices() ;
+    i->computeUpred(m_MRAcovParas, m_predictData, m_matern, m_spaceNuggetSD, m_timeNuggetSD) ;
+  }
+  sp_mat FmatrixPred = createFmatrixAlt(true) ;
+  mat incrementedCovariate = join_rows(vec(covariateMatrix.n_rows, fill::ones), covariateMatrix) ;
+  sp_mat HmatrixPred = join_rows(conv_to<sp_mat>::from(incrementedCovariate), FmatrixPred) ;
+  return HmatrixPred ;
+}
+
+arma::vec AugTree::ComputeEvar(const arma::sp_mat & HmatPred) {
+  uvec blockIndices = extractBlockIndicesFromLowerRight(m_FullCondPrecision) ;
+  double errorVar = std::pow(m_errorSD, 2) ;
+  vec EvarValues(HmatPred.n_rows, fill::zeros) ;
+
+  uint DblockLeftIndex = blockIndices.at(0) ;
+  uint sizeD = m_FullCondPrecision.n_cols - DblockLeftIndex ;
+  uint sizeA = m_FullCondPrecision.n_cols - sizeD ;
+  sp_mat Bmatrix = m_FullCondPrecision(0, sizeA, size(sizeA, sizeD)) ;
+  sp_mat Amatrix = m_FullCondPrecision(0, 0, size(sizeA, sizeA)) ;
+  sp_mat Dinverted = invertSymmBlockDiag(m_FullCondPrecision(sizeA, sizeA, size(sizeD, sizeD)), blockIndices) ;
+  mat secondTermInside = conv_to<mat>::from(Bmatrix * Dinverted * trans(Bmatrix)) ;
+  mat compositeInverted = inv(Amatrix - secondTermInside) ;
+
+  vec bVec(HmatPred.n_cols, fill::zeros), b1, b2 ;
+
+  for (uint i = 0 ; i < HmatPred.n_rows ; i++) {
+    bVec = conv_to<vec>::from(conv_to<mat>::from(HmatPred.row(i))) ;
+    b1 = bVec.subvec(0, sizeA - 1) ;
+    b2 = bVec.subvec(sizeA, bVec.size() - 1) ;
+    sp_mat firstElementSecondTerm = Dinverted * conv_to<sp_mat>::from(b2) ;
+    firstElementSecondTerm = Bmatrix * firstElementSecondTerm ;
+    firstElementSecondTerm = compositeInverted * firstElementSecondTerm ;
+    vec firstElementFirstTerm = compositeInverted * b1 ;
+    vec firstElement =  trans(b1) * (firstElementFirstTerm - firstElementSecondTerm) ;
+
+    vec secondElementFirstTerm = trans(Bmatrix) * firstElementFirstTerm ;
+    secondElementFirstTerm = -Dinverted * secondElementFirstTerm ;
+    sp_mat secondElementSecondTerm = trans(Bmatrix) * firstElementSecondTerm ;
+    secondElementSecondTerm = Dinverted * secondElementSecondTerm ;
+    secondElementSecondTerm = Dinverted * b2 + secondElementSecondTerm ;
+    vec secondElement = trans(b2) * (secondElementFirstTerm + secondElementSecondTerm) ;
+
+    vec meanVec = join_cols<vec>(firstElement, secondElement) + errorVar;
+    EvarValues.at(i) = meanVec.at(0) ;
+  }
+  return EvarValues ;
 }

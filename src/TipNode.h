@@ -79,6 +79,11 @@ public:
   void SetUncorrSD(const double & sd) {
     m_uncorrSD = sd ;
   }
+  arma::mat GetUpred(const uint & l) { return m_UmatList.at(l) ;} ;
+
+  void SetPredictLocations(const inputdata &) ;
+  arma::uvec GetPredIndices() { return m_predsInNode ;}
+  void computeUpred(const arma::vec &, const spatialcoor &, const bool, const double &, const double &) ;
 
   void genRandomKnots(inputdata & dataset, const uint & numKnots, const gsl_rng * RNG) {
     m_knotsCoor = spatialcoor(dataset.spatialCoords.rows(m_obsInNode),
@@ -100,19 +105,20 @@ protected:
   arma::mat m_SigmaInverse ;
   double m_uncorrSD ;
 
+
   // Prediction components (should probably be freed once computations are done)
 
-  void computeVpred(const arma::vec &, const spatialcoor &) ;
-  void computeUpred(const arma::vec &, const spatialcoor &) ;
+  // void computeVpred(const arma::vec &, const spatialcoor &) ;
   arma::mat GetLM() { return m_UmatList.at(m_depth) ;}
-  void computeDeltaTildeParas(const inputdata &) ;
-  void recurseBtilde(const uint, const uint) ;
+  // void computeDeltaTildeParas(const inputdata &) ;
+  // void recurseBtilde(const uint, const uint) ;
+  arma::uvec m_predsInNode ;
 
-  arma::mat m_V ;
+  // arma::mat m_V ;
   std::vector<arma::mat> m_UmatList ;
-  arma::mat m_covMatrixPredict ;
-  GaussDistParas m_deltaTilde ;
-  std::vector<std::vector<arma::mat>> m_Btilde ;
-  std::vector<arma::mat> m_bPred ;
+  // arma::mat m_covMatrixPredict ;
+  // GaussDistParas m_deltaTilde ;
+  // std::vector<std::vector<arma::mat>> m_Btilde ;
+  // std::vector<arma::mat> m_bPred ;
 };
 }

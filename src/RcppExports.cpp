@@ -49,7 +49,7 @@ BEGIN_RCPP
 END_RCPP
 }
 // GetFullCondMean
-Rcpp::NumericVector GetFullCondMean(SEXP treePointer);
+arma::vec GetFullCondMean(SEXP treePointer);
 RcppExport SEXP _MRAinla_GetFullCondMean(SEXP treePointerSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
@@ -60,7 +60,7 @@ BEGIN_RCPP
 END_RCPP
 }
 // GetFullCondSDs
-Rcpp::NumericVector GetFullCondSDs(SEXP treePointer);
+arma::vec GetFullCondSDs(SEXP treePointer);
 RcppExport SEXP _MRAinla_GetFullCondSDs(SEXP treePointerSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
@@ -70,12 +70,27 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// ComputeCondPredStats
+Rcpp::List ComputeCondPredStats(SEXP treePointer, NumericMatrix spCoordsForPredict, NumericVector timeForPredict, NumericMatrix covariateMatrixForPredict);
+RcppExport SEXP _MRAinla_ComputeCondPredStats(SEXP treePointerSEXP, SEXP spCoordsForPredictSEXP, SEXP timeForPredictSEXP, SEXP covariateMatrixForPredictSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< SEXP >::type treePointer(treePointerSEXP);
+    Rcpp::traits::input_parameter< NumericMatrix >::type spCoordsForPredict(spCoordsForPredictSEXP);
+    Rcpp::traits::input_parameter< NumericVector >::type timeForPredict(timeForPredictSEXP);
+    Rcpp::traits::input_parameter< NumericMatrix >::type covariateMatrixForPredict(covariateMatrixForPredictSEXP);
+    rcpp_result_gen = Rcpp::wrap(ComputeCondPredStats(treePointer, spCoordsForPredict, timeForPredict, covariateMatrixForPredict));
+    return rcpp_result_gen;
+END_RCPP
+}
 
 static const R_CallMethodDef CallEntries[] = {
     {"_MRAinla_setupGridCpp", (DL_FUNC) &_MRAinla_setupGridCpp, 10},
     {"_MRAinla_LogJointHyperMarginal", (DL_FUNC) &_MRAinla_LogJointHyperMarginal, 12},
     {"_MRAinla_GetFullCondMean", (DL_FUNC) &_MRAinla_GetFullCondMean, 1},
     {"_MRAinla_GetFullCondSDs", (DL_FUNC) &_MRAinla_GetFullCondSDs, 1},
+    {"_MRAinla_ComputeCondPredStats", (DL_FUNC) &_MRAinla_ComputeCondPredStats, 4},
     {NULL, NULL, 0}
 };
 

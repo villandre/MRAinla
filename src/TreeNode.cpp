@@ -102,16 +102,6 @@ mat TreeNode::computeCovMat(const spatialcoor & spTime1, const spatialcoor & spT
   return covMat ;
 }
 
-void TreeNode::SetPredictLocations(const spatialcoor & predictLocations) {
-  uvec lonCheck = (predictLocations.spatialCoords.col(0) > min(m_dimensions.longitude)) %
-    (predictLocations.spatialCoords.col(0) <= max(m_dimensions.longitude)) ; // Longitude check
-  uvec latCheck = (predictLocations.spatialCoords.col(1) > min(m_dimensions.latitude)) %
-    (predictLocations.spatialCoords.col(1) <= max(m_dimensions.latitude)) ; // Latitude check
-  uvec timeCheck = (predictLocations.timeCoords > min(m_dimensions.time)) %
-    (predictLocations.timeCoords <= max(m_dimensions.time)) ; // Time check
-  m_predictLocIndices = find(lonCheck % latCheck % timeCheck) ; // find is equivalent to which in R
-}
-
 // void TreeNode::initiateBknots(const vec & covParas) {
 //   std::vector<TreeNode *> brickList = getAncestors() ;
 //   if (m_depth > 0) {

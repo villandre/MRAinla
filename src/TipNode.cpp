@@ -19,24 +19,25 @@ void TipNode::DeriveOmega(const arma::vec & responseValues) {
 //   }
 // }
 
-// void TipNode::computeUpred(const vec & covParas, const spatialcoor & predictLocations) {
-//   if (m_predictLocIndices.size() > 0) {
-//     std::vector<TreeNode *> brickList = getAncestors() ;
-//     m_UmatList.resize(m_depth + 1) ;
-//
-//     spatialcoor subLocations = predictLocations.subset(m_predictLocIndices) ; // Will I need to invoke the destructor to avoid a memory leak?
-//     m_UmatList.at(0) = computeCovMat(subLocations, brickList.at(0)->GetKnotsCoor(), covParas) ;
-//
-//     for (uint l = 1; l <= m_depth; l++) {
-//       mat firstTerm = computeCovMat(subLocations, brickList.at(l)->GetKnotsCoor(), covParas) ;
-//       mat secondTerm(firstTerm.n_rows, firstTerm.n_cols, fill::zeros) ;
-//       for (uint k = 0 ; k <= l-1; k++) {
-//          secondTerm += m_UmatList.at(k) * brickList.at(k)->GetKmatrix() * trans(brickList.at(l)->GetWlist().at(k)) ;
-//       }
-//       m_UmatList.at(l) = firstTerm - secondTerm ;
-//     }
-//   }
-// }
+void TipNode::computeUpred(const vec & covParas, const spatialcoor & predictLocations,
+                           const bool matern, const double & spaceNuggetSD, const double & timeNuggetSD) {
+  if (m_predsInNode.size() > 0) {
+    std::vector<TreeNode *> brickList = getAncestors() ;
+    m_UmatList.resize(m_depth + 1) ;
+
+    spatialcoor subLocations = predictLocations.subset(m_predsInNode) ; // Will I need to invoke the destructor to avoid a memory leak?
+    m_UmatList.at(0) = computeCovMat(subLocations, brickList.at(0)->GetKnotsCoor(), covParas, matern, spaceNuggetSD, timeNuggetSD) ;
+
+    for (uint l = 1; l <= m_depth; l++) {
+      mat firstTerm = computeCovMat(subLocations, brickList.at(l)->GetKnotsCoor(), covParas, matern, spaceNuggetSD, timeNuggetSD) ;
+      mat secondTerm(firstTerm.n_rows, firstTerm.n_cols, fill::zeros) ;
+      for (uint k = 0 ; k <= l-1; k++) {
+         secondTerm += m_UmatList.at(k) * brickList.at(k)->GetKmatrix() * trans(brickList.at(l)->GetWlist().at(k)) ;
+      }
+      m_UmatList.at(l) = firstTerm - secondTerm ;
+    }
+  }
+}
 
 // void TipNode::computeVpred(const arma::vec & covParas, const spatialcoor & predictLocations) {
 //   if (m_predictLocIndices.size() > 0) {
@@ -138,3 +139,8 @@ void TipNode::DeriveOmega(const arma::vec & responseValues) {
 //   }
 //   return estimatesFromRegion ;
 // }
+
+void TipNode::SetPredictLocations(const inputdata & predictData) {
+  arma::uvec indices = deriveObsInNode(predictData) ;
+  m_predsInNode = indices ;
+}

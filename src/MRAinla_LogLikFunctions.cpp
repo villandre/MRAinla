@@ -49,94 +49,6 @@ SEXP setupGridCpp(NumericVector responseValues, NumericMatrix spCoords, NumericV
   return List::create(Named("gridPointer") = p) ;
 }
 
-// // [[Rcpp::export]]
-//
-// List logLikMRAcpp(SEXP treePointer, NumericVector & covParameters, NumericVector & fixedEffectParameters,
-//                   double & errorSD, double & fixedEffSD, NumericVector & fieldValues)
-// {
-//   //omp_set_num_threads(numOpenMP) ;
-//   double logLikVal = 0;
-//   vec fixedEfvec = as<vec>(fixedEffectParameters) ;
-//   vec covParVec = as<vec>(covParameters) ;
-//   vec fieldValuesVec = as<vec>(fieldValues) ;
-//   if (!(treePointer == NULL))
-//   {
-//     XPtr<AugTree> pointedTree(treePointer) ; // Becomes a regular pointer again.
-//     bool testEqual = false ;
-//     if (covParVec.size() == pointedTree->GetCovParameters().size()) {
-//       testEqual = approx_equal(covParVec, pointedTree->GetCovParameters(), "absdiff", 1e-6) ;
-//     } // If covariance parameters haven't changed since the last evaluation, there's no need to re-run functions involving only covariance calculations.
-//
-//     pointedTree->SetCovParameters(covParVec) ;
-//     pointedTree->SetFixedEffParameters(fixedEffVec) ;
-//     pointedTree->SetErrorSD(errorSD) ;
-//     pointedTree->SetFixedEffSD(fixedEffSD) ;
-//     // pointedTree->CenterResponse() ;
-//
-//     logLikVal = pointedTree->ComputeMRAloglik(fieldValuesVec, testEqual) ;
-//     // pointedTree->ComputeGlobalLogLik() ;
-//   }
-//   else
-//   {
-//     throw Rcpp::exception("Pointer to MRA grid is null." ) ;
-//   }
-//   return List::create(Named("logLik") = logLikVal, Named("gridPointer") = treePointer) ;
-// }
-
-// // [[Rcpp::export]]
-
-// List predictMRArcpp(SEXP treePointer, NumericMatrix predSpatialCoor, IntegerVector predTime, NumericMatrix covariatesAtPredLocs) {
-//   uvec predictionTime = as<uvec>(predTime) ;
-//   mat predSp = as<mat>(predSpatialCoor) ;
-//   mat predCovariates = as<mat>(covariatesAtPredLocs) ;
-//   std::vector<GaussDistParas> predsInZones ;
-//   std::vector<vec> meanVecVec ;
-//   std::vector<mat> covMatVec ;
-//   vec predResponses = zeros<vec>(predictionTime.size()) ;
-//   inputdata dataForPreds(predResponses, predSp, predictionTime, predCovariates) ;
-//
-//   if (!(treePointer == NULL))
-//   {
-//     XPtr<AugTree> pointedTree(treePointer) ; // Becomes a regular pointer again.
-//     spatialcoor predLocs(predSp, predictionTime) ;
-//     predsInZones = pointedTree->ComputeConditionalPrediction(dataForPreds) ;
-//
-//     for (auto & i : predsInZones) {
-//       if (i.covPara(0,0) != -1) { // A value under 0 on the diagonal indicates that the region had no observations for prediction
-//         meanVecVec.push_back(i.meanPara) ;
-//         covMatVec.push_back(i.covPara) ;
-//       }
-//     }
-//     pointedTree->CleanPredictionComponents() ;
-//   }
-//   else
-//   {
-//     throw Rcpp::exception("Pointer to MRA grid is null." ) ;
-//   }
-//   return List::create(Named("means") = Rcpp::wrap(meanVecVec),
-//                       Named("covMatricesNoDim") = Rcpp::wrap(covMatVec),
-//                       Named("gridPointer") = treePointer) ;
-// }
-
-// // [[Rcpp::export]]
-//
-// NumericMatrix inla(SEXP treePointer, NumericMatrix predictionLocations, IntegerVector predictionTime, double stepSize) {
-//
-//   arma::mat posteriorMatrix ;
-//
-//   if (!(treePointer == NULL))
-//   {
-//     XPtr<AugTree> pointedTree(treePointer) ; // Becomes a regular pointer again.
-//     spatialcoor predictionST(as<mat>(predictionLocations), as<uvec>(predictionTime)) ;
-//     posteriorMatrix = pointedTree->ComputePosteriors(predictionST, stepSize) ;
-//   }
-//   else
-//   {
-//     throw Rcpp::exception("Pointer to MRA grid is null." ) ;
-//   }
-//   return Rcpp::wrap(posteriorMatrix) ;
-// }
-
 // [[Rcpp::export]]
 
 double LogJointHyperMarginal(SEXP treePointer, Rcpp::NumericVector MRAhyperparas,
@@ -195,7 +107,7 @@ double LogJointHyperMarginal(SEXP treePointer, Rcpp::NumericVector MRAhyperparas
 
 // [[Rcpp::export]]
 
-Rcpp::NumericVector GetFullCondMean(SEXP treePointer) {
+arma::vec GetFullCondMean(SEXP treePointer) {
   vec outputVec ;
   if (!(treePointer == NULL))
   {
@@ -206,12 +118,12 @@ Rcpp::NumericVector GetFullCondMean(SEXP treePointer) {
   {
     throw Rcpp::exception("Pointer to MRA grid is null." ) ;
   }
-  return Rcpp::wrap(outputVec) ;
+  return outputVec ;
 }
 
 // [[Rcpp::export]]
 
-Rcpp::NumericVector GetFullCondSDs(SEXP treePointer) {
+arma::vec GetFullCondSDs(SEXP treePointer) {
   vec outputVec ;
   if (!(treePointer == NULL))
   {
@@ -222,5 +134,32 @@ Rcpp::NumericVector GetFullCondSDs(SEXP treePointer) {
   {
     throw Rcpp::exception("Pointer to MRA grid is null." ) ;
   }
-  return Rcpp::wrap(outputVec) ;
+  return outputVec ;
+}
+
+// [[Rcpp::export]]
+
+Rcpp::List ComputeCondPredStats(SEXP treePointer, NumericMatrix spCoordsForPredict, NumericVector timeForPredict,
+                                 NumericMatrix covariateMatrixForPredict) {
+  sp_mat Hmat, Hmean, HmeanSq ;
+  mat HmeanMat ;
+  vec Evar ;
+
+  if (!(treePointer == NULL))
+  {
+    XPtr<AugTree> pointedTree(treePointer) ; // Becomes a regular pointer again.
+    mat spCoords = Rcpp::as<mat>(spCoordsForPredict) ;
+    vec time = Rcpp::as<vec>(timeForPredict) ;
+    mat covariates = Rcpp::as<mat>(covariateMatrixForPredict) ;
+    Hmat = conv_to<mat>::from(pointedTree->ComputeHpred(spCoords, time, covariates)) ;
+
+    sp_mat Hmean = Hmat * conv_to<sp_mat>::from(pointedTree->GetFullCondMean()) ;
+    mat HmeanMat = conv_to<mat>::from(Hmean) ;
+    Evar = pointedTree->ComputeEvar(Hmat) ;
+  }
+  else
+  {
+    throw Rcpp::exception("Pointer to MRA grid is null." ) ;
+  }
+  return Rcpp::List::create(Named("Hmean") = HmeanMat, Named("Evar") = Evar) ;
 }
