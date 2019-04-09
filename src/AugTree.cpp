@@ -381,6 +381,7 @@ arma::sp_mat AugTree::CombineFEinvAndKinvMatrices() {
 // }
 
 arma::sp_mat AugTree::createFmatrixAlt(const bool predictionMode) {
+
   int numObs = m_dataset.spatialCoords.n_rows ;
   if (predictionMode) {
     numObs = m_predictData.spatialCoords.n_rows ;
@@ -422,15 +423,15 @@ arma::sp_mat AugTree::createFmatrixAlt(const bool predictionMode) {
   }) ; // This is supposed to reorder the tip nodes in such a way that the F matrix has contiguous blocks.
 
   for (auto & nodeToProcess : tipNodes) {
-
-    bool test = nodeToProcess->GetObsInNode().size() > 0 ;
+    uvec observationIndices = nodeToProcess->GetObsInNode() ;
 
     if (predictionMode) {
-      test = nodeToProcess->GetPredIndices().size() > 0 ;
+      observationIndices = nodeToProcess->GetPredIndices() ;
     }
+    bool test =  observationIndices.size() > 0 ;
 
     if (test) {
-      FmatObsOrder.subvec(rowIndex, size(nodeToProcess->GetObsInNode())) = nodeToProcess->GetObsInNode() ;
+      FmatObsOrder.subvec(rowIndex, size(observationIndices)) = observationIndices ;
 
       std::vector<TreeNode *> brickList = nodeToProcess->getAncestors() ;
 
@@ -445,7 +446,8 @@ arma::sp_mat AugTree::createFmatrixAlt(const bool predictionMode) {
 
         Fmat(rowIndex, colIndicesPerNodeId.at(nodeId), size(matToAdd)) = matToAdd ;
       }
-      rowIndex += nodeToProcess->GetB(0).n_rows ; // The B(0), B(1), ..., B(M) all have the same number of rows.
+      // rowIndex += nodeToProcess->GetB(0).n_rows ; // The B(0), B(1), ..., B(M) all have the same number of rows.
+      rowIndex += observationIndices.size() ; // The B matrices should have as may rows as observations in the node...
     }
   }
 
@@ -899,17 +901,22 @@ arma::vec AugTree::ComputeFullConditionalMean(const arma::vec & bVec) {
 }
 
 sp_mat AugTree::ComputeHpred(const mat & spCoords, const vec & time, const mat & covariateMatrix) {
+
   SetPredictData(spCoords, time, covariateMatrix) ;
   std::vector<TreeNode *> tipNodes = GetLevelNodes(m_M) ;
 
   for (auto & i : tipNodes) {
     i->SetPredictLocations(m_predictData) ;
     uvec predictionsInLeaf = i->GetPredIndices() ;
-    i->computeUpred(m_MRAcovParas, m_predictData, m_matern, m_spaceNuggetSD, m_timeNuggetSD) ;
+    if (predictionsInLeaf.size() > 0) {
+
+      i->computeUpred(m_MRAcovParas, m_predictData, m_matern, m_spaceNuggetSD, m_timeNuggetSD) ;
+    }
   }
   sp_mat FmatrixPred = createFmatrixAlt(true) ;
   mat incrementedCovariate = join_rows(vec(covariateMatrix.n_rows, fill::ones), covariateMatrix) ;
   sp_mat HmatrixPred = join_rows(conv_to<sp_mat>::from(incrementedCovariate), FmatrixPred) ;
+  conv_to<mat>::from(HmatrixPred).save("/home/luc/Documents/HmatrixPred.info", raw_ascii) ;
   return HmatrixPred ;
 }
 
@@ -921,33 +928,35 @@ arma::vec AugTree::ComputeEvar(const arma::sp_mat & HmatPred) {
   uint DblockLeftIndex = blockIndices.at(0) ;
   uint sizeD = m_FullCondPrecision.n_cols - DblockLeftIndex ;
   uint sizeA = m_FullCondPrecision.n_cols - sizeD ;
+
   sp_mat Bmatrix = m_FullCondPrecision(0, sizeA, size(sizeA, sizeD)) ;
   sp_mat Amatrix = m_FullCondPrecision(0, 0, size(sizeA, sizeA)) ;
   sp_mat Dinverted = invertSymmBlockDiag(m_FullCondPrecision(sizeA, sizeA, size(sizeD, sizeD)), blockIndices) ;
   mat secondTermInside = conv_to<mat>::from(Bmatrix * Dinverted * trans(Bmatrix)) ;
   mat compositeInverted = inv(Amatrix - secondTermInside) ;
 
-  vec bVec(HmatPred.n_cols, fill::zeros), b1, b2 ;
+  sp_mat bVec ;
+  sp_mat b1, b2 ;
 
   for (uint i = 0 ; i < HmatPred.n_rows ; i++) {
-    bVec = conv_to<vec>::from(conv_to<mat>::from(HmatPred.row(i))) ;
-    b1 = bVec.subvec(0, sizeA - 1) ;
-    b2 = bVec.subvec(sizeA, bVec.size() - 1) ;
-    sp_mat firstElementSecondTerm = Dinverted * conv_to<sp_mat>::from(b2) ;
+    bVec = trans(HmatPred.row(i)) ;
+    b1 = bVec(0, 0, size(sizeA, 1)) ;
+    b2 = bVec(sizeA, 0, size(sizeD, 1)) ;
+    sp_mat firstElementSecondTerm = Dinverted * b2 ;
     firstElementSecondTerm = Bmatrix * firstElementSecondTerm ;
     firstElementSecondTerm = compositeInverted * firstElementSecondTerm ;
-    vec firstElementFirstTerm = compositeInverted * b1 ;
-    vec firstElement =  trans(b1) * (firstElementFirstTerm - firstElementSecondTerm) ;
+    sp_mat firstElementFirstTerm = conv_to<sp_mat>::from(compositeInverted) * b1 ;
+    sp_mat firstElement =  trans(b1) * (firstElementFirstTerm - firstElementSecondTerm) ;
 
-    vec secondElementFirstTerm = trans(Bmatrix) * firstElementFirstTerm ;
+    sp_mat secondElementFirstTerm = trans(Bmatrix) * firstElementFirstTerm ;
     secondElementFirstTerm = -Dinverted * secondElementFirstTerm ;
     sp_mat secondElementSecondTerm = trans(Bmatrix) * firstElementSecondTerm ;
     secondElementSecondTerm = Dinverted * secondElementSecondTerm ;
     secondElementSecondTerm = Dinverted * b2 + secondElementSecondTerm ;
-    vec secondElement = trans(b2) * (secondElementFirstTerm + secondElementSecondTerm) ;
+    sp_mat secondElement = trans(b2) * (secondElementFirstTerm + secondElementSecondTerm) ;
 
-    vec meanVec = join_cols<vec>(firstElement, secondElement) + errorVar;
-    EvarValues.at(i) = meanVec.at(0) ;
+    mat meanVec = conv_to<mat>::from(join_cols(firstElement, secondElement)) + errorVar ;
+    EvarValues.at(i) = meanVec.at(0,0) ;
   }
   return EvarValues ;
 }

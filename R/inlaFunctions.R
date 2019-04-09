@@ -31,8 +31,9 @@
 MRA_INLA <- function(spacetimeData, errorSDstart, fixedEffSDstart, MRAhyperparasStart, M, lonRange, latRange, timeRange, randomSeed, cutForTimeSplit = 400, MRAcovParasIGalphaBeta, FEmuVec, fixedEffIGalphaBeta, errorIGalphaBeta, stepSize = 1, lowerThreshold = 3, maternCov = FALSE, spaceNuggetSD, timeNuggetSD, predictionData = NULL) {
   dataCoordinates <- spacetimeData@sp@coords
   timeRangeReshaped <- as.integer(timeRange)/(3600*24)
-  timeValues <- as.integer(time(spacetimeData@time))/(3600*24) - min(timeRangeReshaped) # The division is to obtain values in days.
-  timeRangeReshaped <- timeRangeReshaped - min(timeRangeReshaped)
+  timeBaseline <- min(timeRangeReshaped)
+  timeValues <- as.integer(time(spacetimeData@time))/(3600*24) - timeBaseline # The division is to obtain values in days.
+  timeRangeReshaped <- timeRangeReshaped - timeBaseline
 
   covariateMatrix <- as.matrix(spacetimeData@data[, -1, drop = FALSE])
   gridPointer <- setupGridCpp(spacetimeData@data[, 1], dataCoordinates, timeValues, covariateMatrix, M, lonRange, latRange, timeRangeReshaped, randomSeed, cutForTimeSplit)
@@ -60,7 +61,7 @@ MRA_INLA <- function(spacetimeData, errorSDstart, fixedEffSDstart, MRAhyperparas
     warning("Non-positive definite Hessian matrix... \n \n")
   }
   optimResult$hessian <- -hessianMat # The "-" is necessary because we performed a minimisation rather than a maximisation.
-  hyperparaList <- getIntegrationPointsAndValues(optimObject = optimResult, gridPointer = gridPointer$gridPointer, MRAcovParasIGalphaBeta = MRAcovParasIGalphaBeta, FEmuVec = FEmuVec, fixedEffIGalphaBeta = fixedEffIGalphaBeta, errorIGalphaBeta = errorIGalphaBeta, stepSize = stepSize, lowerThreshold = lowerThreshold, matern = maternCov, predictionData = predictionData, timeRangeReshaped = timeRangeReshaped)
+  hyperparaList <- getIntegrationPointsAndValues(optimObject = optimResult, gridPointer = gridPointer$gridPointer, MRAcovParasIGalphaBeta = MRAcovParasIGalphaBeta, FEmuVec = FEmuVec, fixedEffIGalphaBeta = fixedEffIGalphaBeta, errorIGalphaBeta = errorIGalphaBeta, stepSize = stepSize, lowerThreshold = lowerThreshold, matern = maternCov, predictionData = predictionData, timeBaseline = timeBaseline)
   # load("~/Documents/hyperparaList.Rdata")
   discreteLogJointValues <- sapply(hyperparaList, '[[', "logJointValue")
   maxLogJointValues <- max(discreteLogJointValues)
@@ -115,16 +116,16 @@ ComputeMeanMarginalMoments <- function(hyperparaList) {
 
 ComputeKrigingMoments <- function(hyperparaList) {
   termsForMean <- lapply(hyperparaList, function(x) {
-    drop(x$Hmean * exp(x$logJointValue))
+    drop(x$CondPredStats$Hmean * exp(x$logJointValue))
   })
   krigingMeans <- Reduce("+", termsForMean)
   termsForVarE1 <- lapply(hyperparaList, FUN = function(x) {
-    drop(x$Hmean^2 * exp(x$logJointValue))
+    drop(x$CondPredStats$Hmean^2 * exp(x$logJointValue))
   })
   varE <- Reduce('+', termsForVarE1) - krigingMeans^2
 
   termsForEvar <- lapply(hyperparaList, function(x) {
-    drop(x$Evar * exp(x$logJointValue))
+    drop(x$CondPredStats$Evar * exp(x$logJointValue))
   })
   Evar <- Reduce("+", termsForEvar)
   list(predictMeans = krigingMeans, predictSDs = sqrt(varE + Evar))
@@ -139,7 +140,7 @@ covFunctionBiMatern <- function(rangeParaSpace = 10, rangeParaTime = 10) {
 }
 
 # When lowerThreshold is 3, the exploration stops if the value being tested is at least 20 times smaller than the value at the peak of the hyperparameter marginal a posteriori distribution.
-getIntegrationPointsAndValues <- function(optimObject, gridPointer, MRAcovParasIGalphaBeta, FEmuVec, fixedEffIGalphaBeta, errorIGalphaBeta, stepSize = 1, lowerThreshold = 3, matern = FALSE, predictionData = NULL, timeRangeReshaped) {
+getIntegrationPointsAndValues <- function(optimObject, gridPointer, MRAcovParasIGalphaBeta, FEmuVec, fixedEffIGalphaBeta, errorIGalphaBeta, stepSize = 1, lowerThreshold = 3, matern = FALSE, predictionData = NULL, timeBaseline) {
 
   decomposition <- eigen(solve(-optimObject$hessian), symmetric = TRUE)
 
@@ -157,8 +158,8 @@ getIntegrationPointsAndValues <- function(optimObject, gridPointer, MRAcovParasI
     aList <- list(z = z, MRAhyperparas = head(Psis, n = -2), fixedEffSD = Psis[length(Psis) - 1], errorSD = tail(Psis, n = 1))
     aList$logJointValue <- with(aList, expr = LogJointHyperMarginal(treePointer = gridPointer, MRAhyperparas = MRAhyperparas, fixedEffSD = fixedEffSD, errorSD = errorSD, MRAcovParasIGalphaBeta = MRAcovParasIGalphaBeta, FEmuVec = FEmuVec, fixedEffIGalphaBeta =  fixedEffIGalphaBeta, errorIGalphaBeta = errorIGalphaBeta, matern = matern, spaceNuggetSD = spaceNuggetSD, timeNuggetSD = timeNuggetSD, recordFullConditional = TRUE))
     if (!is.null(predictionData)) {
-      timeValues <- as.integer(time(predictionData@time))/(3600*24) - min(timeRangeReshaped) # The division is to obtain values in days.
-      aList$CondPredStats <- ComputeCondPredStats(gridPointer, predictionData@sp, timeValues, as.matrix(predictionData@data))
+      timeValues <- as.integer(time(predictionData@time))/(3600*24) - timeBaseline # The division is to obtain values in days.
+      aList$CondPredStats <- ComputeCondPredStats(gridPointer, predictionData@sp@coords, timeValues, as.matrix(predictionData@data))
     }
     # Running LogJointHyperMarginal stores in the tree pointed by gridPointer the full conditional mean and SDs when recordFullConditional = TRUE. We can get them with the simple functions I call now.
     aList$FullCondMean <- GetFullCondMean(gridPointer)
