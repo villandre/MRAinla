@@ -172,7 +172,7 @@ private:
   arma::vec m_MRAvalues ;
   arma::vec m_FullCondMean ;
   arma::vec m_FullCondSDs ;
-  arma::sp_mat m_FullCondPrecision{ 0 } ;
+  arma::sp_mat m_FullCondPrecision ;
   bool m_recordFullConditional{ false } ;
   std::vector<arma::mat *> getKmatricesInversePointers() {
     std::vector<arma::mat *> KmatrixInverseList ;
