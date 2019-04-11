@@ -46,21 +46,23 @@ MRA_INLA <- function(spacetimeData, errorSDstart, fixedEffSDstart, MRAhyperparas
     -LogJointHyperMarginal(treePointer = treePointer, MRAhyperparas = x[1:numMRAhyperparas], fixedEffSD = x[numMRAhyperparas + 1], errorSD = x[numMRAhyperparas + 2], MRAcovParasIGalphaBeta = MRAcovParasIGalphaBeta, FEmuVec = FEmuVec, fixedEffIGalphaBeta = fixedEffIGalphaBeta, errorIGalphaBeta, matern = as.logical(maternCov), spaceNuggetSD = spaceNuggetSD, timeNuggetSD = timeNuggetSD, recordFullConditional = FALSE)
   }
 
-  # nloptrOpts <-  list(maxeval = 1000, xtol_rel = 1e-8)
-  # optimResult <- nloptr::lbfgs(x0 = xStartValues, fn = funForOptim, lower = rep(0.01, length(xStartValues)), upper = 20*xStartValues, control = nloptrOpts, treePointer = gridPointer$gridPointer, MRAcovParasIGalphaBeta = MRAcovParasIGalphaBeta, FEmuVec = FEmuVec, fixedEffIGalphaBeta = fixedEffIGalphaBeta, errorIGalphaBeta = errorIGalphaBeta)
-  # if (optimResult$convergence < 0) {
-  #   stop("Optimisation algorithm did not converge! \n \n")
-  # }
+  nloptrOpts <-  list(maxeval = 1000, xtol_rel = 1e-8)
+  cat("Optimising marginal hyperparameter posterior distribution... \n") ;
+  optimResult <- nloptr::lbfgs(x0 = xStartValues, fn = funForOptim, lower = rep(0.01, length(xStartValues)), upper = 20*xStartValues, control = nloptrOpts, treePointer = gridPointer$gridPointer, MRAcovParasIGalphaBeta = MRAcovParasIGalphaBeta, FEmuVec = FEmuVec, fixedEffIGalphaBeta = fixedEffIGalphaBeta, errorIGalphaBeta = errorIGalphaBeta)
+  if (optimResult$convergence < 0) {
+    stop("Optimisation algorithm did not converge! \n \n")
+  }
   # save(optimResult, file = "~/Documents/optimForTests.R")
-  cat("LOADING VALUES FOR TESTING PURPOSES. REMOVE THIS ONCE CODE IS COMPLETE.\n \n")
-  load("~/Documents/optimForTests.R")
-
+  # cat("LOADING VALUES FOR TESTING PURPOSES. REMOVE THIS ONCE CODE IS COMPLETE.\n \n")
+  # load("~/Documents/optimForTests.R")
+  cat("Estimating Hessian at mode... \n") ;
   hessianMat <- nlme::fdHess(pars = optimResult$par, fun = funForOptim, treePointer = gridPointer$gridPointer, MRAcovParasIGalphaBeta = MRAcovParasIGalphaBeta, FEmuVec = FEmuVec, fixedEffIGalphaBeta = fixedEffIGalphaBeta, errorIGalphaBeta = errorIGalphaBeta)$Hessian
 
   if (det(hessianMat) <= 0) {
     warning("Non-positive definite Hessian matrix... \n \n")
   }
   optimResult$hessian <- -hessianMat # The "-" is necessary because we performed a minimisation rather than a maximisation.
+  cat("Computing distribution value at integration points... \n")
   hyperparaList <- getIntegrationPointsAndValues(optimObject = optimResult, gridPointer = gridPointer$gridPointer, MRAcovParasIGalphaBeta = MRAcovParasIGalphaBeta, FEmuVec = FEmuVec, fixedEffIGalphaBeta = fixedEffIGalphaBeta, errorIGalphaBeta = errorIGalphaBeta, stepSize = stepSize, lowerThreshold = lowerThreshold, matern = maternCov, predictionData = predictionData, timeBaseline = timeBaseline)
   # load("~/Documents/hyperparaList.Rdata")
   discreteLogJointValues <- sapply(hyperparaList, '[[', "logJointValue")
@@ -68,17 +70,21 @@ MRA_INLA <- function(spacetimeData, errorSDstart, fixedEffSDstart, MRAhyperparas
   logStandardisingConstant <- maxLogJointValues + log(sum(exp(discreteLogJointValues - maxLogJointValues)))
 
   # The following normalises the joint distribution.
+  cat("Standardising empirical distribution...\n") ;
   hyperparaList <- lapply(hyperparaList, function(x) {
     x$logJointValue <- x$logJointValue - logStandardisingConstant
     x
   })
-  # # Now, we obtain the marginal distribution of all mean parameters.
+
+  # Now, we obtain the marginal distribution of all mean parameters.
+  cat("Computing moments for marginal posterior distributions...\n")
   hyperMarginalMoments <- ComputeHyperMarginalMoments(hyperparaList)
   meanMarginalMoments <- ComputeMeanMarginalMoments(hyperparaList)
   outputList <- list(hyperMarginalMoments = hyperMarginalMoments, meanMarginalMoments = meanMarginalMoments)
   if (!is.null(predictionData)) {
     outputList$predictionMoments <- ComputeKrigingMoments(hyperparaList)
   }
+  cat("Returning results... \n")
   outputList
 }
 

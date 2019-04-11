@@ -582,9 +582,10 @@ void AugTree::ComputeLogFCandLogCDandDataLL() {
 void AugTree::ComputeLogJointPsiMarginal() {
 
   ComputeLogPriors() ;
-  // if (m_recomputeMRAlogLik) {
+
+  if (m_recomputeMRAlogLik) {
     computeWmats() ; // This will produce the K matrices required. NOTE: ADD CHECK THAT ENSURES THAT THE MRA LIK. IS ONLY RE-COMPUTED WHEN THE MRA COV. PARAMETERS CHANGE.
-  // }
+  }
 
   ComputeLogFCandLogCDandDataLL() ;
 
@@ -916,7 +917,7 @@ sp_mat AugTree::ComputeHpred(const mat & spCoords, const vec & time, const mat &
   sp_mat FmatrixPred = createFmatrixAlt(true) ;
   mat incrementedCovariate = join_rows(vec(covariateMatrix.n_rows, fill::ones), covariateMatrix) ;
   sp_mat HmatrixPred = join_rows(conv_to<sp_mat>::from(incrementedCovariate), FmatrixPred) ;
-  conv_to<mat>::from(HmatrixPred).save("/home/luc/Documents/HmatrixPred.info", raw_ascii) ;
+  // conv_to<mat>::from(HmatrixPred).save("/home/luc/Documents/HmatrixPred.info", raw_ascii) ;
   return HmatrixPred ;
 }
 
@@ -933,7 +934,8 @@ arma::vec AugTree::ComputeEvar(const arma::sp_mat & HmatPred) {
   sp_mat Amatrix = m_FullCondPrecision(0, 0, size(sizeA, sizeA)) ;
   sp_mat Dinverted = invertSymmBlockDiag(m_FullCondPrecision(sizeA, sizeA, size(sizeD, sizeD)), blockIndices) ;
   mat secondTermInside = conv_to<mat>::from(Bmatrix * Dinverted * trans(Bmatrix)) ;
-  mat compositeInverted = inv(Amatrix - secondTermInside) ;
+  sp_mat compositeInverted = conv_to<sp_mat>::from(inv(Amatrix - secondTermInside)) ;
+  // mat compositeInverted = inv(Amatrix - secondTermInside) ;
 
   sp_mat bVec ;
   sp_mat b1, b2 ;
@@ -942,21 +944,33 @@ arma::vec AugTree::ComputeEvar(const arma::sp_mat & HmatPred) {
     bVec = trans(HmatPred.row(i)) ;
     b1 = bVec(0, 0, size(sizeA, 1)) ;
     b2 = bVec(sizeA, 0, size(sizeD, 1)) ;
-    sp_mat firstElementSecondTerm = Dinverted * b2 ;
-    firstElementSecondTerm = Bmatrix * firstElementSecondTerm ;
-    firstElementSecondTerm = compositeInverted * firstElementSecondTerm ;
-    sp_mat firstElementFirstTerm = conv_to<sp_mat>::from(compositeInverted) * b1 ;
-    sp_mat firstElement =  trans(b1) * (firstElementFirstTerm - firstElementSecondTerm) ;
 
-    sp_mat secondElementFirstTerm = trans(Bmatrix) * firstElementFirstTerm ;
-    secondElementFirstTerm = -Dinverted * secondElementFirstTerm ;
-    sp_mat secondElementSecondTerm = trans(Bmatrix) * firstElementSecondTerm ;
-    secondElementSecondTerm = Dinverted * secondElementSecondTerm ;
-    secondElementSecondTerm = Dinverted * b2 + secondElementSecondTerm ;
-    sp_mat secondElement = trans(b2) * (secondElementFirstTerm + secondElementSecondTerm) ;
+    sp_mat DinvB2 = Dinverted * b2 ;
+    sp_mat BmatDinvB2 = Bmatrix * DinvB2 ;
+    sp_mat firstElement = b1 - BmatDinvB2 ;
+    sp_mat b1CompInv = trans(compositeInverted * b1) ;
+    sp_mat firstTerm =  b1CompInv * firstElement ;
 
-    mat meanVec = conv_to<mat>::from(join_cols(firstElement, secondElement)) + errorVar ;
-    EvarValues.at(i) = meanVec.at(0,0) ;
+    sp_mat secondTerm = (-b1 + BmatDinvB2) ;
+    secondTerm = compositeInverted * secondTerm ;
+    secondTerm = trans(BmatDinvB2) * secondTerm + trans(DinvB2) * b2 ;
+
+    sp_mat meanVec = firstTerm + secondTerm  ;
+    // sp_mat firstElementSecondTerm = Dinverted * b2 ;
+    // firstElementSecondTerm = Bmatrix * firstElementSecondTerm ;
+    // firstElementSecondTerm = compositeInverted * firstElementSecondTerm ;
+    // sp_mat firstElementFirstTerm = conv_to<sp_mat>::from(compositeInverted) * b1 ;
+    // sp_mat firstElement =  firstElementFirstTerm - firstElementSecondTerm ;
+    //
+    // sp_mat secondElementFirstTerm = trans(Bmatrix) * firstElementFirstTerm ;
+    // secondElementFirstTerm = -Dinverted * secondElementFirstTerm ;
+    // sp_mat secondElementSecondTerm = trans(Bmatrix) * firstElementSecondTerm ;
+    // secondElementSecondTerm = Dinverted * secondElementSecondTerm ;
+    // secondElementSecondTerm = Dinverted * b2 + secondElementSecondTerm ;
+    // sp_mat secondElement = secondElementFirstTerm + secondElementSecondTerm ;
+    //
+    // sp_mat meanVec = trans(bVec) * join_cols(firstElement, secondElement) ;
+    EvarValues.at(i) = meanVec.at(0,0) + errorVar ;
   }
   return EvarValues ;
 }

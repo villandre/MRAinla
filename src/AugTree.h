@@ -59,7 +59,11 @@ public:
     m_errorSD = errorSD ;
   }
   void SetMRAcovParas(const arma::vec & MRAcovParas) {
-    if (arma::approx_equal(MRAcovParas, m_MRAcovParas, "absdiff", 1e-8)) m_recomputeMRAlogLik = true ;
+    if (arma::approx_equal(MRAcovParas, m_MRAcovParas, "absdiff", 1e-100)) {
+      m_recomputeMRAlogLik = false ;
+    } else {
+      m_recomputeMRAlogLik = true ;
+    }
     m_MRAcovParas = MRAcovParas ;
   }
   std::vector<TreeNode *> GetLevelNodes(const uint & level) ;
