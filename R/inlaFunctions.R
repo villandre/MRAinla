@@ -28,7 +28,7 @@
 #' }
 #' @export
 
-MRA_INLA <- function(spacetimeData, errorSDstart, fixedEffSDstart, MRAhyperparasStart, M, lonRange, latRange, timeRange, randomSeed, cutForTimeSplit = 400, MRAcovParasIGalphaBeta, FEmuVec, fixedEffIGalphaBeta, errorIGalphaBeta, stepSize = 1, lowerThreshold = 3, maternCov = FALSE, spaceNuggetSD, timeNuggetSD, predictionData = NULL) {
+MRA_INLA <- function(spacetimeData, errorSDstart, fixedEffSDstart, MRAhyperparasStart, M, lonRange, latRange, timeRange, randomSeed, cutForTimeSplit = 400, MRAcovParasIGalphaBeta, FEmuVec, fixedEffIGalphaBeta, errorIGalphaBeta, stepSize = 1, lowerThreshold = 3, maternCov = FALSE, spaceNuggetSD, timeNuggetSD, predictionData = NULL, clusterAddress) {
   dataCoordinates <- spacetimeData@sp@coords
   timeRangeReshaped <- as.integer(timeRange)/(3600*24)
   timeBaseline <- min(timeRangeReshaped)
@@ -41,7 +41,7 @@ MRA_INLA <- function(spacetimeData, errorSDstart, fixedEffSDstart, MRAhyperparas
 
   xStartValues <- c(MRAhyperparasStart, fixedEffSDstart, errorSDstart)
   numMRAhyperparas <- length(MRAhyperparasStart)
-  # funForOptimJointHyperMarginal(treePointer = gridPointer$gridPointer, exp(0.5*xStartValues[1:numMRAhyperparas]), exp(0.5*xStartValues[numMRAhyperparas + 1]), exp(0.5*xStartValues[numMRAhyperparas + 2]), MRAcovParasIGalphaBeta = MRAcovParasIGalphaBeta, fixedEffIGalphaBeta = fixedEffIGalphaBeta, errorIGalphaBeta = errorIGalphaBeta)
+
   funForOptim <- function(x, treePointer, MRAcovParasIGalphaBeta, fixedEffIGalphaBeta, errorIGalphaBeta, FEmuVec) {
     -LogJointHyperMarginal(treePointer = treePointer, MRAhyperparas = x[1:numMRAhyperparas], fixedEffSD = x[numMRAhyperparas + 1], errorSD = x[numMRAhyperparas + 2], MRAcovParasIGalphaBeta = MRAcovParasIGalphaBeta, FEmuVec = FEmuVec, fixedEffIGalphaBeta = fixedEffIGalphaBeta, errorIGalphaBeta, matern = as.logical(maternCov), spaceNuggetSD = spaceNuggetSD, timeNuggetSD = timeNuggetSD, recordFullConditional = FALSE)
   }
@@ -146,7 +146,7 @@ covFunctionBiMatern <- function(rangeParaSpace = 10, rangeParaTime = 10) {
 }
 
 # When lowerThreshold is 3, the exploration stops if the value being tested is at least 20 times smaller than the value at the peak of the hyperparameter marginal a posteriori distribution.
-getIntegrationPointsAndValues <- function(optimObject, gridPointer, MRAcovParasIGalphaBeta, FEmuVec, fixedEffIGalphaBeta, errorIGalphaBeta, stepSize = 1, lowerThreshold = 3, matern = FALSE, predictionData = NULL, timeBaseline) {
+getIntegrationPointsAndValues <- function(optimObject, gridPointer, MRAcovParasIGalphaBeta, FEmuVec, fixedEffIGalphaBeta, errorIGalphaBeta, stepSize = 1, lowerThreshold = 3, matern = FALSE, predictionData = NULL, timeBaseline, otherGridPointers = NULL, clusterAddress = NULL) {
 
   decomposition <- eigen(solve(-optimObject$hessian), symmetric = TRUE)
 
@@ -177,25 +177,39 @@ getIntegrationPointsAndValues <- function(optimObject, gridPointer, MRAcovParasI
   centerList <- list() ; # We'll be growing this list, but considering that we'll be having only a few hundred elements in final, this should be inconsequential.
 
   centerList[[1]] <- getContainerElement(rep(0,numDims))
+  peakLogJointValue <- centerList[[1]]$logJointValue
   counter <- 1
   # This explores the distribution strictly along the axes defining centers for exploration at points not on the axes.
-  for (dimNumber in 1:numDims) {
-    for (direction in c(-1, 1)) {
-      currentZ <- rep(0, numDims)
-      currentZ[dimNumber] <- stepSize*direction
-      repeat {
-        elementToAdd <- getContainerElement(currentZ)
-        # The following check compares the value at the peak of the distribution with that at the current location. Since values are on the log-scale, the criterion is multiplicative: if the log of the ratio of the two density values is greater than the threshold, it means there was a steep enough drop, and that the density at the point considered is low enough that it won't matter much in the computation of the normalizing constant.
-        if ((centerList[[1]]$logJointValue - elementToAdd$logJointValue) > lowerThreshold) break
+  exploreCombinations <- expand.grid(dimNumber = 1:numDims, direction = c(-1, 1))
+  exploreList <- lapply(as.list(as.data.frame(t(exploreCombinations))), function(x) {
+    names(x) <- colnames(exploreCombinations)
+    x
+  })
+  # for (dimNumber in 1:numDims) {
+  #   for (direction in c(-1, 1)) {
+  centerListList <- lapply(exploreList, function(x) {
+    centers <- list()
+    counter <- 0
+    currentZ <- rep(0, numDims)
+    currentZ[x[["dimNumber"]]] <- stepSize*x[["direction"]]
+    repeat {
+      elementToAdd <- getContainerElement(currentZ)
+      # The following check compares the value at the peak of the distribution with that at the current location. Since values are on the log-scale, the criterion is multiplicative: if the log of the ratio of the two density values is greater than the threshold, it means there was a steep enough drop, and that the density at the point considered is low enough that it won't matter much in the computation of the normalizing constant.
+      if ((peakLogJointValue - elementToAdd$logJointValue) > lowerThreshold) break
 
-        counter <- counter + 1
-        centerList[[counter]] <- elementToAdd
-        currentZ[dimNumber] <- currentZ[dimNumber] + direction*stepSize
-      }
+      counter <- counter + 1
+      centers[[counter]] <- elementToAdd
+      currentZ[x[["dimNumber"]]] <- currentZ[x[["dimNumber"]]] + x[["direction"]]*stepSize
     }
-  }
+    centers
+  })
+  #   }
+  # }
+  centerList <- do.call("c", centerListList)
+
   zMatrix <- t(sapply(centerList, '[[', "z"))
   containerList <- centerList
+  counter <- length(containerList)
   # The following explores the distribution at points not found on the axes.
   for (centerIndex in 2:length(centerList)) {
     for (dimNumber in 1:numDims) {
@@ -209,6 +223,7 @@ getIntegrationPointsAndValues <- function(optimObject, gridPointer, MRAcovParasI
           if (test <- length(rowNumber) == 0) { # This syntax actually works...
             containerElement <- getContainerElement(currentZ)
           } else {
+            cat("Point known... \n")
             containerElement <- containerList[[rowNumber]]
           }
 
@@ -226,7 +241,46 @@ getIntegrationPointsAndValues <- function(optimObject, gridPointer, MRAcovParasI
   containerList
 }
 
-SimulateSpacetimeData <- function(numObsPerTimeSlice = 2025, covFunction, lonRange, latRange, timeValuesInPOSIXct, covariateDistributionList, errorSD, distFun = dist, FEvalues, tiltSpaceSD = 0, tiltTime = FALSE) {
+# SimulateSpacetimeData <- function(numObsPerTimeSlice = 2025, covFunction, lonRange, latRange, timeValuesInPOSIXct, covariateDistributionList, errorSD, distFun = dist, FEvalues, tiltSpaceSD = 0, tiltTime = FALSE) {
+#   numSlotsPerRow <- ceiling(sqrt(numObsPerTimeSlice))
+#   slotCoordinates <- sapply(list(longitude = lonRange, latitude = latRange), FUN = function(x) {
+#     width <- abs(diff(x)/numSlotsPerRow)
+#     seq(from = min(x) + width/2, to = max(x) - width/2, length.out = numSlotsPerRow)
+#   }, USE.NAMES = TRUE)
+#
+#   allSpaceCoordinates <- as.data.frame(expand.grid(as.data.frame(slotCoordinates)))
+#
+#   timeLayerFct <- function(timeValue) {
+#     selectedRows <- sample.int(n = nrow(allSpaceCoordinates), size = numObsPerTimeSlice, replace = FALSE)
+#     layerCoordinates <- allSpaceCoordinates[selectedRows, ]
+#     layerCoordinates$time <- rep(timeValue, nrow(layerCoordinates))
+#     if (tiltTime) {
+#       numObs <- length(selectedRows)
+#       numObsDiv2 <- floor(numObs/2)
+#       layerCoordinates$time <- layerCoordinates$time +  seq(from = -numObsDiv2, to = numObsDiv2 - ((numObs %% 2) == 0))
+#     }
+#     covariateFrame <- as.data.frame(sapply(covariateDistributionList, function(x) sample(x[[1]], size = nrow(layerCoordinates), prob = x[[2]], replace = TRUE)))
+#     colnames(covariateFrame) <- paste("Covariate", seq_along(covariateFrame), sep = "")
+#     cbind(layerCoordinates, covariateFrame)
+#   }
+#
+#   coordinates <- lapply(timeValuesInPOSIXct, FUN = timeLayerFct)
+#   coordinates <- do.call("rbind", coordinates)
+#
+#   spatialDistMatrix <- dist(coordinates[, c("longitude", "latitude")])
+#   timeDistMatrix <- dist(coordinates[, "time"])/(3600*24)
+#   covarianceMat <- covFunction(spatialDistMatrix, timeDistMatrix)
+#   meanVector <- cbind(1, as.matrix(coordinates[ , grep(pattern = "Covariate", colnames(coordinates))])) %*% FEvalues
+#   fieldValues <- mvtnorm::rmvnorm(n = 1, mean = as.numeric(meanVector), sigma = covarianceMat) + rnorm(n = length(meanVector), mean = 0, sd = errorSD)
+#   dataForObject <- cbind(data.frame(y = fieldValues[1, ]), coordinates[ , grep(pattern = "Covariate", colnames(coordinates))])
+#   spacetimeObj <- spacetime::STIDF(sp = sp::SpatialPoints(coordinates[, c("longitude", "latitude")]), data = dataForObject, time = coordinates$time)
+#   if (tiltSpaceSD > 0) {
+#     spacetimeObj@sp@coords <- spacetimeObj@sp@coords + rnorm(length(spacetimeObj@sp@coords), 0, tiltSpaceSD)
+#   }
+#   spacetimeObj
+# }
+
+SimulateSpacetimeData <- function(numObsPerTimeSlice = 225, covFunction, lonRange, latRange, timeValuesInPOSIXct, covariateGenerationFctList, errorSD, distFun = dist, FEvalues) {
   numSlotsPerRow <- ceiling(sqrt(numObsPerTimeSlice))
   slotCoordinates <- sapply(list(longitude = lonRange, latitude = latRange), FUN = function(x) {
     width <- abs(diff(x)/numSlotsPerRow)
@@ -234,35 +288,26 @@ SimulateSpacetimeData <- function(numObsPerTimeSlice = 2025, covFunction, lonRan
   }, USE.NAMES = TRUE)
 
   allSpaceCoordinates <- as.data.frame(expand.grid(as.data.frame(slotCoordinates)))
+  numToRemove <- nrow(allSpaceCoordinates) - numObsPerTimeSlice
+  obsToRemove <- sample.int(n = nrow(allSpaceCoordinates), size = numToRemove, replace = FALSE)
+  allSpaceCoordinates <- allSpaceCoordinates[-obsToRemove, ]
 
-  timeLayerFct <- function(timeValue) {
-    selectedRows <- sample.int(n = nrow(allSpaceCoordinates), size = numObsPerTimeSlice, replace = FALSE)
-    layerCoordinates <- allSpaceCoordinates[selectedRows, ]
-    layerCoordinates$time <- rep(timeValue, nrow(layerCoordinates))
-    if (tiltTime) {
-      numObs <- length(selectedRows)
-      numObsDiv2 <- floor(numObs/2)
-      layerCoordinates$time <- layerCoordinates$time +  seq(from = -numObsDiv2, to = numObsDiv2 - ((numObs %% 2) == 0))
-    }
-    covariateFrame <- as.data.frame(sapply(covariateDistributionList, function(x) sample(x[[1]], size = nrow(layerCoordinates), prob = x[[2]], replace = TRUE)))
-    colnames(covariateFrame) <- paste("Covariate", seq_along(covariateFrame), sep = "")
-    cbind(layerCoordinates, covariateFrame)
-  }
+  coordinates <- allSpaceCoordinates[rep(1:nrow(allSpaceCoordinates), length(timeValuesInPOSIXct)), ]
+  coordinates$time <- rep(timeValuesInPOSIXct, each = numObsPerTimeSlice)
 
-  coordinates <- lapply(timeValuesInPOSIXct, FUN = timeLayerFct)
-  coordinates <- do.call("rbind", coordinates)
+  covariateMatrix <- cbind(1, as.matrix(sapply(covariateGenerationFctList, function(x) x(coordinates[, c("longitude", "latitude")], coordinates[, "time"]))))
 
   spatialDistMatrix <- dist(coordinates[, c("longitude", "latitude")])
   timeDistMatrix <- dist(coordinates[, "time"])/(3600*24)
   covarianceMat <- covFunction(spatialDistMatrix, timeDistMatrix)
-  meanVector <- cbind(1, as.matrix(coordinates[ , grep(pattern = "Covariate", colnames(coordinates))])) %*% FEvalues
-  fieldValues <- mvtnorm::rmvnorm(n = 1, mean = as.numeric(meanVector), sigma = covarianceMat) + rnorm(n = length(meanVector), mean = 0, sd = errorSD)
-  dataForObject <- cbind(data.frame(y = fieldValues[1, ]), coordinates[ , grep(pattern = "Covariate", colnames(coordinates))])
+  meanVector <- drop(covariateMatrix %*% FEvalues)
+  fieldValues <- drop(mvtnorm::rmvnorm(n = 1, mean = meanVector, sigma = covarianceMat) + rnorm(n = length(meanVector), mean = 0, sd = errorSD))
+  dataForObject <- cbind(y = fieldValues, as.data.frame(covariateMatrix[, -1]))
+  colnames(dataForObject) <- c("y", paste("Covariate", 1:(length(FEvalues) - 1), sep = ""))
   spacetimeObj <- spacetime::STIDF(sp = sp::SpatialPoints(coordinates[, c("longitude", "latitude")]), data = dataForObject, time = coordinates$time)
-  if (tiltSpaceSD > 0) {
-    spacetimeObj@sp@coords <- spacetimeObj@sp@coords + rnorm(length(spacetimeObj@sp@coords), 0, tiltSpaceSD)
-  }
   spacetimeObj
 }
 
-
+jitterData <- function(jitterSpaceSD = 0, jitterTimeSD = 0) {
+  #TO_DO
+}
