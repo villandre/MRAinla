@@ -28,7 +28,7 @@
 #' }
 #' @export
 
-MRA_INLA <- function(spacetimeData, errorSDstart, fixedEffSDstart, spRho, spSmoothness, spScale, timeRho, timeSmoothness, timeScale, M, lonRange, latRange, timeRange, randomSeed, cutForTimeSplit = 400, MRAcovParasIGalphaBeta, FEmuVec, fixedEffIGalphaBeta = NULL, errorIGalphaBeta, stepSize = 1, lowerThreshold = 3, maternCov = FALSE, spaceNuggetSD, timeNuggetSD, predictionData = NULL, clusterAddress = NULL, varyFixedEffSD = TRUE, varyMaternSmoothness = TRUE) {
+MRA_INLA <- function(spacetimeData, errorSDstart, fixedEffSDstart, MRAhyperparasStart, M, lonRange, latRange, timeRange, randomSeed, cutForTimeSplit = 400, MRAcovParasGammaAlphaBeta, FEmuVec, fixedEffGammaAlphaBeta = NULL, errorGammaAlphaBeta, stepSize = 1, lowerThreshold = 3, maternCov = FALSE, spaceNuggetSD, timeNuggetSD, predictionData = NULL, clusterAddress = NULL, varyFixedEffSD = TRUE, varyMaternSmoothness = TRUE) {
   dataCoordinates <- spacetimeData@sp@coords
   timeRangeReshaped <- as.integer(timeRange)/(3600*24)
   timeBaseline <- min(timeRangeReshaped)
@@ -38,13 +38,13 @@ MRA_INLA <- function(spacetimeData, errorSDstart, fixedEffSDstart, spRho, spSmoo
   covariateMatrix <- as.matrix(spacetimeData@data[, -1, drop = FALSE])
   gridPointer <- setupGridCpp(spacetimeData@data[, 1], dataCoordinates, timeValues, covariateMatrix, M, lonRange, latRange, timeRangeReshaped, randomSeed, cutForTimeSplit)
   # First we compute values relating to the hyperprior marginal distribution...
-  xStartValues <- c(spRho = spRho, spScale = spScale, timeRho = timeRho, timeScale = timeScale, errorSDstart = errorSDstart)
+  xStartValues <- c(spRho = MRAhyperparasStart$space["rho"], spScale = MRAhyperparasStart$space["scale"], timeRho = MRAhyperparasStart$time["rho"], timeScale = MRAhyperparasStart$time["scale"], errorSDstart = errorSDstart)
   if (varyFixedEffSD) {
     xStartValues[["fixedEffSD"]] <- fixedEffSDstart
   }
   if (varyMaternSmoothness) {
-    xStartValues[["spSmoothness"]] <- spSmoothness
-    xStartValues[["timeSmoothness"]] <- timeSmoothness
+    xStartValues[["spSmoothness"]] <- MRAhyperparasStart$space["smoothness"]
+    xStartValues[["timeSmoothness"]] <- MRAhyperparasStart$time["smoothness"]
   }
 
   funForOptim <- function(x, treePointer, MRAcovParasIGalphaBeta, fixedEffIGalphaBeta, errorIGalphaBeta, FEmuVec) {
@@ -52,19 +52,19 @@ MRA_INLA <- function(spacetimeData, errorSDstart, fixedEffSDstart, spRho, spSmoo
     if (varyFixedEffSD) {
       fixedEffArg <- x[["fixedEffSD"]]
     }
-    spSmoothnessArg <- spSmoothness
-    timeSmoothnessArg <- timeSmoothness
+    spSmoothnessArg <- MRAhyperparasStart$space["smoothness"]
+    timeSmoothnessArg <- MRAhyperparasStart$time["smoothness"]
     if (varyMaternSmoothness) {
       spSmoothnessArg <- x[["spSmoothness"]]
       timeSmoothnessArg <- x[["timeSmoothness"]]
     }
     MRAlist <- list(space = list(rho = x[["spRho"]], smoothness = spSmoothnessArg, scale = x[["spScale"]]), time = list(rho = x[["timeRho"]], smoothness = timeSmoothnessArg, scale = x[["timeScale"]]))
-    -LogJointHyperMarginal(treePointer = treePointer, MRAhyperparas = MRAlist, fixedEffSD = fixedEffArg, errorSD = x[["errorSD"]], MRAcovParasIGalphaBeta = MRAcovParasIGalphaBeta, FEmuVec = FEmuVec, fixedEffIGalphaBeta = fixedEffIGalphaBeta, errorIGalphaBeta, matern = as.logical(maternCov), spaceNuggetSD = spaceNuggetSD, timeNuggetSD = timeNuggetSD, recordFullConditional = FALSE)
+    -LogJointHyperMarginal(treePointer = treePointer, MRAhyperparas = MRAlist, fixedEffSD = fixedEffArg, errorSD = x[["errorSD"]], MRAcovParasGammaAlphaBeta = MRAcovParasGammaAlphaBeta, FEmuVec = FEmuVec, fixedEffGammaAlphaBeta = fixedEffGammaAlphaBeta, errorGammaAlphaBeta = errorGammaAlphaBeta, matern = as.logical(maternCov), spaceNuggetSD = spaceNuggetSD, timeNuggetSD = timeNuggetSD, recordFullConditional = FALSE)
   }
 
   nloptrOpts <-  list(maxeval = 1000, xtol_rel = 1e-8)
   cat("Optimising marginal hyperparameter posterior distribution... \n") ;
-  optimResult <- nloptr::lbfgs(x0 = xStartValues, fn = funForOptim, lower = rep(0.01, length(xStartValues)), upper = 20*xStartValues, control = nloptrOpts, treePointer = gridPointer$gridPointer, MRAcovParasIGalphaBeta = MRAcovParasIGalphaBeta, FEmuVec = FEmuVec, fixedEffIGalphaBeta = fixedEffIGalphaBeta, errorIGalphaBeta = errorIGalphaBeta)
+  optimResult <- nloptr::lbfgs(x0 = xStartValues, fn = funForOptim, lower = rep(0.01, length(xStartValues)), upper = 20*xStartValues, control = nloptrOpts, treePointer = gridPointer$gridPointer, MRAcovParasGammaAlphaBeta = MRAcovParasGammaAlphaBeta, FEmuVec = FEmuVec, fixedEffGammaAlphaBeta = fixedEffGammaAlphaBeta, errorGammaAlphaBeta = errorGammaAlphaBeta)
   if (optimResult$convergence < 0) {
     stop("Optimisation algorithm did not converge! \n \n")
   }
@@ -72,14 +72,14 @@ MRA_INLA <- function(spacetimeData, errorSDstart, fixedEffSDstart, spRho, spSmoo
   # cat("LOADING VALUES FOR TESTING PURPOSES. REMOVE THIS ONCE CODE IS COMPLETE.\n \n")
   # load("~/Documents/optimForTests.R")
   cat("Estimating Hessian at mode... \n") ;
-  hessianMat <- nlme::fdHess(pars = optimResult$par, fun = funForOptim, treePointer = gridPointer$gridPointer, MRAcovParasIGalphaBeta = MRAcovParasIGalphaBeta, FEmuVec = FEmuVec, fixedEffIGalphaBeta = fixedEffIGalphaBeta, errorIGalphaBeta = errorIGalphaBeta)$Hessian
+  hessianMat <- nlme::fdHess(pars = optimResult$par, fun = funForOptim, treePointer = gridPointer$gridPointer, MRAcovParasGammaAlphaBeta = MRAcovParasGammaAlphaBeta, FEmuVec = FEmuVec, fixedEffGammaAlphaBeta = fixedEffGammaAlphaBeta, errorGammaAlphaBeta = errorGammaAlphaBeta)$Hessian
 
   if (det(hessianMat) <= 0) {
     warning("Non-positive definite Hessian matrix... \n \n")
   }
   optimResult$hessian <- -hessianMat # The "-" is necessary because we performed a minimisation rather than a maximisation.
   cat("Computing distribution value at integration points... \n")
-  hyperparaList <- getIntegrationPointsAndValues(optimObject = optimResult, gridPointer = gridPointer$gridPointer, MRAcovParasIGalphaBeta = MRAcovParasIGalphaBeta, FEmuVec = FEmuVec, fixedEffIGalphaBeta = fixedEffIGalphaBeta, errorIGalphaBeta = errorIGalphaBeta, stepSize = stepSize, lowerThreshold = lowerThreshold, matern = maternCov, predictionData = predictionData, timeBaseline = timeBaseline)
+  hyperparaList <- getIntegrationPointsAndValues(optimObject = optimResult, gridPointer = gridPointer$gridPointer, MRAcovParasGammaAlphaBeta = MRAcovParasGammaAlphaBeta, FEmuVec = FEmuVec, fixedEffGammaAlphaBeta = fixedEffGammaAlphaBeta, errorGammaAlphaBeta = errorGammaAlphaBeta, stepSize = stepSize, lowerThreshold = lowerThreshold, matern = maternCov, predictionData = predictionData, timeBaseline = timeBaseline)
   # load("~/Documents/hyperparaList.Rdata")
   discreteLogJointValues <- sapply(hyperparaList, '[[', "logJointValue")
   maxLogJointValues <- max(discreteLogJointValues)
@@ -155,14 +155,14 @@ ComputeKrigingMoments <- function(hyperparaList) {
 
 covFunctionBiMatern <- function(rangeParaSpace = 10, rangeParaTime = 10) {
   function(spacetime1, spacetime2) {
-    euclidDist <- spDists(spacetime1@sp, spacetime2@sp)
+    euclidDist <- sp::spDists(spacetime1@sp, spacetime2@sp)
     timeDist <- outer(zoo::index(spacetime2@time), zoo::index(spacetime1@time), function(x, y) as.numeric(abs(difftime(x, y, units = "days"))))
     fields::Exponential(euclidDist, range = 10)*t(fields::Exponential(timeDist, range = 10))
   }
 }
 
 # When lowerThreshold is 3, the exploration stops if the value being tested is at least 20 times smaller than the value at the peak of the hyperparameter marginal a posteriori distribution.
-getIntegrationPointsAndValues <- function(optimObject, gridPointer, MRAcovParasIGalphaBeta, FEmuVec, fixedEffIGalphaBeta, errorIGalphaBeta, stepSize = 1, lowerThreshold = 3, matern = FALSE, predictionData = NULL, timeBaseline, otherGridPointers = NULL, clusterAddress = NULL) {
+getIntegrationPointsAndValues <- function(optimObject, gridPointer, MRAcovParasGammaAlphaBeta, FEmuVec, fixedEffGammaAlphaBeta, errorGammaAlphaBeta, stepSize = 1, lowerThreshold = 3, matern = FALSE, predictionData = NULL, timeBaseline, otherGridPointers = NULL, clusterAddress = NULL) {
 
   decomposition <- eigen(solve(-optimObject$hessian), symmetric = TRUE)
 
@@ -178,7 +178,7 @@ getIntegrationPointsAndValues <- function(optimObject, gridPointer, MRAcovParasI
   getContainerElement <- function(z) {
     Psis <- getPsi(z)
     aList <- list(z = z, MRAhyperparas = head(Psis, n = -2), fixedEffSD = Psis[length(Psis) - 1], errorSD = tail(Psis, n = 1))
-    aList$logJointValue <- with(aList, expr = LogJointHyperMarginal(treePointer = gridPointer, MRAhyperparas = MRAhyperparas, fixedEffSD = fixedEffSD, errorSD = errorSD, MRAcovParasIGalphaBeta = MRAcovParasIGalphaBeta, FEmuVec = FEmuVec, fixedEffIGalphaBeta =  fixedEffIGalphaBeta, errorIGalphaBeta = errorIGalphaBeta, matern = matern, spaceNuggetSD = spaceNuggetSD, timeNuggetSD = timeNuggetSD, recordFullConditional = TRUE))
+    aList$logJointValue <- with(aList, expr = LogJointHyperMarginal(treePointer = gridPointer, MRAhyperparas = MRAhyperparas, fixedEffSD = fixedEffSD, errorSD = errorSD, MRAcovParasGammaAlphaBeta = MRAcovParasGammaAlphaBeta, FEmuVec = FEmuVec, fixedEffGammaAlphaBeta =  fixedEffGammaAlphaBeta, errorGammaAlphaBeta = errorGammaAlphaBeta, matern = matern, spaceNuggetSD = spaceNuggetSD, timeNuggetSD = timeNuggetSD, recordFullConditional = TRUE))
     if (!is.null(predictionData)) {
       timeValues <- as.integer(time(predictionData@time))/(3600*24) - timeBaseline # The division is to obtain values in days.
       aList$CondPredStats <- ComputeCondPredStats(gridPointer, predictionData@sp@coords, timeValues, as.matrix(predictionData@data))
