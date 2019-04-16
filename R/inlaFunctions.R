@@ -28,7 +28,7 @@
 #' }
 #' @export
 
-MRA_INLA <- function(spacetimeData, errorSDstart, fixedEffSDstart, MRAhyperparasStart, M, lonRange, latRange, timeRange, randomSeed, cutForTimeSplit = 400, MRAcovParasIGalphaBeta, FEmuVec, fixedEffIGalphaBeta, errorIGalphaBeta, stepSize = 1, lowerThreshold = 3, maternCov = FALSE, spaceNuggetSD, timeNuggetSD, predictionData = NULL, clusterAddress) {
+MRA_INLA <- function(spacetimeData, errorSDstart, fixedEffSDstart, spRho, spSmoothness, spScale, timeRho, timeSmoothness, timeScale, M, lonRange, latRange, timeRange, randomSeed, cutForTimeSplit = 400, MRAcovParasIGalphaBeta, FEmuVec, fixedEffIGalphaBeta = NULL, errorIGalphaBeta, stepSize = 1, lowerThreshold = 3, maternCov = FALSE, spaceNuggetSD, timeNuggetSD, predictionData = NULL, clusterAddress = NULL, varyFixedEffSD = TRUE, varyMaternSmoothness = TRUE) {
   dataCoordinates <- spacetimeData@sp@coords
   timeRangeReshaped <- as.integer(timeRange)/(3600*24)
   timeBaseline <- min(timeRangeReshaped)
@@ -38,12 +38,28 @@ MRA_INLA <- function(spacetimeData, errorSDstart, fixedEffSDstart, MRAhyperparas
   covariateMatrix <- as.matrix(spacetimeData@data[, -1, drop = FALSE])
   gridPointer <- setupGridCpp(spacetimeData@data[, 1], dataCoordinates, timeValues, covariateMatrix, M, lonRange, latRange, timeRangeReshaped, randomSeed, cutForTimeSplit)
   # First we compute values relating to the hyperprior marginal distribution...
-
-  xStartValues <- c(MRAhyperparasStart, fixedEffSDstart, errorSDstart)
-  numMRAhyperparas <- length(MRAhyperparasStart)
+  xStartValues <- c(spRho = spRho, spScale = spScale, timeRho = timeRho, timeScale = timeScale, errorSDstart = errorSDstart)
+  if (varyFixedEffSD) {
+    xStartValues[["fixedEffSD"]] <- fixedEffSDstart
+  }
+  if (varyMaternSmoothness) {
+    xStartValues[["spSmoothness"]] <- spSmoothness
+    xStartValues[["timeSmoothness"]] <- timeSmoothness
+  }
 
   funForOptim <- function(x, treePointer, MRAcovParasIGalphaBeta, fixedEffIGalphaBeta, errorIGalphaBeta, FEmuVec) {
-    -LogJointHyperMarginal(treePointer = treePointer, MRAhyperparas = x[1:numMRAhyperparas], fixedEffSD = x[numMRAhyperparas + 1], errorSD = x[numMRAhyperparas + 2], MRAcovParasIGalphaBeta = MRAcovParasIGalphaBeta, FEmuVec = FEmuVec, fixedEffIGalphaBeta = fixedEffIGalphaBeta, errorIGalphaBeta, matern = as.logical(maternCov), spaceNuggetSD = spaceNuggetSD, timeNuggetSD = timeNuggetSD, recordFullConditional = FALSE)
+    fixedEffArg <- fixedEffSDstart
+    if (varyFixedEffSD) {
+      fixedEffArg <- x[["fixedEffSD"]]
+    }
+    spSmoothnessArg <- spSmoothness
+    timeSmoothnessArg <- timeSmoothness
+    if (varyMaternSmoothness) {
+      spSmoothnessArg <- x[["spSmoothness"]]
+      timeSmoothnessArg <- x[["timeSmoothness"]]
+    }
+    MRAlist <- list(space = list(rho = x[["spRho"]], smoothness = spSmoothnessArg, scale = x[["spScale"]]), time = list(rho = x[["timeRho"]], smoothness = timeSmoothnessArg, scale = x[["timeScale"]]))
+    -LogJointHyperMarginal(treePointer = treePointer, MRAhyperparas = MRAlist, fixedEffSD = fixedEffArg, errorSD = x[["errorSD"]], MRAcovParasIGalphaBeta = MRAcovParasIGalphaBeta, FEmuVec = FEmuVec, fixedEffIGalphaBeta = fixedEffIGalphaBeta, errorIGalphaBeta, matern = as.logical(maternCov), spaceNuggetSD = spaceNuggetSD, timeNuggetSD = timeNuggetSD, recordFullConditional = FALSE)
   }
 
   nloptrOpts <-  list(maxeval = 1000, xtol_rel = 1e-8)
@@ -289,7 +305,7 @@ SimulateSpacetimeData <- function(numObsPerTimeSlice = 225, covFunction, lonRang
 
   allSpaceCoordinates <- as.data.frame(expand.grid(as.data.frame(slotCoordinates)))
   numToRemove <- nrow(allSpaceCoordinates) - numObsPerTimeSlice
-  obsToRemove <- sample.int(n = nrow(allSpaceCoordinates), size = numToRemove, replace = FALSE)
+  obsToRemove <- (nrow(allSpaceCoordinates) - numToRemove + 1):nrow(allSpaceCoordinates)
   allSpaceCoordinates <- allSpaceCoordinates[-obsToRemove, ]
 
   coordinates <- allSpaceCoordinates[rep(1:nrow(allSpaceCoordinates), length(timeValuesInPOSIXct)), ]
@@ -306,8 +322,4 @@ SimulateSpacetimeData <- function(numObsPerTimeSlice = 225, covFunction, lonRang
   colnames(dataForObject) <- c("y", paste("Covariate", 1:(length(FEvalues) - 1), sep = ""))
   spacetimeObj <- spacetime::STIDF(sp = sp::SpatialPoints(coordinates[, c("longitude", "latitude")]), data = dataForObject, time = coordinates$time)
   spacetimeObj
-}
-
-jitterData <- function(jitterSpaceSD = 0, jitterTimeSD = 0) {
-  #TO_DO
 }

@@ -19,26 +19,30 @@ arma::uvec TreeNode::deriveObsInNode(const spatialcoor & dataset) {
 
 // We assume a squared exponential decay function with sigma^2 = 1
 
-double TreeNode::SqExpCovFunction(const Spatiotemprange & distance, const vec & covParameters, const double & spaceNuggetSD, const double & timeNuggetSD) {
+double TreeNode::SqExpCovFunction(const Spatiotemprange & distance, const double & rhoSpace, const double & rhoTime, const double & spaceNuggetSD, const double & timeNuggetSD) {
   double spExp, timeExp ;
   if (distance.sp == 0) {
     spExp = pow(spaceNuggetSD, 2) ;
   } else {
-    spExp = exp(-pow(distance.sp, 2)/(2 * pow(covParameters.at(0), 2))) ;
+    spExp = exp(-pow(distance.sp, 2)/(2 * pow(rhoSpace, 2))) ;
   }
 
   if (distance.time == 0) {
     timeExp = pow(timeNuggetSD, 2) ;
   } else {
-    timeExp = exp(-pow(distance.time, 2)/(2 * pow(covParameters.at(1), 2))) ;
+    timeExp = exp(-pow(distance.time, 2)/(2 * pow(rhoTime, 2))) ;
   }
   return spExp * timeExp ;
 }
 
-double TreeNode::MaternCovFunction(const Spatiotemprange & distance, const vec & covParameters, const double & spaceNuggetSD, const double & timeNuggetSD) {
+double TreeNode::MaternCovFunction(const Spatiotemprange & distance, const maternVec & covParasSpace,
+                                   const maternVec & covParasTime, const double & spaceNuggetSD,
+                                   const double & timeNuggetSD) {
   // Matern covariance with smoothness 1 and scaling 1.
-  double spExp = maternCov(distance.sp, covParameters.at(0), 1 , 1, spaceNuggetSD) ;
-  double timeExp = maternCov(distance.sp, covParameters.at(1), 1 , 1, timeNuggetSD) ;
+  double spExp = maternCov(distance.sp, covParasSpace.rho, covParasSpace.smoothness , covParasSpace.scale,
+                           spaceNuggetSD) ;
+  double timeExp = maternCov(distance.time, covParasTime.rho, covParasTime.smoothness, covParasTime.scale,
+                             timeNuggetSD) ;
   return spExp * timeExp ;
 }
 
@@ -80,7 +84,7 @@ std::vector<TreeNode *> TreeNode::getAncestors() {
   return ancestorsList ;
 }
 
-mat TreeNode::computeCovMat(const spatialcoor & spTime1, const spatialcoor & spTime2, const vec & covParas, const bool matern, const double & spaceNuggetSD, const double & timeNuggetSD) {
+mat TreeNode::computeCovMat(const spatialcoor & spTime1, const spatialcoor & spTime2, const maternVec & covParasSp, const maternVec & covParasTime, const bool matern, const double & spaceNuggetSD, const double & timeNuggetSD) {
 
   mat covMat(spTime1.timeCoords.size(), spTime2.timeCoords.size(), fill::zeros) ;
   for (uint rowIndex = 0; rowIndex < spTime1.timeCoords.size() ; rowIndex++) {
@@ -92,9 +96,9 @@ mat TreeNode::computeCovMat(const spatialcoor & spTime1, const spatialcoor & spT
 
       Spatiotemprange rangeValue = sptimeDistance(space1, time1, space2, time2) ;
       if (matern) {
-        covMat.at(rowIndex, colIndex) = MaternCovFunction(rangeValue, covParas, spaceNuggetSD, timeNuggetSD) ;
+        covMat.at(rowIndex, colIndex) = MaternCovFunction(rangeValue, covParasSp, covParasTime, spaceNuggetSD, timeNuggetSD) ;
       } else {
-        covMat.at(rowIndex, colIndex) = SqExpCovFunction(rangeValue, covParas, spaceNuggetSD, timeNuggetSD) ;
+        covMat.at(rowIndex, colIndex) = SqExpCovFunction(rangeValue, covParasSp.rho, covParasTime.rho, spaceNuggetSD, timeNuggetSD) ;
       }
     }
   }

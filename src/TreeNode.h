@@ -23,6 +23,13 @@ namespace MRAinla
 {
 typedef unsigned int uint ;
 
+struct maternVec{
+  double rho ;
+  double smoothness ;
+  double scale ;
+  maternVec(double rho, double smoothness, double scale) : smoothness(smoothness), rho(rho), scale(scale) { };
+};
+
 struct spatialcoor {
   arma::mat spatialCoords = arma::mat(1, 2, arma::fill::zeros) ;
   arma::vec timeCoords = arma::vec(1, arma::fill::zeros) ;
@@ -200,8 +207,8 @@ protected:
   double m_u ;
   double m_d ;
 
-  double SqExpCovFunction(const Spatiotemprange &, const arma::vec &, const double &, const double &) ;
-  double MaternCovFunction(const Spatiotemprange &, const arma::vec &, const double &, const double &) ;
+  double SqExpCovFunction(const Spatiotemprange &, const double &, const double &, const double &, const double &) ;
+  double MaternCovFunction(const Spatiotemprange &, const maternVec &, const maternVec &, const double &, const double &) ;
 
   arma::mat computeCovMat(const spatialcoor &, const spatialcoor &, const arma::vec &, const bool, const double &, const double &) ;
   void baseInitialise(const dimensions & dims, const uint & depth, TreeNode * parent, const inputdata & dataset) {
