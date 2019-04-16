@@ -53,10 +53,10 @@ List setupGridCpp(NumericVector responseValues, NumericMatrix spCoords, NumericV
 
 // [[Rcpp::export]]
 
-double LogJointHyperMarginal(SEXP treePointer, Rcpp::NumericVector MRAhyperparas,
-         double fixedEffSD, double errorSD, Rcpp::List MRAcovParasIGalphaBeta,
-         Rcpp::NumericVector FEmuVec, NumericVector fixedEffIGalphaBeta,
-         NumericVector errorIGalphaBeta, bool matern, double spaceNuggetSD, double timeNuggetSD,
+double LogJointHyperMarginal(SEXP treePointer, Rcpp::List MRAhyperparas,
+         double fixedEffSD, double errorSD, Rcpp::List MRAcovParasGammaAlphaBeta,
+         Rcpp::NumericVector FEmuVec, NumericVector fixedEffGammaAlphaBeta,
+         NumericVector errorGammaAlphaBeta, bool matern, double spaceNuggetSD, double timeNuggetSD,
          bool recordFullConditional) {
   arma::mat posteriorMatrix ;
   double outputValue = 0 ;
@@ -65,22 +65,17 @@ double LogJointHyperMarginal(SEXP treePointer, Rcpp::NumericVector MRAhyperparas
   {
     XPtr<AugTree> pointedTree(treePointer) ; // Becomes a regular pointer again.
 
-    // ProfilerStart("/home/luc/Downloads/myprofile.log") ;
     // The alpha's and beta's for the gamma distribution of the hyperparameters do not change.
-    if (pointedTree->GetMRAcovParasIGalphaBeta().size() == 0) {
-      std::vector<IGhyperParas> MRAalphaBeta ;
-      for (auto & i : MRAcovParasIGalphaBeta) {
-        vec alphaBetaVec = Rcpp::as<vec>(i) ;
-        IGhyperParas alphaBetaStruct(alphaBetaVec.at(0), alphaBetaVec.at(1)) ;
-        MRAalphaBeta.push_back(alphaBetaStruct) ;
-      }
-      pointedTree->SetMRAcovParasIGalphaBeta(MRAalphaBeta) ;
-      vec fixedEffAlphaBeta = Rcpp::as<vec>(fixedEffIGalphaBeta) ;
-      vec errorAlphaBeta = Rcpp::as<vec>(errorIGalphaBeta) ;
+    if (!pointedTree->CheckMRAcovParasGammaAlphaBeta()) {
+      pointedTree->ToggleGammaParasSet() ;
+      pointedTree->SetMRAcovParasGammaAlphaBeta(MRAcovParasGammaAlphaBeta) ;
+
+      vec fixedEffAlphaBeta = Rcpp::as<vec>(fixedEffGammaAlphaBeta) ;
+      vec errorAlphaBeta = Rcpp::as<vec>(errorGammaAlphaBeta) ;
       vec FEmu = Rcpp::as<vec>(FEmuVec) ;
 
-      pointedTree->SetFixedEffIGalphaBeta(IGhyperParas(fixedEffAlphaBeta.at(0), fixedEffAlphaBeta.at(1))) ;
-      pointedTree->SetErrorIGalphaBeta(IGhyperParas(errorAlphaBeta.at(0), errorAlphaBeta.at(1))) ;
+      pointedTree->SetFixedEffGammaAlphaBeta(GammaHyperParas(fixedEffAlphaBeta.at(0), fixedEffAlphaBeta.at(1))) ;
+      pointedTree->SetErrorGammaAlphaBeta(GammaHyperParas(errorAlphaBeta.at(0), errorAlphaBeta.at(1))) ;
       pointedTree->SetFEmu(FEmu) ;
       pointedTree->SetMatern(matern) ;
       pointedTree->SetSpaceAndTimeNuggetSD(spaceNuggetSD, timeNuggetSD) ;
@@ -94,9 +89,17 @@ double LogJointHyperMarginal(SEXP treePointer, Rcpp::NumericVector MRAhyperparas
 
     pointedTree->SetMRAcovParas(MRAhyperparas) ;
     pointedTree->SetRecordFullConditional(recordFullConditional) ;
-
-    pointedTree->ComputeLogJointPsiMarginal() ;
+    // ProfilerStart("/home/luc/Downloads/myprofile.log") ;
+    // cout <<"Started profiling... \n" ;
+    // for (uint i = 1; i < 80 ; i++) {
+      // vec newHypers = Rcpp::as<vec>(MRAhyperparas) ;
+      // newHypers.transform( [i](double val) { return (val + 1e-4 * double(i)); } );
+      // pointedTree->SetMRAcovParas(newHypers) ;
+      pointedTree->ComputeLogJointPsiMarginal() ;
+    // }
+    // cout <<"Done profiling... \n" ;
     // ProfilerStop() ;
+    // throw Rcpp::exception("Stop for profiling... \n") ;
     outputValue = pointedTree->GetLogJointPsiMarginal() ;
     printf("Marginal joint Psi: %.4e \n \n \n", pointedTree->GetLogJointPsiMarginal()) ;
   }

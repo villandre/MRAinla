@@ -22,7 +22,7 @@ public:
   void DeriveOmega(const arma::vec &) ;
   void DeriveU(const arma::vec &) ;
   void DeriveD() ;
-  void ComputeWmat(const arma::vec &, const bool, const double &, const double &) ;
+  void ComputeWmat(const maternVec &, const maternVec &, const bool, const double &, const double &) ;
   void ComputeParasEtaDeltaTilde(const spatialcoor &, const inputdata &, const arma::vec &) ;
   std::vector<std::vector<arma::mat>> GetAlist() const {return m_Alist ;};
   arma::mat GetKtilde() const {return m_Ktilde ;}
@@ -41,7 +41,7 @@ public:
   arma::mat GetUpred(const uint & l) { throw Rcpp::exception("Upred matrices only computed for tip nodes! \n") ;}
   void SetPredictLocations(const inputdata & data) { throw Rcpp::exception("Trying to attach predict locations to internal nodes! Predict locations should only be defined in the tips! \n") ;}
   arma::uvec GetPredIndices() { throw Rcpp::exception("Prediction locations not defined in internal nodes! \n");}
-  void computeUpred(const arma::vec &, const spatialcoor &, const bool, const double &, const double &) {
+  void computeUpred(const maternVec &, const maternVec &, const spatialcoor &, const bool, const double &, const double &) {
     throw Rcpp::exception("Upred matrices need not be computed in internal nodes! \n") ;
   }
 

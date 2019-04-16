@@ -5,8 +5,8 @@ setupGridCpp <- function(responseValues, spCoords, obsTime, covariateMatrix, M, 
     .Call('_MRAinla_setupGridCpp', PACKAGE = 'MRAinla', responseValues, spCoords, obsTime, covariateMatrix, M, lonRange, latRange, timeRange, randomSeed, cutForTimeSplit)
 }
 
-LogJointHyperMarginal <- function(treePointer, MRAhyperparas, fixedEffSD, errorSD, MRAcovParasIGalphaBeta, FEmuVec, fixedEffIGalphaBeta, errorIGalphaBeta, matern, spaceNuggetSD, timeNuggetSD, recordFullConditional) {
-    .Call('_MRAinla_LogJointHyperMarginal', PACKAGE = 'MRAinla', treePointer, MRAhyperparas, fixedEffSD, errorSD, MRAcovParasIGalphaBeta, FEmuVec, fixedEffIGalphaBeta, errorIGalphaBeta, matern, spaceNuggetSD, timeNuggetSD, recordFullConditional)
+LogJointHyperMarginal <- function(treePointer, MRAhyperparas, fixedEffSD, errorSD, MRAcovParasGammaAlphaBeta, FEmuVec, fixedEffGammaAlphaBeta, errorGammaAlphaBeta, matern, spaceNuggetSD, timeNuggetSD, recordFullConditional) {
+    .Call('_MRAinla_LogJointHyperMarginal', PACKAGE = 'MRAinla', treePointer, MRAhyperparas, fixedEffSD, errorSD, MRAcovParasGammaAlphaBeta, FEmuVec, fixedEffGammaAlphaBeta, errorGammaAlphaBeta, matern, spaceNuggetSD, timeNuggetSD, recordFullConditional)
 }
 
 GetFullCondMean <- function(treePointer) {

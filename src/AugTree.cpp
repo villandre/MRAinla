@@ -24,8 +24,6 @@ AugTree::AugTree(uint & M, vec & lonRange, vec & latRange, vec & timeRange, vec 
   m_dataset = inputdata(observations, obsSp, obsTime, covariates) ;
   m_mapDimensions = dimensions(lonRange, latRange, timeRange) ;
   m_randomNumGenerator = gsl_rng_alloc(gsl_rng_taus) ;
-  m_MRAcovParas.resize(1) ;
-  m_MRAcovParas.fill(-1.5e6) ;
 
   gsl_rng_set(m_randomNumGenerator, seed) ;
   m_fixedEffParameters.resize(m_dataset.covariateValues.n_cols + 1) ; // An extra 1 is added to take into account the intercept.
@@ -205,7 +203,7 @@ void AugTree::ComputeMRAlogLikAlt(const bool WmatsAvailable)
 
 void AugTree::computeWmats() {
 
-  m_vertexVector.at(0)->ComputeWmat(m_MRAcovParas, m_matern, m_spaceNuggetSD, m_timeNuggetSD) ;
+  m_vertexVector.at(0)->ComputeWmat(m_MRAcovParasSpace, m_MRAcovParasTime, m_matern, m_spaceNuggetSD, m_timeNuggetSD) ;
 
   for (uint level = 1; level <= m_M; level++) {
     std::vector<TreeNode *> levelNodes = GetLevelNodes(level) ;
@@ -214,7 +212,7 @@ void AugTree::computeWmats() {
     // #pragma omp parallel for
     for (std::vector<TreeNode *>::iterator it = levelNodes.begin(); it < levelNodes.end(); it++)
     {
-      (*it)->ComputeWmat(m_MRAcovParas, m_matern, m_spaceNuggetSD, m_timeNuggetSD) ;
+      (*it)->ComputeWmat(m_MRAcovParasSpace, m_MRAcovParasTime, m_matern, m_spaceNuggetSD, m_timeNuggetSD) ;
     }
   }
 }
@@ -244,39 +242,39 @@ void AugTree::deriveAtildeMatrices() {
   }
 }
 
-void AugTree::computeOmegas() {
-  for (int level = m_M; level >= 0 ; level--) {
-    uint levelRecast = (uint) level ;
-    std::vector<TreeNode *> levelNodes = GetLevelNodes(levelRecast) ;
-    for (auto & i : levelNodes) {
-      i->DeriveOmega(m_MRAvalues) ;
-    }
-  }
-}
-
-void AugTree::computeU() {
-  for (int level = m_M; level >= 0 ; level--) {
-    uint levelRecast = (uint) level ;
-    std::vector<TreeNode *> levelNodes = GetLevelNodes(levelRecast) ;
-    for (auto & i : levelNodes) {
-      i->DeriveU(m_MRAvalues) ;
-    }
-  }
-};
-
-void AugTree::computeD() {
-  for (int level = m_M; level >= 0 ; level--) {
-    uint levelRecast = (uint) level ;
-    std::vector<TreeNode *> levelNodes = GetLevelNodes(levelRecast) ;
-
-    // Trying openmp. We need to have a standard looping structure.
-
-    // #pragma omp parallel for
-    for (std::vector<TreeNode *>::iterator it = levelNodes.begin(); it < levelNodes.end(); it++) {
-      (*it)->DeriveD() ;
-    }
-  }
-}
+// void AugTree::computeOmegas() {
+//   for (int level = m_M; level >= 0 ; level--) {
+//     uint levelRecast = (uint) level ;
+//     std::vector<TreeNode *> levelNodes = GetLevelNodes(levelRecast) ;
+//     for (auto & i : levelNodes) {
+//       i->DeriveOmega(m_MRAvalues) ;
+//     }
+//   }
+// }
+//
+// void AugTree::computeU() {
+//   for (int level = m_M; level >= 0 ; level--) {
+//     uint levelRecast = (uint) level ;
+//     std::vector<TreeNode *> levelNodes = GetLevelNodes(levelRecast) ;
+//     for (auto & i : levelNodes) {
+//       i->DeriveU(m_MRAvalues) ;
+//     }
+//   }
+// };
+//
+// void AugTree::computeD() {
+//   for (int level = m_M; level >= 0 ; level--) {
+//     uint levelRecast = (uint) level ;
+//     std::vector<TreeNode *> levelNodes = GetLevelNodes(levelRecast) ;
+//
+//     // Trying openmp. We need to have a standard looping structure.
+//
+//     // #pragma omp parallel for
+//     for (std::vector<TreeNode *>::iterator it = levelNodes.begin(); it < levelNodes.end(); it++) {
+//       (*it)->DeriveD() ;
+//     }
+//   }
+// }
 
 // std::vector<GaussDistParas> AugTree::ComputeConditionalPrediction(const inputdata & predictionData) {
 //   distributePredictionData(predictionData) ;
@@ -473,21 +471,24 @@ void AugTree::diveAndUpdate(TreeNode * nodePointer, std::vector<TreeNode *> * de
 // For now, we assume that all hyperpriors have an inverse gamma distribution with the same parameters.
 
 void AugTree::ComputeLogPriors() {
-  vec hyperPriorVec = m_MRAcovParas ;
-  hyperPriorVec.resize(hyperPriorVec.size() + 2) ;
-  hyperPriorVec(m_MRAcovParas.size()) = m_fixedEffSD ;
-  hyperPriorVec(m_MRAcovParas.size() + 1) = m_errorSD ;
 
-  std::vector<IGhyperParas> incrementedIG = m_MRAcovParasIGalphaBeta ;
-  incrementedIG.push_back(m_fixedEffIGalphaBeta) ;
-  incrementedIG.push_back(m_errorIGalphaBeta) ;
+  std::vector<std::pair<double, GammaHyperParas>> priorCombinations ;
 
-  hyperPriorVec.print("Hyperparameter values:") ;
+  priorCombinations.push_back(std::make_pair(m_MRAcovParasSpace.m_rho, m_maternParasGammaAlphaBetaSpace.m_rho)) ;
+  priorCombinations.push_back(std::make_pair(m_MRAcovParasSpace.m_smoothness, m_maternParasGammaAlphaBetaSpace.m_smoothness)) ;
+  priorCombinations.push_back(std::make_pair(m_MRAcovParasSpace.m_scale, m_maternParasGammaAlphaBetaSpace.m_scale)) ;
+
+  priorCombinations.push_back(std::make_pair(m_MRAcovParasTime.m_rho, m_maternParasGammaAlphaBetaTime.m_rho)) ;
+  priorCombinations.push_back(std::make_pair(m_MRAcovParasTime.m_smoothness, m_maternParasGammaAlphaBetaTime.m_smoothness)) ;
+  priorCombinations.push_back(std::make_pair(m_MRAcovParasTime.m_scale, m_maternParasGammaAlphaBetaTime.m_scale)) ;
+
+  priorCombinations.push_back(std::make_pair(m_fixedEffSD, m_fixedEffGammaAlphaBeta)) ;
+  priorCombinations.push_back(std::make_pair(m_errorSD, m_errorGammaAlphaBeta)) ;
 
   double logPrior = 0 ;
 
-  for (uint i = 0 ; i < hyperPriorVec.size() ; i++) {
-    logPrior += (incrementedIG.at(i).m_alpha - 1) * log(hyperPriorVec.at(i)) - incrementedIG.at(i).m_beta * hyperPriorVec.at(i) ;
+  for (auto & i : priorCombinations) {
+    logPrior += (i.second.m_alpha - 1) * log(i.first) - i.second.m_beta * i.first ;
   }
 
   m_logPrior = logPrior ;
@@ -514,30 +515,31 @@ void AugTree::ComputeLogFCandLogCDandDataLL() {
 
   sp_mat SigmaFEandEtaInv = CombineFEinvAndKinvMatrices() ;
 
-  sp_mat Fmatrix = createFmatrixAlt(false) ;
+  if (m_recomputeMRAlogLik) {
+    sp_mat Fmatrix = createFmatrixAlt(false) ;
+    mat transIncrementedCovar = trans(join_rows(ones<vec>(n), m_dataset.covariateValues)) ;
 
-  mat transIncrementedCovar = trans(join_rows(ones<vec>(n), m_dataset.covariateValues)) ;
+    //We re-shuffle the X matrix in such a way that the lines match those in the F matrix, based on
+    // m_obsOrderForFmat.
 
- //We re-shuffle the X matrix in such a way that the lines match those in the F matrix, based on
- // m_obsOrderForFmat.
+    mat incrementedCovarReshuffled = trans(transIncrementedCovar.cols(m_obsOrderForFmat)) ;
 
-  mat incrementedCovarReshuffled = trans(transIncrementedCovar.cols(m_obsOrderForFmat)) ;
-
-  sp_mat Hstar = join_rows(conv_to<sp_mat>::from(incrementedCovarReshuffled), Fmatrix) ;
+    m_Hstar = join_rows(conv_to<sp_mat>::from(incrementedCovarReshuffled), Fmatrix) ;
+  }
 
   sp_mat TepsilonInverse = std::pow(m_errorSD, -2) * eye<sp_mat>(n, n) ;
 
-  m_FullCondPrecision = SigmaFEandEtaInv + trans(Hstar) * TepsilonInverse * Hstar ;
+  m_FullCondPrecision = SigmaFEandEtaInv + trans(m_Hstar) * TepsilonInverse * m_Hstar ;
 
   vec responsesReshuffled = m_dataset.responseValues.elem(m_obsOrderForFmat) ;
 
-  vec bVec = trans(trans(responsesReshuffled) * TepsilonInverse * Hstar) ;
+  vec bVec = trans(trans(responsesReshuffled) * TepsilonInverse * m_Hstar) ;
 
   vec updatedMean = ComputeFullConditionalMean(bVec) ;
 
   m_Vstar = updatedMean ;
 
-  m_MRAvalues = Fmatrix * updatedMean.tail(m_numKnots) ;
+  // m_MRAvalues = m_Fmatrix * updatedMean.tail(m_numKnots) ;
 
   vec fixedEffMeans = updatedMean.head(m_fixedEffParameters.size()) ;
   SetFixedEffParameters(fixedEffMeans) ;
@@ -554,8 +556,8 @@ void AugTree::ComputeLogFCandLogCDandDataLL() {
   m_logCondDist = logLikTerm(0,0) + 0.5 * logDetSigmaKFEinv ;
 
   // Computing p(y | v*, Psi)
-  double errorLogDet = -2 * n * std::log(m_errorSD) ;
-  vec recenteredY = responsesReshuffled - Hstar * m_Vstar ;
+  double errorLogDet = -2 * n * log(m_errorSD) ;
+  vec recenteredY = responsesReshuffled - m_Hstar * m_Vstar ;
   vec globalLogLikExp = -0.5 * (trans(recenteredY) * TepsilonInverse * recenteredY) ;
   m_globalLogLik = 0.5 * errorLogDet + globalLogLikExp(0) ;
 }
@@ -892,7 +894,7 @@ arma::vec AugTree::ComputeFullConditionalMean(const arma::vec & bVec) {
       mat secondExp = compositeInverted * conv_to<mat>::from(firstExp) ;
       mat thirdExp = trans(Bmatrix) * secondExp ;
       mat finalExp = Dinverted.col(i) + Dinverted * thirdExp ;
-      m_FullCondSDs.at(i + compositeInverted.n_rows) = std::sqrt(finalExp(i, 0)) ;
+      m_FullCondSDs.at(i + compositeInverted.n_rows) = sqrt(finalExp(i, 0)) ;
     }
 
     m_FullCondMean = meanVec ;
@@ -910,8 +912,7 @@ sp_mat AugTree::ComputeHpred(const mat & spCoords, const vec & time, const mat &
     i->SetPredictLocations(m_predictData) ;
     uvec predictionsInLeaf = i->GetPredIndices() ;
     if (predictionsInLeaf.size() > 0) {
-
-      i->computeUpred(m_MRAcovParas, m_predictData, m_matern, m_spaceNuggetSD, m_timeNuggetSD) ;
+      i->computeUpred(m_MRAcovParasSpace, m_MRAcovParasTime, m_predictData, m_matern, m_spaceNuggetSD, m_timeNuggetSD) ;
     }
   }
   sp_mat FmatrixPred = createFmatrixAlt(true) ;
@@ -973,4 +974,42 @@ arma::vec AugTree::ComputeEvar(const arma::sp_mat & HmatPred) {
     EvarValues.at(i) = meanVec.at(0,0) + errorVar ;
   }
   return EvarValues ;
+}
+
+void AugTree::SetMRAcovParas(const Rcpp::List & MRAcovParas) {
+  List SpaceParas = Rcpp::as<List>(MRAcovParas["space"]) ;
+  List TimeParas = Rcpp::as<List>(MRAcovParas["time"]) ;
+
+  double rhoSpace = Rcpp::as<double>(SpaceParas["rho"]) ;
+  double smoothnessSpace = Rcpp::as<double>(SpaceParas["smoothness"]) ;
+  double scaleSpace = Rcpp::as<double>(SpaceParas["scale"]) ;
+
+  double rhoTime = Rcpp::as<double>(TimeParas["rho"]) ;
+  double smoothnessTime = Rcpp::as<double>(TimeParas["smoothness"]) ;
+  double scaleTime = Rcpp::as<double>(TimeParas["scale"]) ;
+
+  maternVec MRAcovParasSpace(rhoSpace, smoothnessSpace, scaleSpace) ;
+  maternVec MRAcovParasTime(rhoTime, smoothnessTime, scaleTime) ;
+
+  bool test = (m_MRAcovParasSpace == MRAcovParasSpace) && (m_MRAcovParasTime == MRAcovParasTime) ;
+
+  if (test) {
+    m_recomputeMRAlogLik = false ;
+  } else {
+    m_recomputeMRAlogLik = true ;
+  }
+  m_MRAcovParasSpace = MRAcovParasSpace ;
+  m_MRAcovParasTime = MRAcovParasTime ;
+}
+
+void AugTree::SetMRAcovParasGammaAlphaBeta(const Rcpp::List & MRAcovParasList) {
+  Rcpp::List spaceParas = Rcpp::as<List>(MRAcovParasList["space"]) ;
+  Rcpp::List timeParas = Rcpp::as<List>(MRAcovParasList["time"]) ;
+
+  m_maternParasGammaAlphaBetaSpace = maternGammaPriorParas(GammaHyperParas(Rcpp::as<vec>(spaceParas["rho"])),
+                                            GammaHyperParas(Rcpp::as<vec>(spaceParas["smoothness"])),
+                                            GammaHyperParas(Rcpp::as<vec>(spaceParas["scale"]))) ;
+  m_maternParasGammaAlphaBetaTime = maternGammaPriorParas(GammaHyperParas(Rcpp::as<vec>(timeParas["rho"])),
+                                            GammaHyperParas(Rcpp::as<vec>(timeParas["smoothness"])),
+                                            GammaHyperParas(Rcpp::as<vec>(timeParas["scale"]))) ;
 }

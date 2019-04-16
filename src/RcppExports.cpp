@@ -27,24 +27,24 @@ BEGIN_RCPP
 END_RCPP
 }
 // LogJointHyperMarginal
-double LogJointHyperMarginal(SEXP treePointer, Rcpp::NumericVector MRAhyperparas, double fixedEffSD, double errorSD, Rcpp::List MRAcovParasIGalphaBeta, Rcpp::NumericVector FEmuVec, NumericVector fixedEffIGalphaBeta, NumericVector errorIGalphaBeta, bool matern, double spaceNuggetSD, double timeNuggetSD, bool recordFullConditional);
-RcppExport SEXP _MRAinla_LogJointHyperMarginal(SEXP treePointerSEXP, SEXP MRAhyperparasSEXP, SEXP fixedEffSDSEXP, SEXP errorSDSEXP, SEXP MRAcovParasIGalphaBetaSEXP, SEXP FEmuVecSEXP, SEXP fixedEffIGalphaBetaSEXP, SEXP errorIGalphaBetaSEXP, SEXP maternSEXP, SEXP spaceNuggetSDSEXP, SEXP timeNuggetSDSEXP, SEXP recordFullConditionalSEXP) {
+double LogJointHyperMarginal(SEXP treePointer, Rcpp::List MRAhyperparas, double fixedEffSD, double errorSD, Rcpp::List MRAcovParasGammaAlphaBeta, Rcpp::NumericVector FEmuVec, NumericVector fixedEffGammaAlphaBeta, NumericVector errorGammaAlphaBeta, bool matern, double spaceNuggetSD, double timeNuggetSD, bool recordFullConditional);
+RcppExport SEXP _MRAinla_LogJointHyperMarginal(SEXP treePointerSEXP, SEXP MRAhyperparasSEXP, SEXP fixedEffSDSEXP, SEXP errorSDSEXP, SEXP MRAcovParasGammaAlphaBetaSEXP, SEXP FEmuVecSEXP, SEXP fixedEffGammaAlphaBetaSEXP, SEXP errorGammaAlphaBetaSEXP, SEXP maternSEXP, SEXP spaceNuggetSDSEXP, SEXP timeNuggetSDSEXP, SEXP recordFullConditionalSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
     Rcpp::traits::input_parameter< SEXP >::type treePointer(treePointerSEXP);
-    Rcpp::traits::input_parameter< Rcpp::NumericVector >::type MRAhyperparas(MRAhyperparasSEXP);
+    Rcpp::traits::input_parameter< Rcpp::List >::type MRAhyperparas(MRAhyperparasSEXP);
     Rcpp::traits::input_parameter< double >::type fixedEffSD(fixedEffSDSEXP);
     Rcpp::traits::input_parameter< double >::type errorSD(errorSDSEXP);
-    Rcpp::traits::input_parameter< Rcpp::List >::type MRAcovParasIGalphaBeta(MRAcovParasIGalphaBetaSEXP);
+    Rcpp::traits::input_parameter< Rcpp::List >::type MRAcovParasGammaAlphaBeta(MRAcovParasGammaAlphaBetaSEXP);
     Rcpp::traits::input_parameter< Rcpp::NumericVector >::type FEmuVec(FEmuVecSEXP);
-    Rcpp::traits::input_parameter< NumericVector >::type fixedEffIGalphaBeta(fixedEffIGalphaBetaSEXP);
-    Rcpp::traits::input_parameter< NumericVector >::type errorIGalphaBeta(errorIGalphaBetaSEXP);
+    Rcpp::traits::input_parameter< NumericVector >::type fixedEffGammaAlphaBeta(fixedEffGammaAlphaBetaSEXP);
+    Rcpp::traits::input_parameter< NumericVector >::type errorGammaAlphaBeta(errorGammaAlphaBetaSEXP);
     Rcpp::traits::input_parameter< bool >::type matern(maternSEXP);
     Rcpp::traits::input_parameter< double >::type spaceNuggetSD(spaceNuggetSDSEXP);
     Rcpp::traits::input_parameter< double >::type timeNuggetSD(timeNuggetSDSEXP);
     Rcpp::traits::input_parameter< bool >::type recordFullConditional(recordFullConditionalSEXP);
-    rcpp_result_gen = Rcpp::wrap(LogJointHyperMarginal(treePointer, MRAhyperparas, fixedEffSD, errorSD, MRAcovParasIGalphaBeta, FEmuVec, fixedEffIGalphaBeta, errorIGalphaBeta, matern, spaceNuggetSD, timeNuggetSD, recordFullConditional));
+    rcpp_result_gen = Rcpp::wrap(LogJointHyperMarginal(treePointer, MRAhyperparas, fixedEffSD, errorSD, MRAcovParasGammaAlphaBeta, FEmuVec, fixedEffGammaAlphaBeta, errorGammaAlphaBeta, matern, spaceNuggetSD, timeNuggetSD, recordFullConditional));
     return rcpp_result_gen;
 END_RCPP
 }

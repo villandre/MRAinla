@@ -19,17 +19,17 @@ void TipNode::DeriveOmega(const arma::vec & responseValues) {
 //   }
 // }
 
-void TipNode::computeUpred(const vec & covParas, const spatialcoor & predictLocations,
+void TipNode::computeUpred(const maternVec & covParasSp, const maternVec & covParasTime, const spatialcoor & predictLocations,
                            const bool matern, const double & spaceNuggetSD, const double & timeNuggetSD) {
   if (m_predsInNode.size() > 0) {
     std::vector<TreeNode *> brickList = getAncestors() ;
     m_UmatList.resize(m_depth + 1) ;
 
     spatialcoor subLocations = predictLocations.subset(m_predsInNode) ; // Will I need to invoke the destructor to avoid a memory leak?
-    m_UmatList.at(0) = computeCovMat(subLocations, brickList.at(0)->GetKnotsCoor(), covParas, matern, spaceNuggetSD, timeNuggetSD) ;
+    m_UmatList.at(0) = computeCovMat(subLocations, brickList.at(0)->GetKnotsCoor(), covParasSp, covParasTime, matern, spaceNuggetSD, timeNuggetSD) ;
 
     for (uint l = 1; l <= m_depth; l++) {
-      mat firstTerm = computeCovMat(subLocations, brickList.at(l)->GetKnotsCoor(), covParas, matern, spaceNuggetSD, timeNuggetSD) ;
+      mat firstTerm = computeCovMat(subLocations, brickList.at(l)->GetKnotsCoor(), covParasSp, covParasTime, matern, spaceNuggetSD, timeNuggetSD) ;
       mat secondTerm(firstTerm.n_rows, firstTerm.n_cols, fill::zeros) ;
       for (uint k = 0 ; k <= l-1; k++) {
          secondTerm += m_UmatList.at(k) * brickList.at(k)->GetKmatrix() * trans(brickList.at(l)->GetWlist().at(k)) ;

@@ -3,17 +3,26 @@
 #ifndef MYPROJECT_AUGTREE_H
 #define MYPROJECT_AUGTREE_H
 
-struct IGhyperParas{
+struct GammaHyperParas{
   // Default IG mean is 1 (mean = beta/(alpha - 1)), var is beta^2/[(alpha-1)^2(alpha-2)]
   // If alpha <= 2, variance is infinite,
   double m_alpha = 3;
   double m_beta = 2;
-  IGhyperParas() {}
-  IGhyperParas(double alpha, double beta) : m_alpha(alpha), m_beta(beta) {
-    // if (alpha < 2) {
-    //   std::cout << "Careful: IG distribution for hyperparameter has infinite variance! \n" ;
-    // }
+  GammaHyperParas() {}
+  GammaHyperParas(double alpha, double beta) : m_alpha(alpha), m_beta(beta) { }
+  GammaHyperParas(const arma::vec & alphaBeta) {
+    m_alpha = alphaBeta.at(0) ;
+    m_beta = alphaBeta.at(1) ;
   }
+};
+
+struct maternGammaPriorParas{
+  GammaHyperParas m_rho ;
+  GammaHyperParas m_smoothness ;
+  GammaHyperParas m_scale ;
+
+  maternGammaPriorParas() { }
+  maternGammaPriorParas(const GammaHyperParas & rho, const GammaHyperParas & smoothness, const GammaHyperParas & scale) : m_rho(rho), m_smoothness(smoothness), m_scale(scale) { }
 };
 
 namespace MRAinla {
@@ -37,7 +46,7 @@ public:
   inputdata GetDataset() {return m_dataset;}
   int GetNumTips() {return m_numTips ;}
   // arma::vec GetCovParameters() {return m_covParameters ;}
-  std::vector<IGhyperParas> GetMRAcovParasIGalphaBeta() { return m_MRAcovParasIGalphaBeta ;}
+
   int GetM() { return m_M ;}
   double GetLogJointPsiMarginal() { return m_logJointPsiMarginal ;}
 
@@ -58,18 +67,13 @@ public:
     }
     m_errorSD = errorSD ;
   }
-  void SetMRAcovParas(const arma::vec & MRAcovParas) {
-    if (arma::approx_equal(MRAcovParas, m_MRAcovParas, "absdiff", 1e-100)) {
-      m_recomputeMRAlogLik = false ;
-    } else {
-      m_recomputeMRAlogLik = true ;
-    }
-    m_MRAcovParas = MRAcovParas ;
-  }
+  void SetMRAcovParas(const Rcpp::List &) ;
+
   std::vector<TreeNode *> GetLevelNodes(const uint & level) ;
-  void SetMRAcovParasIGalphaBeta(const std::vector<IGhyperParas> & alphaBeta) {m_MRAcovParasIGalphaBeta = alphaBeta ;}
-  void SetErrorIGalphaBeta(const IGhyperParas & alphaBeta) {m_errorIGalphaBeta = alphaBeta ;}
-  void SetFixedEffIGalphaBeta(const IGhyperParas & alphaBeta) {m_fixedEffIGalphaBeta = alphaBeta ;}
+
+  void SetErrorGammaAlphaBeta(const GammaHyperParas & alphaBeta) {m_errorGammaAlphaBeta = alphaBeta ;}
+  void SetFixedEffGammaAlphaBeta(const GammaHyperParas & alphaBeta) {m_fixedEffGammaAlphaBeta = alphaBeta ;}
+  void SetMRAcovParasGammaAlphaBeta(const Rcpp::List &) ;
   void SetFEmu(const arma::vec & muVec) {m_FEmu = muVec ;}
   void SetSpaceAndTimeNuggetSD(const double & spaceNuggetSD, const double & timeNuggetSD) {
     m_spaceNuggetSD = spaceNuggetSD ;
@@ -84,6 +88,11 @@ public:
     arma::vec placeholder(covariates.n_rows, arma::fill::zeros) ;
     inputdata dataObject(placeholder, spCoords, timeValues, covariates) ;
     m_predictData = dataObject ;
+  }
+  void ToggleGammaParasSet() { m_GammaParasSet = true ;}
+
+  bool CheckMRAcovParasGammaAlphaBeta() {
+    return m_GammaParasSet ;
   }
 
   void CleanPredictionComponents() ;
@@ -128,11 +137,13 @@ private:
   double m_errorSD ;
   double m_fixedEffSD ;
   arma::vec m_spatialComponents ;
-  std::vector<IGhyperParas> m_MRAcovParasIGalphaBeta ;
-  IGhyperParas m_fixedEffIGalphaBeta ;
-  IGhyperParas m_errorIGalphaBeta ;
+  maternGammaPriorParas m_maternParasGammaAlphaBetaSpace ;
+  maternGammaPriorParas m_maternParasGammaAlphaBetaTime ;
+  GammaHyperParas m_fixedEffGammaAlphaBeta ;
+  GammaHyperParas m_errorGammaAlphaBeta ;
 
-  arma::vec m_MRAcovParas ;
+  maternVec m_MRAcovParasSpace ;
+  maternVec m_MRAcovParasTime ;
   arma::vec m_fixedEffParameters ;
   arma::vec m_FEmu ;
 
@@ -177,7 +188,10 @@ private:
   arma::vec m_FullCondMean ;
   arma::vec m_FullCondSDs ;
   arma::sp_mat m_FullCondPrecision ;
+  arma::sp_mat m_Hstar ;
   bool m_recordFullConditional{ false } ;
+  bool m_GammaParasSet{ false } ;
+
   std::vector<arma::mat *> getKmatricesInversePointers() {
     std::vector<arma::mat *> KmatrixInverseList ;
     for (auto & i : m_vertexVector) KmatrixInverseList.push_back(i->GetKmatrixInverseAddress()) ;

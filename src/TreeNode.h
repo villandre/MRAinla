@@ -24,10 +24,15 @@ namespace MRAinla
 typedef unsigned int uint ;
 
 struct maternVec{
-  double rho ;
-  double smoothness ;
-  double scale ;
-  maternVec(double rho, double smoothness, double scale) : smoothness(smoothness), rho(rho), scale(scale) { };
+  double m_rho ;
+  double m_smoothness ;
+  double m_scale ;
+
+  friend bool operator==(const maternVec & first, const maternVec & second) {
+    return (first.m_rho == second.m_rho) && (first.m_scale == second.m_scale) && (first.m_smoothness == second.m_smoothness) ;
+  }
+  maternVec() {} ;
+  maternVec(double rho, double smoothness, double scale) : m_smoothness(smoothness), m_rho(rho), m_scale(scale) { };
 };
 
 struct spatialcoor {
@@ -113,7 +118,7 @@ public:
   virtual void DeriveOmega(const arma::vec &)=0 ;
   virtual void DeriveU(const arma::vec &)=0 ;
   virtual void DeriveD()=0 ;
-  virtual void ComputeWmat(const arma::vec &, const bool, const double &, const double &)=0 ;
+  virtual void ComputeWmat(const maternVec &, const maternVec &, const bool, const double &, const double &)=0 ;
   // virtual void ComputeParasEtaDeltaTilde(const spatialcoor &, const inputdata &, const arma::vec &)=0 ;
   virtual std::vector<std::vector<arma::mat>> GetAlist() const = 0;
   virtual arma::mat GetKtilde() const = 0;
@@ -132,7 +137,7 @@ public:
   virtual arma::mat GetUpred(const uint & l)=0 ;
   virtual void SetPredictLocations(const inputdata &)=0 ;
   virtual arma::uvec GetPredIndices()=0 ;
-  virtual void computeUpred(const arma::vec &, const spatialcoor &, const bool, const double &, const double &)=0 ;
+  virtual void computeUpred(const maternVec &, const maternVec &, const spatialcoor &, const bool, const double &, const double &)=0 ;
 
   virtual void genRandomKnots(inputdata &, const uint &, const gsl_rng *) = 0;
 
@@ -198,7 +203,7 @@ protected:
   int m_nodeId ;
 
   std::vector<std::vector<arma::mat>>& GetAtildeList() {return m_AtildeList ;}
-  void baseComputeWmat(const arma::vec &, const bool, const double &, const double &) ;
+  void baseComputeWmat(const maternVec &, const maternVec &, const bool, const double &, const double &) ;
   void SetParent(TreeNode * vertexParentPoint) {m_parent = vertexParentPoint ;}
 
   std::vector<std::vector<arma::mat>> m_AtildeList ;
@@ -210,7 +215,7 @@ protected:
   double SqExpCovFunction(const Spatiotemprange &, const double &, const double &, const double &, const double &) ;
   double MaternCovFunction(const Spatiotemprange &, const maternVec &, const maternVec &, const double &, const double &) ;
 
-  arma::mat computeCovMat(const spatialcoor &, const spatialcoor &, const arma::vec &, const bool, const double &, const double &) ;
+  arma::mat computeCovMat(const spatialcoor &, const spatialcoor &, const maternVec &, const maternVec &, const bool, const double &, const double &) ;
   void baseInitialise(const dimensions & dims, const uint & depth, TreeNode * parent, const inputdata & dataset) {
     m_dimensions = dims;
     m_depth = depth ;
