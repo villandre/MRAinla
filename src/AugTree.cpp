@@ -18,7 +18,7 @@ struct gridPair{
   gridPair(AugTree * gridArg, vec vectorArg) : grid(gridArg), vector(vectorArg) { } ;
 };
 
-AugTree::AugTree(uint & M, vec & lonRange, vec & latRange, vec & timeRange, vec & observations, mat & obsSp, vec & obsTime, uint & minObsForTimeSplit, unsigned long int & seed, mat & covariates)
+AugTree::AugTree(uint & M, vec & lonRange, vec & latRange, vec & timeRange, vec & observations, mat & obsSp, vec & obsTime, uint & minObsForTimeSplit, unsigned long int & seed, mat & covariates, const bool splitTime)
   : m_M(M)
 {
   m_dataset = inputdata(observations, obsSp, obsTime, covariates) ;
@@ -29,7 +29,7 @@ AugTree::AugTree(uint & M, vec & lonRange, vec & latRange, vec & timeRange, vec 
   m_fixedEffParameters.resize(m_dataset.covariateValues.n_cols + 1) ; // An extra 1 is added to take into account the intercept.
   m_fixedEffParameters.randu() ;
 
-  BuildTree(minObsForTimeSplit) ;
+  BuildTree(minObsForTimeSplit, splitTime) ;
 
   m_numKnots = 0 ;
   for (uint i = 0 ; i < m_vertexVector.size() ; i++) {
@@ -40,7 +40,7 @@ AugTree::AugTree(uint & M, vec & lonRange, vec & latRange, vec & timeRange, vec 
   m_FullCondSDs = vec(m_numKnots + m_fixedEffParameters.size(), fill::zeros) ;
 }
 
-void AugTree::BuildTree(const uint & minObsForTimeSplit)
+void AugTree::BuildTree(const uint & minObsForTimeSplit, const bool splitTime)
 {
   m_vertexVector.reserve(1) ;
 
@@ -50,66 +50,163 @@ void AugTree::BuildTree(const uint & minObsForTimeSplit)
 
   m_vertexVector.push_back(topNode) ;
 
-  createLevels(topNode, minObsForTimeSplit) ;
+  createLevels(topNode, minObsForTimeSplit, splitTime) ;
 
   generateKnots(topNode) ;
 }
 
-void AugTree::createLevels(TreeNode * parent, const uint & numObsForTimeSplit) {
-  uvec obsForMedian(m_dataset.responseValues.size(), fill::zeros) ;
-  obsForMedian = parent->GetObsInNode() ;
+// void AugTree::createLevels(TreeNode * parent, const uint & numObsForTimeSplit) {
+//   uvec obsForMedian(m_dataset.responseValues.size(), fill::zeros) ;
+//   obsForMedian = parent->GetObsInNode() ;
+//
+//   if (obsForMedian.n_elem == 0) {
+//     throw Rcpp::exception("Empty region.") ;
+//   }
+//   mat spMediansMat = median(m_dataset.spatialCoords.rows(obsForMedian), 0) ;
+//   Row<double> spMedians = spMediansMat.row(0) ;
+//
+//   vec sortedTimes = sort(m_dataset.timeCoords.elem(obsForMedian)) ;
+//   double timeMedian = sortedTimes.at(std::ceil((obsForMedian.size()-1)/2));
+//
+//   std::vector<dimensions> dimensionsForChildren ;
+//   vec lonRange(2, fill::zeros), latRange(2, fill::zeros) ;
+//
+//   if (parent->GetObsInNode().size() < numObsForTimeSplit) {
+//     for (uint i = 0; i < 2; i++) {
+//       for (uint j = 0 ; j < 2; j++) {
+//         lonRange.at(0) = parent->GetDimensions().longitude.at(i) ;
+//         lonRange.at(1) = spMedians.at(0);
+//         lonRange = sort(lonRange);
+//
+//         latRange.at(0) = parent->GetDimensions().latitude.at(j) ;
+//         latRange.at(1) = spMedians.at(1);
+//         latRange = sort(latRange);
+//
+//         dimensionsForChildren.push_back(dimensions(lonRange, latRange, parent->GetDimensions().time)) ;
+//       }
+//     }
+//   } else {
+//     vec timeRange(2, fill::zeros) ;
+//     for (uint i = 0; i < 2; i++) {
+//       for (uint j = 0; j < 2; j++) {
+//         for(uint k = 0; k < 2; k++) {
+//           lonRange.at(0) = parent->GetDimensions().longitude.at(i) ;
+//           lonRange.at(1) = spMedians.at(0);
+//           lonRange = sort(lonRange);
+//
+//           latRange.at(0) = parent->GetDimensions().latitude.at(j) ;
+//           latRange.at(1) = spMedians.at(1);
+//           latRange = sort(latRange);
+//
+//           timeRange.at(0) = parent->GetDimensions().time.at(k) ;
+//           timeRange.at(1) = timeMedian ;
+//           timeRange = sort(timeRange) ;
+//
+//           dimensionsForChildren.push_back(dimensions(lonRange, latRange, timeRange)) ;
+//         }
+//       }
+//     }
+//   }
+//   int incrementedDepth = parent->GetDepth()+1 ;
+//
+//   for (auto &&i : dimensionsForChildren) {
+//     if (parent->GetDepth() < m_M-1) {
+//       InternalNode * newNode = new InternalNode(i, incrementedDepth, parent, m_dataset) ;
+//       m_vertexVector.push_back(newNode) ;
+//       parent->AddChild(newNode) ;
+//     } else {
+//       TipNode * newNode = new TipNode(i, incrementedDepth, parent, m_dataset) ;
+//       m_numTips = m_numTips+1 ;
+//       m_vertexVector.push_back(newNode) ;
+//       parent->AddChild(newNode) ;
+//     }
+//   }
+//   if (incrementedDepth < m_M) {
+//     incrementedDepth = incrementedDepth + 1 ;
+//     for (auto && i : parent->GetChildren()) {
+//       createLevels(i, numObsForTimeSplit) ;
+//     }
+//   }
+// }
 
-  if (obsForMedian.n_elem == 0) {
-    throw Rcpp::exception("Empty region.") ;
+// In this version, we first split the latitude, then the latitude, and finally time.
+// We make sure that splits don't result in empty regions
+void AugTree::createLevels(TreeNode * parent, const uint & numObsForTimeSplit, const bool splitTime) {
+  uvec obsForMedian = parent->GetObsInNode() ;
+  uvec childMembership(obsForMedian.size(), fill::zeros) ;
+  std::vector<dimensions> childDimensions ;
+  childDimensions.push_back(parent->GetDimensions()) ;
+
+  if (obsForMedian.n_elem < 1) {
+    throw Rcpp::exception("Cannot split empty region or region with only one observation.\n") ;
   }
-  mat spMediansMat = median(m_dataset.spatialCoords.rows(obsForMedian), 0) ;
-  Row<double> spMedians = spMediansMat.row(0) ;
 
-  vec sortedTimes = sort(m_dataset.timeCoords.elem(obsForMedian)) ;
-  double timeMedian = sortedTimes.at(std::ceil((obsForMedian.size()-1)/2));
+  uint newChildIndex = 1 ;
 
-  std::vector<dimensions> dimensionsForChildren ;
-  vec lonRange(2, fill::zeros), latRange(2, fill::zeros) ;
+  // Handling longitude
+  uvec currentChildIndices = regspace<uvec>(0, newChildIndex - 1) ;
+  for (auto & j : currentChildIndices) {
+    uvec elementsInChild = find(childMembership == j) ;
+    vec column = m_dataset.spatialCoords.col(0) ;
+    vec subColumn = column.elem(obsForMedian) ;
+    double colMedian = median(subColumn.elem(elementsInChild)) ;
+    vec updatedLongitude{childDimensions.at(j).longitude.at(0), colMedian} ;
+    vec newChildLongitude{colMedian, childDimensions.at(j).longitude.at(1)} ;
+    dimensions newDimensions = childDimensions.at(j) ;
+    newDimensions.longitude = newChildLongitude ;
+    childDimensions.push_back(newDimensions) ;
+    childDimensions.at(j).longitude = updatedLongitude ;
+    uvec greaterElements = find(subColumn.elem(elementsInChild) > colMedian) ; // In deriveObsInNode, the checks are <=. It follows that observations on the right and upper boundaries of a zone are included.
+    uvec updateIndices = elementsInChild.elem(greaterElements) ;
+    childMembership.elem(updateIndices).fill(newChildIndex) ;
+    newChildIndex += 1 ;
+  }
 
-  if (parent->GetObsInNode().size() < numObsForTimeSplit) {
-    for (uint i = 0; i < 2; i++) {
-      for (uint j = 0 ; j < 2; j++) {
-        lonRange.at(0) = parent->GetDimensions().longitude.at(i) ;
-        lonRange.at(1) = spMedians.at(0);
-        lonRange = sort(lonRange);
+  // Handling latitude
+  currentChildIndices = regspace<uvec>(0, newChildIndex - 1) ;
+  for (auto & j : currentChildIndices) {
+    vec column = m_dataset.spatialCoords.col(1) ;
+    vec subColumn = column.elem(obsForMedian) ;
+    uvec elementsInChild = find(childMembership == j) ;
+    double colMedian = median(subColumn.elem(elementsInChild)) ;
+    vec updatedLatitude{childDimensions.at(j).latitude.at(0), colMedian} ;
+    vec newChildLatitude{colMedian, childDimensions.at(j).latitude.at(1)} ;
+    dimensions newDimensions = childDimensions.at(j) ;
+    newDimensions.latitude = newChildLatitude ;
+    childDimensions.push_back(newDimensions) ;
+    childDimensions.at(j).latitude = updatedLatitude ;
+    uvec greaterElements = find(subColumn.elem(elementsInChild) > colMedian) ;
+    uvec updateIndices = elementsInChild.elem(greaterElements) ;
+    childMembership.elem(updateIndices).fill(newChildIndex) ;
+    newChildIndex += 1 ;
+  }
+  if (splitTime) {
+    // Handling time
+    currentChildIndices = regspace<uvec>(0, newChildIndex - 1) ;
+    for (auto & j : currentChildIndices) {
+      vec time = m_dataset.timeCoords.elem(obsForMedian) ;
+      uvec elementsInChild = find(childMembership == j) ;
+      vec elementsForMedian = time.elem(elementsInChild) ;
+      uvec uniqueTimeValues = find_unique(elementsForMedian) ;
 
-        latRange.at(0) = parent->GetDimensions().latitude.at(j) ;
-        latRange.at(1) = spMedians.at(1);
-        latRange = sort(latRange);
-
-        dimensionsForChildren.push_back(dimensions(lonRange, latRange, parent->GetDimensions().time)) ;
+      if (uniqueTimeValues.size() > 1) {
+        double colMedian = median(elementsForMedian) ;
+        vec updatedTime{childDimensions.at(j).time.at(0), colMedian} ;
+        vec newChildTime{colMedian, childDimensions.at(j).time.at(1)} ;
+        dimensions newDimensions = childDimensions.at(j) ;
+        newDimensions.time = newChildTime ;
+        childDimensions.push_back(newDimensions) ;
+        childDimensions.at(j).time = updatedTime ;
+        uvec greaterElements = find(time.elem(elementsInChild) > colMedian) ;
+        uvec updateIndices = elementsInChild.elem(greaterElements) ;
+        childMembership.elem(updateIndices).fill(newChildIndex) ;
+        newChildIndex += 1 ;
       }
     }
-  } else {
-    vec timeRange(2, fill::zeros) ;
-    for (uint i = 0; i < 2; i++) {
-      for (uint j = 0; j < 2; j++) {
-        for(uint k = 0; k < 2; k++) {
-          lonRange.at(0) = parent->GetDimensions().longitude.at(i) ;
-          lonRange.at(1) = spMedians.at(0);
-          lonRange = sort(lonRange);
-
-          latRange.at(0) = parent->GetDimensions().latitude.at(j) ;
-          latRange.at(1) = spMedians.at(1);
-          latRange = sort(latRange);
-
-          timeRange.at(0) = parent->GetDimensions().time.at(k) ;
-          timeRange.at(1) = timeMedian ;
-          timeRange = sort(timeRange) ;
-
-          dimensionsForChildren.push_back(dimensions(lonRange, latRange, timeRange)) ;
-        }
-      }
-    }
   }
+
   int incrementedDepth = parent->GetDepth()+1 ;
-
-  for (auto &&i : dimensionsForChildren) {
+  for (auto & i : childDimensions) {
     if (parent->GetDepth() < m_M-1) {
       InternalNode * newNode = new InternalNode(i, incrementedDepth, parent, m_dataset) ;
       m_vertexVector.push_back(newNode) ;
@@ -121,10 +218,11 @@ void AugTree::createLevels(TreeNode * parent, const uint & numObsForTimeSplit) {
       parent->AddChild(newNode) ;
     }
   }
+
   if (incrementedDepth < m_M) {
     incrementedDepth = incrementedDepth + 1 ;
     for (auto && i : parent->GetChildren()) {
-      createLevels(i, numObsForTimeSplit) ;
+      createLevels(i, numObsForTimeSplit, splitTime) ;
     }
   }
 }
@@ -174,7 +272,6 @@ void AugTree::generateKnots(TreeNode * node) {
 
 void AugTree::ComputeMRAlogLikAlt(const bool WmatsAvailable)
 {
-  cout << "Entered ComputeMRAlogLik... \n" ;
   if (!WmatsAvailable) {
     computeWmats() ;
   }
@@ -586,6 +683,8 @@ void AugTree::ComputeLogJointPsiMarginal() {
   ComputeLogPriors() ;
 
   if (m_recomputeMRAlogLik) {
+    m_MRAcovParasSpace.print("Space parameters:") ;
+    m_MRAcovParasTime.print("Time parameters:") ;
     computeWmats() ; // This will produce the K matrices required. NOTE: ADD CHECK THAT ENSURES THAT THE MRA LIK. IS ONLY RE-COMPUTED WHEN THE MRA COV. PARAMETERS CHANGE.
   }
 
@@ -992,7 +1091,7 @@ void AugTree::SetMRAcovParas(const Rcpp::List & MRAcovParas) {
   maternVec MRAcovParasTime(rhoTime, smoothnessTime, scaleTime) ;
 
   bool test = (m_MRAcovParasSpace == MRAcovParasSpace) && (m_MRAcovParasTime == MRAcovParasTime) ;
-
+  cout << "Test value: " << test << "\n" ;
   if (test) {
     m_recomputeMRAlogLik = false ;
   } else {
