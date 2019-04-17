@@ -11,6 +11,8 @@
 #' the length of gridRasterList giving the number of knots for each resolution, or a list of vectors giving
 #' the number of knots in each region of the grid for each resolution
 #' @param hyperPriorFunList named list of functions with one argument specifying the hyperprior distributions
+#' @param MRAcovParasGammaAlphaBeta list with two components, named 'space' and 'time'. Each component is itself a list with three components, 'rho', 'smoothness', and 'scale'. Finally, each of these thress components is a vector with two elements, corresponding to the alpha and beta parameters of the Gamma distribution serving as a prior for the MRA space and time hyperparameters.
+#'
 #'
 #' @details Nothing to say for now.
 #'
@@ -28,7 +30,7 @@
 #' }
 #' @export
 
-MRA_INLA <- function(spacetimeData, errorSDstart, fixedEffSDstart, MRAhyperparasStart, M, lonRange, latRange, timeRange, randomSeed, cutForTimeSplit = 400, MRAcovParasGammaAlphaBeta, FEmuVec, fixedEffGammaAlphaBeta = NULL, errorGammaAlphaBeta, stepSize = 1, lowerThreshold = 3, maternCov = FALSE, spaceNuggetSD, timeNuggetSD, predictionData = NULL, clusterAddress = NULL, varyFixedEffSD = TRUE, varyMaternSmoothness = TRUE) {
+MRA_INLA <- function(spacetimeData, errorSDstart, fixedEffSDstart, MRAhyperparasStart, M, lonRange, latRange, timeRange, randomSeed, cutForTimeSplit = 400, MRAcovParasGammaAlphaBeta, FEmuVec, fixedEffGammaAlphaBeta, errorGammaAlphaBeta, stepSize = 1, lowerThreshold = 3, maternCov = FALSE, spaceNuggetSD, timeNuggetSD, predictionData = NULL, clusterAddress = NULL, varyFixedEffSD = TRUE, varyMaternSmoothness = TRUE) {
   dataCoordinates <- spacetimeData@sp@coords
   timeRangeReshaped <- as.integer(timeRange)/(3600*24)
   timeBaseline <- min(timeRangeReshaped)
@@ -38,22 +40,22 @@ MRA_INLA <- function(spacetimeData, errorSDstart, fixedEffSDstart, MRAhyperparas
   covariateMatrix <- as.matrix(spacetimeData@data[, -1, drop = FALSE])
   gridPointer <- setupGridCpp(spacetimeData@data[, 1], dataCoordinates, timeValues, covariateMatrix, M, lonRange, latRange, timeRangeReshaped, randomSeed, cutForTimeSplit)
   # First we compute values relating to the hyperprior marginal distribution...
-  xStartValues <- c(spRho = MRAhyperparasStart$space["rho"], spScale = MRAhyperparasStart$space["scale"], timeRho = MRAhyperparasStart$time["rho"], timeScale = MRAhyperparasStart$time["scale"], errorSDstart = errorSDstart)
+  xStartValues <- c(spRho = MRAhyperparasStart$space[["rho"]], spScale = MRAhyperparasStart$space[["scale"]], timeRho = MRAhyperparasStart$time[["rho"]], timeScale = MRAhyperparasStart$time[["scale"]], errorSD = errorSDstart)
   if (varyFixedEffSD) {
     xStartValues[["fixedEffSD"]] <- fixedEffSDstart
   }
   if (varyMaternSmoothness) {
-    xStartValues[["spSmoothness"]] <- MRAhyperparasStart$space["smoothness"]
-    xStartValues[["timeSmoothness"]] <- MRAhyperparasStart$time["smoothness"]
+    xStartValues[["spSmoothness"]] <- MRAhyperparasStart$space[["smoothness"]]
+    xStartValues[["timeSmoothness"]] <- MRAhyperparasStart$time[["smoothness"]]
   }
 
-  funForOptim <- function(x, treePointer, MRAcovParasIGalphaBeta, fixedEffIGalphaBeta, errorIGalphaBeta, FEmuVec) {
+  funForOptim <- function(x, treePointer, MRAcovParasGammaAlphaBeta, fixedEffGammaAlphaBeta, errorGammaAlphaBeta, FEmuVec) {
     fixedEffArg <- fixedEffSDstart
     if (varyFixedEffSD) {
       fixedEffArg <- x[["fixedEffSD"]]
     }
-    spSmoothnessArg <- MRAhyperparasStart$space["smoothness"]
-    timeSmoothnessArg <- MRAhyperparasStart$time["smoothness"]
+    spSmoothnessArg <- MRAhyperparasStart$space[["smoothness"]]
+    timeSmoothnessArg <- MRAhyperparasStart$time[["smoothness"]]
     if (varyMaternSmoothness) {
       spSmoothnessArg <- x[["spSmoothness"]]
       timeSmoothnessArg <- x[["timeSmoothness"]]
