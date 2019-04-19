@@ -1091,7 +1091,7 @@ void AugTree::SetMRAcovParas(const Rcpp::List & MRAcovParas) {
   maternVec MRAcovParasTime(rhoTime, smoothnessTime, scaleTime) ;
 
   bool test = (m_MRAcovParasSpace == MRAcovParasSpace) && (m_MRAcovParasTime == MRAcovParasTime) ;
-  cout << "Test value: " << test << "\n" ;
+
   if (test) {
     m_recomputeMRAlogLik = false ;
   } else {

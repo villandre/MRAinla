@@ -31,7 +31,7 @@ typedef unsigned int uint ;
 
 List setupGridCpp(NumericVector responseValues, NumericMatrix spCoords, NumericVector obsTime,
                   NumericMatrix covariateMatrix, uint M, NumericVector lonRange, NumericVector latRange,
-                  NumericVector timeRange, uint randomSeed, uint cutForTimeSplit)
+                  NumericVector timeRange, uint randomSeed, uint cutForTimeSplit, bool splitTime)
 {
   vec lonR = as<vec>(lonRange) ;
   vec latR = as<vec>(latRange) ;
@@ -44,7 +44,7 @@ List setupGridCpp(NumericVector responseValues, NumericMatrix spCoords, NumericV
 
   mat covariateMat = as<mat>(covariateMatrix) ;
 
-  AugTree * MRAgrid = new AugTree(M, lonR, latR, timeR, response, sp, time, cutForTimeSplit, seedForRNG, covariateMat) ;
+  AugTree * MRAgrid = new AugTree(M, lonR, latR, timeR, response, sp, time, cutForTimeSplit, seedForRNG, covariateMat, splitTime) ;
 
   XPtr<AugTree> p(MRAgrid, false) ; // Disabled automatic garbage collection.
 
@@ -90,14 +90,9 @@ double LogJointHyperMarginal(SEXP treePointer, Rcpp::List MRAhyperparas,
     pointedTree->SetMRAcovParas(MRAhyperparas) ;
     pointedTree->SetRecordFullConditional(recordFullConditional) ;
     // ProfilerStart("/home/luc/Downloads/myprofile.log") ;
-    // cout <<"Started profiling... \n" ;
-    // for (uint i = 1; i < 80 ; i++) {
-      // vec newHypers = Rcpp::as<vec>(MRAhyperparas) ;
-      // newHypers.transform( [i](double val) { return (val + 1e-4 * double(i)); } );
-      // pointedTree->SetMRAcovParas(newHypers) ;
-      pointedTree->ComputeLogJointPsiMarginal() ;
-    // }
-    // cout <<"Done profiling... \n" ;
+
+    pointedTree->ComputeLogJointPsiMarginal() ;
+
     // ProfilerStop() ;
     // throw Rcpp::exception("Stop for profiling... \n") ;
     outputValue = pointedTree->GetLogJointPsiMarginal() ;

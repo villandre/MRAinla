@@ -46,8 +46,6 @@ public:
 
   void ComputeWmat(const maternVec & covParasSp, const maternVec & covParasTime, const bool matern, const double & spaceNuggetSD, const double & timeNuggetSD) {
     baseComputeWmat(covParasSp, covParasTime, matern, spaceNuggetSD, timeNuggetSD) ;
-    // std::cout << "Saving Sigma matrix... \n" ;
-    // GetSigma().save("/home/luc/Documents/SigmaMat.info", arma::raw_ascii) ;
     m_SigmaInverse = arma::inv_sympd(GetSigma()) ;
   }
 

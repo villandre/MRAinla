@@ -61,15 +61,12 @@ MRA_INLA <- function(spacetimeData, errorSDstart, fixedEffSDstart, MRAhyperparas
       spSmoothnessArg <- x[["spSmoothness"]]
       timeSmoothnessArg <- x[["timeSmoothness"]]
     }
-    print(x)
-    names(x)
     MRAlist <- list(space = list(rho = x[["spRho"]], smoothness = spSmoothnessArg, scale = x[["spScale"]]), time = list(rho = x[["timeRho"]], smoothness = timeSmoothnessArg, scale = x[["timeScale"]]))
     -LogJointHyperMarginal(treePointer = treePointer, MRAhyperparas = MRAlist, fixedEffSD = fixedEffArg, errorSD = x[["errorSD"]], MRAcovParasGammaAlphaBeta = MRAcovParasGammaAlphaBeta, FEmuVec = FEmuVec, fixedEffGammaAlphaBeta = fixedEffGammaAlphaBeta, errorGammaAlphaBeta = errorGammaAlphaBeta, matern = as.logical(maternCov), spaceNuggetSD = spaceNuggetSD, timeNuggetSD = timeNuggetSD, recordFullConditional = FALSE)
   }
 
-  nloptrOpts <-  list(maxeval = 1000, xtol_rel = 1e-8)
   cat("Optimising marginal hyperparameter posterior distribution... \n") ;
-  optimResult <- nloptr::lbfgs(x0 = xStartValues, fn = funForOptim, lower = rep(0.01, length(xStartValues)), upper = 20*xStartValues, control = nloptrOpts, treePointer = gridPointer$gridPointer, MRAcovParasGammaAlphaBeta = MRAcovParasGammaAlphaBeta, FEmuVec = FEmuVec, elementNames = names(xStartValues), fixedEffGammaAlphaBeta = fixedEffGammaAlphaBeta, errorGammaAlphaBeta = errorGammaAlphaBeta)
+  optimResult <- nloptr::lbfgs(x0 = xStartValues, fn = funForOptim, lower = rep(0.01, length(xStartValues)), upper = 20*xStartValues, control = list(maxeval = 100, xtol_rel = 1e-4, ftol_rel = 1e-4), treePointer = gridPointer$gridPointer, MRAcovParasGammaAlphaBeta = MRAcovParasGammaAlphaBeta, FEmuVec = FEmuVec, elementNames = names(xStartValues), fixedEffGammaAlphaBeta = fixedEffGammaAlphaBeta, errorGammaAlphaBeta = errorGammaAlphaBeta)
   cat("Optimisation complete... \n")
   if (optimResult$convergence < 0) {
     stop("Optimisation algorithm did not converge! \n \n")
@@ -78,12 +75,13 @@ MRA_INLA <- function(spacetimeData, errorSDstart, fixedEffSDstart, MRAhyperparas
   # cat("LOADING VALUES FOR TESTING PURPOSES. REMOVE THIS ONCE CODE IS COMPLETE.\n \n")
   # load("~/Documents/optimForTests.R")
   cat("Estimating Hessian at mode... \n") ;
-  hessianMat <- nlme::fdHess(pars = optimResult$par, fun = funForOptim, treePointer = gridPointer$gridPointer, MRAcovParasGammaAlphaBeta = MRAcovParasGammaAlphaBeta, FEmuVec = FEmuVec, elementNames = names(xStartValues), fixedEffGammaAlphaBeta = fixedEffGammaAlphaBeta, errorGammaAlphaBeta = errorGammaAlphaBeta)$Hessian
+  hessianMat <- nlme::fdHess(pars = optimResult$par, fun = funForOptim, treePointer = gridPointer$gridPointer, MRAcovParasGammaAlphaBeta = MRAcovParasGammaAlphaBeta, FEmuVec = FEmuVec, elementNames = names(xStartValues), fixedEffGammaAlphaBeta = fixedEffGammaAlphaBeta, errorGammaAlphaBeta = errorGammaAlphaBeta, .relStep = .Machine$double.eps^(1/3))$Hessian
 
-  if (det(hessianMat) <= 0) {
-    warning("Non-positive definite Hessian matrix... \n \n")
+  if (det(-hessianMat) <= 0) {
+    warning("Non-positive definite negative Hessian matrix... \n \n")
   }
   optimResult$hessian <- -hessianMat # The "-" is necessary because we performed a minimisation rather than a maximisation.
+  return(optimResult)
   cat("Computing distribution value at integration points... \n")
   hyperparaList <- getIntegrationPointsAndValues(optimObject = optimResult, gridPointer = gridPointer$gridPointer, MRAcovParasGammaAlphaBeta = MRAcovParasGammaAlphaBeta, FEmuVec = FEmuVec, fixedEffGammaAlphaBeta = fixedEffGammaAlphaBeta, errorGammaAlphaBeta = errorGammaAlphaBeta, stepSize = stepSize, lowerThreshold = lowerThreshold, matern = maternCov, predictionData = predictionData, timeBaseline = timeBaseline)
   # load("~/Documents/hyperparaList.Rdata")
@@ -323,9 +321,22 @@ SimulateSpacetimeData <- function(numObsPerTimeSlice = 225, covFunction, lonRang
   timeDistMatrix <- dist(coordinates[, "time"])/(3600*24)
   covarianceMat <- covFunction(spatialDistMatrix, timeDistMatrix)
   meanVector <- drop(covariateMatrix %*% FEvalues)
-  fieldValues <- drop(mvtnorm::rmvnorm(n = 1, mean = meanVector, sigma = covarianceMat) + rnorm(n = length(meanVector), mean = 0, sd = errorSD))
+  fieldValues <- drop(mvtnorm::rmvnorm(n = 1, mean = meanVector, sigma = covarianceMat)) + rnorm(n = length(meanVector), mean = 0, sd = errorSD)
   dataForObject <- cbind(y = fieldValues, as.data.frame(covariateMatrix[, -1]))
   colnames(dataForObject) <- c("y", paste("Covariate", 1:(length(FEvalues) - 1), sep = ""))
   spacetimeObj <- spacetime::STIDF(sp = sp::SpatialPoints(coordinates[, c("longitude", "latitude")]), data = dataForObject, time = coordinates$time)
   spacetimeObj
+}
+
+# In the Wikipedia notation, smoothness corresponds to nu, and
+# scale corresponds to sigma.
+maternCov <- function(d, rho, smoothness, scale) {
+  if (any(d < 0))
+    stop("distance argument must be nonnegative")
+  d[d == 0] <- 1e-10
+
+  dScaled <- sqrt(2 * smoothness) * d / rho
+  con <- scale^2 * 2^(1 - smoothness) / gamma(smoothness)
+
+  con * dScaled^smoothness * besselK(dScaled, smoothness)
 }

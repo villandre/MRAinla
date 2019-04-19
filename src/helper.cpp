@@ -1,3 +1,5 @@
+// [[Rcpp::depends(BH)]]
+
 #include<math.h>
 #include<iostream>
 #include<stdlib.h>
@@ -143,15 +145,16 @@ double logNormPDF(const arma::vec & x, const arma::vec & mu, const arma::vec & s
 double maternCov(const double & distance, const double & rho,
                     const double & smoothness, const double & scale, const double & nugget) {
   double maternValue ;
-  if (distance > 0) {
-    double base = pow(2 * smoothness, 0.5) * distance / rho ;
-    double bessel = cyl_bessel_k(smoothness, base) ;
-    maternValue = pow(scale, 2) * pow(2, 1 - smoothness) / gsl_sf_gamma(smoothness) *
-    pow(base, smoothness) * bessel ;
 
+  if (distance == 0) {
+    maternValue = pow(scale, 2) + nugget ;
   } else {
-    maternValue = pow(nugget, 2) ;
+    double base = pow(2 * smoothness, 0.5) * distance / rho ;
+    double bessel = boost::math::cyl_bessel_k(smoothness, base) ;
+    maternValue = pow(scale, 2) * pow(2, 1 - smoothness) / gsl_sf_gamma(smoothness) *
+      pow(base, smoothness) * bessel ;
   }
+
   return maternValue ;
 }
 

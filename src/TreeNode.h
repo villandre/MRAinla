@@ -31,8 +31,14 @@ struct maternVec{
   friend bool operator==(const maternVec & first, const maternVec & second) {
     return (first.m_rho == second.m_rho) && (first.m_scale == second.m_scale) && (first.m_smoothness == second.m_smoothness) ;
   }
+
+  void print(std::string header) {
+    std::cout << header << "\n" ;
+    printf("Matern parameters: rho = %.4e smoothness = %.4e scale = %.4e \n", m_rho, m_smoothness, m_scale) ;
+  }
+
   maternVec() {} ;
-  maternVec(double rho, double smoothness, double scale) : m_smoothness(smoothness), m_rho(rho), m_scale(scale) { };
+  maternVec(double rho, double smoothness, double scale) : m_rho(rho), m_smoothness(smoothness), m_scale(scale) { };
 };
 
 struct spatialcoor {
