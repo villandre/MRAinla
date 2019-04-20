@@ -37,23 +37,23 @@ double TreeNode::SqExpCovFunction(const Spatiotemprange & distance, const double
 }
 
 double TreeNode::MaternCovFunction(const Spatiotemprange & distance, const maternVec & covParasSpace,
-                                   const maternVec & covParasTime, const double & spaceNuggetSD,
+                                   const maternVec & covParasTime, const double & scaling, const double & spaceNuggetSD,
                                    const double & timeNuggetSD) {
   // Matern covariance with smoothness 1 and scaling 1.
-  double spExp = maternCov(distance.sp, covParasSpace.m_rho, covParasSpace.m_smoothness , covParasSpace.m_scale,
+  double spExp = maternCov(distance.sp, covParasSpace.m_rho, covParasSpace.m_smoothness , 1,
                            spaceNuggetSD) ;
-  double timeExp = maternCov(distance.time, covParasTime.m_rho, covParasTime.m_smoothness, covParasTime.m_scale,
+  double timeExp = maternCov(distance.time, covParasTime.m_rho, covParasTime.m_smoothness, 1,
                              timeNuggetSD) ;
-  return spExp * timeExp ;
+  return pow(scaling, 2) * spExp * timeExp ;
 }
 
-void TreeNode::baseComputeWmat(const maternVec & covParasSp, const maternVec & covParasTime, const bool matern, const double & spaceNuggetSD, const double & timeNuggetSD) {
+void TreeNode::baseComputeWmat(const maternVec & covParasSp, const maternVec & covParasTime, const double & scaling, const bool matern, const double & spaceNuggetSD, const double & timeNuggetSD) {
   std::vector<TreeNode *> brickList = getAncestors() ;
 
-  m_Wlist.at(0) = computeCovMat(m_knotsCoor, brickList.at(0)->GetKnotsCoor(), covParasSp, covParasTime, matern, spaceNuggetSD, timeNuggetSD) ;
+  m_Wlist.at(0) = computeCovMat(m_knotsCoor, brickList.at(0)->GetKnotsCoor(), covParasSp, covParasTime, scaling, matern, spaceNuggetSD, timeNuggetSD) ;
 
   for (uint l = 1; l <= m_depth; l++) {
-    mat firstMat = computeCovMat(m_knotsCoor, brickList.at(l)->GetKnotsCoor(), covParasSp, covParasTime, matern, spaceNuggetSD, timeNuggetSD) ;
+    mat firstMat = computeCovMat(m_knotsCoor, brickList.at(l)->GetKnotsCoor(), covParasSp, covParasTime, scaling, matern, spaceNuggetSD, timeNuggetSD) ;
     mat secondMat(firstMat.n_rows, firstMat.n_cols, fill::zeros) ;
     for (uint k = 0; k < l ; k++) {
       secondMat += m_Wlist.at(k) *
@@ -85,7 +85,7 @@ std::vector<TreeNode *> TreeNode::getAncestors() {
   return ancestorsList ;
 }
 
-mat TreeNode::computeCovMat(const spatialcoor & spTime1, const spatialcoor & spTime2, const maternVec & covParasSp, const maternVec & covParasTime, const bool matern, const double & spaceNuggetSD, const double & timeNuggetSD) {
+mat TreeNode::computeCovMat(const spatialcoor & spTime1, const spatialcoor & spTime2, const maternVec & covParasSp, const maternVec & covParasTime, const double & scaling, const bool matern, const double & spaceNuggetSD, const double & timeNuggetSD) {
 
   mat covMat(spTime1.timeCoords.size(), spTime2.timeCoords.size(), fill::zeros) ;
   for (uint rowIndex = 0; rowIndex < spTime1.timeCoords.size() ; rowIndex++) {
@@ -97,7 +97,7 @@ mat TreeNode::computeCovMat(const spatialcoor & spTime1, const spatialcoor & spT
 
       Spatiotemprange rangeValue = sptimeDistance(space1, time1, space2, time2) ;
       if (matern) {
-        covMat.at(rowIndex, colIndex) = MaternCovFunction(rangeValue, covParasSp, covParasTime, spaceNuggetSD, timeNuggetSD) ;
+        covMat.at(rowIndex, colIndex) = MaternCovFunction(rangeValue, covParasSp, covParasTime, scaling, spaceNuggetSD, timeNuggetSD) ;
       } else {
         covMat.at(rowIndex, colIndex) = SqExpCovFunction(rangeValue, covParasSp.m_rho, covParasTime.m_rho, spaceNuggetSD, timeNuggetSD) ;
       }

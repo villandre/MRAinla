@@ -130,8 +130,8 @@ void::InternalNode::DeriveD() {
   m_d += thirdTerm ;
 }
 
-void InternalNode::ComputeWmat(const maternVec & covParasSp, const maternVec & covParasTime, const bool matern, const double & spaceNuggetSD, const double & timeNuggetSD) {
-  baseComputeWmat(covParasSp, covParasTime, matern, spaceNuggetSD, timeNuggetSD) ;
+void InternalNode::ComputeWmat(const maternVec & covParasSp, const maternVec & covParasTime, const double & scaling, const bool matern, const double & spaceNuggetSD, const double & timeNuggetSD) {
+  baseComputeWmat(covParasSp, covParasTime, scaling, matern, spaceNuggetSD, timeNuggetSD) ;
   m_K = inv_sympd(GetKmatrixInverse()) ; // The K matrix is some sort of covariance matrix, so it should always be symmetrical..
 }
 

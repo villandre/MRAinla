@@ -303,7 +303,7 @@ void AugTree::ComputeMRAlogLikAlt(const bool WmatsAvailable)
 
 void AugTree::computeWmats() {
 
-  m_vertexVector.at(0)->ComputeWmat(m_MRAcovParasSpace, m_MRAcovParasTime, m_matern, m_spaceNuggetSD, m_timeNuggetSD) ;
+  m_vertexVector.at(0)->ComputeWmat(m_MRAcovParasSpace, m_MRAcovParasTime, m_spacetimeScaling, m_matern, m_spaceNuggetSD, m_timeNuggetSD) ;
 
   for (uint level = 1; level <= m_M; level++) {
     std::vector<TreeNode *> levelNodes = GetLevelNodes(level) ;
@@ -312,7 +312,7 @@ void AugTree::computeWmats() {
     // #pragma omp parallel for
     for (std::vector<TreeNode *>::iterator it = levelNodes.begin(); it < levelNodes.end(); it++)
     {
-      (*it)->ComputeWmat(m_MRAcovParasSpace, m_MRAcovParasTime, m_matern, m_spaceNuggetSD, m_timeNuggetSD) ;
+      (*it)->ComputeWmat(m_MRAcovParasSpace, m_MRAcovParasTime, m_spacetimeScaling, m_matern, m_spaceNuggetSD, m_timeNuggetSD) ;
     }
   }
 }
@@ -576,11 +576,11 @@ void AugTree::ComputeLogPriors() {
 
   priorCombinations.push_back(std::make_pair(m_MRAcovParasSpace.m_rho, m_maternParasGammaAlphaBetaSpace.m_rho)) ;
   priorCombinations.push_back(std::make_pair(m_MRAcovParasSpace.m_smoothness, m_maternParasGammaAlphaBetaSpace.m_smoothness)) ;
-  priorCombinations.push_back(std::make_pair(m_MRAcovParasSpace.m_scale, m_maternParasGammaAlphaBetaSpace.m_scale)) ;
 
   priorCombinations.push_back(std::make_pair(m_MRAcovParasTime.m_rho, m_maternParasGammaAlphaBetaTime.m_rho)) ;
   priorCombinations.push_back(std::make_pair(m_MRAcovParasTime.m_smoothness, m_maternParasGammaAlphaBetaTime.m_smoothness)) ;
-  priorCombinations.push_back(std::make_pair(m_MRAcovParasTime.m_scale, m_maternParasGammaAlphaBetaTime.m_scale)) ;
+
+  priorCombinations.push_back(std::make_pair(m_spacetimeScaling, m_maternSpacetimeScalingGammaAlphaBeta)) ;
 
   priorCombinations.push_back(std::make_pair(m_fixedEffSD, m_fixedEffGammaAlphaBeta)) ;
   priorCombinations.push_back(std::make_pair(m_errorSD, m_errorGammaAlphaBeta)) ;
@@ -1014,7 +1014,7 @@ sp_mat AugTree::ComputeHpred(const mat & spCoords, const vec & time, const mat &
     i->SetPredictLocations(m_predictData) ;
     uvec predictionsInLeaf = i->GetPredIndices() ;
     if (predictionsInLeaf.size() > 0) {
-      i->computeUpred(m_MRAcovParasSpace, m_MRAcovParasTime, m_predictData, m_matern, m_spaceNuggetSD, m_timeNuggetSD) ;
+      i->computeUpred(m_MRAcovParasSpace, m_MRAcovParasTime, m_spacetimeScaling, m_predictData, m_matern, m_spaceNuggetSD, m_timeNuggetSD) ;
     }
   }
   sp_mat FmatrixPred = createFmatrixAlt(true) ;
@@ -1081,19 +1081,19 @@ arma::vec AugTree::ComputeEvar(const arma::sp_mat & HmatPred) {
 void AugTree::SetMRAcovParas(const Rcpp::List & MRAcovParas) {
   List SpaceParas = Rcpp::as<List>(MRAcovParas["space"]) ;
   List TimeParas = Rcpp::as<List>(MRAcovParas["time"]) ;
+  double scalePara = Rcpp::as<double>(MRAcovParas["scale"]) ;
 
   double rhoSpace = Rcpp::as<double>(SpaceParas["rho"]) ;
   double smoothnessSpace = Rcpp::as<double>(SpaceParas["smoothness"]) ;
-  double scaleSpace = Rcpp::as<double>(SpaceParas["scale"]) ;
 
   double rhoTime = Rcpp::as<double>(TimeParas["rho"]) ;
   double smoothnessTime = Rcpp::as<double>(TimeParas["smoothness"]) ;
-  double scaleTime = Rcpp::as<double>(TimeParas["scale"]) ;
 
-  maternVec MRAcovParasSpace(rhoSpace, smoothnessSpace, scaleSpace) ;
-  maternVec MRAcovParasTime(rhoTime, smoothnessTime, scaleTime) ;
 
-  bool test = (m_MRAcovParasSpace == MRAcovParasSpace) && (m_MRAcovParasTime == MRAcovParasTime) ;
+  maternVec MRAcovParasSpace(rhoSpace, smoothnessSpace, 1) ;
+  maternVec MRAcovParasTime(rhoTime, smoothnessTime, 1) ;
+
+  bool test = (m_spacetimeScaling == scalePara) && (m_MRAcovParasSpace == MRAcovParasSpace) && (m_MRAcovParasTime == MRAcovParasTime) ;
 
   if (test) {
     m_recomputeMRAlogLik = false ;
@@ -1102,16 +1102,16 @@ void AugTree::SetMRAcovParas(const Rcpp::List & MRAcovParas) {
   }
   m_MRAcovParasSpace = MRAcovParasSpace ;
   m_MRAcovParasTime = MRAcovParasTime ;
+  m_spacetimeScaling = scalePara ;
 }
 
 void AugTree::SetMRAcovParasGammaAlphaBeta(const Rcpp::List & MRAcovParasList) {
   Rcpp::List spaceParas = Rcpp::as<List>(MRAcovParasList["space"]) ;
   Rcpp::List timeParas = Rcpp::as<List>(MRAcovParasList["time"]) ;
-
-  m_maternParasGammaAlphaBetaSpace = maternGammaPriorParas(GammaHyperParas(Rcpp::as<vec>(spaceParas["rho"])),
-                                            GammaHyperParas(Rcpp::as<vec>(spaceParas["smoothness"])),
-                                            GammaHyperParas(Rcpp::as<vec>(spaceParas["scale"]))) ;
-  m_maternParasGammaAlphaBetaTime = maternGammaPriorParas(GammaHyperParas(Rcpp::as<vec>(timeParas["rho"])),
-                                            GammaHyperParas(Rcpp::as<vec>(timeParas["smoothness"])),
-                                            GammaHyperParas(Rcpp::as<vec>(timeParas["scale"]))) ;
+  vec scaling = Rcpp::as<vec>(MRAcovParasList["scale"]) ;
+  m_maternSpacetimeScalingGammaAlphaBeta = scaling ;
+  m_maternParasGammaAlphaBetaSpace = maternGammaPriorParasWithoutScale(GammaHyperParas(Rcpp::as<vec>(spaceParas["rho"])),
+                                            GammaHyperParas(Rcpp::as<vec>(spaceParas["smoothness"]))) ;
+  m_maternParasGammaAlphaBetaTime = maternGammaPriorParasWithoutScale(GammaHyperParas(Rcpp::as<vec>(timeParas["rho"])),
+                                            GammaHyperParas(Rcpp::as<vec>(timeParas["smoothness"]))) ;
 }

@@ -40,7 +40,7 @@ MRA_INLA <- function(spacetimeData, errorSDstart, fixedEffSDstart, MRAhyperparas
   covariateMatrix <- as.matrix(spacetimeData@data[, -1, drop = FALSE])
   gridPointer <- setupGridCpp(spacetimeData@data[, 1], dataCoordinates, timeValues, covariateMatrix, M, lonRange, latRange, timeRangeReshaped, randomSeed, cutForTimeSplit, splitTime)
   # First we compute values relating to the hyperprior marginal distribution...
-  xStartValues <- c(spRho = MRAhyperparasStart$space[["rho"]], spScale = MRAhyperparasStart$space[["scale"]], timeRho = MRAhyperparasStart$time[["rho"]], timeScale = MRAhyperparasStart$time[["scale"]])
+  xStartValues <- c(spRho = MRAhyperparasStart$space[["rho"]], timeRho = MRAhyperparasStart$time[["rho"]], scale = MRAhyperparasStart[["scale"]])
   if (varyFixedEffSD) {
     xStartValues[["fixedEffSD"]] <- fixedEffSDstart
   }
@@ -68,13 +68,14 @@ MRA_INLA <- function(spacetimeData, errorSDstart, fixedEffSDstart, MRAhyperparas
       spSmoothnessArg <- x[["spSmoothness"]]
       timeSmoothnessArg <- x[["timeSmoothness"]]
     }
-    MRAlist <- list(space = list(rho = x[["spRho"]], smoothness = spSmoothnessArg, scale = x[["spScale"]]), time = list(rho = x[["timeRho"]], smoothness = timeSmoothnessArg, scale = x[["timeScale"]]))
+    MRAlist <- list(space = list(rho = x[["spRho"]], smoothness = spSmoothnessArg), time = list(rho = x[["timeRho"]], smoothness = timeSmoothnessArg), scale = x[["scale"]])
     -LogJointHyperMarginal(treePointer = treePointer, MRAhyperparas = MRAlist, fixedEffSD = fixedEffArg, errorSD = errorArg, MRAcovParasGammaAlphaBeta = MRAcovParasGammaAlphaBeta, FEmuVec = FEmuVec, fixedEffGammaAlphaBeta = fixedEffGammaAlphaBeta, errorGammaAlphaBeta = errorGammaAlphaBeta, matern = as.logical(maternCov), spaceNuggetSD = spaceNuggetSD, timeNuggetSD = timeNuggetSD, recordFullConditional = FALSE)
   }
 
   cat("Optimising marginal hyperparameter posterior distribution... \n") ;
   optimResult <- nloptr::lbfgs(x0 = xStartValues, fn = funForOptim, lower = rep(0.01, length(xStartValues)), upper = 10*xStartValues, control = list(maxeval = 200, xtol_rel = 1e-4, ftol_rel = 1e-4), treePointer = gridPointer$gridPointer, MRAcovParasGammaAlphaBeta = MRAcovParasGammaAlphaBeta, FEmuVec = FEmuVec, elementNames = names(xStartValues), fixedEffGammaAlphaBeta = fixedEffGammaAlphaBeta, errorGammaAlphaBeta = errorGammaAlphaBeta)
   cat("Optimisation complete... \n")
+  names(optimResult$par) <- names(xStartValues)
   if (optimResult$convergence < 0) {
     stop("Optimisation algorithm did not converge! \n \n")
   }

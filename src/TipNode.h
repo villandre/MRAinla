@@ -44,8 +44,8 @@ public:
     m_d = val ;
   }
 
-  void ComputeWmat(const maternVec & covParasSp, const maternVec & covParasTime, const bool matern, const double & spaceNuggetSD, const double & timeNuggetSD) {
-    baseComputeWmat(covParasSp, covParasTime, matern, spaceNuggetSD, timeNuggetSD) ;
+  void ComputeWmat(const maternVec & covParasSp, const maternVec & covParasTime, const double & scaling, const bool matern, const double & spaceNuggetSD, const double & timeNuggetSD) {
+    baseComputeWmat(covParasSp, covParasTime, scaling, matern, spaceNuggetSD, timeNuggetSD) ;
     m_SigmaInverse = arma::inv_sympd(GetSigma()) ;
   }
 
@@ -81,7 +81,7 @@ public:
 
   void SetPredictLocations(const inputdata &) ;
   arma::uvec GetPredIndices() { return m_predsInNode ;}
-  void computeUpred(const maternVec &, const maternVec &, const spatialcoor &, const bool, const double &, const double &) ;
+  void computeUpred(const maternVec &, const maternVec &, const double &, const spatialcoor &, const bool, const double &, const double &) ;
 
   void genRandomKnots(inputdata & dataset, const uint & numKnots, const gsl_rng * RNG) {
     m_knotsCoor = spatialcoor(dataset.spatialCoords.rows(m_obsInNode),

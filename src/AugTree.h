@@ -16,14 +16,21 @@ struct GammaHyperParas{
   }
 };
 
-struct maternGammaPriorParas{
+struct maternGammaPriorParasWithoutScale{
   GammaHyperParas m_rho ;
   GammaHyperParas m_smoothness ;
+
+  maternGammaPriorParasWithoutScale() { }
+  maternGammaPriorParasWithoutScale(const GammaHyperParas & rho, const GammaHyperParas & smoothness) : m_rho(rho), m_smoothness(smoothness) { }
+};
+
+struct maternGammaPriorParas : public maternGammaPriorParasWithoutScale{
   GammaHyperParas m_scale ;
 
-  maternGammaPriorParas() { }
-  maternGammaPriorParas(const GammaHyperParas & rho, const GammaHyperParas & smoothness, const GammaHyperParas & scale) : m_rho(rho), m_smoothness(smoothness), m_scale(scale) { }
+  maternGammaPriorParas(const GammaHyperParas & rho, const GammaHyperParas & smoothness, const GammaHyperParas & scale) : maternGammaPriorParasWithoutScale(rho, smoothness), m_scale(scale) { } ;
 };
+
+
 
 namespace MRAinla {
 
@@ -137,13 +144,15 @@ private:
   double m_errorSD ;
   double m_fixedEffSD ;
   arma::vec m_spatialComponents ;
-  maternGammaPriorParas m_maternParasGammaAlphaBetaSpace ;
-  maternGammaPriorParas m_maternParasGammaAlphaBetaTime ;
+  maternGammaPriorParasWithoutScale m_maternParasGammaAlphaBetaSpace ;
+  maternGammaPriorParasWithoutScale m_maternParasGammaAlphaBetaTime ;
+  GammaHyperParas m_maternSpacetimeScalingGammaAlphaBeta ;
   GammaHyperParas m_fixedEffGammaAlphaBeta ;
   GammaHyperParas m_errorGammaAlphaBeta ;
 
   maternVec m_MRAcovParasSpace ;
   maternVec m_MRAcovParasTime ;
+  double m_spacetimeScaling ;
   arma::vec m_fixedEffParameters ;
   arma::vec m_FEmu ;
 
