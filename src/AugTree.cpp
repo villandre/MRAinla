@@ -21,7 +21,10 @@ struct gridPair{
 AugTree::AugTree(uint & M, vec & lonRange, vec & latRange, vec & timeRange, vec & observations, mat & obsSp, vec & obsTime, uint & minObsForTimeSplit, unsigned long int & seed, mat & covariates, const bool splitTime)
   : m_M(M)
 {
-  m_dataset = inputdata(observations, obsSp, obsTime, covariates) ;
+  // Jittering time a bit might help with estimation.
+  vec jitter = randn<vec>(obsTime.size()) ;
+
+  m_dataset = inputdata(observations, obsSp, obsTime + 1e-4 * jitter, covariates) ;
   m_mapDimensions = dimensions(lonRange, latRange, timeRange) ;
   m_randomNumGenerator = gsl_rng_alloc(gsl_rng_taus) ;
 
