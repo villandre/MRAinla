@@ -73,7 +73,7 @@ MRA_INLA <- function(spacetimeData, errorSDstart, fixedEffSDstart, MRAhyperparas
   }
 
   cat("Optimising marginal hyperparameter posterior distribution... \n") ;
-  optimResult <- nloptr::lbfgs(x0 = xStartValues, fn = funForOptim, lower = rep(0.01, length(xStartValues)), upper = 10*xStartValues, control = list(maxeval = 200, xtol_rel = 1e-4, ftol_rel = 1e-4), treePointer = gridPointer$gridPointer, MRAcovParasGammaAlphaBeta = MRAcovParasGammaAlphaBeta, FEmuVec = FEmuVec, elementNames = names(xStartValues), fixedEffGammaAlphaBeta = fixedEffGammaAlphaBeta, errorGammaAlphaBeta = errorGammaAlphaBeta)
+  optimResult <- nloptr::lbfgs(x0 = xStartValues, fn = funForOptim, lower = rep(0.01, length(xStartValues)), upper = 10*xStartValues, control = list(maxeval = 200, xtol_rel = 1e-3, ftol_rel = 1e-3), treePointer = gridPointer$gridPointer, MRAcovParasGammaAlphaBeta = MRAcovParasGammaAlphaBeta, FEmuVec = FEmuVec, elementNames = names(xStartValues), fixedEffGammaAlphaBeta = fixedEffGammaAlphaBeta, errorGammaAlphaBeta = errorGammaAlphaBeta)
   cat("Optimisation complete... \n")
   names(optimResult$par) <- names(xStartValues)
   if (optimResult$convergence < 0) {
@@ -83,7 +83,7 @@ MRA_INLA <- function(spacetimeData, errorSDstart, fixedEffSDstart, MRAhyperparas
   # cat("LOADING VALUES FOR TESTING PURPOSES. REMOVE THIS ONCE CODE IS COMPLETE.\n \n")
   # load("~/Documents/optimForTests.R")
   cat("Estimating Hessian at mode... \n") ;
-  hessianMat <- nlme::fdHess(pars = optimResult$par, fun = funForOptim, treePointer = gridPointer$gridPointer, MRAcovParasGammaAlphaBeta = MRAcovParasGammaAlphaBeta, FEmuVec = FEmuVec, elementNames = names(xStartValues), fixedEffGammaAlphaBeta = fixedEffGammaAlphaBeta, errorGammaAlphaBeta = errorGammaAlphaBeta, .relStep = .Machine$double.eps^(1/3))$Hessian
+  hessianMat <- nlme::fdHess(pars = optimResult$par, fun = funForOptim, treePointer = gridPointer$gridPointer, MRAcovParasGammaAlphaBeta = MRAcovParasGammaAlphaBeta, FEmuVec = FEmuVec, elementNames = names(xStartValues), fixedEffGammaAlphaBeta = fixedEffGammaAlphaBeta, errorGammaAlphaBeta = errorGammaAlphaBeta, .relStep = 3*.Machine$double.eps^(1/3))$Hessian
 
   if (det(-hessianMat) <= 0) {
     warning("Non-positive definite negative Hessian matrix... \n \n")
