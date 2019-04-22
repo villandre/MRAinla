@@ -686,15 +686,15 @@ void AugTree::ComputeLogJointPsiMarginal() {
   ComputeLogPriors() ;
 
   if (m_recomputeMRAlogLik) {
-    m_MRAcovParasSpace.print("Space parameters:") ;
-    m_MRAcovParasTime.print("Time parameters:") ;
+    // m_MRAcovParasSpace.print("Space parameters:") ;
+    // m_MRAcovParasTime.print("Time parameters:") ;
     computeWmats() ; // This will produce the K matrices required. NOTE: ADD CHECK THAT ENSURES THAT THE MRA LIK. IS ONLY RE-COMPUTED WHEN THE MRA COV. PARAMETERS CHANGE.
   }
 
   ComputeLogFCandLogCDandDataLL() ;
 
-  printf("Observations log-lik: %.4e \n Log-prior: %.4e \n Log-Cond. dist.: %.4e \n Log-full cond.: %.4e \n \n \n",
-         m_globalLogLik, m_logPrior, m_logCondDist, m_logFullCond) ;
+  // printf("Observations log-lik: %.4e \n Log-prior: %.4e \n Log-Cond. dist.: %.4e \n Log-full cond.: %.4e \n \n \n",
+         // m_globalLogLik, m_logPrior, m_logCondDist, m_logFullCond) ;
   m_logJointPsiMarginal = m_globalLogLik + m_logPrior + m_logCondDist - m_logFullCond ;
 }
 

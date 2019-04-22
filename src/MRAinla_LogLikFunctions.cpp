@@ -96,7 +96,7 @@ double LogJointHyperMarginal(SEXP treePointer, Rcpp::List MRAhyperparas,
     // ProfilerStop() ;
     // throw Rcpp::exception("Stop for profiling... \n") ;
     outputValue = pointedTree->GetLogJointPsiMarginal() ;
-    printf("Marginal joint Psi: %.4e \n \n \n", pointedTree->GetLogJointPsiMarginal()) ;
+    // printf("Marginal joint Psi: %.4e \n \n \n", pointedTree->GetLogJointPsiMarginal()) ;
   }
   else
   {
