@@ -73,7 +73,7 @@ MRA_INLA <- function(spacetimeData, errorSDstart, fixedEffSDstart, MRAhyperparas
   }
 
   cat("Optimising marginal hyperparameter posterior distribution... \n") ;
-  optimResult <- nloptr::lbfgs(x0 = xStartValues, fn = funForOptim, lower = rep(0.01, length(xStartValues)), upper = 10*xStartValues, control = list(maxeval = 200, xtol_rel = 1e-5, ftol_rel = 1e-5), treePointer = gridPointer$gridPointer, MRAcovParasGammaAlphaBeta = MRAcovParasGammaAlphaBeta, FEmuVec = FEmuVec, elementNames = names(xStartValues), fixedEffGammaAlphaBeta = fixedEffGammaAlphaBeta, errorGammaAlphaBeta = errorGammaAlphaBeta)
+  optimResult <- nloptr::lbfgs(x0 = xStartValues, fn = funForOptim, lower = rep(0.01, length(xStartValues)), upper = 10*xStartValues, control = list(maxeval = 200, xtol_rel = 10^(-(length(xStartValues) + 3)), ftol_rel = 10^(-(length(xStartValues) + 3))), treePointer = gridPointer$gridPointer, MRAcovParasGammaAlphaBeta = MRAcovParasGammaAlphaBeta, FEmuVec = FEmuVec, elementNames = names(xStartValues), fixedEffGammaAlphaBeta = fixedEffGammaAlphaBeta, errorGammaAlphaBeta = errorGammaAlphaBeta)
   cat("Optimisation complete... \n")
   names(optimResult$par) <- names(xStartValues)
   if (optimResult$convergence < 0) {
@@ -82,11 +82,15 @@ MRA_INLA <- function(spacetimeData, errorSDstart, fixedEffSDstart, MRAhyperparas
   # save(optimResult, file = "~/Documents/optimForTests.R")
   # cat("LOADING VALUES FOR TESTING PURPOSES. REMOVE THIS ONCE CODE IS COMPLETE.\n \n")
   # load("~/Documents/optimForTests.R")
-  cat("Estimating Hessian at mode... \n") ;
-  hessianMat <- nlme::fdHess(pars = optimResult$par, fun = funForOptim, treePointer = gridPointer$gridPointer, MRAcovParasGammaAlphaBeta = MRAcovParasGammaAlphaBeta, FEmuVec = FEmuVec, elementNames = names(xStartValues), fixedEffGammaAlphaBeta = fixedEffGammaAlphaBeta, errorGammaAlphaBeta = errorGammaAlphaBeta, .relStep = 3*.Machine$double.eps^(1/3))$Hessian
+  cat("Estimating Hessian at mode... \n")
+  for (i in 1:5) {
+    hessianMat <- nlme::fdHess(pars = optimResult$par, fun = funForOptim, treePointer = gridPointer$gridPointer, MRAcovParasGammaAlphaBeta = MRAcovParasGammaAlphaBeta, FEmuVec = FEmuVec, elementNames = names(xStartValues), fixedEffGammaAlphaBeta = fixedEffGammaAlphaBeta, errorGammaAlphaBeta = errorGammaAlphaBeta, .relStep = i*.Machine$double.eps^(1/3))$Hessian
+    if (all(eigen(-hessianMat)$values <= 0)) break
+    if (i == 4) stop("Couldn't obtain a negative definite Hessian matrix... \n")
+  }
 
-  if (det(-hessianMat) <= 0) {
-    warning("Non-positive definite negative Hessian matrix... \n \n")
+  if (any(eigen(-hessianMat)$values >= 0)) {
+    warning("Positive eigenvalues for the hessian matrix indicate a saddle point or a local MINIMUM... \n \n")
   }
   optimResult$hessian <- -hessianMat # The "-" is necessary because we performed a minimisation rather than a maximisation.
   cat("Computing distribution value at integration points... \n")
@@ -116,17 +120,19 @@ MRA_INLA <- function(spacetimeData, errorSDstart, fixedEffSDstart, MRAhyperparas
 }
 
 ComputeHyperMarginalMoments <- function(hyperparaList) {
-  psiAndMargDistMatrix <- t(sapply(hyperparaList, function(x) c(x$MRAhyperparas, x$fixedEffSD, x$errorSD, exp(x$logJointValue))))
+  psiAndMargDistMatrix <- t(sapply(hyperparaList, function(x) c(unlist(x$MRAhyperparas), fixedEffSD = x$fixedEffSD, errorSD = x$errorSD, logJointValue = exp(x$logJointValue))))
+  rownames(psiAndMargDistMatrix) <- NULL
   funToGetParaMoments <- function(hyperparaIndex) {
-    variableValues <- sort(unique(psiAndMargDistMatrix[, hyperparaIndex]))
-    massValues <- do.call("c", by(psiAndMargDistMatrix, INDICES = variableValues, FUN = function(block) sum(block[, ncol(block)]), simplify = FALSE))
-    meanValue <- sum(variableValues * massValues)
-    sdValue <- sqrt(sum(variableValues^2 * massValues) - meanValue^2)
+    # variableValues <- sort(unique(psiAndMargDistMatrix[, hyperparaIndex]))
+    # massValues <- do.call("c", by(psiAndMargDistMatrix, INDICES = variableValues, FUN = function(block) sum(block[, ncol(block)]), simplify = FALSE))
+    meanValue <- sum(psiAndMargDistMatrix[, hyperparaIndex] * psiAndMargDistMatrix[, ncol(psiAndMargDistMatrix)])
+    sdValue <- sqrt(sum(psiAndMargDistMatrix[, hyperparaIndex]^2 * psiAndMargDistMatrix[, ncol(psiAndMargDistMatrix)]) - meanValue^2)
     c(mean = meanValue, StdDev = sdValue)
   }
   paraMoments <- t(sapply(1:(ncol(psiAndMargDistMatrix) - 1), FUN = funToGetParaMoments))
 
   colnames(paraMoments) <- c("Mean", "StdDev")
+  rownames(paraMoments) <- head(colnames(psiAndMargDistMatrix), n = -1)
   as.data.frame(paraMoments)
 }
 
@@ -178,7 +184,7 @@ getIntegrationPointsAndValues <- function(optimObject, gridPointer, MRAcovParasG
   decomposition <- eigen(solve(-optimObject$hessian), symmetric = TRUE)
 
   if (any(decomposition$values < 0)) {
-    stop("Error: The Hessian matrix has negative eigenvalues. The values found in the optimisation is not a maximum. \n \n")
+    stop("Error: The negative Hessian matrix has negative eigenvalues. The values found in the optimisation is not a maximum. \n \n")
   }
 
   getPsi <- function(z) {
@@ -212,7 +218,7 @@ getIntegrationPointsAndValues <- function(optimObject, gridPointer, MRAcovParasG
     errorSD <- ifelse(any(grepl(pattern = "error", x = names(Psis))), Psis[[grep(pattern = "error", x = names(Psis), value = TRUE)]], errorSDstart)
     fixedEffSD <- ifelse(any(grepl(pattern = "fixedEff", x = names(Psis))), Psis[[grep(pattern = "fixedEff", x = names(Psis), value = TRUE)]], fixedEffSDstart)
 
-    aList <- list(errorSD = errorSD, fixedEffSD = fixedEffSD, MRAhyperparas = MRAhyperList)
+    aList <- list(z = z, errorSD = errorSD, fixedEffSD = fixedEffSD, MRAhyperparas = MRAhyperList)
 
     aList$logJointValue <- LogJointHyperMarginal(treePointer = gridPointer, MRAhyperparas = MRAhyperList, fixedEffSD = fixedEffSD, errorSD = errorSD, MRAcovParasGammaAlphaBeta = MRAcovParasGammaAlphaBeta, FEmuVec = FEmuVec, fixedEffGammaAlphaBeta =  fixedEffGammaAlphaBeta, errorGammaAlphaBeta = errorGammaAlphaBeta, matern = matern, spaceNuggetSD = spaceNuggetSD, timeNuggetSD = timeNuggetSD, recordFullConditional = TRUE)
     if (!is.null(predictionData)) {
@@ -275,7 +281,6 @@ getIntegrationPointsAndValues <- function(optimObject, gridPointer, MRAcovParasG
           if (test <- length(rowNumber) == 0) { # This syntax actually works...
             containerElement <- getContainerElement(currentZ)
           } else {
-            cat("Point known... \n")
             containerElement <- containerList[[rowNumber]]
           }
 
