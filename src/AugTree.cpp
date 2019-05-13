@@ -237,7 +237,7 @@ void AugTree::generateKnots(TreeNode * node) {
   // double expToRound = depthContribution + scaledRespSize ; // Why is it that we have to store every term separately for expToRound to not evaluate to 0?
   // double numKnots = expToRound * node->GetObsInNode().size() ;
   //// CAREFUL: THIS IS HARD-CODED, THERE MIGHT BE A BETTER WAY /////////////
-  int baseNumberOfKnots = 30 ;
+  int baseNumberOfKnots = 20 ;
   uint numKnotsToGen = baseNumberOfKnots * pow(2, node->GetDepth()) ;
   // double numKnots = sqrt((double) node->GetObsInNode().size()) ;
   // uint numKnotsToGen = uint (std::ceil(numKnots)) ;
@@ -521,6 +521,7 @@ arma::sp_mat AugTree::createFmatrixAlt(const bool predictionMode) {
   }) ; // This is supposed to reorder the tip nodes in such a way that the F matrix has contiguous blocks.
 
   for (auto & nodeToProcess : tipNodes) {
+    printf("Processing node %i. \n", nodeToProcess->GetNodeId()) ;
     uvec observationIndices = nodeToProcess->GetObsInNode() ;
 
     if (predictionMode) {
@@ -616,20 +617,30 @@ void AugTree::ComputeLogFCandLogCDandDataLL() {
   sp_mat SigmaFEandEtaInv = CombineFEinvAndKinvMatrices() ;
 
   if (m_recomputeMRAlogLik) {
+    cout << "Computing Fmatrix... \n" ;
     sp_mat Fmatrix = createFmatrixAlt(false) ;
+    cout << "Done... \n" ;
     mat transIncrementedCovar = trans(join_rows(ones<vec>(n), m_dataset.covariateValues)) ;
 
     //We re-shuffle the X matrix in such a way that the lines match those in the F matrix, based on
     // m_obsOrderForFmat.
 
     mat incrementedCovarReshuffled = trans(transIncrementedCovar.cols(m_obsOrderForFmat)) ;
-
+    cout << "Forming Hstar... \n" ;
     m_Hstar = join_rows(conv_to<sp_mat>::from(incrementedCovarReshuffled), Fmatrix) ;
+    cout << "Done... \n" ;
   }
 
   sp_mat TepsilonInverse = std::pow(m_errorSD, -2) * eye<sp_mat>(n, n) ;
 
-  m_FullCondPrecision = SigmaFEandEtaInv + trans(m_Hstar) * TepsilonInverse * m_Hstar ;
+  sp_mat secondTerm = trans(m_Hstar) * TepsilonInverse * m_Hstar ;
+  cout << "Obtaining Q... \n" ;fo
+  m_FullCondPrecision = SigmaFEandEtaInv + secondTerm ;
+  cout << "Done... \n" ;
+
+  // We must fix numerical errors to ensure the matrix is perfectly symmetric. Hopefully, this is not too demanding...
+
+  m_FullCondPrecision = symmatl(m_FullCondPrecision) ;
 
   vec responsesReshuffled = m_dataset.responseValues.elem(m_obsOrderForFmat) ;
 
@@ -684,11 +695,12 @@ void AugTree::ComputeLogFCandLogCDandDataLL() {
 void AugTree::ComputeLogJointPsiMarginal() {
 
   ComputeLogPriors() ;
-
+  cout << "Computing Wmats... \n" ;
   if (m_recomputeMRAlogLik) {
-    // m_MRAcovParasSpace.print("Space parameters:") ;
-    // m_MRAcovParasTime.print("Time parameters:") ;
+    m_MRAcovParasSpace.print("Space parameters:") ;
+    m_MRAcovParasTime.print("Time parameters:") ;
     computeWmats() ; // This will produce the K matrices required. NOTE: ADD CHECK THAT ENSURES THAT THE MRA LIK. IS ONLY RE-COMPUTED WHEN THE MRA COV. PARAMETERS CHANGE.
+    cout << "Done... \n" ;
   }
 
   ComputeLogFCandLogCDandDataLL() ;
@@ -714,10 +726,11 @@ double AugTree::logDeterminantQmat() {
                                          DmatrixBlockIndices.at(0),
                                          size(numRowsD, numRowsD)),
                                          shiftedBlockIndices) ;
+
   double logDeterminantD = 0 ;
+  double value = 0 ;
+  double sign = 0 ;
   for (uint i = 0 ; i < (DmatrixBlockIndices.size() - 1) ; i++) {
-    double value = 0 ;
-    double sign = 0 ;
     uint matSize = DmatrixBlockIndices.at(i+1) - DmatrixBlockIndices.at(i) ;
     log_det(value, sign, mat(m_FullCondPrecision(DmatrixBlockIndices.at(i), DmatrixBlockIndices.at(i), size(matSize, matSize)))) ;
     if (sign < 0) {
@@ -727,13 +740,22 @@ double AugTree::logDeterminantQmat() {
   }
   double logDeterminantComposite, sign1 ;
   uint AmatrixSize = DmatrixBlockIndices.at(0) ;
-  sp_mat compositeMat = m_FullCondPrecision(0, 0, size(AmatrixSize, AmatrixSize)) -
-    m_FullCondPrecision(0, AmatrixSize, size(AmatrixSize, numRowsD)) * Dinv * m_FullCondPrecision(AmatrixSize, 0, size(numRowsD, AmatrixSize)) ;
+
+  sp_mat Amatrix = m_FullCondPrecision(0, 0, size(AmatrixSize, AmatrixSize)) ;
+  sp_mat Bmatrix = m_FullCondPrecision(0, AmatrixSize, size(AmatrixSize, numRowsD)) ;
+  // The next few lines ensure that the matrix whose determinant needs to be computed is
+  // really symmetric. Else computational zeros will ruin the symmetry.
+  mat lowerTri = mat(trimatl(Dinv)) ;
+  lowerTri.diag() = mat(Dinv).diag() * 0.5 ;
+
+  sp_mat secondTermMat = Bmatrix * sp_mat(lowerTri) * trans(Bmatrix) ;
+  sp_mat compositeMat =  Amatrix + (-secondTermMat - trans(secondTermMat)) ;
 
   log_det(logDeterminantComposite, sign1, mat(compositeMat)) ;
+
   if (sign1 < 0) {
     throw Rcpp::exception("Error in logDeterminantQmat! sign1 should be positive. \n") ;
-  }
+  } // The determinant for the composite must be positive, because the determinant for D is positive. If it were negative, the determinant for the Q matrix would be negative, which is not allowed since it's a covariance matrix.
 
   return logDeterminantD + logDeterminantComposite ;
 }

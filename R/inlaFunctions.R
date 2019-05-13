@@ -72,26 +72,41 @@ MRA_INLA <- function(spacetimeData, errorSDstart, fixedEffSDstart, MRAhyperparas
     -LogJointHyperMarginal(treePointer = treePointer, MRAhyperparas = MRAlist, fixedEffSD = fixedEffArg, errorSD = errorArg, MRAcovParasGammaAlphaBeta = MRAcovParasGammaAlphaBeta, FEmuVec = FEmuVec, fixedEffGammaAlphaBeta = fixedEffGammaAlphaBeta, errorGammaAlphaBeta = errorGammaAlphaBeta, matern = as.logical(maternCov), spaceNuggetSD = spaceNuggetSD, timeNuggetSD = timeNuggetSD, recordFullConditional = FALSE)
   }
 
-  cat("Optimising marginal hyperparameter posterior distribution... \n") ;
-  optimResult <- nloptr::lbfgs(x0 = xStartValues, fn = funForOptim, lower = rep(0.01, length(xStartValues)), upper = 10*xStartValues, control = list(maxeval = 200, xtol_rel = 10^(-(length(xStartValues) + 3)), ftol_rel = 10^(-(length(xStartValues) + 3))), treePointer = gridPointer$gridPointer, MRAcovParasGammaAlphaBeta = MRAcovParasGammaAlphaBeta, FEmuVec = FEmuVec, elementNames = names(xStartValues), fixedEffGammaAlphaBeta = fixedEffGammaAlphaBeta, errorGammaAlphaBeta = errorGammaAlphaBeta)
-  cat("Optimisation complete... \n")
+  cat("Optimising marginal hyperparameter posterior distribution... \n")
+  lowerValues <- rep(1e-3, length(xStartValues))
+  lowerValues[grep(pattern = "moothness", x = names(xStartValues))] <- 0.5 # This may avoid a numerical issue where a negative value of the smoothness is used. Else a transformation will be required.
+  upperValues <- 15 * xStartValues
+  upperValues[grep(pattern = "moothness", x = names(xStartValues))] <- 10
+  optimResult <- nloptr::lbfgs(x0 = xStartValues, fn = funForOptim, lower = lowerValues, upper = upperValues, control = list(maxeval = 50, xtol_rel = 10^(-(length(xStartValues) + 1)), ftol_rel = 10^(-(length(xStartValues) + 1))), treePointer = gridPointer$gridPointer, MRAcovParasGammaAlphaBeta = MRAcovParasGammaAlphaBeta, FEmuVec = FEmuVec, elementNames = names(xStartValues), fixedEffGammaAlphaBeta = fixedEffGammaAlphaBeta, errorGammaAlphaBeta = errorGammaAlphaBeta)
+  # optimResult <- nloptr::neldermead(x0 = xStartValues, fn = funForOptim, lower = lowerValues, upper = upperValues, control = list(maxeval = 200, xtol_rel = 10^(-(length(xStartValues) + 2)), ftol_rel = 10^(-(length(xStartValues) + 2))), treePointer = gridPointer$gridPointer, MRAcovParasGammaAlphaBeta = MRAcovParasGammaAlphaBeta, FEmuVec = FEmuVec, elementNames = names(xStartValues), fixedEffGammaAlphaBeta = fixedEffGammaAlphaBeta, errorGammaAlphaBeta = errorGammaAlphaBeta)
+
   names(optimResult$par) <- names(xStartValues)
-  if (optimResult$convergence < 0) {
-    stop("Optimisation algorithm did not converge! \n \n")
-  }
+
+  # if (optimResult$convergence < 0) {
+  #   newStartValues <- optimResult$par*1.1
+  #   optimResult <- nloptr::lbfgs(x0 = newStartValues, fn = funForOptim, lower = rep(0.001, length(newStartValues)), upper = 10*newStartValues, control = list(maxeval = 70, xtol_rel = 10^(-(length(newStartValues) + 3)), ftol_rel = 10^(-(length(newStartValues) + 3))), treePointer = gridPointer$gridPointer, MRAcovParasGammaAlphaBeta = MRAcovParasGammaAlphaBeta, FEmuVec = FEmuVec, elementNames = names(newStartValues), fixedEffGammaAlphaBeta = fixedEffGammaAlphaBeta, errorGammaAlphaBeta = errorGammaAlphaBeta)
+  #   if (optimResult$convergence < 0) {
+  #     stop("Optimisation algorithms (L-BFGS and Nelder-Mead) did not converge! \n \n")
+  #   }
+  # }
+  cat("Optimisation complete... \n")
   # save(optimResult, file = "~/Documents/optimForTests.R")
   # cat("LOADING VALUES FOR TESTING PURPOSES. REMOVE THIS ONCE CODE IS COMPLETE.\n \n")
   # load("~/Documents/optimForTests.R")
   cat("Estimating Hessian at mode... \n")
-  for (i in 1:5) {
-    hessianMat <- nlme::fdHess(pars = optimResult$par, fun = funForOptim, treePointer = gridPointer$gridPointer, MRAcovParasGammaAlphaBeta = MRAcovParasGammaAlphaBeta, FEmuVec = FEmuVec, elementNames = names(xStartValues), fixedEffGammaAlphaBeta = fixedEffGammaAlphaBeta, errorGammaAlphaBeta = errorGammaAlphaBeta, .relStep = i*.Machine$double.eps^(1/3))$Hessian
-    if (all(eigen(-hessianMat)$values <= 0)) break
-    if (i == 4) stop("Couldn't obtain a negative definite Hessian matrix... \n")
+  successFlag <- FALSE
+  for (relStep in c(.Machine$double.eps^(1/3), 1e-04, 2e-04)) {
+    hessianMat <- nlme::fdHess(pars = optimResult$par, fun = funForOptim, treePointer = gridPointer$gridPointer, MRAcovParasGammaAlphaBeta = MRAcovParasGammaAlphaBeta, FEmuVec = FEmuVec, elementNames = names(xStartValues), fixedEffGammaAlphaBeta = fixedEffGammaAlphaBeta, errorGammaAlphaBeta = errorGammaAlphaBeta, .relStep = relStep)$Hessian
+    if (all(eigen(-hessianMat)$values <= 0)) {
+      successFlag <- TRUE
+      break
+    }
   }
 
-  if (any(eigen(-hessianMat)$values >= 0)) {
-    warning("Positive eigenvalues for the hessian matrix indicate a saddle point or a local MINIMUM... \n \n")
+  if (!successFlag) {
+    stop("Couldn't obtain a negative definite Hessian matrix... \n")
   }
+
   optimResult$hessian <- -hessianMat # The "-" is necessary because we performed a minimisation rather than a maximisation.
   cat("Computing distribution value at integration points... \n")
   hyperparaList <- getIntegrationPointsAndValues(optimObject = optimResult, gridPointer = gridPointer$gridPointer, MRAcovParasGammaAlphaBeta = MRAcovParasGammaAlphaBeta, FEmuVec = FEmuVec, fixedEffGammaAlphaBeta = fixedEffGammaAlphaBeta, errorGammaAlphaBeta = errorGammaAlphaBeta, stepSize = stepSize, lowerThreshold = lowerThreshold, matern = maternCov, predictionData = predictionData, timeBaseline = timeBaseline, spaceNuggetSD = spaceNuggetSD, timeNuggetSD = timeNuggetSD, MRAhyperparasStart = MRAhyperparasStart, errorSDstart = errorSDstart, fixedEffSDstart = fixedEffSDstart)
@@ -120,7 +135,9 @@ MRA_INLA <- function(spacetimeData, errorSDstart, fixedEffSDstart, MRAhyperparas
 }
 
 ComputeHyperMarginalMoments <- function(hyperparaList) {
-  psiAndMargDistMatrix <- t(sapply(hyperparaList, function(x) c(unlist(x$MRAhyperparas), fixedEffSD = x$fixedEffSD, errorSD = x$errorSD, logJointValue = exp(x$logJointValue))))
+  domainCheck <- sapply(hyperparaList, function(x) x$logJointValue > -Inf)
+  hyperparaList <- hyperparaList[domainCheck]
+  psiAndMargDistMatrix <- t(sapply(hyperparaList, function(x) c(unlist(x$MRAhyperparas), fixedEffSD = x$fixedEffSD, errorSD = x$errorSD, jointValue = exp(x$logJointValue))))
   rownames(psiAndMargDistMatrix) <- NULL
   funToGetParaMoments <- function(hyperparaIndex) {
     # variableValues <- sort(unique(psiAndMargDistMatrix[, hyperparaIndex]))
@@ -137,6 +154,8 @@ ComputeHyperMarginalMoments <- function(hyperparaList) {
 }
 
 ComputeMeanMarginalMoments <- function(hyperparaList) {
+  domainCheck <- sapply(hyperparaList, function(x) x$logJointValue > -Inf)
+  hyperparaList <- hyperparaList[domainCheck]
   numMeanParas <- length(hyperparaList[[1]]$FullCondMean)
   weights <- exp(sapply(hyperparaList, "[[", "logJointValue"))
   marginalMeans <- sapply(1:numMeanParas, function(paraIndex) {
@@ -154,6 +173,8 @@ ComputeMeanMarginalMoments <- function(hyperparaList) {
 }
 
 ComputeKrigingMoments <- function(hyperparaList) {
+  domainCheck <- sapply(hyperparaList, function(x) x$logJointValue > -Inf)
+  hyperparaList <- hyperparaList[domainCheck]
   termsForMean <- lapply(hyperparaList, function(x) {
     drop(x$CondPredStats$Hmean * exp(x$logJointValue))
   })
@@ -194,6 +215,9 @@ getIntegrationPointsAndValues <- function(optimObject, gridPointer, MRAcovParasG
 
   getContainerElement <- function(z) {
     Psis <- getPsi(z)
+    if (any(Psis <= 0)) {
+      return(list(logJointValue = -Inf))
+    }
     names(Psis) <- names(optimObject$par)
     MRAhyperList <- MRAhyperparasStart
     # spaceVars <- grep(pattern = "sp", x = names(z), value = TRUE)
