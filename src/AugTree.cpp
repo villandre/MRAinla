@@ -22,9 +22,10 @@ AugTree::AugTree(uint & M, vec & lonRange, vec & latRange, vec & timeRange, vec 
   : m_M(M)
 {
   // Jittering time a bit might help with estimation.
-  vec jitter = randn<vec>(obsTime.size()) ;
-
-  m_dataset = inputdata(observations, obsSp, obsTime + 1e-4 * jitter, covariates) ;
+  // vec jitter = randn<vec>(obsTime.size()) ;
+  //
+  // m_dataset = inputdata(observations, obsSp, obsTime + 1e-4 * jitter, covariates) ;
+  m_dataset = inputdata(observations, obsSp, obsTime, covariates) ;
   m_mapDimensions = dimensions(lonRange, latRange, timeRange) ;
   m_randomNumGenerator = gsl_rng_alloc(gsl_rng_taus) ;
 
@@ -35,8 +36,10 @@ AugTree::AugTree(uint & M, vec & lonRange, vec & latRange, vec & timeRange, vec 
   BuildTree(minObsForTimeSplit, splitTime) ;
 
   m_numKnots = 0 ;
+
+  numberNodes() ;
+
   for (uint i = 0 ; i < m_vertexVector.size() ; i++) {
-    m_vertexVector.at(i)->SetNodeId(i) ;
     m_numKnots += m_vertexVector.at(i)->GetKnotsCoor().timeCoords.size() ;
   }
   m_FullCondMean = vec(m_numKnots + m_fixedEffParameters.size(), fill::zeros) ;
@@ -56,6 +59,18 @@ void AugTree::BuildTree(const uint & minObsForTimeSplit, const bool splitTime)
   createLevels(topNode, minObsForTimeSplit, splitTime) ;
 
   generateKnots(topNode) ;
+}
+
+void AugTree::numberNodes() {
+  m_vertexVector.at(0)->SetNodeId(0) ;
+  int currentIndex = 1 ;
+  for (uint i = 1; i <= m_M; i++) {
+    std::vector<TreeNode *> levelNodes = GetLevelNodes(i) ;
+    for (auto & j : levelNodes) {
+      j->SetNodeId(currentIndex) ;
+      currentIndex += 1 ;
+    }
+  }
 }
 
 // void AugTree::createLevels(TreeNode * parent, const uint & numObsForTimeSplit) {
@@ -634,7 +649,7 @@ void AugTree::ComputeLogFCandLogCDandDataLL() {
   sp_mat TepsilonInverse = std::pow(m_errorSD, -2) * eye<sp_mat>(n, n) ;
 
   sp_mat secondTerm = trans(m_Hstar) * TepsilonInverse * m_Hstar ;
-  cout << "Obtaining Q... \n" ;fo
+  cout << "Obtaining Q... \n" ;
   m_FullCondPrecision = SigmaFEandEtaInv + secondTerm ;
   cout << "Done... \n" ;
 

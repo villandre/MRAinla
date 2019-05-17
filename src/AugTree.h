@@ -171,6 +171,8 @@ private:
   void createLevels(TreeNode *, const uint &, const bool) ;
   void generateKnots(TreeNode *) ;
 
+  void numberNodes() ;
+
   // Likelihood computations functions
 
   void computeWmats() ;
