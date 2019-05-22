@@ -499,17 +499,17 @@ arma::sp_mat AugTree::createFmatrixAlt(const bool predictionMode) {
   if (predictionMode) {
     numObs = m_predictData.spatialCoords.n_rows ;
   }
-  sp_mat Fmat(numObs, m_numKnots) ;
+  sp_mat Fmat ;
   std::vector<uvec> FmatNodeOrder(m_M) ;
   uvec FmatObsOrder(numObs, fill::zeros) ;
   uint rowIndex = 0 ;
-  uvec colIndicesPerNodeId(m_vertexVector.size(), fill::zeros) ;
+  // uvec colIndicesPerNodeId(m_vertexVector.size(), fill::zeros) ;
 
-  uint colIndex = 0 ;
-  for (uint i = 0 ; i < m_vertexVector.size() ; i++) {
-    colIndicesPerNodeId.at(i) = colIndex ;
-    colIndex += m_vertexVector.at(i)->GetNumKnots() ;
-  }
+  // uint colIndex = 0 ;
+  // for (uint i = 0 ; i < m_vertexVector.size() ; i++) {
+  //   colIndicesPerNodeId.at(m_vertexVector.at(i)->GetNodeId()) = colIndex ;
+  //   colIndex += m_vertexVector.at(i)->GetNumKnots() ;
+  // }
 
   std::vector<TreeNode *> tipNodes = GetLevelNodes(m_M) ;
   int numTips = tipNodes.size() ;
@@ -536,7 +536,6 @@ arma::sp_mat AugTree::createFmatrixAlt(const bool predictionMode) {
   }) ; // This is supposed to reorder the tip nodes in such a way that the F matrix has contiguous blocks.
 
   for (auto & nodeToProcess : tipNodes) {
-    printf("Processing node %i. \n", nodeToProcess->GetNodeId()) ;
     uvec observationIndices = nodeToProcess->GetObsInNode() ;
 
     if (predictionMode) {
@@ -548,25 +547,48 @@ arma::sp_mat AugTree::createFmatrixAlt(const bool predictionMode) {
       FmatObsOrder.subvec(rowIndex, size(observationIndices)) = observationIndices ;
 
       std::vector<TreeNode *> brickList = nodeToProcess->getAncestors() ;
+      sp_mat rowMat ;
 
-      for (uint resolution = 0; resolution <= m_M; resolution++) {
-        uint nodeId = brickList.at(resolution)->GetNodeId() ;
-        mat matToAdd ;
-        if (predictionMode) {
-          matToAdd = nodeToProcess->GetUpred(resolution) ;
-        } else {
-          matToAdd = nodeToProcess->GetB(resolution) ;
+      // for (uint resolution = 0; resolution <= m_M; resolution++) {
+      //   uint nodeId = brickList.at(resolution)->GetNodeId() ;
+      //   mat matToAdd ;
+      //   if (predictionMode) {
+      //     matToAdd = nodeToProcess->GetUpred(resolution) ;
+      //   } else {
+      //     matToAdd = nodeToProcess->GetB(resolution) ;
+      //   }
+      //   Fmat(rowIndex, colIndicesPerNodeId.at(nodeId), size(matToAdd)) = matToAdd ;
+      // }
+      uvec brickAncestors(brickList.size()) ;
+      for (uint i = 0 ; i < brickAncestors.size() ; i++) {
+        brickAncestors.at(i) = brickList.at(i)->GetNodeId() ;
+      }
+      uint index = 0 ;
+      for (uint nodeIndex = 0; nodeIndex < m_vertexVector.size() ; nodeIndex++) {
+        int nodePos = GetNodePos(nodeIndex) ;
+
+        if (nodeIndex != brickAncestors.at(index)) {
+          rowMat = join_rows(rowMat, sp_mat(nodeToProcess->GetObsInNode().size(), m_vertexVector.at(nodePos)->GetNumKnots())) ;
         }
-
-        Fmat(rowIndex, colIndicesPerNodeId.at(nodeId), size(matToAdd)) = matToAdd ;
+        else {
+          sp_mat matToAdd ;
+          if (predictionMode) {
+            matToAdd = nodeToProcess->GetUpred(index) ;
+          } else {
+            matToAdd = nodeToProcess->GetB(index) ;
+          }
+          rowMat = join_rows(rowMat, matToAdd) ;
+          index += 1 ;
+        }
       }
       // rowIndex += nodeToProcess->GetB(0).n_rows ; // The B(0), B(1), ..., B(M) all have the same number of rows.
       rowIndex += observationIndices.size() ; // The B matrices should have as may rows as observations in the node...
+      Fmat = join_rows(Fmat, trans(rowMat)) ;
     }
   }
 
   m_obsOrderForFmat = FmatObsOrder ;
-  return Fmat ;
+  return trans(Fmat) ;
 }
 
 std::vector<TreeNode *> AugTree::Descendants(std::vector<TreeNode *> nodeList) {
@@ -635,6 +657,7 @@ void AugTree::ComputeLogFCandLogCDandDataLL() {
     cout << "Computing Fmatrix... \n" ;
     sp_mat Fmatrix = createFmatrixAlt(false) ;
     cout << "Done... \n" ;
+
     mat transIncrementedCovar = trans(join_rows(ones<vec>(n), m_dataset.covariateValues)) ;
 
     //We re-shuffle the X matrix in such a way that the lines match those in the F matrix, based on
@@ -648,9 +671,10 @@ void AugTree::ComputeLogFCandLogCDandDataLL() {
 
   sp_mat TepsilonInverse = std::pow(m_errorSD, -2) * eye<sp_mat>(n, n) ;
 
-  sp_mat secondTerm = trans(m_Hstar) * TepsilonInverse * m_Hstar ;
+  sp_mat secondTerm = std::pow(m_errorSD, -2) * trans(m_Hstar) * m_Hstar ;
   cout << "Obtaining Q... \n" ;
   m_FullCondPrecision = SigmaFEandEtaInv + secondTerm ;
+  // mat(m_FullCondPrecision(0, 0, size(1000, 1000))).save("/home/luc/Documents/Qmatrix.info", raw_ascii) ;
   cout << "Done... \n" ;
 
   // We must fix numerical errors to ensure the matrix is perfectly symmetric. Hopefully, this is not too demanding...
@@ -659,7 +683,7 @@ void AugTree::ComputeLogFCandLogCDandDataLL() {
 
   vec responsesReshuffled = m_dataset.responseValues.elem(m_obsOrderForFmat) ;
 
-  vec bVec = trans(trans(responsesReshuffled) * TepsilonInverse * m_Hstar) ;
+  vec bVec = trans(std::pow(m_errorSD, -2) * trans(responsesReshuffled) * m_Hstar) ; // This should be equal to trans(trans(responsesReshuffled) * TepsilonInverse * m_Hstar)
 
   vec updatedMean = ComputeFullConditionalMean(bVec) ;
 
@@ -998,8 +1022,10 @@ arma::vec AugTree::ComputeFullConditionalMean(const arma::vec & bVec) {
   uint DblockLeftIndex = blockIndices.at(0) ;
   uint sizeD = m_FullCondPrecision.n_cols - DblockLeftIndex ;
   uint sizeA = m_FullCondPrecision.n_cols - sizeD ;
+
   vec b1 = bVec.subvec(0, sizeA - 1) ;
   vec b2 = bVec.subvec(sizeA, bVec.size() - 1) ;
+
   sp_mat Bmatrix = m_FullCondPrecision(0, sizeA, size(sizeA, sizeD)) ;
   sp_mat Amatrix = m_FullCondPrecision(0, 0, size(sizeA, sizeA)) ;
 

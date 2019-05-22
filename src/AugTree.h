@@ -124,6 +124,14 @@ private:
 
   std::vector<TreeNode *> m_vertexVector ;
 
+  int GetNodePos(int nodeId) {
+    int nodePos = 0 ;
+    while (m_vertexVector.at(nodePos)->GetNodeId() != nodeId) {
+      nodePos += 1 ;
+    }
+  return nodePos ;
+  }
+
   bool m_recomputeMRAlogLik{ true } ; // When this flag is true, more computations are required to get the log-lik.
   bool m_recomputeGlobalLogLik{ true } ; // When this flag is true, the global log-likelihood (conditional on all mean parameters) needs to be recomputed.
 
@@ -204,13 +212,13 @@ private:
   bool m_GammaParasSet{ false } ;
 
   std::vector<arma::mat *> getKmatricesInversePointers() {
-    std::vector<arma::mat *> KmatrixInverseList ;
-    for (auto & i : m_vertexVector) KmatrixInverseList.push_back(i->GetKmatrixInverseAddress()) ;
+    std::vector<arma::mat *> KmatrixInverseList(m_vertexVector.size()) ;
+    for (auto & i : m_vertexVector) KmatrixInverseList.at(i->GetNodeId()) = i->GetKmatrixInverseAddress() ;
     return KmatrixInverseList ;
   }
   std::vector<arma::mat *> getKmatricesPointers() {
-    std::vector<arma::mat *> KmatrixList ;
-    for (auto & i : m_vertexVector) KmatrixList.push_back(i->GetKmatrixAddress()) ;
+    std::vector<arma::mat *> KmatrixList(m_vertexVector.size()) ;
+    for (auto & i : m_vertexVector) KmatrixList.at(i->GetNodeId()) = i->GetKmatrixAddress() ;
     return KmatrixList ;
   }
   // arma::sp_mat createFmatrix() ;
