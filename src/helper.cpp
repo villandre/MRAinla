@@ -167,7 +167,7 @@ double logDetBlockMatrix(const arma::sp_mat & blockMatrix) {
     unsigned int matSize = blockIndices.at(i+1) - blockIndices.at(i) ;
     log_det(value, sign, mat(blockMatrix(blockIndices.at(i), blockIndices.at(i), size(matSize, matSize)))) ;
     if (sign < 0) {
-      throw Rcpp::exception("Error in logDeterminantQmat! sign should be positive. \n") ;
+      throw Rcpp::exception("Error logDetBlockMatrix: Log determinant sign should be positive. \n") ;
     }
     logDeterminant += value ;
   }

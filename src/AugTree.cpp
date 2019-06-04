@@ -18,6 +18,19 @@ struct gridPair{
   gridPair(AugTree * gridArg, vec vectorArg) : grid(gridArg), vector(vectorArg) { } ;
 };
 
+struct MVN{
+  vec mu ;
+  sp_mat precision ;
+
+  MVN() { } ;
+  MVN(const vec & mu, const sp_mat & precision): mu(mu), precision(precision) {} ;
+
+  double ComputeExpTerm(const vec & coordinate) {
+    vec output = -0.5 * trans(coordinate - mu) * precision * (coordinate - mu) ;
+    return output(0) ;
+  }
+};
+
 AugTree::AugTree(uint & M, vec & lonRange, vec & latRange, vec & timeRange, vec & observations, mat & obsSp, vec & obsTime, uint & minObsForTimeSplit, unsigned long int & seed, mat & covariates, const bool splitTime)
   : m_M(M)
 {
@@ -44,6 +57,8 @@ AugTree::AugTree(uint & M, vec & lonRange, vec & latRange, vec & timeRange, vec 
   }
   m_FullCondMean = vec(m_numKnots + m_fixedEffParameters.size(), fill::zeros) ;
   m_FullCondSDs = vec(m_numKnots + m_fixedEffParameters.size(), fill::zeros) ;
+  m_Vstar = vec(m_numKnots + m_dataset.covariateValues.n_cols + 1, fill::zeros) ;
+  m_Vstar.subvec(0, size(m_FEmu)) = m_FEmu ;
 }
 
 void AugTree::BuildTree(const uint & minObsForTimeSplit, const bool splitTime)
@@ -566,20 +581,24 @@ arma::sp_mat AugTree::createFmatrixAlt(const bool predictionMode) {
       uint index = 0 ;
       for (uint nodeIndex = 0; nodeIndex < m_vertexVector.size() ; nodeIndex++) {
         int nodePos = GetNodePos(nodeIndex) ;
-
-        if (nodeIndex != brickAncestors.at(index)) {
+        if (index < brickAncestors.size()) {
+          if (nodeIndex != brickAncestors.at(index)) {
+            rowMat = join_rows(rowMat, sp_mat(nodeToProcess->GetObsInNode().size(), m_vertexVector.at(nodePos)->GetNumKnots())) ;
+          }
+          else {
+            sp_mat matToAdd ;
+            if (predictionMode) {
+              matToAdd = nodeToProcess->GetUpred(index) ;
+            } else {
+              matToAdd = nodeToProcess->GetB(index) ;
+            }
+            rowMat = join_rows(rowMat, matToAdd) ;
+            index += 1 ;
+          }
+        } else {
           rowMat = join_rows(rowMat, sp_mat(nodeToProcess->GetObsInNode().size(), m_vertexVector.at(nodePos)->GetNumKnots())) ;
         }
-        else {
-          sp_mat matToAdd ;
-          if (predictionMode) {
-            matToAdd = nodeToProcess->GetUpred(index) ;
-          } else {
-            matToAdd = nodeToProcess->GetB(index) ;
-          }
-          rowMat = join_rows(rowMat, matToAdd) ;
-          index += 1 ;
-        }
+
       }
       // rowIndex += nodeToProcess->GetB(0).n_rows ; // The B(0), B(1), ..., B(M) all have the same number of rows.
       rowIndex += observationIndices.size() ; // The B matrices should have as may rows as observations in the node...
@@ -647,23 +666,24 @@ void AugTree::ComputeLogPriors() {
 // }
 
 
-void AugTree::ComputeLogFCandLogCDandDataLL() {
+void AugTree::ComputeLogFCandLogCDandDataLL(Rcpp::Function funForOptim) {
 
   int n = m_dataset.responseValues.size() ;
 
   sp_mat SigmaFEandEtaInv = CombineFEinvAndKinvMatrices() ;
+  sp_mat Fmatrix ;
 
   if (m_recomputeMRAlogLik) {
     cout << "Computing Fmatrix... \n" ;
-    sp_mat Fmatrix = createFmatrixAlt(false) ;
+    Fmatrix = createFmatrixAlt(false) ;
     cout << "Done... \n" ;
+  }
+  //We re-shuffle the X matrix in such a way that the lines match those in the F matrix, based on
+  // m_obsOrderForFmat.
+  mat transIncrementedCovar = trans(join_rows(ones<vec>(n), m_dataset.covariateValues)) ;
+  mat incrementedCovarReshuffled = trans(transIncrementedCovar.cols(m_obsOrderForFmat)) ;
 
-    mat transIncrementedCovar = trans(join_rows(ones<vec>(n), m_dataset.covariateValues)) ;
-
-    //We re-shuffle the X matrix in such a way that the lines match those in the F matrix, based on
-    // m_obsOrderForFmat.
-
-    mat incrementedCovarReshuffled = trans(transIncrementedCovar.cols(m_obsOrderForFmat)) ;
+  if (m_recomputeMRAlogLik) {
     cout << "Forming Hstar... \n" ;
     m_Hstar = join_rows(conv_to<sp_mat>::from(incrementedCovarReshuffled), Fmatrix) ;
     cout << "Done... \n" ;
@@ -683,15 +703,17 @@ void AugTree::ComputeLogFCandLogCDandDataLL() {
 
   vec responsesReshuffled = m_dataset.responseValues.elem(m_obsOrderForFmat) ;
 
-  vec bVec = trans(std::pow(m_errorSD, -2) * trans(responsesReshuffled) * m_Hstar) ; // This should be equal to trans(trans(responsesReshuffled) * TepsilonInverse * m_Hstar)
+  // vec bVec = trans(std::pow(m_errorSD, -2) * trans(responsesReshuffled) * m_Hstar) ; // This should be equal to trans(trans(responsesReshuffled) * TepsilonInverse * m_Hstar)
 
-  vec updatedMean = ComputeFullConditionalMean(bVec) ;
+  // vec updatedMean = ComputeFullConditionalMean(bVec) ;
 
-  m_Vstar = updatedMean ;
+  NumericVector updatedMean = funForOptim(m_Vstar, std::pow(m_errorSD, 2), SigmaFEandEtaInv, m_dataset.responseValues, m_Hstar) ;
+
+  m_Vstar = updatedMean ; // Assuming there will be an implicit conversion to vec type.
 
   // m_MRAvalues = m_Fmatrix * updatedMean.tail(m_numKnots) ;
 
-  vec fixedEffMeans = updatedMean.head(m_fixedEffParameters.size()) ;
+  vec fixedEffMeans = m_Vstar.head(m_fixedEffParameters.size()) ;
   SetFixedEffParameters(fixedEffMeans) ;
 
   double logDetQmat = logDeterminantQmat() ;
@@ -731,22 +753,25 @@ void AugTree::ComputeLogFCandLogCDandDataLL() {
 //   m_globalLogLik = logDensity ;
 // }
 
-void AugTree::ComputeLogJointPsiMarginal() {
+void AugTree::ComputeLogJointPsiMarginal(Rcpp::Function funForOptim) {
 
   ComputeLogPriors() ;
   cout << "Computing Wmats... \n" ;
   if (m_recomputeMRAlogLik) {
     m_MRAcovParasSpace.print("Space parameters:") ;
     m_MRAcovParasTime.print("Time parameters:") ;
+    fflush(stdout); // Will now print everything in the stdout buffer
     computeWmats() ; // This will produce the K matrices required. NOTE: ADD CHECK THAT ENSURES THAT THE MRA LIK. IS ONLY RE-COMPUTED WHEN THE MRA COV. PARAMETERS CHANGE.
     cout << "Done... \n" ;
   }
 
-  ComputeLogFCandLogCDandDataLL() ;
+  ComputeLogFCandLogCDandDataLL(funForOptim) ;
 
   // printf("Observations log-lik: %.4e \n Log-prior: %.4e \n Log-Cond. dist.: %.4e \n Log-full cond.: %.4e \n \n \n",
          // m_globalLogLik, m_logPrior, m_logCondDist, m_logFullCond) ;
   m_logJointPsiMarginal = m_globalLogLik + m_logPrior + m_logCondDist - m_logFullCond ;
+  printf("Joint value: %.4e \n", m_logJointPsiMarginal) ;
+  throw Rcpp::exception("End test round... \n") ;
 }
 
 // This inversion is based on recursive partitioning of the Q matrix. It is based on the observation that it is
@@ -756,7 +781,10 @@ void AugTree::ComputeLogJointPsiMarginal() {
 double AugTree::logDeterminantQmat() {
   uvec DmatrixBlockIndices = extractBlockIndicesFromLowerRight(m_FullCondPrecision) ;
 
+  uvec AmatrixBlockIndices = extractBlockIndicesFromLowerRight(m_FullCondPrecision.submat(0, 0, DmatrixBlockIndices.at(0) - 1, DmatrixBlockIndices.at(0) - 1)) ;
+
   int numRowsD = m_FullCondPrecision.n_rows - DmatrixBlockIndices(0) ;
+  int numRowsA = DmatrixBlockIndices(0) - AmatrixBlockIndices(0) ;
 
   int shift = DmatrixBlockIndices.at(0) ;
 
@@ -766,22 +794,15 @@ double AugTree::logDeterminantQmat() {
                                          size(numRowsD, numRowsD)),
                                          shiftedBlockIndices) ;
 
-  double logDeterminantD = 0 ;
-  double value = 0 ;
-  double sign = 0 ;
-  for (uint i = 0 ; i < (DmatrixBlockIndices.size() - 1) ; i++) {
-    uint matSize = DmatrixBlockIndices.at(i+1) - DmatrixBlockIndices.at(i) ;
-    log_det(value, sign, mat(m_FullCondPrecision(DmatrixBlockIndices.at(i), DmatrixBlockIndices.at(i), size(matSize, matSize)))) ;
-    if (sign < 0) {
-      throw Rcpp::exception("Error in logDeterminantQmat! sign should be positive. \n") ;
-    }
-    logDeterminantD += value ;
-  }
-  double logDeterminantComposite, sign1 ;
-  uint AmatrixSize = DmatrixBlockIndices.at(0) ;
+  double logDeterminantD = logDetBlockMatrix(m_FullCondPrecision(DmatrixBlockIndices.at(0), DmatrixBlockIndices.at(0), size(numRowsD, numRowsD))) ;
 
-  sp_mat Amatrix = m_FullCondPrecision(0, 0, size(AmatrixSize, AmatrixSize)) ;
-  sp_mat Bmatrix = m_FullCondPrecision(0, AmatrixSize, size(AmatrixSize, numRowsD)) ;
+  sp_mat Amatrix = m_FullCondPrecision(AmatrixBlockIndices.at(0), AmatrixBlockIndices.at(0), size(numRowsA, numRowsA)) ;
+  // double logDeterminantA = logDetBlockMatrix(m_FullCondPrecision(AmatrixBlockIndices.at(0), AmatrixBlockIndices.at(0), size(numRowsD, numRowsD))) ;
+
+  double logDeterminantComposite, sign1 ;
+  // uint AmatrixSize = DmatrixBlockIndices.at(0) ;
+
+  sp_mat Bmatrix = m_FullCondPrecision(AmatrixBlockIndices.at(0), AmatrixBlockIndices.at(AmatrixBlockIndices.size() - 1), size(numRowsA, numRowsD)) ;
   // The next few lines ensure that the matrix whose determinant needs to be computed is
   // really symmetric. Else computational zeros will ruin the symmetry.
   mat lowerTri = mat(trimatl(Dinv)) ;
@@ -796,7 +817,7 @@ double AugTree::logDeterminantQmat() {
     throw Rcpp::exception("Error in logDeterminantQmat! sign1 should be positive. \n") ;
   } // The determinant for the composite must be positive, because the determinant for D is positive. If it were negative, the determinant for the Q matrix would be negative, which is not allowed since it's a covariance matrix.
 
-  return logDeterminantD + logDeterminantComposite ;
+  double logDeterminant = logDeterminantD + logDeterminantComposite ;
 }
 
 uvec AugTree::extractBlockIndicesFromLowerRight(const arma::sp_mat & symmSparseMatrix) {
@@ -1015,58 +1036,123 @@ uvec AugTree::extractBlockIndicesFromLowerRight(const arma::sp_mat & symmSparseM
 //   return optimalParas ;
 // }
 
-arma::vec AugTree::ComputeFullConditionalMean(const arma::vec & bVec) {
+// arma::vec AugTree::ComputeFullConditionalMean(const arma::vec & bVec) {
+//
+//   uvec blockIndices = extractBlockIndicesFromLowerRight(m_FullCondPrecision) ;
+//
+//   uint DblockLeftIndex = blockIndices.at(0) ;
+//   uint sizeD = m_FullCondPrecision.n_cols - DblockLeftIndex ;
+//   uint sizeA = m_FullCondPrecision.n_cols - sizeD ;
+//
+//   vec b1 = bVec.subvec(0, sizeA - 1) ;
+//   vec b2 = bVec.subvec(sizeA, bVec.size() - 1) ;
+//
+//   sp_mat Bmatrix = m_FullCondPrecision(0, sizeA, size(sizeA, sizeD)) ;
+//   sp_mat Amatrix = m_FullCondPrecision(0, 0, size(sizeA, sizeA)) ;
+//
+//   sp_mat Dinverted = invertSymmBlockDiag(m_FullCondPrecision(sizeA, sizeA, size(sizeD, sizeD)), blockIndices) ;
+//
+//   mat secondTermInside = conv_to<mat>::from(Bmatrix * Dinverted * trans(Bmatrix)) ;
+//
+//   mat compositeInverted = inv(Amatrix - secondTermInside) ;
+//
+//   sp_mat firstElementSecondTerm = Dinverted * conv_to<sp_mat>::from(b2) ;
+//   firstElementSecondTerm = Bmatrix * firstElementSecondTerm ;
+//   firstElementSecondTerm = compositeInverted * firstElementSecondTerm ;
+//   vec firstElementFirstTerm = compositeInverted * b1 ;
+//   vec firstElement =  firstElementFirstTerm - firstElementSecondTerm ;
+//
+//   vec secondElementFirstTerm = trans(Bmatrix) * firstElementFirstTerm ;
+//   secondElementFirstTerm = -Dinverted * secondElementFirstTerm ;
+//   sp_mat secondElementSecondTerm = trans(Bmatrix) * firstElementSecondTerm ;
+//   secondElementSecondTerm = Dinverted * secondElementSecondTerm ;
+//   secondElementSecondTerm = Dinverted * b2 + secondElementSecondTerm ;
+//   vec secondElement = secondElementFirstTerm + secondElementSecondTerm ;
+//
+//   vec meanVec = join_cols<vec>(firstElement, secondElement) ;
+//
+//   if (m_recordFullConditional) {
+//     vec firstDiag = sqrt(compositeInverted.diag()) ;
+//     m_FullCondSDs.subvec(0, size(firstDiag)) = firstDiag ;
+//
+//     for (uint i = 0 ; i < Dinverted.n_rows ; i++) {
+//       sp_mat firstExp = Bmatrix * Dinverted.col(i) ;
+//       mat secondExp = compositeInverted * conv_to<mat>::from(firstExp) ;
+//       mat thirdExp = trans(Bmatrix) * secondExp ;
+//       mat finalExp = Dinverted.col(i) + Dinverted * thirdExp ;
+//       m_FullCondSDs.at(i + compositeInverted.n_rows) = sqrt(finalExp(i, 0)) ;
+//     }
+//
+//     m_FullCondMean = meanVec ;
+//   }
+//
+//   return meanVec ;
+// }
 
-  uvec blockIndices = extractBlockIndicesFromLowerRight(m_FullCondPrecision) ;
+/* The basic function */
 
-  uint DblockLeftIndex = blockIndices.at(0) ;
-  uint sizeD = m_FullCondPrecision.n_cols - DblockLeftIndex ;
-  uint sizeA = m_FullCondPrecision.n_cols - sizeD ;
+double
+  my_f (const gsl_vector *v, void *params)
+  {
 
-  vec b1 = bVec.subvec(0, sizeA - 1) ;
-  vec b2 = bVec.subvec(sizeA, bVec.size() - 1) ;
+    auto p = (MVN *) params;
 
-  sp_mat Bmatrix = m_FullCondPrecision(0, sizeA, size(sizeA, sizeD)) ;
-  sp_mat Amatrix = m_FullCondPrecision(0, 0, size(sizeA, sizeA)) ;
+    vec coordinateVec(v->size, fill::zeros) ;
 
-  sp_mat Dinverted = invertSymmBlockDiag(m_FullCondPrecision(sizeA, sizeA, size(sizeD, sizeD)), blockIndices) ;
-
-  mat secondTermInside = conv_to<mat>::from(Bmatrix * Dinverted * trans(Bmatrix)) ;
-
-  mat compositeInverted = inv(Amatrix - secondTermInside) ;
-
-  sp_mat firstElementSecondTerm = Dinverted * conv_to<sp_mat>::from(b2) ;
-  firstElementSecondTerm = Bmatrix * firstElementSecondTerm ;
-  firstElementSecondTerm = compositeInverted * firstElementSecondTerm ;
-  vec firstElementFirstTerm = compositeInverted * b1 ;
-  vec firstElement =  firstElementFirstTerm - firstElementSecondTerm ;
-
-  vec secondElementFirstTerm = trans(Bmatrix) * firstElementFirstTerm ;
-  secondElementFirstTerm = -Dinverted * secondElementFirstTerm ;
-  sp_mat secondElementSecondTerm = trans(Bmatrix) * firstElementSecondTerm ;
-  secondElementSecondTerm = Dinverted * secondElementSecondTerm ;
-  secondElementSecondTerm = Dinverted * b2 + secondElementSecondTerm ;
-  vec secondElement = secondElementFirstTerm + secondElementSecondTerm ;
-
-  vec meanVec = join_cols<vec>(firstElement, secondElement) ;
-
-  if (m_recordFullConditional) {
-    vec firstDiag = sqrt(compositeInverted.diag()) ;
-    m_FullCondSDs.subvec(0, size(firstDiag)) = firstDiag ;
-
-    for (uint i = 0 ; i < Dinverted.n_rows ; i++) {
-      sp_mat firstExp = Bmatrix * Dinverted.col(i) ;
-      mat secondExp = compositeInverted * conv_to<mat>::from(firstExp) ;
-      mat thirdExp = trans(Bmatrix) * secondExp ;
-      mat finalExp = Dinverted.col(i) + Dinverted * thirdExp ;
-      m_FullCondSDs.at(i + compositeInverted.n_rows) = sqrt(finalExp(i, 0)) ;
+    for (int i = 0; i < v->size; i++) {
+      coordinateVec.at(i) = gsl_vector_get(v, i);
     }
-
-    m_FullCondMean = meanVec ;
+    return -0.5 * p->ComputeExpTerm(coordinateVec) ;
   }
 
-  return meanVec ;
-}
+/* The gradient of f, df = (df/dx, df/dy). */
+void
+  my_df (const gsl_vector *v, void *params,
+         gsl_vector *df)
+  {
+    double x, y;
+    double *p = (double *)params;
+
+    x = gsl_vector_get(v, 0);
+    y = gsl_vector_get(v, 1);
+
+    gsl_vector_set(df, 0, 2.0 * p[2] * (x - p[0]));
+    gsl_vector_set(df, 1, 2.0 * p[3] * (y - p[1]));
+  }
+
+/* Compute both f and df together. */
+void
+  my_fdf (const gsl_vector *x, void *params,
+          double *f, gsl_vector *df)
+  {
+    *f = my_f(x, params);
+    my_df(x, params, df);
+  }
+
+
+// arma::vec AugTree::ComputeFullConditionalMean() {
+//   int n = m_FEmu.size() + m_dataset.timeCoords.size() ;
+//   gsl_multimin_fminimizer * minimiser = gsl_multimin_fminimizer_alloc(const gsl_multimin_fminimizer_type * T, n) ;
+//   int gsl_multimin_fminimizer_set(minimiser, gsl_multimin_function * f, const gsl_vector * x, const gsl_vector * step_size) ;
+//   gsl_multimin_fminimizer_free(minimiser) ;
+//
+//   double p[n] ;
+//
+//   for (int i = 0; i < m_FEmu.size(); i++) {
+//     p[i] = m_FEmu.at(i) ;
+//   }
+//
+//   for (int i = m_FEmu.size(); i < n - m_FEmu.size(); i++) {
+//     p[i] = 0 ;
+//   }
+//
+//   gsl_multimin_function_fdf my_func;
+//   my_func.n = 2;  /* number of function components */
+//   my_func.f = &my_f;
+//   my_func.df = &my_df;
+//   my_func.fdf = &my_fdf;
+//   my_func.params = (void *)p;
+// }
 
 sp_mat AugTree::ComputeHpred(const mat & spCoords, const vec & time, const mat & covariateMatrix) {
 

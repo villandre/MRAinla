@@ -53,11 +53,11 @@ List setupGridCpp(NumericVector responseValues, NumericMatrix spCoords, NumericV
 
 // [[Rcpp::export]]
 
-double LogJointHyperMarginal(SEXP treePointer, Rcpp::List MRAhyperparas,
+double LogJointHyperMarginalToWrap(SEXP treePointer, Rcpp::List MRAhyperparas,
          double fixedEffSD, double errorSD, Rcpp::List MRAcovParasGammaAlphaBeta,
          Rcpp::NumericVector FEmuVec, NumericVector fixedEffGammaAlphaBeta,
          NumericVector errorGammaAlphaBeta, bool matern, double spaceNuggetSD, double timeNuggetSD,
-         bool recordFullConditional) {
+         bool recordFullConditional, Rcpp::Function optimFun) {
   arma::mat posteriorMatrix ;
   double outputValue = 0 ;
 
@@ -91,7 +91,7 @@ double LogJointHyperMarginal(SEXP treePointer, Rcpp::List MRAhyperparas,
     pointedTree->SetRecordFullConditional(recordFullConditional) ;
     // ProfilerStart("/home/luc/Downloads/myprofile.log") ;
 
-    pointedTree->ComputeLogJointPsiMarginal() ;
+    pointedTree->ComputeLogJointPsiMarginal(optimFun) ;
 
     // ProfilerStop() ;
     // throw Rcpp::exception("Stop for profiling... \n") ;
@@ -102,7 +102,6 @@ double LogJointHyperMarginal(SEXP treePointer, Rcpp::List MRAhyperparas,
   {
     throw Rcpp::exception("Pointer to MRA grid is null." ) ;
   }
-
   return outputValue ;
 }
 
