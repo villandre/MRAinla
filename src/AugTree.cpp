@@ -1,5 +1,5 @@
 #include <math.h>
-#include <omp.h>
+// #include <omp.h>
 #include <gsl/gsl_sf_gamma.h>
 #include <gsl/gsl_multimin.h>
 
@@ -666,7 +666,7 @@ void AugTree::ComputeLogPriors() {
 // }
 
 
-void AugTree::ComputeLogFCandLogCDandDataLL(Rcpp::Function funForOptim) {
+void AugTree::ComputeLogFCandLogCDandDataLL(Rcpp::Function funForOptim, Rcpp::Function LUfun) {
 
   int n = m_dataset.responseValues.size() ;
 
@@ -689,7 +689,7 @@ void AugTree::ComputeLogFCandLogCDandDataLL(Rcpp::Function funForOptim) {
     cout << "Done... \n" ;
   }
 
-  sp_mat TepsilonInverse = std::pow(m_errorSD, -2) * eye<sp_mat>(n, n) ;
+  // sp_mat TepsilonInverse = std::pow(m_errorSD, -2) * eye<sp_mat>(n, n) ;
 
   sp_mat secondTerm = std::pow(m_errorSD, -2) * trans(m_Hstar) * m_Hstar ;
   cout << "Obtaining Q... \n" ;
@@ -699,7 +699,7 @@ void AugTree::ComputeLogFCandLogCDandDataLL(Rcpp::Function funForOptim) {
 
   // We must fix numerical errors to ensure the matrix is perfectly symmetric. Hopefully, this is not too demanding...
 
-  m_FullCondPrecision = symmatl(m_FullCondPrecision) ;
+  // m_FullCondPrecision = symmatl(m_FullCondPrecision) ;
 
   vec responsesReshuffled = m_dataset.responseValues.elem(m_obsOrderForFmat) ;
 
@@ -707,7 +707,10 @@ void AugTree::ComputeLogFCandLogCDandDataLL(Rcpp::Function funForOptim) {
 
   // vec updatedMean = ComputeFullConditionalMean(bVec) ;
 
-  NumericVector updatedMean = funForOptim(m_Vstar, std::pow(m_errorSD, 2), SigmaFEandEtaInv, m_dataset.responseValues, m_Hstar) ;
+  // NumericVector updatedMean = funForOptim(m_Vstar, std::pow(m_errorSD, 2), SigmaFEandEtaInv, responsesReshuffled, m_Hstar) ;
+
+  cout << "Computing FC mean... \n" ;
+  Rcpp::NumericVector updatedMean = LUfun(std::pow(m_errorSD, 2), SigmaFEandEtaInv, responsesReshuffled, m_Hstar) ;
 
   m_Vstar = updatedMean ; // Assuming there will be an implicit conversion to vec type.
 
@@ -730,7 +733,7 @@ void AugTree::ComputeLogFCandLogCDandDataLL(Rcpp::Function funForOptim) {
   // Computing p(y | v*, Psi)
   double errorLogDet = -2 * n * log(m_errorSD) ;
   vec recenteredY = responsesReshuffled - m_Hstar * m_Vstar ;
-  vec globalLogLikExp = -0.5 * (trans(recenteredY) * TepsilonInverse * recenteredY) ;
+  vec globalLogLikExp = -0.5 * std::pow(m_errorSD, -2) * trans(recenteredY) * recenteredY ;
   m_globalLogLik = 0.5 * errorLogDet + globalLogLikExp(0) ;
 }
 
@@ -753,7 +756,7 @@ void AugTree::ComputeLogFCandLogCDandDataLL(Rcpp::Function funForOptim) {
 //   m_globalLogLik = logDensity ;
 // }
 
-void AugTree::ComputeLogJointPsiMarginal(Rcpp::Function funForOptim) {
+void AugTree::ComputeLogJointPsiMarginal(Rcpp::Function funForOptim, Rcpp::Function LUfun) {
 
   ComputeLogPriors() ;
   cout << "Computing Wmats... \n" ;
@@ -765,13 +768,12 @@ void AugTree::ComputeLogJointPsiMarginal(Rcpp::Function funForOptim) {
     cout << "Done... \n" ;
   }
 
-  ComputeLogFCandLogCDandDataLL(funForOptim) ;
+  ComputeLogFCandLogCDandDataLL(funForOptim, LUfun) ;
 
   // printf("Observations log-lik: %.4e \n Log-prior: %.4e \n Log-Cond. dist.: %.4e \n Log-full cond.: %.4e \n \n \n",
          // m_globalLogLik, m_logPrior, m_logCondDist, m_logFullCond) ;
   m_logJointPsiMarginal = m_globalLogLik + m_logPrior + m_logCondDist - m_logFullCond ;
   printf("Joint value: %.4e \n", m_logJointPsiMarginal) ;
-  throw Rcpp::exception("End test round... \n") ;
 }
 
 // This inversion is based on recursive partitioning of the Q matrix. It is based on the observation that it is
@@ -781,10 +783,8 @@ void AugTree::ComputeLogJointPsiMarginal(Rcpp::Function funForOptim) {
 double AugTree::logDeterminantQmat() {
   uvec DmatrixBlockIndices = extractBlockIndicesFromLowerRight(m_FullCondPrecision) ;
 
-  uvec AmatrixBlockIndices = extractBlockIndicesFromLowerRight(m_FullCondPrecision.submat(0, 0, DmatrixBlockIndices.at(0) - 1, DmatrixBlockIndices.at(0) - 1)) ;
-
   int numRowsD = m_FullCondPrecision.n_rows - DmatrixBlockIndices(0) ;
-  int numRowsA = DmatrixBlockIndices(0) - AmatrixBlockIndices(0) ;
+  int numRowsA = DmatrixBlockIndices(0) ;
 
   int shift = DmatrixBlockIndices.at(0) ;
 
@@ -796,20 +796,15 @@ double AugTree::logDeterminantQmat() {
 
   double logDeterminantD = logDetBlockMatrix(m_FullCondPrecision(DmatrixBlockIndices.at(0), DmatrixBlockIndices.at(0), size(numRowsD, numRowsD))) ;
 
-  sp_mat Amatrix = m_FullCondPrecision(AmatrixBlockIndices.at(0), AmatrixBlockIndices.at(0), size(numRowsA, numRowsA)) ;
-  // double logDeterminantA = logDetBlockMatrix(m_FullCondPrecision(AmatrixBlockIndices.at(0), AmatrixBlockIndices.at(0), size(numRowsD, numRowsD))) ;
+  sp_mat Amatrix = m_FullCondPrecision(0, 0, size(numRowsA, numRowsA)) ;
 
   double logDeterminantComposite, sign1 ;
   // uint AmatrixSize = DmatrixBlockIndices.at(0) ;
 
-  sp_mat Bmatrix = m_FullCondPrecision(AmatrixBlockIndices.at(0), AmatrixBlockIndices.at(AmatrixBlockIndices.size() - 1), size(numRowsA, numRowsD)) ;
+  sp_mat Bmatrix = m_FullCondPrecision(0, DmatrixBlockIndices.at(0), size(numRowsA, numRowsD)) ;
   // The next few lines ensure that the matrix whose determinant needs to be computed is
   // really symmetric. Else computational zeros will ruin the symmetry.
-  mat lowerTri = mat(trimatl(Dinv)) ;
-  lowerTri.diag() = mat(Dinv).diag() * 0.5 ;
-
-  sp_mat secondTermMat = Bmatrix * sp_mat(lowerTri) * trans(Bmatrix) ;
-  sp_mat compositeMat =  Amatrix + (-secondTermMat - trans(secondTermMat)) ;
+  sp_mat compositeMat = Amatrix - Bmatrix * Dinv * trans(Bmatrix) ;
 
   log_det(logDeterminantComposite, sign1, mat(compositeMat)) ;
 
