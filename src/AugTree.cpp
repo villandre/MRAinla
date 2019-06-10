@@ -2,6 +2,7 @@
 // #include <omp.h>
 #include <gsl/gsl_sf_gamma.h>
 #include <gsl/gsl_multimin.h>
+#include "gperftools/heap-profiler.h"
 
 #include "AugTree.h"
 #include "TipNode.h"
@@ -267,8 +268,9 @@ void AugTree::generateKnots(TreeNode * node) {
   // double expToRound = depthContribution + scaledRespSize ; // Why is it that we have to store every term separately for expToRound to not evaluate to 0?
   // double numKnots = expToRound * node->GetObsInNode().size() ;
   //// CAREFUL: THIS IS HARD-CODED, THERE MIGHT BE A BETTER WAY /////////////
-  int baseNumberOfKnots = 20 ;
-  uint numKnotsToGen = baseNumberOfKnots * pow(2, node->GetDepth()) ;
+  int baseNumberOfKnots = 50 ;
+  int numKnotsAtLevel = GetLevelNodes(node->GetDepth()).size() ;
+  uint numKnotsToGen = std::ceil((baseNumberOfKnots * pow(3, node->GetDepth()))/numKnotsAtLevel) ;
   // double numKnots = sqrt((double) node->GetObsInNode().size()) ;
   // uint numKnotsToGen = uint (std::ceil(numKnots)) ;
   node->genRandomKnots(m_dataset, numKnotsToGen, m_randomNumGenerator) ;
@@ -509,7 +511,7 @@ arma::sp_mat AugTree::CombineFEinvAndKinvMatrices() {
 // }
 
 arma::sp_mat AugTree::createFmatrixAlt(const bool predictionMode) {
-
+  cout << "Entered createFmatrixAlt... \n" ;
   int numObs = m_dataset.spatialCoords.n_rows ;
   if (predictionMode) {
     numObs = m_predictData.spatialCoords.n_rows ;
@@ -607,6 +609,7 @@ arma::sp_mat AugTree::createFmatrixAlt(const bool predictionMode) {
   }
 
   m_obsOrderForFmat = FmatObsOrder ;
+  cout << "Leaving createFmatrixAlt... \n" ;
   return trans(Fmat) ;
 }
 
@@ -669,8 +672,9 @@ void AugTree::ComputeLogPriors() {
 void AugTree::ComputeLogFCandLogCDandDataLL(Rcpp::Function funForOptim, Rcpp::Function LUfun) {
 
   int n = m_dataset.responseValues.size() ;
-
+  cout << "Creating matrix of Ks... \n" ;
   sp_mat SigmaFEandEtaInv = CombineFEinvAndKinvMatrices() ;
+  cout << "Done... \n" ;
   sp_mat Fmatrix ;
 
   if (m_recomputeMRAlogLik) {
@@ -710,7 +714,9 @@ void AugTree::ComputeLogFCandLogCDandDataLL(Rcpp::Function funForOptim, Rcpp::Fu
   // NumericVector updatedMean = funForOptim(m_Vstar, std::pow(m_errorSD, 2), SigmaFEandEtaInv, responsesReshuffled, m_Hstar) ;
 
   cout << "Computing FC mean... \n" ;
-  Rcpp::NumericVector updatedMean = LUfun(std::pow(m_errorSD, 2), SigmaFEandEtaInv, responsesReshuffled, m_Hstar) ;
+  sp_mat hessianMat = SigmaFEandEtaInv + std::pow(m_errorSD, -2) * trans(m_Hstar) * m_Hstar ;
+  mat scaledResponse = std::pow(m_errorSD, -2) * trans(responsesReshuffled) * m_Hstar ;
+  Rcpp::NumericVector updatedMean = LUfun(hessianMat, scaledResponse) ;
 
   m_Vstar = updatedMean ; // Assuming there will be an implicit conversion to vec type.
 

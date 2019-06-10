@@ -80,7 +80,7 @@ MRA_INLA <- function(spacetimeData, errorSDstart, fixedEffSDstart, MRAhyperparas
   }
 
   cat("Computing grid values... \n")
-  computedValues <- lapply(1:5, FUN = funForGridEst, treePointer = gridPointer$gridPointer, MRAcovParasGammaAlphaBeta = MRAcovParasGammaAlphaBeta, fixedEffGammaAlphaBeta = fixedEffGammaAlphaBeta, errorGammaAlphaBeta = errorGammaAlphaBeta, FEmuVec = FEmuVec, elementNames = colnames(paraGrid))
+  computedValues <- lapply(1, FUN = funForGridEst, treePointer = gridPointer$gridPointer, MRAcovParasGammaAlphaBeta = MRAcovParasGammaAlphaBeta, fixedEffGammaAlphaBeta = fixedEffGammaAlphaBeta, errorGammaAlphaBeta = errorGammaAlphaBeta, FEmuVec = FEmuVec, elementNames = colnames(paraGrid))
   cat("Log-posterior: ", computedValues[[1]])
   stop("Stop now \n")
   # optimResult <- nloptr::lbfgs(x0 = xStartValues, fn = funForOptim, lower = lowerValues, upper = upperValues, control = list(maxeval = 50, xtol_rel = 10^(-(length(xStartValues) + 1)), ftol_rel = 10^(-(length(xStartValues) + 1))), treePointer = gridPointer$gridPointer, MRAcovParasGammaAlphaBeta = MRAcovParasGammaAlphaBeta, FEmuVec = FEmuVec, elementNames = names(xStartValues), fixedEffGammaAlphaBeta = fixedEffGammaAlphaBeta, errorGammaAlphaBeta = errorGammaAlphaBeta)
@@ -412,11 +412,9 @@ LogJointHyperMarginal <- function(treePointer, MRAhyperparas, fixedEffSD, errorS
   # Hmat is the covariate matrix with a column of 1s at the front for the intercept, with a n x n identity matrix horizontally appended (horizontal/row merge).
   # MRAprecision has to be a sparse matrix.
   require(Matrix, quietly = TRUE)
-  choleskiSolve <- function(sigmaSqEpsilon, MRAprecision, responseVec, Hmat) {
-    hessianMat <- as(MRAprecision + 1/sigmaSqEpsilon * Matrix::t(Hmat) %*% Hmat, "symmetricMatrix")
-    # choleskiDecomp <- Matrix::chol(hessianMat, pivot = TRUE)
-    RHS <- 1/sigmaSqEpsilon * t(responseVec) %*% Hmat
-    value <- as.vector(Matrix::solve(hessianMat, as.vector(RHS), sparse = TRUE))
+  choleskiSolve <- function(hessianMat, scaledResponseHmat) {
+    hessianMat <- as(hessianMat, "symmetricMatrix")
+    value <- as.vector(Matrix::solve(hessianMat, as.vector(scaledResponseHmat), sparse = TRUE))
     value
   }
 

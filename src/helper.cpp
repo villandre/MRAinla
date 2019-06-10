@@ -38,6 +38,7 @@ arma::sp_mat createBlockMatrix(std::vector<arma::mat *> listOfMatrices) {
     X(idx, idx, arma::size(dereferencedMatrix.n_rows, dereferencedMatrix.n_cols)) = dereferencedMatrix ;
     idx += dereferencedMatrix.n_rows ;
   }
+
   return X ;
 }
 
