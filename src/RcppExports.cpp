@@ -7,8 +7,8 @@
 using namespace Rcpp;
 
 // setupGridCpp
-List setupGridCpp(NumericVector responseValues, NumericMatrix spCoords, NumericVector obsTime, NumericMatrix covariateMatrix, uint M, NumericVector lonRange, NumericVector latRange, NumericVector timeRange, uint randomSeed, uint cutForTimeSplit, bool splitTime);
-RcppExport SEXP _MRAinla_setupGridCpp(SEXP responseValuesSEXP, SEXP spCoordsSEXP, SEXP obsTimeSEXP, SEXP covariateMatrixSEXP, SEXP MSEXP, SEXP lonRangeSEXP, SEXP latRangeSEXP, SEXP timeRangeSEXP, SEXP randomSeedSEXP, SEXP cutForTimeSplitSEXP, SEXP splitTimeSEXP) {
+List setupGridCpp(NumericVector responseValues, NumericMatrix spCoords, NumericVector obsTime, NumericMatrix covariateMatrix, uint M, NumericVector lonRange, NumericVector latRange, NumericVector timeRange, uint randomSeed, uint cutForTimeSplit, bool splitTime, int numKnotsRes0, int J);
+RcppExport SEXP _MRAinla_setupGridCpp(SEXP responseValuesSEXP, SEXP spCoordsSEXP, SEXP obsTimeSEXP, SEXP covariateMatrixSEXP, SEXP MSEXP, SEXP lonRangeSEXP, SEXP latRangeSEXP, SEXP timeRangeSEXP, SEXP randomSeedSEXP, SEXP cutForTimeSplitSEXP, SEXP splitTimeSEXP, SEXP numKnotsRes0SEXP, SEXP JSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -23,13 +23,15 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< uint >::type randomSeed(randomSeedSEXP);
     Rcpp::traits::input_parameter< uint >::type cutForTimeSplit(cutForTimeSplitSEXP);
     Rcpp::traits::input_parameter< bool >::type splitTime(splitTimeSEXP);
-    rcpp_result_gen = Rcpp::wrap(setupGridCpp(responseValues, spCoords, obsTime, covariateMatrix, M, lonRange, latRange, timeRange, randomSeed, cutForTimeSplit, splitTime));
+    Rcpp::traits::input_parameter< int >::type numKnotsRes0(numKnotsRes0SEXP);
+    Rcpp::traits::input_parameter< int >::type J(JSEXP);
+    rcpp_result_gen = Rcpp::wrap(setupGridCpp(responseValues, spCoords, obsTime, covariateMatrix, M, lonRange, latRange, timeRange, randomSeed, cutForTimeSplit, splitTime, numKnotsRes0, J));
     return rcpp_result_gen;
 END_RCPP
 }
 // LogJointHyperMarginalToWrap
-double LogJointHyperMarginalToWrap(SEXP treePointer, Rcpp::List MRAhyperparas, double fixedEffSD, double errorSD, Rcpp::List MRAcovParasGammaAlphaBeta, Rcpp::NumericVector FEmuVec, NumericVector fixedEffGammaAlphaBeta, NumericVector errorGammaAlphaBeta, bool matern, double spaceNuggetSD, double timeNuggetSD, bool recordFullConditional, Rcpp::Function optimFun, Rcpp::Function LUfun);
-RcppExport SEXP _MRAinla_LogJointHyperMarginalToWrap(SEXP treePointerSEXP, SEXP MRAhyperparasSEXP, SEXP fixedEffSDSEXP, SEXP errorSDSEXP, SEXP MRAcovParasGammaAlphaBetaSEXP, SEXP FEmuVecSEXP, SEXP fixedEffGammaAlphaBetaSEXP, SEXP errorGammaAlphaBetaSEXP, SEXP maternSEXP, SEXP spaceNuggetSDSEXP, SEXP timeNuggetSDSEXP, SEXP recordFullConditionalSEXP, SEXP optimFunSEXP, SEXP LUfunSEXP) {
+double LogJointHyperMarginalToWrap(SEXP treePointer, Rcpp::List MRAhyperparas, double fixedEffSD, double errorSD, Rcpp::List MRAcovParasGammaAlphaBeta, Rcpp::NumericVector FEmuVec, NumericVector fixedEffGammaAlphaBeta, NumericVector errorGammaAlphaBeta, bool matern, double spaceNuggetSD, double timeNuggetSD, bool recordFullConditional, Rcpp::Function optimFun, Rcpp::Function gradCholeskiFun);
+RcppExport SEXP _MRAinla_LogJointHyperMarginalToWrap(SEXP treePointerSEXP, SEXP MRAhyperparasSEXP, SEXP fixedEffSDSEXP, SEXP errorSDSEXP, SEXP MRAcovParasGammaAlphaBetaSEXP, SEXP FEmuVecSEXP, SEXP fixedEffGammaAlphaBetaSEXP, SEXP errorGammaAlphaBetaSEXP, SEXP maternSEXP, SEXP spaceNuggetSDSEXP, SEXP timeNuggetSDSEXP, SEXP recordFullConditionalSEXP, SEXP optimFunSEXP, SEXP gradCholeskiFunSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -46,8 +48,8 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< double >::type timeNuggetSD(timeNuggetSDSEXP);
     Rcpp::traits::input_parameter< bool >::type recordFullConditional(recordFullConditionalSEXP);
     Rcpp::traits::input_parameter< Rcpp::Function >::type optimFun(optimFunSEXP);
-    Rcpp::traits::input_parameter< Rcpp::Function >::type LUfun(LUfunSEXP);
-    rcpp_result_gen = Rcpp::wrap(LogJointHyperMarginalToWrap(treePointer, MRAhyperparas, fixedEffSD, errorSD, MRAcovParasGammaAlphaBeta, FEmuVec, fixedEffGammaAlphaBeta, errorGammaAlphaBeta, matern, spaceNuggetSD, timeNuggetSD, recordFullConditional, optimFun, LUfun));
+    Rcpp::traits::input_parameter< Rcpp::Function >::type gradCholeskiFun(gradCholeskiFunSEXP);
+    rcpp_result_gen = Rcpp::wrap(LogJointHyperMarginalToWrap(treePointer, MRAhyperparas, fixedEffSD, errorSD, MRAcovParasGammaAlphaBeta, FEmuVec, fixedEffGammaAlphaBeta, errorGammaAlphaBeta, matern, spaceNuggetSD, timeNuggetSD, recordFullConditional, optimFun, gradCholeskiFun));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -89,7 +91,7 @@ END_RCPP
 }
 
 static const R_CallMethodDef CallEntries[] = {
-    {"_MRAinla_setupGridCpp", (DL_FUNC) &_MRAinla_setupGridCpp, 11},
+    {"_MRAinla_setupGridCpp", (DL_FUNC) &_MRAinla_setupGridCpp, 13},
     {"_MRAinla_LogJointHyperMarginalToWrap", (DL_FUNC) &_MRAinla_LogJointHyperMarginalToWrap, 14},
     {"_MRAinla_GetFullCondMean", (DL_FUNC) &_MRAinla_GetFullCondMean, 1},
     {"_MRAinla_GetFullCondSDs", (DL_FUNC) &_MRAinla_GetFullCondSDs, 1},

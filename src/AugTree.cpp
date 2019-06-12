@@ -32,7 +32,7 @@ struct MVN{
   }
 };
 
-AugTree::AugTree(uint & M, vec & lonRange, vec & latRange, vec & timeRange, vec & observations, mat & obsSp, vec & obsTime, uint & minObsForTimeSplit, unsigned long int & seed, mat & covariates, const bool splitTime)
+AugTree::AugTree(uint & M, vec & lonRange, vec & latRange, vec & timeRange, vec & observations, mat & obsSp, vec & obsTime, uint & minObsForTimeSplit, unsigned long int & seed, mat & covariates, const bool splitTime, const unsigned int numKnotsRes0, const unsigned int J)
   : m_M(M)
 {
   // Jittering time a bit might help with estimation.
@@ -47,7 +47,7 @@ AugTree::AugTree(uint & M, vec & lonRange, vec & latRange, vec & timeRange, vec 
   m_fixedEffParameters.resize(m_dataset.covariateValues.n_cols + 1) ; // An extra 1 is added to take into account the intercept.
   m_fixedEffParameters.randu() ;
 
-  BuildTree(minObsForTimeSplit, splitTime) ;
+  BuildTree(minObsForTimeSplit, splitTime, numKnotsRes0, J) ;
 
   m_numKnots = 0 ;
 
@@ -62,7 +62,7 @@ AugTree::AugTree(uint & M, vec & lonRange, vec & latRange, vec & timeRange, vec 
   m_Vstar.subvec(0, size(m_FEmu)) = m_FEmu ;
 }
 
-void AugTree::BuildTree(const uint & minObsForTimeSplit, const bool splitTime)
+void AugTree::BuildTree(const uint & minObsForTimeSplit, const bool splitTime, const unsigned int numKnots0, const unsigned int J)
 {
   m_vertexVector.reserve(1) ;
 
@@ -74,7 +74,7 @@ void AugTree::BuildTree(const uint & minObsForTimeSplit, const bool splitTime)
 
   createLevels(topNode, minObsForTimeSplit, splitTime) ;
 
-  generateKnots(topNode) ;
+  generateKnots(topNode, numKnots0, J) ;
 }
 
 void AugTree::numberNodes() {
@@ -261,22 +261,15 @@ void AugTree::createLevels(TreeNode * parent, const uint & numObsForTimeSplit, c
   }
 }
 
-void AugTree::generateKnots(TreeNode * node) {
-  // double scaledRespSize =  0.05 ;
-  // double depthContribution = 19*node->GetDepth() ;
-  // depthContribution = depthContribution/60 ;
-  // double expToRound = depthContribution + scaledRespSize ; // Why is it that we have to store every term separately for expToRound to not evaluate to 0?
-  // double numKnots = expToRound * node->GetObsInNode().size() ;
-  //// CAREFUL: THIS IS HARD-CODED, THERE MIGHT BE A BETTER WAY /////////////
-  int baseNumberOfKnots = 50 ;
-  int numKnotsAtLevel = GetLevelNodes(node->GetDepth()).size() ;
-  uint numKnotsToGen = std::ceil((baseNumberOfKnots * pow(3, node->GetDepth()))/numKnotsAtLevel) ;
-  // double numKnots = sqrt((double) node->GetObsInNode().size()) ;
-  // uint numKnotsToGen = uint (std::ceil(numKnots)) ;
+void AugTree::generateKnots(TreeNode * node, const unsigned int numKnotsRes0, const unsigned int J) {
+
+  int numNodesAtLevel = GetLevelNodes(node->GetDepth()).size() ;
+  uint numKnotsToGen = std::ceil((numKnotsRes0 * pow(J, node->GetDepth()))/numNodesAtLevel) ;
+
   node->genRandomKnots(m_dataset, numKnotsToGen, m_randomNumGenerator) ;
   if (node->GetChildren().at(0) != NULL) {
     for (auto &i : node->GetChildren()) {
-      generateKnots(i) ;
+      generateKnots(i, numKnotsRes0, J) ;
     }
   }
 }
@@ -669,7 +662,7 @@ void AugTree::ComputeLogPriors() {
 // }
 
 
-void AugTree::ComputeLogFCandLogCDandDataLL(Rcpp::Function funForOptim, Rcpp::Function LUfun) {
+void AugTree::ComputeLogFCandLogCDandDataLL(Rcpp::Function funForOptim, Rcpp::Function gradCholeskiFun) {
 
   int n = m_dataset.responseValues.size() ;
   cout << "Creating matrix of Ks... \n" ;
@@ -716,7 +709,7 @@ void AugTree::ComputeLogFCandLogCDandDataLL(Rcpp::Function funForOptim, Rcpp::Fu
   cout << "Computing FC mean... \n" ;
   sp_mat hessianMat = SigmaFEandEtaInv + std::pow(m_errorSD, -2) * trans(m_Hstar) * m_Hstar ;
   mat scaledResponse = std::pow(m_errorSD, -2) * trans(responsesReshuffled) * m_Hstar ;
-  Rcpp::NumericVector updatedMean = LUfun(hessianMat, scaledResponse) ;
+  Rcpp::NumericVector updatedMean = gradCholeskiFun(hessianMat, scaledResponse) ;
 
   m_Vstar = updatedMean ; // Assuming there will be an implicit conversion to vec type.
 
@@ -762,7 +755,7 @@ void AugTree::ComputeLogFCandLogCDandDataLL(Rcpp::Function funForOptim, Rcpp::Fu
 //   m_globalLogLik = logDensity ;
 // }
 
-void AugTree::ComputeLogJointPsiMarginal(Rcpp::Function funForOptim, Rcpp::Function LUfun) {
+void AugTree::ComputeLogJointPsiMarginal(Rcpp::Function funForOptim, Rcpp::Function gradCholeskiFun) {
 
   ComputeLogPriors() ;
   cout << "Computing Wmats... \n" ;
@@ -774,7 +767,7 @@ void AugTree::ComputeLogJointPsiMarginal(Rcpp::Function funForOptim, Rcpp::Funct
     cout << "Done... \n" ;
   }
 
-  ComputeLogFCandLogCDandDataLL(funForOptim, LUfun) ;
+  ComputeLogFCandLogCDandDataLL(funForOptim, gradCholeskiFun) ;
 
   // printf("Observations log-lik: %.4e \n Log-prior: %.4e \n Log-Cond. dist.: %.4e \n Log-full cond.: %.4e \n \n \n",
          // m_globalLogLik, m_logPrior, m_logCondDist, m_logFullCond) ;

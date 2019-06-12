@@ -37,7 +37,7 @@ namespace MRAinla {
 class AugTree
 {
 public:
-  AugTree(uint &, arma::vec &, arma::vec &, arma::vec &, arma::vec &, arma::mat &, arma::vec &, uint &, unsigned long int &, arma::mat &, const bool) ;
+  AugTree(uint &, arma::vec &, arma::vec &, arma::vec &, arma::vec &, arma::mat &, arma::vec &, uint &, unsigned long int &, arma::mat &, const bool, const unsigned int, const unsigned int) ;
 
   std::vector<TreeNode *> GetVertexVector() {return m_vertexVector ;} ;
 
@@ -175,9 +175,9 @@ private:
   void diveAndUpdate(TreeNode *, std::vector<TreeNode *> *) ;
 
   // Tree construction functions //
-  void BuildTree(const uint &, const bool) ;
+  void BuildTree(const uint &, const bool, const unsigned int, const unsigned int) ;
   void createLevels(TreeNode *, const uint &, const bool) ;
-  void generateKnots(TreeNode *) ;
+  void generateKnots(TreeNode *, const unsigned int, const unsigned int) ;
 
   void numberNodes() ;
 

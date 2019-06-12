@@ -31,7 +31,8 @@ typedef unsigned int uint ;
 
 List setupGridCpp(NumericVector responseValues, NumericMatrix spCoords, NumericVector obsTime,
                   NumericMatrix covariateMatrix, uint M, NumericVector lonRange, NumericVector latRange,
-                  NumericVector timeRange, uint randomSeed, uint cutForTimeSplit, bool splitTime)
+                  NumericVector timeRange, uint randomSeed, uint cutForTimeSplit, bool splitTime,
+                  int numKnotsRes0, int J)
 {
   vec lonR = as<vec>(lonRange) ;
   vec latR = as<vec>(latRange) ;
@@ -44,7 +45,7 @@ List setupGridCpp(NumericVector responseValues, NumericMatrix spCoords, NumericV
 
   mat covariateMat = as<mat>(covariateMatrix) ;
 
-  AugTree * MRAgrid = new AugTree(M, lonR, latR, timeR, response, sp, time, cutForTimeSplit, seedForRNG, covariateMat, splitTime) ;
+  AugTree * MRAgrid = new AugTree(M, lonR, latR, timeR, response, sp, time, cutForTimeSplit, seedForRNG, covariateMat, splitTime, numKnotsRes0, J) ;
 
   XPtr<AugTree> p(MRAgrid, false) ; // Disabled automatic garbage collection.
 
@@ -57,7 +58,7 @@ double LogJointHyperMarginalToWrap(SEXP treePointer, Rcpp::List MRAhyperparas,
          double fixedEffSD, double errorSD, Rcpp::List MRAcovParasGammaAlphaBeta,
          Rcpp::NumericVector FEmuVec, NumericVector fixedEffGammaAlphaBeta,
          NumericVector errorGammaAlphaBeta, bool matern, double spaceNuggetSD, double timeNuggetSD,
-         bool recordFullConditional, Rcpp::Function optimFun, Rcpp::Function LUfun) {
+         bool recordFullConditional, Rcpp::Function optimFun, Rcpp::Function gradCholeskiFun) {
   arma::mat posteriorMatrix ;
   double outputValue = 0 ;
 
@@ -91,7 +92,7 @@ double LogJointHyperMarginalToWrap(SEXP treePointer, Rcpp::List MRAhyperparas,
     pointedTree->SetRecordFullConditional(recordFullConditional) ;
     // ProfilerStart("/home/luc/Downloads/myprofile.log") ;
 
-    pointedTree->ComputeLogJointPsiMarginal(optimFun, LUfun) ;
+    pointedTree->ComputeLogJointPsiMarginal(optimFun, gradCholeskiFun) ;
 
     // ProfilerStop() ;
     // throw Rcpp::exception("Stop for profiling... \n") ;
