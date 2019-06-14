@@ -31,7 +31,7 @@
 #' @export
 
 MRA_INLA <- function(spacetimeData, errorSDstart, fixedEffSDstart, MRAhyperparasStart, FEmuVec, predictionData = NULL, fixedEffGammaAlphaBeta, errorGammaAlphaBeta,  MRAcovParasGammaAlphaBeta, control) {
-  defaultControl <- list(M = 1, randomSeed = 24,  cutForTimeSplit = 400, stepSize = 1, lowerThreshold = 3, maternCov = TRUE, spaceNuggetSD = 0.00001, timeNuggetSD = 0.00001, varyFixedEffSD = FALSE, varyMaternSmoothness = FALSE, varyErrorSD = TRUE, splitTime = FALSE, numKnotsRes0 = 10L, J = 2L, numValuesForGrid = 4, numOptimIter = 10)
+  defaultControl <- list(M = 1, randomSeed = 24,  cutForTimeSplit = 400, stepSize = 1, lowerThreshold = 3, maternCovariance = TRUE, nuggetSD = 0.00001, varyFixedEffSD = FALSE, varyMaternSmoothness = FALSE, varyErrorSD = TRUE, splitTime = FALSE, numKnotsRes0 = 10L, J = 2L, numValuesForGrid = 4)
   coordRanges <- mapply(dimName = c("lonRange", "latRange", "timeRange"), code = c("x", "y", "time"), function(dimName, code) {
     predCoordinates <- c()
     if (code != "time") {
@@ -78,9 +78,7 @@ MRA_INLA <- function(spacetimeData, errorSDstart, fixedEffSDstart, MRAhyperparas
     xStartValues[["timeSmoothness"]] <- MRAhyperparasStart$time[["smoothness"]]
   }
 
-  # numPoints <- ceiling(300^(1/length(xStartValues)))
-  cat("Number of hyperparameters: ", length(xStartValues), "\n")
-  paraGrid <- obtainGridValues(numOptimIter = control$numOptimIter, treePointer = gridPointer$gridPointer, xStartValues = xStartValues, numValuesForGrid = control$numValuesForGrid)
+  paraGrid <- obtainGridValues(treePointer = gridPointer$gridPointer, xStartValues = xStartValues, control = control, fixedEffSDstart = fixedEffSDstart, errorSDstart = errorSDstart, MRAhyperparasStart = MRAhyperparasStart, MRAcovParasGammaAlphaBeta = MRAcovParasGammaAlphaBeta, fixedEffGammaAlphaBeta = fixedEffGammaAlphaBeta, errorGammaAlphaBeta = errorGammaAlphaBeta, FEmuVec = FEmuVec)
 
   funForGridEst <- function(index, treePointer, MRAcovParasGammaAlphaBeta, fixedEffGammaAlphaBeta, errorGammaAlphaBeta, FEmuVec, elementNames) {
     x <- paraGrid[index, ]
@@ -100,25 +98,25 @@ MRA_INLA <- function(spacetimeData, errorSDstart, fixedEffSDstart, MRAhyperparas
       timeSmoothnessArg <- x[["timeSmoothness"]]
     }
     MRAlist <- list(space = list(rho = x[["spRho"]], smoothness = spSmoothnessArg), time = list(rho = x[["timeRho"]], smoothness = timeSmoothnessArg), scale = x[["scale"]])
-    LogJointHyperMarginal(treePointer = treePointer, MRAhyperparas = MRAlist, fixedEffSD = fixedEffArg, errorSD = errorArg, MRAcovParasGammaAlphaBeta = MRAcovParasGammaAlphaBeta, FEmuVec = FEmuVec, fixedEffGammaAlphaBeta = fixedEffGammaAlphaBeta, errorGammaAlphaBeta = errorGammaAlphaBeta, matern = as.logical(maternCov), spaceNuggetSD = spaceNuggetSD, timeNuggetSD = timeNuggetSD, recordFullConditional = FALSE)
+    logJointValue <- LogJointHyperMarginal(treePointer = treePointer, MRAhyperparas = MRAlist, fixedEffSD = fixedEffArg, errorSD = errorArg, MRAcovParasGammaAlphaBeta = MRAcovParasGammaAlphaBeta, FEmuVec = FEmuVec, fixedEffGammaAlphaBeta = fixedEffGammaAlphaBeta, errorGammaAlphaBeta = errorGammaAlphaBeta, matern = control$maternCovariance, spaceNuggetSD = control$nuggetSD, timeNuggetSD = control$nuggetSD, recordFullConditional = FALSE)
+    errorSD <- ifelse(any(grepl(pattern = "error", x = names(x))), x[[grep(pattern = "error", x = names(x), value = TRUE)]], errorSDstart)
+    fixedEffSD <- ifelse(any(grepl(pattern = "fixedEff", x = names(x))), x[[grep(pattern = "fixedEff", x = names(x), value = TRUE)]], fixedEffSDstart)
+    aList <- list(x = x, errorSD = errorSD, fixedEffSD = fixedEffSD, MRAhyperparas = MRAlist, logJointValue = logJointValue)
+    aList$FullCondMean <- GetFullCondMean(treePointer)
+    aList$FullCondSDs <- GetFullCondSDs(treePointer)
+    aList
   }
-
   cat("Computing grid values... \n")
-  computedValues <- lapply(1, FUN = funForGridEst, treePointer = gridPointer$gridPointer, MRAcovParasGammaAlphaBeta = MRAcovParasGammaAlphaBeta, fixedEffGammaAlphaBeta = fixedEffGammaAlphaBeta, errorGammaAlphaBeta = errorGammaAlphaBeta, FEmuVec = FEmuVec, elementNames = colnames(paraGrid))
-  cat("Log-posterior: ", computedValues[[1]])
-  stop("Stop now \n")
+  set.seed(42)
+  computedValues <- lapply(sort(sample.int(n = nrow(paraGrid), size = 100, replace = FALSE)), FUN = funForGridEst, treePointer = gridPointer$gridPointer, MRAcovParasGammaAlphaBeta = MRAcovParasGammaAlphaBeta, fixedEffGammaAlphaBeta = fixedEffGammaAlphaBeta, errorGammaAlphaBeta = errorGammaAlphaBeta, FEmuVec = FEmuVec, elementNames = colnames(paraGrid))
 
-  cat("Computing distribution value at integration points... \n")
-  # hyperparaList <- getIntegrationPointsAndValues(optimObject = optimResult, gridPointer = gridPointer$gridPointer, MRAcovParasGammaAlphaBeta = MRAcovParasGammaAlphaBeta, FEmuVec = FEmuVec, fixedEffGammaAlphaBeta = fixedEffGammaAlphaBeta, errorGammaAlphaBeta = errorGammaAlphaBeta, stepSize = stepSize, lowerThreshold = lowerThreshold, matern = maternCov, predictionData = predictionData, timeBaseline = timeBaseline, spaceNuggetSD = spaceNuggetSD, timeNuggetSD = timeNuggetSD, MRAhyperparasStart = MRAhyperparasStart, errorSDstart = errorSDstart, fixedEffSDstart = fixedEffSDstart)
-  hyperparaList <- getIntegrationPointsAndValuesNoTransform(gridPointer = gridPointer$gridPointer, MRAcovParasGammaAlphaBeta = MRAcovParasGammaAlphaBeta, FEmuVec = FEmuVec, fixedEffGammaAlphaBeta = fixedEffGammaAlphaBeta, errorGammaAlphaBeta = errorGammaAlphaBeta, stepSize = stepSize, lowerThreshold = lowerThreshold, matern = maternCov, predictionData = predictionData, timeBaseline = timeBaseline, spaceNuggetSD = spaceNuggetSD, timeNuggetSD = timeNuggetSD, MRAhyperparasStart = MRAhyperparasStart, errorSDstart = errorSDstart, fixedEffSDstart = fixedEffSDstart)
-  # load("~/Documents/hyperparaList.Rdata")
-  discreteLogJointValues <- sapply(hyperparaList, '[[', "logJointValue")
+  discreteLogJointValues <- sapply(computedValues, '[[', "logJointValue")
   maxLogJointValues <- max(discreteLogJointValues)
   logStandardisingConstant <- maxLogJointValues + log(sum(exp(discreteLogJointValues - maxLogJointValues)))
 
   # The following normalises the joint distribution.
   cat("Standardising empirical distribution...\n") ;
-  hyperparaList <- lapply(hyperparaList, function(x) {
+  hyperparaList <- lapply(computedValues, function(x) {
     x$logJointValue <- x$logJointValue - logStandardisingConstant
     x
   })
@@ -128,6 +126,7 @@ MRA_INLA <- function(spacetimeData, errorSDstart, fixedEffSDstart, MRAhyperparas
   hyperMarginalMoments <- ComputeHyperMarginalMoments(hyperparaList)
   meanMarginalMoments <- ComputeMeanMarginalMoments(hyperparaList)
   outputList <- list(hyperMarginalMoments = hyperMarginalMoments, meanMarginalMoments = meanMarginalMoments)
+  cat("Computing prediction moments... \n")
   if (!is.null(predictionData)) {
     outputList$predictionMoments <- ComputeKrigingMoments(hyperparaList)
   }
@@ -135,14 +134,16 @@ MRA_INLA <- function(spacetimeData, errorSDstart, fixedEffSDstart, MRAhyperparas
   outputList
 }
 
-obtainGridValues <- function(numOptimIter, treePointer, xStartValues, numValuesForGrid, fixedEffSDstart, errorSDstart, MRAhyperparasStart, control) {
-  if ((numOptimIter == 0) | is.null(treePointer)) {
+obtainGridValues <- function(treePointer, xStartValues, control, fixedEffSDstart, errorSDstart, MRAhyperparasStart, MRAcovParasGammaAlphaBeta, fixedEffGammaAlphaBeta, errorGammaAlphaBeta, FEmuVec) {
+  elementNames <- names(xStartValues)
+  if (is.null(treePointer)) {
     paraLimits <- cbind(lower = xStartValues/3, upper = xStartValues*3)
-    paraRanges <- lapply(1:nrow(paraLimits), function(x) seq(from = paraLimits[x,"lower"], to = paraLimits[x,"upper"], length.out = numValuesForGrid))
+    paraRanges <- lapply(1:nrow(paraLimits), function(x) seq(from = paraLimits[x,"lower"], to = paraLimits[x,"upper"], length.out = 20))
     names(paraRanges) <- names(xStartValues)
   } else {
-    funForOptim <- function(x, treePointer, MRAcovParasGammaAlphaBeta, fixedEffGammaAlphaBeta, errorGammaAlphaBeta, FEmuVec, elementNames) {
+    funForOptim <- function(x) {
       names(x) <- elementNames
+      if (any(x <= 0)) return(-Inf)
       fixedEffArg <- fixedEffSDstart
       if (control$varyFixedEffSD) {
         fixedEffArg <- x[["fixedEffSD"]]
@@ -158,21 +159,25 @@ obtainGridValues <- function(numOptimIter, treePointer, xStartValues, numValuesF
         timeSmoothnessArg <- x[["timeSmoothness"]]
       }
       MRAlist <- list(space = list(rho = x[["spRho"]], smoothness = spSmoothnessArg), time = list(rho = x[["timeRho"]], smoothness = timeSmoothnessArg), scale = x[["scale"]])
-      LogJointHyperMarginal(treePointer = treePointer, MRAhyperparas = MRAlist, fixedEffSD = fixedEffArg, errorSD = errorArg, MRAcovParasGammaAlphaBeta = MRAcovParasGammaAlphaBeta, FEmuVec = FEmuVec, fixedEffGammaAlphaBeta = fixedEffGammaAlphaBeta, errorGammaAlphaBeta = errorGammaAlphaBeta, matern = as.logical(maternCov), spaceNuggetSD = spaceNuggetSD, timeNuggetSD = timeNuggetSD, recordFullConditional = FALSE)
+      logJointValue <- tryCatch(expr = LogJointHyperMarginal(treePointer = treePointer, MRAhyperparas = MRAlist, fixedEffSD = fixedEffArg, errorSD = errorArg, MRAcovParasGammaAlphaBeta = MRAcovParasGammaAlphaBeta, FEmuVec = FEmuVec, fixedEffGammaAlphaBeta = fixedEffGammaAlphaBeta, errorGammaAlphaBeta = errorGammaAlphaBeta, matern = as.logical(control$maternCovariance), spaceNuggetSD = control$nuggetSD, timeNuggetSD = control$nuggetSD, recordFullConditional = FALSE), error = function(e) e)
+      if (is.list(logJointValue)) {
+        return(-Inf) # Don't try extreme parameter values.
+      }
+      logJointValue
     }
     gradientFun <- function(x) {
-      numDeriv::grad(func = funForOptim, x = x, method = "simple", treePointer = treePointer, MRAcovParasGammaAlphaBeta, fixedEffGammaAlphaBeta, errorGammaAlphaBeta, FEmuVec, elementNames)
+      numDeriv::grad(func = funForOptim, x = x, method = "simple")
     }
 
-    opt <- trustOptim::trust.optim(x = drop(start), fn = funForOptim,
+    opt <- trustOptim::trust.optim(x = xStartValues, fn = funForOptim,
                                    gr = gradientFun,
-                                   method = "SR1",
+                                   method = "BFGS",
                                    control = list(
                                      start.trust.radius = 3,
                                      stop.trust.radius = 1e-4,
                                      prec = 1e-4,
                                      report.precision = 1L,
-                                     maxit = numOptimIter, # Since we are solving a linear problem, convergence is in one iteration.
+                                     maxit = 20, # Since we are solving a linear problem, convergence is in one iteration.
                                      preconditioner = 0,
                                      precond.refresh.freq = 1,
                                      function.scale.factor = -1 # We are maximising, hence the -1.
@@ -181,7 +186,6 @@ obtainGridValues <- function(numOptimIter, treePointer, xStartValues, numValuesF
     cat(opt$solution)
     stop("Stop to check... \n")
   }
-  expand.grid(paraRanges)
 }
 
 ComputeHyperMarginalMoments <- function(hyperparaList) {
