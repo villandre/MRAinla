@@ -504,7 +504,7 @@ arma::sp_mat AugTree::CombineFEinvAndKinvMatrices() {
 // }
 
 arma::sp_mat AugTree::createFmatrixAlt(const bool predictionMode) {
-  cout << "Entered createFmatrixAlt... \n" ;
+
   int numObs = m_dataset.spatialCoords.n_rows ;
   if (predictionMode) {
     numObs = m_predictData.spatialCoords.n_rows ;
@@ -602,7 +602,7 @@ arma::sp_mat AugTree::createFmatrixAlt(const bool predictionMode) {
   }
 
   m_obsOrderForFmat = FmatObsOrder ;
-  cout << "Leaving createFmatrixAlt... \n" ;
+
   return trans(Fmat) ;
 }
 
@@ -712,6 +712,8 @@ void AugTree::ComputeLogFCandLogCDandDataLL(Rcpp::Function funForOptim, Rcpp::Fu
   Rcpp::NumericVector updatedMean = gradCholeskiFun(hessianMat, scaledResponse) ;
 
   m_Vstar = updatedMean ; // Assuming there will be an implicit conversion to vec type.
+  m_FullCondMean = m_Vstar ;
+  m_FullCondMean.subvec(0, 5).print("Mean vector:") ;
 
   // m_MRAvalues = m_Fmatrix * updatedMean.tail(m_numKnots) ;
 
@@ -772,7 +774,7 @@ void AugTree::ComputeLogJointPsiMarginal(Rcpp::Function funForOptim, Rcpp::Funct
   // printf("Observations log-lik: %.4e \n Log-prior: %.4e \n Log-Cond. dist.: %.4e \n Log-full cond.: %.4e \n \n \n",
          // m_globalLogLik, m_logPrior, m_logCondDist, m_logFullCond) ;
   m_logJointPsiMarginal = m_globalLogLik + m_logPrior + m_logCondDist - m_logFullCond ;
-  printf("Joint value: %.4e \n", m_logJointPsiMarginal) ;
+  printf("Joint value: %.4e \n \n", m_logJointPsiMarginal) ;
 }
 
 // This inversion is based on recursive partitioning of the Q matrix. It is based on the observation that it is
