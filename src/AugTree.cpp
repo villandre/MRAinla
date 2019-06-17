@@ -713,7 +713,6 @@ void AugTree::ComputeLogFCandLogCDandDataLL(Rcpp::Function funForOptim, Rcpp::Fu
 
   m_Vstar = updatedMean ; // Assuming there will be an implicit conversion to vec type.
   m_FullCondMean = m_Vstar ;
-  m_FullCondMean.subvec(0, 5).print("Mean vector:") ;
 
   // m_MRAvalues = m_Fmatrix * updatedMean.tail(m_numKnots) ;
 

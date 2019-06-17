@@ -117,7 +117,7 @@ MRA_INLA <- function(spacetimeData, errorSDstart, fixedEffSDstart, MRAhyperparas
 obtainGridValues <- function(treePointer, xStartValues, control, fixedEffSDstart, errorSDstart, MRAhyperparasStart, MRAcovParasGammaAlphaBeta, fixedEffGammaAlphaBeta, errorGammaAlphaBeta, FEmuVec) {
 
   currentCenter <- xStartValues
-  radius <- 0.75 * xStartValues
+  radius <- 0.9 * xStartValues
   currentMax <- -Inf
   containerList <- list()
   for (i in 1:20) {
@@ -136,10 +136,9 @@ obtainGridValues <- function(treePointer, xStartValues, control, fixedEffSDstart
 
     if (proposedMax > currentMax) {
       currentCenter <- valuesOnGrid[[which.max(postProbValues)]]$x
-      print(currentCenter)
       currentMax <- proposedMax
     } else {
-      radius <- 0.5 * radius
+      radius <- 0.75 * radius
       cat("Radius vector is now: ", radius, "\n")
     }
   }
