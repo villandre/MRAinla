@@ -772,7 +772,7 @@ void AugTree::ComputeLogJointPsiMarginal(Rcpp::Function funForOptim, Rcpp::Funct
   ComputeLogFCandLogCDandDataLL(funForOptim, gradCholeskiFun) ;
 
   // printf("Observations log-lik: %.4e \n Log-prior: %.4e \n Log-Cond. dist.: %.4e \n Log-full cond.: %.4e \n \n \n",
-         // m_globalLogLik, m_logPrior, m_logCondDist, m_logFullCond) ;
+  //  m_globalLogLik, m_logPrior, m_logCondDist, m_logFullCond) ;
   m_logJointPsiMarginal = m_globalLogLik + m_logPrior + m_logCondDist - m_logFullCond ;
   printf("Joint value: %.4e \n \n", m_logJointPsiMarginal) ;
 }
@@ -814,6 +814,7 @@ double AugTree::logDeterminantQmat() {
   } // The determinant for the composite must be positive, because the determinant for D is positive. If it were negative, the determinant for the Q matrix would be negative, which is not allowed since it's a covariance matrix.
 
   double logDeterminant = logDeterminantD + logDeterminantComposite ;
+  return logDeterminant ;
 }
 
 uvec AugTree::extractBlockIndicesFromLowerRight(const arma::sp_mat & symmSparseMatrix) {
