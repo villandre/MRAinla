@@ -115,34 +115,60 @@ MRA_INLA <- function(spacetimeData, errorSDstart, fixedEffSDstart, MRAhyperparas
 }
 
 obtainGridValues <- function(treePointer, xStartValues, control, fixedEffSDstart, errorSDstart, MRAhyperparasStart, MRAcovParasGammaAlphaBeta, fixedEffGammaAlphaBeta, errorGammaAlphaBeta, FEmuVec) {
+  cat("Entered obtainGridValues... \n")
 
-  currentCenter <- xStartValues
-  radius <- 0.9 * xStartValues
-  currentMax <- -Inf
-  containerList <- list()
-  for (i in 1:20) {
-    lowerLimit <- sapply(currentCenter - radius, function(x) ifelse(x <= 0.005, 0.005, x))
-    upperLimit <- currentCenter + radius
-    paraLimits <- cbind(lower = lowerLimit, upper = upperLimit)
-    paraRanges <- lapply(1:nrow(paraLimits), function(x) seq(from = paraLimits[x,"lower"], to = paraLimits[x,"upper"], length.out = 2))
-    names(paraRanges) <- names(currentCenter)
-    paraGrid <- expand.grid(paraRanges)
-    valuesOnGrid <- lapply(1:nrow(paraGrid), funForGridEst, paraGrid = paraGrid, treePointer = treePointer, MRAcovParasGammaAlphaBeta = MRAcovParasGammaAlphaBeta, fixedEffGammaAlphaBeta = fixedEffGammaAlphaBeta, errorGammaAlphaBeta = errorGammaAlphaBeta, fixedEffSDstart = fixedEffSDstart, errorSDstart = errorSDstart, MRAhyperparasStart = MRAhyperparasStart, FEmuVec = FEmuVec, control = control)
-    keepIndices <- sapply(valuesOnGrid, function(x) class(x$logJointValue) == "numeric")
-    valuesOnGrid <- valuesOnGrid[keepIndices]
-    containerList <- c(containerList, valuesOnGrid)
-    postProbValues <- sapply(valuesOnGrid, function(x) x$logJointValue)
-    proposedMax <- max(postProbValues)
-
-    if (proposedMax > currentMax) {
-      currentCenter <- valuesOnGrid[[which.max(postProbValues)]]$x
-      currentMax <- proposedMax
-    } else {
-      radius <- 0.75 * radius
-      cat("Radius vector is now: ", radius, "\n")
+  # A short optimisation first...
+  funForOptim <- function(x) {
+    names(x) <- names(xStartValues)
+    xTrans <- exp(x)
+    fixedEffArg <- fixedEffSDstart
+    if (control$varyFixedEffSD) {
+      fixedEffArg <- xTrans[["fixedEffSD"]]
     }
+    errorArg <- errorSDstart
+    if (control$varyErrorSD) {
+      errorArg <- xTrans[["errorSD"]]
+    }
+    spSmoothnessArg <- MRAhyperparasStart$space[["smoothness"]]
+    timeSmoothnessArg <- MRAhyperparasStart$time[["smoothness"]]
+    if (control$varyMaternSmoothness) {
+      spSmoothnessArg <- xTrans[["spSmoothness"]]
+      timeSmoothnessArg <- xTrans[["timeSmoothness"]]
+    }
+    MRAlist <- list(space = list(rho = xTrans[["spRho"]], smoothness = spSmoothnessArg), time = list(rho = xTrans[["timeRho"]], smoothness = timeSmoothnessArg), scale = xTrans[["scale"]])
+    tryCatch(expr = LogJointHyperMarginal(treePointer = treePointer, MRAhyperparas = MRAlist, fixedEffSD = fixedEffArg, errorSD = errorArg, MRAcovParasGammaAlphaBeta = MRAcovParasGammaAlphaBeta, FEmuVec = FEmuVec, fixedEffGammaAlphaBeta = fixedEffGammaAlphaBeta, errorGammaAlphaBeta = errorGammaAlphaBeta, matern = control$maternCovariance, spaceNuggetSD = control$nuggetSD, timeNuggetSD = control$nuggetSD, recordFullConditional = FALSE), error = function(e) -Inf)
   }
-  containerList
+  gradForOptim <- function(x) {
+    names(x) <- names(xStartValues)
+    numDeriv::grad(func = funForOptim, x = x, method = "simple")
+  }
+  opt <- trustOptim::trust.optim(x = log(xStartValues), fn = funForOptim,
+                                 gr = gradForOptim,
+                                 method = "SR1",
+                                 control = list(
+                                   start.trust.radius = 1,
+                                   stop.trust.radius = 1e-10,
+                                   prec = 1e-4,
+                                   report.precision = 1L,
+                                   maxit = 10L,
+                                   preconditioner = 0,
+                                   precond.refresh.freq = 1,
+                                   function.scale.factor = -1 # We are maximising, hence the -1.
+                                 ))
+  solution <- exp(opt$solution)
+  cat("The solution: ", solution, "\n")
+
+  radius <- 0.1*solution
+
+  lowerLimit <- solution - radius
+  upperLimit <- solution + radius
+  paraLimits <- cbind(lower = lowerLimit, upper = upperLimit)
+  paraRanges <- lapply(1:nrow(paraLimits), function(x) seq(from = paraLimits[x,"lower"], to = paraLimits[x,"upper"], length.out = control$numValuesForGrid))
+  names(paraRanges) <- names(xStartValues)
+  paraGrid <- expand.grid(paraRanges)
+  valuesOnGrid <- lapply(1:nrow(paraGrid), funForGridEst, paraGrid = paraGrid, treePointer = treePointer, MRAcovParasGammaAlphaBeta = MRAcovParasGammaAlphaBeta, fixedEffGammaAlphaBeta = fixedEffGammaAlphaBeta, errorGammaAlphaBeta = errorGammaAlphaBeta, fixedEffSDstart = fixedEffSDstart, errorSDstart = errorSDstart, MRAhyperparasStart = MRAhyperparasStart, FEmuVec = FEmuVec, control = control)
+  keepIndices <- sapply(valuesOnGrid, function(x) class(x$logJointValue) == "numeric")
+  valuesOnGrid[keepIndices]
 }
 
 funForGridEst <- function(index, paraGrid, treePointer, MRAcovParasGammaAlphaBeta, fixedEffGammaAlphaBeta, errorGammaAlphaBeta, fixedEffSDstart, errorSDstart, MRAhyperparasStart, FEmuVec, control) {
