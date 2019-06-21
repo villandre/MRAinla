@@ -106,7 +106,6 @@ protected:
   arma::mat m_SigmaInverse ;
   double m_uncorrSD ;
 
-
   // Prediction components (should probably be freed once computations are done)
 
   // void computeVpred(const arma::vec &, const spatialcoor &) ;

@@ -77,6 +77,7 @@ public:
   void SetMRAcovParas(const Rcpp::List &) ;
 
   std::vector<TreeNode *> GetLevelNodes(const uint & level) ;
+  std::vector<TreeNode *> GetTipNodes() { return GetLevelNodes(m_M) ;}
 
   void SetErrorGammaAlphaBeta(const GammaHyperParas & alphaBeta) {m_errorGammaAlphaBeta = alphaBeta ;}
   void SetFixedEffGammaAlphaBeta(const GammaHyperParas & alphaBeta) {m_fixedEffGammaAlphaBeta = alphaBeta ;}
@@ -104,7 +105,8 @@ public:
 
   void CleanPredictionComponents() ;
   void CenterResponse() ;
-  arma::sp_mat createHstar() ;
+
+  arma::sp_mat createHmatrixPred() ;
   arma::sp_mat CombineFEinvAndKinvMatrices() ;
   arma::sp_mat createQ() ;
 
@@ -146,6 +148,11 @@ private:
   bool m_matern ;
   double m_spaceNuggetSD ;
   double m_timeNuggetSD ;
+
+  // The next few members are to improve computational efficiency
+  arma::uvec m_DmatrixBlockIndices ;
+  arma::uvec m_SigmaFEandEtaInvBlockIndices ;
+  std::vector<double *> m_pointersForFmatrix ;
 
   int m_M{ 0 } ;
   int m_numTips{ 0 } ;
@@ -207,7 +214,8 @@ private:
   arma::vec m_FullCondMean ;
   arma::vec m_FullCondSDs ;
   arma::sp_mat m_FullCondPrecision ;
-  arma::sp_mat m_Hstar ;
+  arma::sp_mat m_Hmat ;
+
   bool m_recordFullConditional{ false } ;
   bool m_GammaParasSet{ false } ;
 
@@ -221,8 +229,9 @@ private:
     for (auto & i : m_vertexVector) KmatrixList.at(i->GetNodeId()) = i->GetKmatrixAddress() ;
     return KmatrixList ;
   }
-  // arma::sp_mat createFmatrix() ;
-  arma::sp_mat createFmatrixAlt(const bool) ;
+
+  void createHmatrix() ;
+  void updateHmatrix() ;
   arma::vec optimJointHyperMarg(const arma::vec &, const double, const double, const double, const double) ;
   double logDeterminantQmat() ;
   arma::uvec extractBlockIndicesFromLowerRight(const arma::sp_mat &) ;
