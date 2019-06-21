@@ -159,8 +159,8 @@ double maternCov(const double & distance, const double & rho,
   return maternValue ;
 }
 
-double logDetBlockMatrix(const arma::sp_mat & blockMatrix) {
-  uvec blockIndices = extractBlockIndices(blockMatrix) ;
+double logDetBlockMatrix(const arma::sp_mat & blockMatrix, const arma::uvec & blockIndices) {
+  // uvec blockIndices = extractBlockIndices(blockMatrix) ;
   double logDeterminant = 0 ;
   for (unsigned int i = 0 ; i < (blockIndices.size() - 1) ; i++) {
     double value = 0 ;

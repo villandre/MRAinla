@@ -150,7 +150,7 @@ obtainGridValues <- function(treePointer, xStartValues, control, fixedEffSDstart
                                    stop.trust.radius = 1e-10,
                                    prec = 1e-4,
                                    report.precision = 1L,
-                                   maxit = 10L,
+                                   maxit = 12L,
                                    preconditioner = 0,
                                    precond.refresh.freq = 1,
                                    function.scale.factor = -1 # We are maximising, hence the -1.
@@ -158,7 +158,7 @@ obtainGridValues <- function(treePointer, xStartValues, control, fixedEffSDstart
   solution <- exp(opt$solution)
   cat("The solution: ", solution, "\n")
 
-  radius <- 0.1*solution
+  radius <- 0.05*solution
 
   lowerLimit <- solution - radius
   upperLimit <- solution + radius
