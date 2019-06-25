@@ -60,6 +60,7 @@ AugTree::AugTree(uint & M, vec & lonRange, vec & latRange, vec & timeRange, vec 
   m_FullCondSDs = vec(m_numKnots + m_fixedEffParameters.size(), fill::zeros) ;
   m_Vstar = vec(m_numKnots + m_dataset.covariateValues.n_cols + 1, fill::zeros) ;
   m_Vstar.subvec(0, size(m_FEmu)) = m_FEmu ;
+  m_HmatPos = umat(0, 2) ;
 }
 
 void AugTree::BuildTree(const uint & minObsForTimeSplit, const bool splitTime, const unsigned int numKnots0, const unsigned int J)
@@ -560,12 +561,13 @@ void AugTree::createHmatrix() {
             rowMat = join_rows(rowMat, sp_mat(nodeToProcess->GetObsInNode().size(), m_vertexVector.at(nodePos)->GetNumKnots())) ;
           } else {
             rowMat = join_rows(rowMat, sp_mat(nodeToProcess->GetB(index))) ;
-            double * pointerToB = nodeToProcess->GetB(index).memptr() ;
-            for (uint elementNum = 0 ; elementNum < nodeToProcess->GetB(index).size() ; elementNum++) {
-              uint colNumber = colIndex + floor(elementNum/nodeToProcess->GetB(index).n_rows) ;
-              memAddressesVec.at(colNumber).push_back(pointerToB) ;
-              pointerToB += 1 ;
-            }
+
+            uvec rowIndices = rep(regspace<uvec>(0, nodeToProcess->GetB(index).n_rows - 1), nodeToProcess->GetB(index).n_cols) + rowIndex ;
+            uvec colIndices = rep_each(regspace<uvec>(0, nodeToProcess->GetB(index).n_cols - 1), nodeToProcess->GetB(index).n_rows) + colIndex ;
+
+            umat positions = join_rows(rowIndices, colIndices) ;
+            m_HmatPos = join_cols(m_HmatPos, positions) ; // Slow, but this is not done many times.
+
             index += 1 ;
           }
         } else {
@@ -576,11 +578,8 @@ void AugTree::createHmatrix() {
       colIndex = 0 ;
       rowIndex += observationIndices.size() ; // The B matrices should have as many rows as observations in the node...
       Fmat = join_rows(Fmat, trans(rowMat)) ;
+      m_HmatPos.col(1) += m_dataset.covariateValues.n_cols + 1 ;
     }
-  }
-
-  for (auto & vectorElement : memAddressesVec) {
-    m_pointersForFmatrix.insert(m_pointersForFmatrix.end(), vectorElement.begin(), vectorElement.end()) ;
   }
 
   m_obsOrderForFmat = FmatObsOrder ;
@@ -663,15 +662,6 @@ sp_mat AugTree::createHmatrixPred() {
   return join_rows(conv_to<sp_mat>::from(incrementedCovarReshuffled), trans(Fmat)) ;
 }
 
-void AugTree::updateHmatrix() {
-  uint index = 0 ;
-
-  for (auto iter = m_Hmat.begin_col(m_dataset.covariateValues.n_cols + 1); iter != m_Hmat.end(); ++iter) {
-    *iter = *(m_pointersForFmatrix.at(index)) ;
-    index += 1 ;
-  }
-}
-
 std::vector<TreeNode *> AugTree::Descendants(std::vector<TreeNode *> nodeList) {
   std::vector<TreeNode *> descendantList ;
   for (auto & i : nodeList) diveAndUpdate(i, &descendantList) ;
@@ -728,26 +718,36 @@ void AugTree::ComputeLogPriors() {
 // }
 
 
-void AugTree::ComputeLogFCandLogCDandDataLL(Rcpp::Function funForOptim, Rcpp::Function gradCholeskiFun) {
+void AugTree::ComputeLogFCandLogCDandDataLL(Rcpp::Function funForOptim, Rcpp::Function gradCholeskiFun,
+                                            Rcpp::Function HmatrixReconstructFun) {
 
   int n = m_dataset.responseValues.size() ;
   cout << "Creating matrix of Ks... \n" ;
   sp_mat SigmaFEandEtaInv = CombineFEinvAndKinvMatrices() ;
   cout << "Done... \n" ;
-
-  if (m_recomputeMRAlogLik) {
-    cout << "Computing H matrix... \n" ;
-    if (m_pointersForFmatrix.size() < n) {
-      createHmatrix() ;
-    } else {
-      updateHmatrix() ;
-    }
-    cout << "Done... \n" ;
-  }
   //We re-shuffle the X matrix in such a way that the lines match those in the F matrix, based on
   // m_obsOrderForFmat.
   mat transIncrementedCovar = trans(join_rows(ones<vec>(n), m_dataset.covariateValues)) ;
   mat incrementedCovarReshuffled = trans(transIncrementedCovar.cols(m_obsOrderForFmat)) ;
+
+  if (m_recomputeMRAlogLik) {
+
+    if (m_HmatPos.size() == 0) {
+      cout << "Creating H matrix... \n" ;
+      createHmatrix() ;
+    } else {
+      cout << "Updating H matrix... \n" ;
+      std::vector<mat> WmatList ;
+      for (auto & i : GetTipNodes()) {
+        WmatList.insert(WmatList.end(), i->GetWlist().begin(), i->GetWlist().end()) ;
+      }
+      printf("Hmat size before: %i %i \n", m_Hmat.n_rows, m_Hmat.n_cols) ;
+      m_Hmat = Rcpp::as<sp_mat>(HmatrixReconstructFun(m_HmatPos, WmatList, incrementedCovarReshuffled)) ;
+      printf("Hmat size after: %i %i \n", m_Hmat.n_rows, m_Hmat.n_cols) ;
+    }
+    cout << "Done... \n" ;
+  }
+
   // sp_mat Hstar ;
   // if (m_recomputeMRAlogLik) {
   //   cout << "Forming Hstar... \n" ;
@@ -828,7 +828,8 @@ void AugTree::ComputeLogFCandLogCDandDataLL(Rcpp::Function funForOptim, Rcpp::Fu
 //   m_globalLogLik = logDensity ;
 // }
 
-void AugTree::ComputeLogJointPsiMarginal(Rcpp::Function funForOptim, Rcpp::Function gradCholeskiFun) {
+void AugTree::ComputeLogJointPsiMarginal(Rcpp::Function funForOptim, Rcpp::Function gradCholeskiFun,
+                                         Rcpp::Function HmatReconstructFun) {
 
   ComputeLogPriors() ;
   cout << "Computing Wmats... \n" ;
@@ -840,7 +841,7 @@ void AugTree::ComputeLogJointPsiMarginal(Rcpp::Function funForOptim, Rcpp::Funct
     cout << "Done... \n" ;
   }
 
-  ComputeLogFCandLogCDandDataLL(funForOptim, gradCholeskiFun) ;
+  ComputeLogFCandLogCDandDataLL(funForOptim, gradCholeskiFun, HmatReconstructFun) ;
 
   // printf("Observations log-lik: %.4e \n Log-prior: %.4e \n Log-Cond. dist.: %.4e \n Log-full cond.: %.4e \n \n \n",
   //  m_globalLogLik, m_logPrior, m_logCondDist, m_logFullCond) ;

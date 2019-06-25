@@ -520,5 +520,13 @@ LogJointHyperMarginal <- function(treePointer, MRAhyperparas, fixedEffSD, errorS
     cat("Partial solution: ", opt$solution[1:8])
     opt$solution
   }
-  LogJointHyperMarginalToWrap(treePointer = treePointer, MRAhyperparas = MRAhyperparas, fixedEffSD = fixedEffSD, errorSD = errorSD, MRAcovParasGammaAlphaBeta = MRAcovParasGammaAlphaBeta, FEmuVec = FEmuVec, fixedEffGammaAlphaBeta =  fixedEffGammaAlphaBeta, errorGammaAlphaBeta = errorGammaAlphaBeta, matern = matern, spaceNuggetSD = spaceNuggetSD, timeNuggetSD = timeNuggetSD, recordFullConditional = TRUE, optimFun = funForTrustOptim, gradCholeskiFun = choleskiSolve)
+  LogJointHyperMarginalToWrap(treePointer = treePointer, MRAhyperparas = MRAhyperparas, fixedEffSD = fixedEffSD, errorSD = errorSD, MRAcovParasGammaAlphaBeta = MRAcovParasGammaAlphaBeta, FEmuVec = FEmuVec, fixedEffGammaAlphaBeta =  fixedEffGammaAlphaBeta, errorGammaAlphaBeta = errorGammaAlphaBeta, matern = matern, spaceNuggetSD = spaceNuggetSD, timeNuggetSD = timeNuggetSD, recordFullConditional = TRUE, optimFun = funForTrustOptim, gradCholeskiFun = choleskiSolve, HmatReconstructFun = buildHmatrix)
+}
+
+buildHmatrix <- function(HmatPos, WmatList, covariateMatrixWithIntercept) {
+  posForCovariate <- cbind(rep(0:(nrow(covariateMatrixWithIntercept) - 1), ncol(covariateMatrixWithIntercept)), rep(0:(ncol(covariateMatrixWithIntercept) - 1), each = nrow(covariateMatrixWithIntercept)))
+  HmatPos <- rbind(posForCovariate, HmatPos)
+  valuesForSparse <- do.call("c", WmatList)
+  valuesForSparse <- c(covariateMatrixWithIntercept, valuesForSparse)
+  sparseMatrix(i = HmatPos[, 1], j = HmatPos[ , 2], x = valuesForSparse, index1 = FALSE)
 }

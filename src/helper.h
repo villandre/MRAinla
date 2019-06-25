@@ -30,4 +30,24 @@ template <typename T> inline void deallocate_container(T& c) {
     delete *i;
 };
 
+template <typename T>
+arma::Col<T> rep(const arma::Col<T> & x, const uint times) {
+  arma::Col<T> container ;
+  for (uint i = 0 ; i < times ; i++) {
+    container = join_cols(container, x) ;
+  }
+  return container ;
+}
+
+template <typename T>
+arma::Col<T> rep_each(const arma::Col<T> & x, const uint times) {
+  arma::Col<T> container ;
+  for (auto & i : x) {
+    arma::Col<T> newVec(times) ;
+    newVec.fill(i) ;
+    container = join_cols(container, newVec) ;
+  }
+  return container ;
+}
+
 #endif /* HELPER_H */

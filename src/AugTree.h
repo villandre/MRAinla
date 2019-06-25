@@ -40,12 +40,13 @@ public:
   AugTree(uint &, arma::vec &, arma::vec &, arma::vec &, arma::vec &, arma::mat &, arma::vec &, uint &, unsigned long int &, arma::mat &, const bool, const unsigned int, const unsigned int) ;
 
   std::vector<TreeNode *> GetVertexVector() {return m_vertexVector ;} ;
+  arma::umat m_HmatPos ;
 
   // void ComputeMRAlogLik(const bool WmatsAvailable = false) ;
   void ComputeMRAlogLikAlt(const bool WmatsAvailable = false) ;
   std::vector<GaussDistParas> ComputeConditionalPrediction(const inputdata &) ;
 
-  void ComputeLogFCandLogCDandDataLL(Rcpp::Function, Rcpp::Function) ;
+  void ComputeLogFCandLogCDandDataLL(Rcpp::Function, Rcpp::Function, Rcpp::Function) ;
   void ComputeLogPriors() ;
 
   double GetMRAlogLik() const {return m_MRAlogLik ;}
@@ -110,7 +111,7 @@ public:
   arma::sp_mat CombineFEinvAndKinvMatrices() ;
   arma::sp_mat createQ() ;
 
-  void ComputeLogJointPsiMarginal(Rcpp::Function, Rcpp::Function) ;
+  void ComputeLogJointPsiMarginal(Rcpp::Function, Rcpp::Function, Rcpp::Function) ;
   // double ComputeJointPsiMarginalPropConstant(const arma::vec &, const double, const double, const double, const double) ;
   arma::vec GetFullCondMean() { return m_FullCondMean ;}
   arma::vec GetFullCondSDs() { return m_FullCondSDs ;}
@@ -152,7 +153,6 @@ private:
   // The next few members are to improve computational efficiency
   arma::uvec m_DmatrixBlockIndices ;
   arma::uvec m_SigmaFEandEtaInvBlockIndices ;
-  std::vector<double *> m_pointersForFmatrix ;
 
   int m_M{ 0 } ;
   int m_numTips{ 0 } ;

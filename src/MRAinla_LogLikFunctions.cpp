@@ -58,7 +58,8 @@ double LogJointHyperMarginalToWrap(SEXP treePointer, Rcpp::List MRAhyperparas,
          double fixedEffSD, double errorSD, Rcpp::List MRAcovParasGammaAlphaBeta,
          Rcpp::NumericVector FEmuVec, NumericVector fixedEffGammaAlphaBeta,
          NumericVector errorGammaAlphaBeta, bool matern, double spaceNuggetSD, double timeNuggetSD,
-         bool recordFullConditional, Rcpp::Function optimFun, Rcpp::Function gradCholeskiFun) {
+         bool recordFullConditional, Rcpp::Function optimFun, Rcpp::Function gradCholeskiFun,
+         Rcpp::Function HmatReconstructFun) {
   arma::mat posteriorMatrix ;
   double outputValue = 0 ;
 
@@ -92,7 +93,7 @@ double LogJointHyperMarginalToWrap(SEXP treePointer, Rcpp::List MRAhyperparas,
     pointedTree->SetRecordFullConditional(recordFullConditional) ;
     // ProfilerStart("/home/luc/Downloads/myprofile.log") ;
 
-    pointedTree->ComputeLogJointPsiMarginal(optimFun, gradCholeskiFun) ;
+    pointedTree->ComputeLogJointPsiMarginal(optimFun, gradCholeskiFun, HmatReconstructFun) ;
 
     // ProfilerStop() ;
     // throw Rcpp::exception("Stop for profiling... \n") ;
