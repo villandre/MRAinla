@@ -733,19 +733,15 @@ void AugTree::ComputeLogFCandLogCDandDataLL(Rcpp::Function funForOptim, Rcpp::Fu
   mat incrementedCovarReshuffled = trans(transIncrementedCovar.cols(m_obsOrderForFmat)) ;
 
   if (m_recomputeMRAlogLik) {
-
+    cout << "Obtaining H matrix... \n" ;
     if (m_HmatPos.size() == 0) {
-      cout << "Creating H matrix... \n" ;
       createHmatrix() ;
     } else {
-      cout << "Updating H matrix... \n" ;
       std::vector<mat> WmatList ;
       for (auto & i : GetTipNodes()) {
         WmatList.insert(WmatList.end(), i->GetWlist().begin(), i->GetWlist().end()) ;
       }
-      printf("Hmat size before: %i %i \n", m_Hmat.n_rows, m_Hmat.n_cols) ;
       m_Hmat = Rcpp::as<sp_mat>(HmatrixReconstructFun(m_HmatPos, WmatList, incrementedCovarReshuffled)) ;
-      printf("Hmat size after: %i %i \n", m_Hmat.n_rows, m_Hmat.n_cols) ;
     }
     cout << "Done... \n" ;
   }
