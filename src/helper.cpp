@@ -29,15 +29,29 @@ arma::sp_mat createBlockMatrix(std::vector<arma::mat *> listOfMatrices) {
   int dimen = 0 ;
   for (auto & i : listOfMatrices) dimen += i->n_rows ;
   arma::ivec dimvec(numMatrices) ;
-
-  arma::sp_mat X(dimen, dimen);
-
-  int idx=0;
-  for(int i = 0; i < numMatrices; i++) {
-    sp_mat dereferencedMatrix = conv_to<sp_mat>::from(*(listOfMatrices.at(i))) ;
-    X(idx, idx, arma::size(dereferencedMatrix.n_rows, dereferencedMatrix.n_cols)) = dereferencedMatrix ;
-    idx += dereferencedMatrix.n_rows ;
+  arma::umat posMatrix(2, 0) ;
+  int rowIndex = 0 ;
+  int colIndex = 0 ;
+  vec concatenatedValues ;
+  for (auto & matrix : listOfMatrices) {
+    uvec rowIndices = rep(regspace<uvec>(0, matrix->n_rows - 1), matrix->n_cols) + rowIndex  ;
+    uvec colIndices = rep_each(regspace<uvec>(0, matrix->n_cols - 1), matrix->n_rows) + colIndex ;
+    posMatrix = join_rows(posMatrix, trans(join_rows(rowIndices, colIndices))) ;
+    concatenatedValues = join_cols(concatenatedValues, arma::vectorise(*matrix)) ;
+    rowIndex += matrix->n_rows ;
+    colIndex += matrix->n_cols ;
   }
+
+  arma::sp_mat X(posMatrix, concatenatedValues, false) ;
+
+  // arma::sp_mat X(dimen, dimen);
+
+  // int idx=0;
+  // for(int i = 0; i < numMatrices; i++) {
+  //   sp_mat dereferencedMatrix = conv_to<sp_mat>::from(*(listOfMatrices.at(i))) ;
+  //   X(idx, idx, arma::size(dereferencedMatrix.n_rows, dereferencedMatrix.n_cols)) = dereferencedMatrix ;
+  //   idx += dereferencedMatrix.n_rows ;
+  // }
 
   return X ;
 }
@@ -103,16 +117,36 @@ arma::uvec extractBlockIndices(const arma::sp_mat & symmSparseMatrix) {
 
 sp_mat invertSymmBlockDiag(const sp_mat & blockMatrix, const uvec & blockIndices) {
   int numRows = blockMatrix.n_rows ;
-  sp_mat inverted(numRows, numRows) ;
+
   unsigned int diagElement = 0 ;
   unsigned int blockSize ;
+  arma::umat posMatrix(2, 0) ;
+  vec concatenatedValues ;
+  uvec blockSizes = diff(blockIndices) ;
+  int index = 0 ;
+
+  for (uint i = 0 ; i < blockSizes.size() ; i++) {
+    umat posMat = join_rows(rep(regspace<uvec>(0, blockSizes.at(i) - 1), blockSizes.at(i)) + index,
+              rep_each(regspace<uvec>(0, blockSizes.at(i) - 1), blockSizes.at(i)) + index) ;
+    posMatrix = join_rows(posMatrix, trans(posMat)) ;
+    index += blockSizes.at(i) ;
+  }
+
+  // for (unsigned int i = 0; i < (blockIndices.size()-1); i++) {
+  //   blockSize = blockIndices.at(i+1) - blockIndices.at(i) ;
+  //   inverted(diagElement, diagElement, size(blockSize, blockSize)) =
+  //     inv_sympd(mat(blockMatrix(diagElement, diagElement, size(blockSize, blockSize)))) ;
+  //   diagElement += blockSize ;
+  // }
 
   for (unsigned int i = 0; i < (blockIndices.size()-1); i++) {
     blockSize = blockIndices.at(i+1) - blockIndices.at(i) ;
-    inverted(diagElement, diagElement, size(blockSize, blockSize)) =
-      inv_sympd(mat(blockMatrix(diagElement, diagElement, size(blockSize, blockSize)))) ;
+    concatenatedValues = join_cols(concatenatedValues,
+                                   vectorise(inv_sympd(mat(blockMatrix(diagElement, diagElement, size(blockSize, blockSize)))))) ;
     diagElement += blockSize ;
   }
+  sp_mat inverted(posMatrix, concatenatedValues, false) ;
+
   return inverted ;
 }
 

@@ -5,7 +5,7 @@
 #include <string>
 #include <algorithm>
 #include <RcppArmadillo.h>
-// #include "gperftools/profiler.h"
+#include "gperftools/profiler.h"
 
 #include "AugTree.h"
 
@@ -14,18 +14,6 @@ using namespace Rcpp;
 using namespace MRAinla;
 
 typedef unsigned int uint ;
-
-// // [[Rcpp::export]]
-// SEXP start_profiler(SEXP str) {
-//   ProfilerStart(as<const char*>(str));
-//   return R_NilValue;
-// }
-
-// // [[Rcpp::export]]
-// SEXP stop_profiler() {
-//   ProfilerStop();
-//   return R_NilValue;
-// }
 
 // [[Rcpp::export]]
 
@@ -91,12 +79,16 @@ double LogJointHyperMarginalToWrap(SEXP treePointer, Rcpp::List MRAhyperparas,
 
     pointedTree->SetMRAcovParas(MRAhyperparas) ;
     pointedTree->SetRecordFullConditional(recordFullConditional) ;
-    // ProfilerStart("/home/luc/Downloads/myprofile.log") ;
+    // if (pointedTree->m_HmatPos.size() > 0) {
+    //   ProfilerStart("/home/luc/Downloads/myprofile.log") ;
+    //   pointedTree->ComputeLogJointPsiMarginal(optimFun, gradCholeskiFun, HmatReconstructFun) ;
+    //   ProfilerStop() ;
+    //   throw Rcpp::exception("Stop for profiling... \n") ;
+    // }
+    // else {
+      pointedTree->ComputeLogJointPsiMarginal(optimFun, gradCholeskiFun, HmatReconstructFun) ;
+    // }
 
-    pointedTree->ComputeLogJointPsiMarginal(optimFun, gradCholeskiFun, HmatReconstructFun) ;
-
-    // ProfilerStop() ;
-    // throw Rcpp::exception("Stop for profiling... \n") ;
     outputValue = pointedTree->GetLogJointPsiMarginal() ;
     // printf("Marginal joint Psi: %.4e \n \n \n", pointedTree->GetLogJointPsiMarginal()) ;
   }
