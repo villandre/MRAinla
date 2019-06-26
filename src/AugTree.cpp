@@ -562,8 +562,10 @@ void AugTree::createHmatrix() {
           } else {
             rowMat = join_rows(rowMat, sp_mat(nodeToProcess->GetB(index))) ;
 
-            uvec rowIndices = rep(regspace<uvec>(0, nodeToProcess->GetB(index).n_rows - 1), nodeToProcess->GetB(index).n_cols) + rowIndex ;
-            uvec colIndices = rep_each(regspace<uvec>(0, nodeToProcess->GetB(index).n_cols - 1), nodeToProcess->GetB(index).n_rows) + colIndex ;
+            uvec rowIndices = rep(regspace<uvec>(0, nodeToProcess->GetB(index).n_rows - 1),
+                                  nodeToProcess->GetB(index).n_cols) + rowIndex ;
+            uvec colIndices = rep_each(regspace<uvec>(0, nodeToProcess->GetB(index).n_cols - 1),
+                                       nodeToProcess->GetB(index).n_rows) + colIndex ;
 
             umat positions = join_rows(rowIndices, colIndices) ;
             m_HmatPos = join_cols(m_HmatPos, positions) ; // Slow, but this is not done many times.
@@ -578,7 +580,6 @@ void AugTree::createHmatrix() {
       colIndex = 0 ;
       rowIndex += observationIndices.size() ; // The B matrices should have as many rows as observations in the node...
       Fmat = join_rows(Fmat, trans(rowMat)) ;
-      m_HmatPos.col(1) += m_dataset.covariateValues.n_cols + 1 ;
     }
   }
 
@@ -587,6 +588,7 @@ void AugTree::createHmatrix() {
   mat transIncrementedCovar = trans(join_rows(ones<vec>(numObs), m_dataset.covariateValues)) ;
   mat incrementedCovarReshuffled = trans(transIncrementedCovar.cols(m_obsOrderForFmat)) ;
   m_Hmat = join_rows(conv_to<sp_mat>::from(incrementedCovarReshuffled), trans(Fmat)) ;
+  m_HmatPos.col(1) += m_dataset.covariateValues.n_cols + 1 ;
 }
 
 sp_mat AugTree::createHmatrixPred() {
