@@ -41,6 +41,8 @@ public:
 
   std::vector<TreeNode *> GetVertexVector() {return m_vertexVector ;} ;
   arma::umat m_HmatPos ;
+  arma::umat m_SigmaPos ;
+  arma::umat m_DinFCmatPos ;
 
   // void ComputeMRAlogLik(const bool WmatsAvailable = false) ;
   void ComputeMRAlogLikAlt(const bool WmatsAvailable = false) ;
@@ -108,7 +110,8 @@ public:
   void CenterResponse() ;
 
   arma::sp_mat createHmatrixPred() ;
-  arma::sp_mat CombineFEinvAndKinvMatrices() ;
+  arma::sp_mat CreateSigmaBetaEtaInvMat() ;
+  arma::sp_mat UpdateSigmaBetaEtaInvMat(Rcpp::Function) ;
   arma::sp_mat createQ() ;
 
   void ComputeLogJointPsiMarginal(Rcpp::Function, Rcpp::Function, Rcpp::Function) ;
@@ -149,6 +152,7 @@ private:
   bool m_matern ;
   double m_spaceNuggetSD ;
   double m_timeNuggetSD ;
+  arma::mat m_incrementedCovarReshuffled ;
 
   // The next few members are to improve computational efficiency
   arma::uvec m_DmatrixBlockIndices ;
@@ -231,9 +235,9 @@ private:
   }
 
   void createHmatrix() ;
-  void updateHmatrix() ;
+  void updateHmatrix(Rcpp::Function) ;
   arma::vec optimJointHyperMarg(const arma::vec &, const double, const double, const double, const double) ;
-  double logDeterminantQmat() ;
+  double logDeterminantQmat(Rcpp::Function) ;
   arma::uvec extractBlockIndicesFromLowerRight(const arma::sp_mat &) ;
   // void invFromDecomposition(const arma::sp_mat &, const arma::sp_mat &, const arma::sp_mat &, arma::sp_mat *,
   //                                const arma::uvec &) ;

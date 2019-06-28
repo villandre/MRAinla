@@ -136,7 +136,8 @@ obtainGridValues <- function(treePointer, xStartValues, control, fixedEffSDstart
       timeSmoothnessArg <- xTrans[["timeSmoothness"]]
     }
     MRAlist <- list(space = list(rho = xTrans[["spRho"]], smoothness = spSmoothnessArg), time = list(rho = xTrans[["timeRho"]], smoothness = timeSmoothnessArg), scale = xTrans[["scale"]])
-    tryCatch(expr = LogJointHyperMarginal(treePointer = treePointer, MRAhyperparas = MRAlist, fixedEffSD = fixedEffArg, errorSD = errorArg, MRAcovParasGammaAlphaBeta = MRAcovParasGammaAlphaBeta, FEmuVec = FEmuVec, fixedEffGammaAlphaBeta = fixedEffGammaAlphaBeta, errorGammaAlphaBeta = errorGammaAlphaBeta, matern = control$maternCovariance, spaceNuggetSD = control$nuggetSD, timeNuggetSD = control$nuggetSD, recordFullConditional = FALSE), error = function(e) -Inf)
+    LogJointHyperMarginal(treePointer = treePointer, MRAhyperparas = MRAlist, fixedEffSD = fixedEffArg, errorSD = errorArg, MRAcovParasGammaAlphaBeta = MRAcovParasGammaAlphaBeta, FEmuVec = FEmuVec, fixedEffGammaAlphaBeta = fixedEffGammaAlphaBeta, errorGammaAlphaBeta = errorGammaAlphaBeta, matern = control$maternCovariance, spaceNuggetSD = control$nuggetSD, timeNuggetSD = control$nuggetSD, recordFullConditional = FALSE)
+    # tryCatch(expr = LogJointHyperMarginal(treePointer = treePointer, MRAhyperparas = MRAlist, fixedEffSD = fixedEffArg, errorSD = errorArg, MRAcovParasGammaAlphaBeta = MRAcovParasGammaAlphaBeta, FEmuVec = FEmuVec, fixedEffGammaAlphaBeta = fixedEffGammaAlphaBeta, errorGammaAlphaBeta = errorGammaAlphaBeta, matern = control$maternCovariance, spaceNuggetSD = control$nuggetSD, timeNuggetSD = control$nuggetSD, recordFullConditional = FALSE), error = function(e) -Inf)
   }
   gradForOptim <- function(x) {
     names(x) <- names(xStartValues)
@@ -471,6 +472,7 @@ LogJointHyperMarginal <- function(treePointer, MRAhyperparas, fixedEffSD, errorS
   # MRAprecision has to be a sparse matrix.
   require(Matrix, quietly = TRUE)
   choleskiSolve <- function(hessianMat, scaledResponseHmat) {
+    # hessianMat <- Matrix::forceSymmetric(hessianMat, uplo = "U")
     hessianMat <- as(hessianMat, "symmetricMatrix")
     value <- as.vector(Matrix::solve(hessianMat, as.vector(scaledResponseHmat), sparse = TRUE))
     value
@@ -520,13 +522,9 @@ LogJointHyperMarginal <- function(treePointer, MRAhyperparas, fixedEffSD, errorS
     cat("Partial solution: ", opt$solution[1:8])
     opt$solution
   }
-  LogJointHyperMarginalToWrap(treePointer = treePointer, MRAhyperparas = MRAhyperparas, fixedEffSD = fixedEffSD, errorSD = errorSD, MRAcovParasGammaAlphaBeta = MRAcovParasGammaAlphaBeta, FEmuVec = FEmuVec, fixedEffGammaAlphaBeta =  fixedEffGammaAlphaBeta, errorGammaAlphaBeta = errorGammaAlphaBeta, matern = matern, spaceNuggetSD = spaceNuggetSD, timeNuggetSD = timeNuggetSD, recordFullConditional = TRUE, optimFun = funForTrustOptim, gradCholeskiFun = choleskiSolve, HmatReconstructFun = buildHmatrix)
+  LogJointHyperMarginalToWrap(treePointer = treePointer, MRAhyperparas = MRAhyperparas, fixedEffSD = fixedEffSD, errorSD = errorSD, MRAcovParasGammaAlphaBeta = MRAcovParasGammaAlphaBeta, FEmuVec = FEmuVec, fixedEffGammaAlphaBeta =  fixedEffGammaAlphaBeta, errorGammaAlphaBeta = errorGammaAlphaBeta, matern = matern, spaceNuggetSD = spaceNuggetSD, timeNuggetSD = timeNuggetSD, recordFullConditional = TRUE, optimFun = funForTrustOptim, gradCholeskiFun = choleskiSolve, sparseMatrixConstructFun = buildSparseMatrix)
 }
 
-buildHmatrix <- function(HmatPos, WmatList, covariateMatrixWithIntercept) {
-  posForCovariate <- cbind(rep(0:(nrow(covariateMatrixWithIntercept) - 1), ncol(covariateMatrixWithIntercept)), rep(0:(ncol(covariateMatrixWithIntercept) - 1), each = nrow(covariateMatrixWithIntercept)))
-  HmatPos <- rbind(posForCovariate, HmatPos)
-  valuesForSparse <- do.call("c", WmatList)
-  valuesForSparse <- c(covariateMatrixWithIntercept, valuesForSparse)
-  sparseMatrix(i = HmatPos[, 1], j = HmatPos[ , 2], x = valuesForSparse, index1 = FALSE)
+buildSparseMatrix <- function(posMat, values) {
+  Matrix::sparseMatrix(i = posMat[, 1], j = posMat[ , 2], x = drop(values), index1 = FALSE)
 }

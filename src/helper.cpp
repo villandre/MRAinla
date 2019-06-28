@@ -24,34 +24,26 @@ Spatiotemprange sptimeDistance(const arma::vec & spCoor1, const double & time1, 
   return Spatiotemprange(sp, timeDiff) ;
 };
 
+// Pretty slow. Should not be called too often.
+
 arma::sp_mat createBlockMatrix(std::vector<arma::mat *> listOfMatrices) {
-  int numMatrices = listOfMatrices.size() ;
-  int dimen = 0 ;
-  for (auto & i : listOfMatrices) dimen += i->n_rows ;
-  arma::ivec dimvec(numMatrices) ;
-  arma::umat posMatrix(2, 0) ;
-  int rowIndex = 0 ;
-  int colIndex = 0 ;
-  vec concatenatedValues ;
-  for (auto & matrix : listOfMatrices) {
-    uvec rowIndices = rep(regspace<uvec>(0, matrix->n_rows - 1), matrix->n_cols) + rowIndex  ;
-    uvec colIndices = rep_each(regspace<uvec>(0, matrix->n_cols - 1), matrix->n_rows) + colIndex ;
-    posMatrix = join_rows(posMatrix, trans(join_rows(rowIndices, colIndices))) ;
-    concatenatedValues = join_cols(concatenatedValues, arma::vectorise(*matrix)) ;
-    rowIndex += matrix->n_rows ;
-    colIndex += matrix->n_cols ;
+  uint numRows = 0 ;
+  uint numCols = 0 ;
+  for (auto & i : listOfMatrices) {
+    numRows += i->n_rows ;
+    numCols += i->n_cols ;
   }
+  arma::sp_mat X(numRows, numCols);
 
-  arma::sp_mat X(posMatrix, concatenatedValues, false) ;
+  int idxRows = 0;
+  int idxCols = 0 ;
 
-  // arma::sp_mat X(dimen, dimen);
-
-  // int idx=0;
-  // for(int i = 0; i < numMatrices; i++) {
-  //   sp_mat dereferencedMatrix = conv_to<sp_mat>::from(*(listOfMatrices.at(i))) ;
-  //   X(idx, idx, arma::size(dereferencedMatrix.n_rows, dereferencedMatrix.n_cols)) = dereferencedMatrix ;
-  //   idx += dereferencedMatrix.n_rows ;
-  // }
+  for(int i = 0; i < listOfMatrices.size(); i++) {
+    sp_mat dereferencedMatrix = conv_to<sp_mat>::from(*(listOfMatrices.at(i))) ;
+    X(idxRows, idxCols, arma::size(dereferencedMatrix.n_rows, dereferencedMatrix.n_cols)) = dereferencedMatrix ;
+    idxRows += dereferencedMatrix.n_rows ;
+    idxCols += dereferencedMatrix.n_cols ;
+  }
 
   return X ;
 }
@@ -115,37 +107,18 @@ arma::uvec extractBlockIndices(const arma::sp_mat & symmSparseMatrix) {
 //   return Bmatrix ;
 // }
 
+// Pretty slow. Should not be called too often.
+
 sp_mat invertSymmBlockDiag(const sp_mat & blockMatrix, const uvec & blockIndices) {
-  int numRows = blockMatrix.n_rows ;
-
-  unsigned int diagElement = 0 ;
-  unsigned int blockSize ;
-  arma::umat posMatrix(2, 0) ;
-  vec concatenatedValues ;
-  uvec blockSizes = diff(blockIndices) ;
-  int index = 0 ;
-
-  for (uint i = 0 ; i < blockSizes.size() ; i++) {
-    umat posMat = join_rows(rep(regspace<uvec>(0, blockSizes.at(i) - 1), blockSizes.at(i)) + index,
-              rep_each(regspace<uvec>(0, blockSizes.at(i) - 1), blockSizes.at(i)) + index) ;
-    posMatrix = join_rows(posMatrix, trans(posMat)) ;
-    index += blockSizes.at(i) ;
-  }
-
-  // for (unsigned int i = 0; i < (blockIndices.size()-1); i++) {
-  //   blockSize = blockIndices.at(i+1) - blockIndices.at(i) ;
-  //   inverted(diagElement, diagElement, size(blockSize, blockSize)) =
-  //     inv_sympd(mat(blockMatrix(diagElement, diagElement, size(blockSize, blockSize)))) ;
-  //   diagElement += blockSize ;
-  // }
-
+  uint diagElement = 0 ;
+  uint numRows = blockIndices.at(blockIndices.size() - 1) ;
+  sp_mat inverted(numRows, numRows) ;
   for (unsigned int i = 0; i < (blockIndices.size()-1); i++) {
-    blockSize = blockIndices.at(i+1) - blockIndices.at(i) ;
-    concatenatedValues = join_cols(concatenatedValues,
-                                   vectorise(inv_sympd(mat(blockMatrix(diagElement, diagElement, size(blockSize, blockSize)))))) ;
+    int blockSize = blockIndices.at(i+1) - blockIndices.at(i) ;
+    inverted(diagElement, diagElement, size(blockSize, blockSize)) =
+      inv_sympd(mat(blockMatrix(diagElement, diagElement, size(blockSize, blockSize)))) ;
     diagElement += blockSize ;
   }
-  sp_mat inverted(posMatrix, concatenatedValues, false) ;
 
   return inverted ;
 }
