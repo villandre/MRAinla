@@ -47,7 +47,7 @@ double LogJointHyperMarginalToWrap(SEXP treePointer, Rcpp::List MRAhyperparas,
          Rcpp::NumericVector FEmuVec, NumericVector fixedEffGammaAlphaBeta,
          NumericVector errorGammaAlphaBeta, bool matern, double spaceNuggetSD, double timeNuggetSD,
          bool recordFullConditional, Rcpp::Function optimFun, Rcpp::Function gradCholeskiFun,
-         Rcpp::Function sparseMatrixConstructFun) {
+         Rcpp::Function sparseMatrixConstructFun, Rcpp::Function sparseDeterminantFun) {
   arma::mat posteriorMatrix ;
   double outputValue = 0 ;
 
@@ -78,15 +78,15 @@ double LogJointHyperMarginalToWrap(SEXP treePointer, Rcpp::List MRAhyperparas,
     pointedTree->SetFixedEffSD(fixedEffSD) ;
 
     pointedTree->SetMRAcovParas(MRAhyperparas) ;
-    // pointedTree->SetRecordFullConditional(recordFullConditional) ;
+    pointedTree->SetRecordFullConditional(recordFullConditional) ;
     // if (pointedTree->m_HmatPos.size() > 0) {
     //   ProfilerStart("/home/luc/Downloads/myprofile.log") ;
-    //   pointedTree->ComputeLogJointPsiMarginal(optimFun, gradCholeskiFun, HmatReconstructFun) ;
+    //   pointedTree->ComputeLogJointPsiMarginal(optimFun, gradCholeskiFun, sparseMatrixConstructFun, sparseDeterminantFun) ;
     //   ProfilerStop() ;
     //   throw Rcpp::exception("Stop for profiling... \n") ;
     // }
     // else {
-      pointedTree->ComputeLogJointPsiMarginal(optimFun, gradCholeskiFun, sparseMatrixConstructFun) ;
+      pointedTree->ComputeLogJointPsiMarginal(optimFun, gradCholeskiFun, sparseMatrixConstructFun, sparseDeterminantFun) ;
     // }
 
     outputValue = pointedTree->GetLogJointPsiMarginal() ;

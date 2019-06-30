@@ -478,6 +478,12 @@ LogJointHyperMarginal <- function(treePointer, MRAhyperparas, fixedEffSD, errorS
     value
   }
 
+  logDetFun <- function(sparseM) {
+    sparseM <- as(sparseM, "symmetricMatrix")
+    value <- Matrix::determinant(x = sparseM, logarithm = TRUE)
+    value$modulus
+  }
+
   funForTrustOptim <- function(start, sigmaSqEpsilon, MRAprecision, responseVec, Hmat) {
     cat("Entered funForTrustOptim...")
 
@@ -522,7 +528,7 @@ LogJointHyperMarginal <- function(treePointer, MRAhyperparas, fixedEffSD, errorS
     cat("Partial solution: ", opt$solution[1:8])
     opt$solution
   }
-  LogJointHyperMarginalToWrap(treePointer = treePointer, MRAhyperparas = MRAhyperparas, fixedEffSD = fixedEffSD, errorSD = errorSD, MRAcovParasGammaAlphaBeta = MRAcovParasGammaAlphaBeta, FEmuVec = FEmuVec, fixedEffGammaAlphaBeta =  fixedEffGammaAlphaBeta, errorGammaAlphaBeta = errorGammaAlphaBeta, matern = matern, spaceNuggetSD = spaceNuggetSD, timeNuggetSD = timeNuggetSD, recordFullConditional = TRUE, optimFun = funForTrustOptim, gradCholeskiFun = choleskiSolve, sparseMatrixConstructFun = buildSparseMatrix)
+  LogJointHyperMarginalToWrap(treePointer = treePointer, MRAhyperparas = MRAhyperparas, fixedEffSD = fixedEffSD, errorSD = errorSD, MRAcovParasGammaAlphaBeta = MRAcovParasGammaAlphaBeta, FEmuVec = FEmuVec, fixedEffGammaAlphaBeta =  fixedEffGammaAlphaBeta, errorGammaAlphaBeta = errorGammaAlphaBeta, matern = matern, spaceNuggetSD = spaceNuggetSD, timeNuggetSD = timeNuggetSD, recordFullConditional = TRUE, optimFun = funForTrustOptim, gradCholeskiFun = choleskiSolve, sparseMatrixConstructFun = buildSparseMatrix, sparseDeterminantFun = logDetFun)
 }
 
 buildSparseMatrix <- function(posMat, values) {

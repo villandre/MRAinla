@@ -48,7 +48,7 @@ public:
   void ComputeMRAlogLikAlt(const bool WmatsAvailable = false) ;
   std::vector<GaussDistParas> ComputeConditionalPrediction(const inputdata &) ;
 
-  void ComputeLogFCandLogCDandDataLL(Rcpp::Function, Rcpp::Function, Rcpp::Function) ;
+  void ComputeLogFCandLogCDandDataLL(Rcpp::Function, Rcpp::Function, Rcpp::Function, Rcpp::Function) ;
   void ComputeLogPriors() ;
 
   double GetMRAlogLik() const {return m_MRAlogLik ;}
@@ -114,7 +114,7 @@ public:
   arma::sp_mat UpdateSigmaBetaEtaInvMat(Rcpp::Function) ;
   arma::sp_mat createQ() ;
 
-  void ComputeLogJointPsiMarginal(Rcpp::Function, Rcpp::Function, Rcpp::Function) ;
+  void ComputeLogJointPsiMarginal(Rcpp::Function, Rcpp::Function, Rcpp::Function, Rcpp::Function) ;
   // double ComputeJointPsiMarginalPropConstant(const arma::vec &, const double, const double, const double, const double) ;
   arma::vec GetFullCondMean() { return m_FullCondMean ;}
   arma::vec GetFullCondSDs() { return m_FullCondSDs ;}

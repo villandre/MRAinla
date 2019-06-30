@@ -2,7 +2,6 @@
 // #include <omp.h>
 #include <gsl/gsl_sf_gamma.h>
 #include <gsl/gsl_multimin.h>
-// #include "gperftools/heap-profiler.h"
 
 #include "AugTree.h"
 #include "TipNode.h"
@@ -35,10 +34,6 @@ struct MVN{
 AugTree::AugTree(uint & M, vec & lonRange, vec & latRange, vec & timeRange, vec & observations, mat & obsSp, vec & obsTime, uint & minObsForTimeSplit, unsigned long int & seed, mat & covariates, const bool splitTime, const unsigned int numKnotsRes0, const unsigned int J)
   : m_M(M)
 {
-  // Jittering time a bit might help with estimation.
-  // vec jitter = randn<vec>(obsTime.size()) ;
-  //
-  // m_dataset = inputdata(observations, obsSp, obsTime + 1e-4 * jitter, covariates) ;
   m_dataset = inputdata(observations, obsSp, obsTime, covariates) ;
   m_mapDimensions = dimensions(lonRange, latRange, timeRange) ;
   m_randomNumGenerator = gsl_rng_alloc(gsl_rng_taus) ;
@@ -90,80 +85,6 @@ void AugTree::numberNodes() {
     }
   }
 }
-
-// void AugTree::createLevels(TreeNode * parent, const uint & numObsForTimeSplit) {
-//   uvec obsForMedian(m_dataset.responseValues.size(), fill::zeros) ;
-//   obsForMedian = parent->GetObsInNode() ;
-//
-//   if (obsForMedian.n_elem == 0) {
-//     throw Rcpp::exception("Empty region.") ;
-//   }
-//   mat spMediansMat = median(m_dataset.spatialCoords.rows(obsForMedian), 0) ;
-//   Row<double> spMedians = spMediansMat.row(0) ;
-//
-//   vec sortedTimes = sort(m_dataset.timeCoords.elem(obsForMedian)) ;
-//   double timeMedian = sortedTimes.at(std::ceil((obsForMedian.size()-1)/2));
-//
-//   std::vector<dimensions> dimensionsForChildren ;
-//   vec lonRange(2, fill::zeros), latRange(2, fill::zeros) ;
-//
-//   if (parent->GetObsInNode().size() < numObsForTimeSplit) {
-//     for (uint i = 0; i < 2; i++) {
-//       for (uint j = 0 ; j < 2; j++) {
-//         lonRange.at(0) = parent->GetDimensions().longitude.at(i) ;
-//         lonRange.at(1) = spMedians.at(0);
-//         lonRange = sort(lonRange);
-//
-//         latRange.at(0) = parent->GetDimensions().latitude.at(j) ;
-//         latRange.at(1) = spMedians.at(1);
-//         latRange = sort(latRange);
-//
-//         dimensionsForChildren.push_back(dimensions(lonRange, latRange, parent->GetDimensions().time)) ;
-//       }
-//     }
-//   } else {
-//     vec timeRange(2, fill::zeros) ;
-//     for (uint i = 0; i < 2; i++) {
-//       for (uint j = 0; j < 2; j++) {
-//         for(uint k = 0; k < 2; k++) {
-//           lonRange.at(0) = parent->GetDimensions().longitude.at(i) ;
-//           lonRange.at(1) = spMedians.at(0);
-//           lonRange = sort(lonRange);
-//
-//           latRange.at(0) = parent->GetDimensions().latitude.at(j) ;
-//           latRange.at(1) = spMedians.at(1);
-//           latRange = sort(latRange);
-//
-//           timeRange.at(0) = parent->GetDimensions().time.at(k) ;
-//           timeRange.at(1) = timeMedian ;
-//           timeRange = sort(timeRange) ;
-//
-//           dimensionsForChildren.push_back(dimensions(lonRange, latRange, timeRange)) ;
-//         }
-//       }
-//     }
-//   }
-//   int incrementedDepth = parent->GetDepth()+1 ;
-//
-//   for (auto &&i : dimensionsForChildren) {
-//     if (parent->GetDepth() < m_M-1) {
-//       InternalNode * newNode = new InternalNode(i, incrementedDepth, parent, m_dataset) ;
-//       m_vertexVector.push_back(newNode) ;
-//       parent->AddChild(newNode) ;
-//     } else {
-//       TipNode * newNode = new TipNode(i, incrementedDepth, parent, m_dataset) ;
-//       m_numTips = m_numTips+1 ;
-//       m_vertexVector.push_back(newNode) ;
-//       parent->AddChild(newNode) ;
-//     }
-//   }
-//   if (incrementedDepth < m_M) {
-//     incrementedDepth = incrementedDepth + 1 ;
-//     for (auto && i : parent->GetChildren()) {
-//       createLevels(i, numObsForTimeSplit) ;
-//     }
-//   }
-// }
 
 // In this version, we first split the latitude, then the latitude, and finally time.
 // We make sure that splits don't result in empty regions
@@ -493,7 +414,7 @@ arma::sp_mat AugTree::CreateSigmaBetaEtaInvMat() {
   m_SigmaFEandEtaInvBlockIndices = extractBlockIndices(SigmaFEandEtaInv) ;
 
   uint basicIndex = 0 ;
-  for (uint i = 0 ; i < m_SigmaFEandEtaInvBlockIndices.size() - 1 ; i++) { // Problem here...
+  for (uint i = 0 ; i < m_SigmaFEandEtaInvBlockIndices.size() - 1 ; i++) {
     uint blockIndex = m_SigmaFEandEtaInvBlockIndices.at(i) ;
     uint nextBlockIndex = m_SigmaFEandEtaInvBlockIndices.at(i+1) ;
     uint numRows = nextBlockIndex - blockIndex ;
@@ -510,13 +431,16 @@ arma::sp_mat AugTree::UpdateSigmaBetaEtaInvMat(Rcpp::Function buildSparse) {
   std::vector<mat *> FEinvAndKinvMatrixList = getKmatricesInversePointers() ;
   mat FEinvMatrix = pow(m_fixedEffSD, -2) * eye<mat>(m_fixedEffParameters.size(), m_fixedEffParameters.size()) ;
   FEinvAndKinvMatrixList.insert(FEinvAndKinvMatrixList.begin(), &FEinvMatrix) ;
-  vec concatenatedValues ;
-  concatenatedValues = join_cols(concatenatedValues, FEinvMatrix.diag()) ;
-  uint index = 0 ;
+  uint accSize = 0 ;
 
+  vec concatenatedValues(m_SigmaPos.n_rows) ;
+  concatenatedValues.subvec(0, size(FEinvMatrix.diag())) = FEinvMatrix.diag() ;
+  uint index = FEinvMatrix.n_rows ;
+  uint newIndex ;
   for (uint i = 1; i < FEinvAndKinvMatrixList.size(); i++) {
-    concatenatedValues = join_cols(concatenatedValues, vectorise(*FEinvAndKinvMatrixList.at(i))) ;
-    index += FEinvAndKinvMatrixList.at(i)->size() ;
+    newIndex = index + FEinvAndKinvMatrixList.at(i)->size() ;
+    concatenatedValues.subvec(index,  newIndex - 1) = vectorise(*FEinvAndKinvMatrixList.at(i)) ;
+    index = newIndex ;
   }
   sp_mat FEinvAndKinvMatrices = Rcpp::as<sp_mat>(buildSparse(m_SigmaPos, concatenatedValues)) ;
 
@@ -737,23 +661,8 @@ void AugTree::ComputeLogPriors() {
   m_logPrior = logPrior ;
 }
 
-// void AugTree::ComputeLogJointCondTheta() {
-//   // if (m_recomputeMRAlogLik) {
-//     ComputeMRAlogLikAlt(true) ; // Getting the eta values requires computing the K matrices, hence KmatricesAvailable = true.
-//   // }
-//
-//   double fixedEffLogLik = 0 ;
-//
-//   for (uint i = 0; i < m_fixedEffParameters.size(); i++) {
-//     fixedEffLogLik += std::log(normpdf(m_fixedEffParameters.at(i), m_FEmu.at(i), m_fixedEffSD)) ;
-//   }
-//
-//   m_logCondDist = m_MRAlogLik + fixedEffLogLik ;
-// }
-
-
 void AugTree::ComputeLogFCandLogCDandDataLL(Rcpp::Function funForOptim, Rcpp::Function gradCholeskiFun,
-                                            Rcpp::Function sparseMatrixConstructFun) {
+                                            Rcpp::Function sparseMatrixConstructFun, Rcpp::Function sparseDeterminantFun) {
 
   int n = m_dataset.responseValues.size() ;
   cout << "Creating matrix of Ks... \n" ;
@@ -763,6 +672,7 @@ void AugTree::ComputeLogFCandLogCDandDataLL(Rcpp::Function funForOptim, Rcpp::Fu
   } else {
     SigmaFEandEtaInv = UpdateSigmaBetaEtaInvMat(sparseMatrixConstructFun) ;
   }
+  double logDetSigmaKFEinv = logDetBlockMatrix(SigmaFEandEtaInv, m_SigmaFEandEtaInvBlockIndices) ;
   cout << "Done... \n" ;
 
   if (m_recomputeMRAlogLik) {
@@ -783,36 +693,27 @@ void AugTree::ComputeLogFCandLogCDandDataLL(Rcpp::Function funForOptim, Rcpp::Fu
 
   vec responsesReshuffled = m_dataset.responseValues.elem(m_obsOrderForFmat) ;
 
-  // vec bVec = trans(std::pow(m_errorSD, -2) * trans(responsesReshuffled) * m_Hstar) ; // This should be equal to trans(trans(responsesReshuffled) * TepsilonInverse * m_Hstar)
-
-  // vec updatedMean = ComputeFullConditionalMean(bVec) ;
-
-  // NumericVector updatedMean = funForOptim(m_Vstar, std::pow(m_errorSD, 2), SigmaFEandEtaInv, responsesReshuffled, m_Hstar) ;
-
   cout << "Computing FC mean... \n" ;
 
-  sp_mat hessianMat = SigmaFEandEtaInv + std::pow(m_errorSD, -2) * trans(m_Hmat) * m_Hmat ;
+  sp_mat hessianMat = SigmaFEandEtaInv + secondTerm ;
   mat scaledResponse = std::pow(m_errorSD, -2) * trans(responsesReshuffled) * m_Hmat ;
   Rcpp::NumericVector updatedMean = gradCholeskiFun(hessianMat, scaledResponse) ;
 
   m_Vstar = updatedMean ; // Assuming there will be an implicit conversion to vec type.
   m_FullCondMean = m_Vstar ;
 
-  // m_MRAvalues = m_Fmatrix * updatedMean.tail(m_numKnots) ;
-
   vec fixedEffMeans = m_Vstar.head(m_fixedEffParameters.size()) ;
   SetFixedEffParameters(fixedEffMeans) ;
 
-  double logDetQmat = logDeterminantQmat(sparseMatrixConstructFun) ;
-
-  // sp_mat Kmatrices = createSparseMatrix(KmatrixList) ;
+  // double logDetQmat = logDeterminantQmat(sparseMatrixConstructFun) ;
+  double logDetQmat = Rcpp::as<double>(sparseDeterminantFun(m_FullCondPrecision)) ;
 
   m_logFullCond = 0.5 * logDetQmat ; // Since we arbitrarily evaluate always at the full-conditional mean, the exponential part of the distribution reduces to 0.
 
   // Computing p(v* | Psi)
   mat logLikTerm = -0.5 * trans(m_Vstar) * SigmaFEandEtaInv * m_Vstar ;
 
-  double logDetSigmaKFEinv = logDetBlockMatrix(SigmaFEandEtaInv, m_SigmaFEandEtaInvBlockIndices) ;
+
   m_logCondDist = logLikTerm(0,0) + 0.5 * logDetSigmaKFEinv ;
 
   // Computing p(y | v*, Psi)
@@ -822,27 +723,8 @@ void AugTree::ComputeLogFCandLogCDandDataLL(Rcpp::Function funForOptim, Rcpp::Fu
   m_globalLogLik = 0.5 * errorLogDet + globalLogLikExp(0) ;
 }
 
-// void AugTree::ComputeGlobalLogLik() {
-//   mat incrementedCovar = m_dataset.covariateValues ;
-//   incrementedCovar.insert_cols(0, 1) ;
-//   incrementedCovar.col(0).fill(1) ;
-//   mat incrementedCovarTrans = trans(incrementedCovar) ;
-//   incrementedCovar = trans(incrementedCovarTrans.cols(m_obsOrderForFmat)) ;
-//   vec meanVec(m_dataset.responseValues.size(), fill::zeros) ;
-//   meanVec = incrementedCovar * m_fixedEffParameters + m_MRAvalues ;
-//
-//   vec sdVec(m_dataset.responseValues.size(), fill::zeros) ;
-//
-//   sdVec.fill(m_errorSD) ;
-//   vec logDensVec(m_dataset.responseValues.size(), fill::zeros) ;
-//   // logDensVec = log(normpdf(m_dataset.responseValues, meanVec, sdVec)) ;
-//   double logDensity = logNormPDF(m_dataset.responseValues.elem(m_obsOrderForFmat), meanVec, sdVec) ;
-//   m_recomputeGlobalLogLik = false ;
-//   m_globalLogLik = logDensity ;
-// }
-
 void AugTree::ComputeLogJointPsiMarginal(Rcpp::Function funForOptim, Rcpp::Function gradCholeskiFun,
-                                         Rcpp::Function sparseMatConstructFun) {
+                                         Rcpp::Function sparseMatConstructFun, Rcpp::Function sparseDeterminantFun) {
 
   ComputeLogPriors() ;
   cout << "Computing Wmats... \n" ;
@@ -854,7 +736,7 @@ void AugTree::ComputeLogJointPsiMarginal(Rcpp::Function funForOptim, Rcpp::Funct
     cout << "Done... \n" ;
   }
 
-  ComputeLogFCandLogCDandDataLL(funForOptim, gradCholeskiFun, sparseMatConstructFun) ;
+  ComputeLogFCandLogCDandDataLL(funForOptim, gradCholeskiFun, sparseMatConstructFun, sparseDeterminantFun) ;
 
   printf("Observations log-lik: %.4e \n Log-prior: %.4e \n Log-Cond. dist.: %.4e \n Log-full cond.: %.4e \n \n \n",
   m_globalLogLik, m_logPrior, m_logCondDist, m_logFullCond) ;
@@ -952,132 +834,6 @@ uvec AugTree::extractBlockIndicesFromLowerRight(const arma::sp_mat & symmSparseM
   std::sort(blockIndices.begin(), blockIndices.end()) ;
   return conv_to<uvec>::from(blockIndices) ;
 }
-
-// double AugTree::logDeterminantFullConditional(const sp_mat & SigmaMat) {
-//   uint n = m_dataset.timeCoords.size() ;
-//   sp_mat compositeAmatrix = join_rows(eye<sp_mat>(n,n),
-//     join_rows(conv_to<sp_mat>::from(vec(n, fill::ones)),
-//       conv_to<sp_mat>::from(conv_to<mat>::from(m_dataset.covariateValues)))) ;
-//
-//   sp_mat Bmatrix = 1/pow(m_errorSD,2) * trans(compositeAmatrix) * eye<sp_mat>(n,n) * compositeAmatrix ;
-//   sp_mat Cinverse = SigmaMat ;
-//   sp_mat Bk(Bmatrix.n_rows , Bmatrix.n_cols) ;
-//
-//   for (uint i = 0 ; i < 4 ; i++) {
-//
-//     uint j = Bmatrix.n_cols - i - 1;
-//     Bk.col(j) = Bmatrix.col(j) ;
-//     // double gk = 1/(1+ trace(Cinverse * trans(BkT))) ;
-//     double gk = 1;
-//
-//     Cinverse = Cinverse - gk * Cinverse * Bk * Cinverse ;
-//     Bk.zeros() ;
-//   } ;
-//   throw Rcpp::exception("Stop now!!! \n") ;
-//   return logDeterminantQmat(Cinverse) ;
-// }
-
-// void AugTree::invFromDecomposition(const sp_mat & A, const sp_mat & B, const sp_mat & D,
-//                                   sp_mat * Dinv, const uvec & blockDiagAindices) {
-//   cout << "Entering invFromDecomposition... \n" ;
-//   sp_mat Ainv ;
-//   // Typecasting those sparse matrices will be required for inversions.
-//   // mat Amat = mat(A) ;
-//   // mat Dmat = mat(D) ;
-//   // mat Bmat = mat(B) ;
-//   cout << "Inverting A... \n" ;
-//   if (blockDiagAindices.size() > 1) {
-//     Ainv = invertSymmBlockDiag(A, blockDiagAindices) ;
-//   } else {
-//     Ainv = sp_mat(inv_sympd(mat(A))) ;
-//   }
-//   cout << "Generating components... \n" ;
-//   printf("A size: %i %i \n B size %i %i \n", A.n_rows, A.n_cols, B.n_rows, B.n_cols) ;
-//   // Ainverse(0,0, size(161, 10)).print("Inverse of A:") ;
-//   sp_mat M11 = sp_mat(inv(mat(A - B * (*Dinv) * trans(B)))) ;
-//   cout << "Obtained M11... \n" ;
-//   printf("M11 size: %i %i \n", M11.n_rows, M11.n_cols) ;
-//   sp_mat M12 = -M11 * B * (*Dinv) ;
-//   cout << "Obtained M12... \n" ;
-//   printf("M12 size: %i %i \n", M12.n_rows, M12.n_cols) ;
-//   printf("trans(B) size: %i %i \n", B.n_cols, B.n_rows) ;
-//   sp_mat identity = sp_mat((*Dinv).n_rows, (*Dinv).n_cols) ;
-//   identity.diag().ones() ;
-//   sp_mat difference((*Dinv).n_rows, (*Dinv).n_cols) ;
-//   sp_mat difference1 = (*Dinv) * trans(B) ;
-//   difference1(0,0,size(difference1.n_rows, 1)).print("First column 1:") ;
-//   sp_mat difference2 = difference1 * M12 ;
-//   difference2(0,0,size(difference2.n_rows, 1)).print("First column 2:") ;
-//   throw Rcpp::exception("Stop here for now...\n") ;
-//   cout << "Assigned identity... \n" ;
-//   cout << "Number of zeros: " << approx_equal(difference, sp_mat(difference.n_cols, difference.n_cols), "absdiff", 1e-6) << "\n";
-//
-//   cout << "Found difference. \n" ;
-//   printf("difference size: %i %i \n", difference.n_rows, difference.n_cols) ;
-//
-//   // sp_mat multiplier = identity - difference ;
-//   // cout << "Got multiplier... \n" ;
-//   // sp_mat M22 = (*Dinv) * multiplier ;
-//   // cout << "Obtained M22... \n" ;
-//   // cout << "Creating the inverse matrix... \n" ;
-//   // *Dinv = join_rows(join_cols(M11, trans(M12)), join_cols(M12, M22)) ; // Will the memory be freed once the function is done running?
-//   // cout << "Leaving invFromDecomposition... \n" ;
-// }
-
-
-
-// arma::vec AugTree::ComputeFullConditionalMean(const arma::vec & bVec) {
-//
-//   uvec blockIndices = extractBlockIndicesFromLowerRight(m_FullCondPrecision) ;
-//
-//   uint DblockLeftIndex = blockIndices.at(0) ;
-//   uint sizeD = m_FullCondPrecision.n_cols - DblockLeftIndex ;
-//   uint sizeA = m_FullCondPrecision.n_cols - sizeD ;
-//
-//   vec b1 = bVec.subvec(0, sizeA - 1) ;
-//   vec b2 = bVec.subvec(sizeA, bVec.size() - 1) ;
-//
-//   sp_mat Bmatrix = m_FullCondPrecision(0, sizeA, size(sizeA, sizeD)) ;
-//   sp_mat Amatrix = m_FullCondPrecision(0, 0, size(sizeA, sizeA)) ;
-//
-//   sp_mat Dinverted = invertSymmBlockDiag(m_FullCondPrecision(sizeA, sizeA, size(sizeD, sizeD)), blockIndices) ;
-//
-//   mat secondTermInside = conv_to<mat>::from(Bmatrix * Dinverted * trans(Bmatrix)) ;
-//
-//   mat compositeInverted = inv(Amatrix - secondTermInside) ;
-//
-//   sp_mat firstElementSecondTerm = Dinverted * conv_to<sp_mat>::from(b2) ;
-//   firstElementSecondTerm = Bmatrix * firstElementSecondTerm ;
-//   firstElementSecondTerm = compositeInverted * firstElementSecondTerm ;
-//   vec firstElementFirstTerm = compositeInverted * b1 ;
-//   vec firstElement =  firstElementFirstTerm - firstElementSecondTerm ;
-//
-//   vec secondElementFirstTerm = trans(Bmatrix) * firstElementFirstTerm ;
-//   secondElementFirstTerm = -Dinverted * secondElementFirstTerm ;
-//   sp_mat secondElementSecondTerm = trans(Bmatrix) * firstElementSecondTerm ;
-//   secondElementSecondTerm = Dinverted * secondElementSecondTerm ;
-//   secondElementSecondTerm = Dinverted * b2 + secondElementSecondTerm ;
-//   vec secondElement = secondElementFirstTerm + secondElementSecondTerm ;
-//
-//   vec meanVec = join_cols<vec>(firstElement, secondElement) ;
-//
-//   if (m_recordFullConditional) {
-//     vec firstDiag = sqrt(compositeInverted.diag()) ;
-//     m_FullCondSDs.subvec(0, size(firstDiag)) = firstDiag ;
-//
-//     for (uint i = 0 ; i < Dinverted.n_rows ; i++) {
-//       sp_mat firstExp = Bmatrix * Dinverted.col(i) ;
-//       mat secondExp = compositeInverted * conv_to<mat>::from(firstExp) ;
-//       mat thirdExp = trans(Bmatrix) * secondExp ;
-//       mat finalExp = Dinverted.col(i) + Dinverted * thirdExp ;
-//       m_FullCondSDs.at(i + compositeInverted.n_rows) = sqrt(finalExp(i, 0)) ;
-//     }
-//
-//     m_FullCondMean = meanVec ;
-//   }
-//
-//   return meanVec ;
-// }
 
 sp_mat AugTree::ComputeHpred(const mat & spCoords, const vec & time, const mat & covariateMatrix) {
 
