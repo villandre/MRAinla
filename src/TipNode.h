@@ -80,7 +80,8 @@ public:
   void SetUncorrSD(const double & sd) {
     m_uncorrSD = sd ;
   }
-  arma::mat GetUpred(const uint & l) { return m_UmatList.at(l) ;} ;
+  arma::mat GetUpred(const uint & l) { return m_UmatList.at(l) ;}
+  std::vector<arma::mat> GetUmatList() { return m_UmatList ;}
 
   void SetPredictLocations(const inputdata &) ;
   arma::uvec GetPredIndices() { return m_predsInNode ;}

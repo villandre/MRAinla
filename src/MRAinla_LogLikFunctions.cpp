@@ -134,7 +134,7 @@ arma::vec GetFullCondSDs(SEXP treePointer) {
 // [[Rcpp::export]]
 
 Rcpp::List ComputeCondPredStats(SEXP treePointer, NumericMatrix spCoordsForPredict, NumericVector timeForPredict,
-                                 NumericMatrix covariateMatrixForPredict) {
+                                 NumericMatrix covariateMatrixForPredict, Rcpp::Function sparseMatrixConstructFun) {
   sp_mat Hmat, Hmean, HmeanSq ;
   mat HmeanMat ;
   vec Evar ;
@@ -147,7 +147,7 @@ Rcpp::List ComputeCondPredStats(SEXP treePointer, NumericMatrix spCoordsForPredi
     mat covariates = Rcpp::as<mat>(covariateMatrixForPredict) ;
     // ProfilerStart("/home/luc/Downloads/myprofile.log") ;
 
-    Hmat = conv_to<mat>::from(pointedTree->ComputeHpred(spCoords, time, covariates)) ;
+    Hmat = conv_to<mat>::from(pointedTree->ComputeHpred(spCoords, time, covariates, sparseMatrixConstructFun)) ;
     sp_mat Hmean = Hmat * conv_to<sp_mat>::from(pointedTree->GetFullCondMean()) ;
     HmeanMat = conv_to<mat>::from(Hmean) ;
     Evar = pointedTree->ComputeEvar(Hmat) ;

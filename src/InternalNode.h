@@ -39,6 +39,7 @@ public:
   arma::vec GetOmega(const uint & order) { return m_omega.at(order) ;}
   void SetUncorrSD(const double &) {throw Rcpp::exception("Trying to add uncorrelated error for internal nodes! \n") ;}
   arma::mat GetUpred(const uint & l) { throw Rcpp::exception("Upred matrices only computed for tip nodes! \n") ;}
+  std::vector<arma::mat> GetUmatList() { throw Rcpp::exception("UmatList only available in tip nodes! \n") ;}
   void SetPredictLocations(const inputdata & data) { throw Rcpp::exception("Trying to attach predict locations to internal nodes! Predict locations should only be defined in the tips! \n") ;}
   arma::uvec GetPredIndices() { throw Rcpp::exception("Prediction locations not defined in internal nodes! \n");}
   void computeUpred(const maternVec &, const maternVec &, const double &, const spatialcoor &, const bool, const double &, const double &) {

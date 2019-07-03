@@ -219,7 +219,7 @@ funForGridEst <- function(index, paraGrid, treePointer, predictionData, MRAcovPa
   aList <- list(x = x, errorSD = errorSD, fixedEffSD = fixedEffSD, MRAhyperparas = MRAlist, logJointValue = logJointValue)
   if (!is.null(predictionData) & computePrediction) {
     timeValues <- as.integer(time(predictionData@time))/(3600*24) - timeBaseline # The division is to obtain values in days.
-    aList$CondPredStats <- ComputeCondPredStats(treePointer, predictionData@sp@coords, timeValues, as.matrix(predictionData@data))
+    aList$CondPredStats <- ComputeCondPredStats(treePointer, predictionData@sp@coords, timeValues, as.matrix(predictionData@data), sparseMatrixConstructFun = buildSparseMatrix)
   }
   # Running LogJointHyperMarginal stores in the tree pointed by gridPointer the full conditional mean and SDs when recordFullConditional = TRUE. We can get them with the simple functions I call now.
   aList$FullCondMean <- GetFullCondMean(treePointer)
@@ -341,7 +341,7 @@ getIntegrationPointsAndValues <- function(optimObject, gridPointer, MRAcovParasG
     aList$logJointValue <- LogJointHyperMarginal(treePointer = gridPointer, MRAhyperparas = MRAhyperList, fixedEffSD = fixedEffSD, errorSD = errorSD, MRAcovParasGammaAlphaBeta = MRAcovParasGammaAlphaBeta, FEmuVec = FEmuVec, fixedEffGammaAlphaBeta =  fixedEffGammaAlphaBeta, errorGammaAlphaBeta = errorGammaAlphaBeta, matern = matern, spaceNuggetSD = spaceNuggetSD, timeNuggetSD = timeNuggetSD, recordFullConditional = TRUE)
     if (!is.null(predictionData)) {
       timeValues <- as.integer(time(predictionData@time))/(3600*24) - timeBaseline # The division is to obtain values in days.
-      aList$CondPredStats <- ComputeCondPredStats(gridPointer, predictionData@sp@coords, timeValues, as.matrix(predictionData@data))
+      aList$CondPredStats <- ComputeCondPredStats(gridPointer, predictionData@sp@coords, timeValues, as.matrix(predictionData@data), sparseMatrixConstructFun = buildSparseMatrix)
     }
     # Running LogJointHyperMarginal stores in the tree pointed by gridPointer the full conditional mean and SDs when recordFullConditional = TRUE. We can get them with the simple functions I call now.
     aList$FullCondMean <- GetFullCondMean(gridPointer)

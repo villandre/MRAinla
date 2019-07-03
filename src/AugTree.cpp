@@ -56,6 +56,7 @@ AugTree::AugTree(uint & M, vec & lonRange, vec & latRange, vec & timeRange, vec 
   m_Vstar = vec(m_numKnots + m_dataset.covariateValues.n_cols + 1, fill::zeros) ;
   m_Vstar.subvec(0, size(m_FEmu)) = m_FEmu ;
   m_HmatPos = umat(0, 2) ;
+  m_HmatPredPos = umat(0, 2) ;
   m_SigmaPos = umat(0, 2) ;
 }
 
@@ -449,11 +450,11 @@ arma::sp_mat AugTree::UpdateSigmaBetaEtaInvMat(Rcpp::Function buildSparse) {
   return FEinvAndKinvMatrices ;
 }
 
-void AugTree::createHmatrix() {
+void AugTree::createHmatrixPos() {
 
   int numObs = m_dataset.spatialCoords.n_rows ;
   std::vector<std::vector<double *>> memAddressesVec(m_numKnots) ;
-  sp_mat Fmat ;
+
   std::vector<uvec> FmatNodeOrder(m_M) ;
   uvec FmatObsOrder(numObs, fill::zeros) ;
   uint rowIndex = 0 ;
@@ -492,7 +493,6 @@ void AugTree::createHmatrix() {
       FmatObsOrder.subvec(rowIndex, size(observationIndices)) = observationIndices ;
 
       std::vector<TreeNode *> brickList = nodeToProcess->getAncestors() ;
-      sp_mat rowMat ;
 
       uvec brickAncestors(brickList.size()) ;
       for (uint i = 0 ; i < brickAncestors.size() ; i++) {
@@ -502,11 +502,7 @@ void AugTree::createHmatrix() {
       for (uint nodeIndex = 0; nodeIndex < m_vertexVector.size() ; nodeIndex++) {
         int nodePos = GetNodePos(nodeIndex) ;
         if (index < brickAncestors.size()) {
-          if (nodeIndex != brickAncestors.at(index)) {
-            rowMat = join_rows(rowMat, sp_mat(nodeToProcess->GetObsInNode().size(), m_vertexVector.at(nodePos)->GetNumKnots())) ;
-          } else {
-            rowMat = join_rows(rowMat, sp_mat(nodeToProcess->GetB(index))) ;
-
+          if (nodeIndex == brickAncestors.at(index)) {
             uvec rowIndices = rep(regspace<uvec>(0, nodeToProcess->GetB(index).n_rows - 1),
                                   nodeToProcess->GetB(index).n_cols) + rowIndex ;
             uvec colIndices = rep_each(regspace<uvec>(0, nodeToProcess->GetB(index).n_cols - 1),
@@ -517,14 +513,11 @@ void AugTree::createHmatrix() {
 
             index += 1 ;
           }
-        } else {
-          rowMat = join_rows(rowMat, sp_mat(nodeToProcess->GetObsInNode().size(), m_vertexVector.at(nodePos)->GetNumKnots())) ;
         }
         colIndex += m_vertexVector.at(nodePos)->GetNumKnots() ;
       }
       colIndex = 0 ;
       rowIndex += observationIndices.size() ; // The B matrices should have as many rows as observations in the node...
-      Fmat = join_rows(Fmat, trans(rowMat)) ;
     }
   }
 
@@ -532,7 +525,6 @@ void AugTree::createHmatrix() {
 
   mat transIncrementedCovar = trans(join_rows(ones<vec>(numObs), m_dataset.covariateValues)) ;
   m_incrementedCovarReshuffled = trans(transIncrementedCovar.cols(m_obsOrderForFmat)) ;
-  m_Hmat = join_rows(conv_to<sp_mat>::from(m_incrementedCovarReshuffled), trans(Fmat)) ;
   m_HmatPos.col(1) += m_dataset.covariateValues.n_cols + 1 ;
   umat covPos = join_rows(rep(regspace<uvec>(0, m_incrementedCovarReshuffled.n_rows - 1), m_incrementedCovarReshuffled.n_cols),
                           rep_each(regspace<uvec>(0, m_incrementedCovarReshuffled.n_cols - 1), m_incrementedCovarReshuffled.n_rows)) ;
@@ -549,14 +541,24 @@ void AugTree::updateHmatrix(Rcpp::Function sparseMatrixConstructFun) {
   m_Hmat = Rcpp::as<sp_mat>(sparseMatrixConstructFun(m_HmatPos, concatenatedValues, false)) ;
 }
 
-sp_mat AugTree::createHmatrixPred() {
+arma::sp_mat AugTree::updateHmatrixPred(Rcpp::Function sparseMatrixConstructFun) {
+  vec concatenatedValues = vectorise(m_incrementedCovarPredictReshuffled) ;
+  for (auto & tipNode : GetTipNodes()) {
+    for (auto & Umat : tipNode->GetUmatList()) {
+      concatenatedValues = join_cols(concatenatedValues, vectorise(Umat)) ;
+    }
+  }
+  return Rcpp::as<sp_mat>(sparseMatrixConstructFun(m_HmatPredPos, concatenatedValues, false)) ;
+}
+
+void AugTree::createHmatrixPosPred() {
 
   uint numObs = m_predictData.spatialCoords.n_rows ;
 
-  sp_mat Fmat ;
   std::vector<uvec> FmatNodeOrder(m_M) ;
   uvec FmatObsOrder(numObs, fill::zeros) ;
   uint rowIndex = 0 ;
+  uint colIndex = 0 ;
 
   std::vector<TreeNode *> tipNodes = GetTipNodes() ;
   int numTips = tipNodes.size() ;
@@ -591,7 +593,6 @@ sp_mat AugTree::createHmatrixPred() {
       FmatObsOrder.subvec(rowIndex, size(observationIndices)) = observationIndices ;
 
       std::vector<TreeNode *> brickList = nodeToProcess->getAncestors() ;
-      sp_mat rowMat ;
 
       uvec brickAncestors(brickList.size()) ;
       for (uint i = 0 ; i < brickAncestors.size() ; i++) {
@@ -601,25 +602,33 @@ sp_mat AugTree::createHmatrixPred() {
       for (uint nodeIndex = 0; nodeIndex < m_vertexVector.size() ; nodeIndex++) {
         int nodePos = GetNodePos(nodeIndex) ;
         if (index < brickAncestors.size()) {
-          if (nodeIndex != brickAncestors.at(index)) {
-            rowMat = join_rows(rowMat, sp_mat(nodeToProcess->GetObsInNode().size(), m_vertexVector.at(nodePos)->GetNumKnots())) ;
-          } else {
-            rowMat = join_rows(rowMat, sp_mat(nodeToProcess->GetUpred(index))) ;
+          if (nodeIndex == brickAncestors.at(index)) {
+            uvec rowIndices = rep(regspace<uvec>(0, nodeToProcess->GetUpred(index).n_rows - 1),
+                                  nodeToProcess->GetUpred(index).n_cols) + rowIndex ;
+            uvec colIndices = rep_each(regspace<uvec>(0, nodeToProcess->GetUpred(index).n_cols - 1),
+                                       nodeToProcess->GetUpred(index).n_rows) + colIndex ;
+
+            umat positions = join_rows(rowIndices, colIndices) ;
+            m_HmatPredPos = join_cols(m_HmatPredPos, positions) ; // Slow, but this is not done many times.
+
             index += 1 ;
           }
-        } else {
-          rowMat = join_rows(rowMat, sp_mat(nodeToProcess->GetObsInNode().size(), m_vertexVector.at(nodePos)->GetNumKnots())) ;
         }
+        colIndex += m_vertexVector.at(nodePos)->GetNumKnots() ;
       }
+      colIndex = 0 ;
       rowIndex += observationIndices.size() ; // The B matrices should have as many rows as observations in the node...
-      Fmat = join_rows(Fmat, trans(rowMat)) ;
     }
   }
 
   mat transIncrementedCovar = trans(join_rows(ones<vec>(numObs), m_predictData.covariateValues)) ;
-  mat incrementedCovarReshuffled = trans(transIncrementedCovar.cols(FmatObsOrder)) ;
-
-  return join_rows(conv_to<sp_mat>::from(incrementedCovarReshuffled), trans(Fmat)) ;
+  mat m_incrementedCovarPredictReshuffled = trans(transIncrementedCovar.cols(FmatObsOrder)) ;
+  m_HmatPredPos.col(1) += m_predictData.covariateValues.n_cols + 1 ;
+  umat covPos = join_rows(rep(regspace<uvec>(0, m_incrementedCovarPredictReshuffled.n_rows - 1),
+                              m_incrementedCovarPredictReshuffled.n_cols),
+                          rep_each(regspace<uvec>(0, m_incrementedCovarPredictReshuffled.n_cols - 1),
+                                   m_incrementedCovarPredictReshuffled.n_rows)) ;
+  m_HmatPredPos = join_cols(covPos, m_HmatPredPos) ;
 }
 
 std::vector<TreeNode *> AugTree::Descendants(std::vector<TreeNode *> nodeList) {
@@ -680,10 +689,10 @@ void AugTree::ComputeLogFCandLogCDandDataLL(Rcpp::Function gradCholeskiFun, Rcpp
   if (m_recomputeMRAlogLik) {
     cout << "Obtaining H matrix... \n" ;
     if (m_HmatPos.size() == 0) {
-      createHmatrix() ;
-    } else {
-      updateHmatrix(sparseMatrixConstructFun) ;
+      createHmatrixPos() ;
     }
+    updateHmatrix(sparseMatrixConstructFun) ;
+
     cout << "Done... \n" ;
   }
 
@@ -837,7 +846,7 @@ uvec AugTree::extractBlockIndicesFromLowerRight(const arma::sp_mat & symmSparseM
   return conv_to<uvec>::from(blockIndices) ;
 }
 
-sp_mat AugTree::ComputeHpred(const mat & spCoords, const vec & time, const mat & covariateMatrix) {
+sp_mat AugTree::ComputeHpred(const mat & spCoords, const vec & time, const mat & covariateMatrix, Rcpp::Function sparseMatrixConstructFun) {
 
   SetPredictData(spCoords, time, covariateMatrix) ;
   std::vector<TreeNode *> tipNodes = GetTipNodes() ;
@@ -849,7 +858,10 @@ sp_mat AugTree::ComputeHpred(const mat & spCoords, const vec & time, const mat &
       i->computeUpred(m_MRAcovParasSpace, m_MRAcovParasTime, m_spacetimeScaling, m_predictData, m_matern, m_spaceNuggetSD, m_timeNuggetSD) ;
     }
   }
-  return createHmatrixPred() ;
+  if (m_HmatPredPos.n_rows == 0) {
+    createHmatrixPosPred() ;
+  }
+  return updateHmatrixPred(sparseMatrixConstructFun) ;
 }
 
 arma::vec AugTree::ComputeEvar(const arma::sp_mat & HmatPred) {

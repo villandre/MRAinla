@@ -41,6 +41,7 @@ public:
 
   std::vector<TreeNode *> GetVertexVector() {return m_vertexVector ;} ;
   arma::umat m_HmatPos ;
+  arma::umat m_HmatPredPos ;
   arma::umat m_SigmaPos ;
   arma::umat m_DinFCmatPos ;
 
@@ -109,7 +110,7 @@ public:
   void CleanPredictionComponents() ;
   void CenterResponse() ;
 
-  arma::sp_mat createHmatrixPred() ;
+  void createHmatrixPosPred() ;
   arma::sp_mat CreateSigmaBetaEtaInvMat() ;
   arma::sp_mat UpdateSigmaBetaEtaInvMat(Rcpp::Function) ;
   arma::sp_mat createQ() ;
@@ -119,7 +120,7 @@ public:
   arma::vec GetFullCondMean() { return m_FullCondMean ;}
   arma::vec GetFullCondSDs() { return m_FullCondSDs ;}
 
-  arma::sp_mat ComputeHpred(const arma::mat &, const arma::vec &, const arma::mat &) ;
+  arma::sp_mat ComputeHpred(const arma::mat &, const arma::vec &, const arma::mat &, Rcpp::Function ) ;
   arma::vec ComputeEvar(const arma::sp_mat &) ;
 
   ~ AugTree() {
@@ -153,6 +154,7 @@ private:
   double m_spaceNuggetSD ;
   double m_timeNuggetSD ;
   arma::mat m_incrementedCovarReshuffled ;
+  arma::mat m_incrementedCovarPredictReshuffled ;
 
   // The next few members are to improve computational efficiency
   arma::uvec m_DmatrixBlockIndices ;
@@ -234,8 +236,9 @@ private:
     return KmatrixList ;
   }
 
-  void createHmatrix() ;
+  void createHmatrixPos() ;
   void updateHmatrix(Rcpp::Function) ;
+  arma::sp_mat updateHmatrixPred(Rcpp::Function) ;
   arma::vec optimJointHyperMarg(const arma::vec &, const double, const double, const double, const double) ;
   double logDeterminantQmat(Rcpp::Function) ;
   arma::uvec extractBlockIndicesFromLowerRight(const arma::sp_mat &) ;
