@@ -424,6 +424,8 @@ arma::sp_mat AugTree::CreateSigmaBetaEtaInvMat() {
     m_SigmaPos = join_cols(m_SigmaPos, blockPos) ;
     basicIndex += numRows ;
   }
+  // uvec keepIndices = find(m_SigmaPos.col(0) >= m_SigmaPos.col(1)) ;
+  // m_SigmaPos = m_SigmaPos.rows(keepIndices) ;
   return SigmaFEandEtaInv ;
 }
 
@@ -442,7 +444,7 @@ arma::sp_mat AugTree::UpdateSigmaBetaEtaInvMat(Rcpp::Function buildSparse) {
     concatenatedValues.subvec(index,  newIndex - 1) = vectorise(*FEinvAndKinvMatrixList.at(i)) ;
     index = newIndex ;
   }
-  sp_mat FEinvAndKinvMatrices = Rcpp::as<sp_mat>(buildSparse(m_SigmaPos, concatenatedValues)) ;
+  sp_mat FEinvAndKinvMatrices = Rcpp::as<sp_mat>(buildSparse(m_SigmaPos, concatenatedValues, false)) ;
 
   return FEinvAndKinvMatrices ;
 }
@@ -544,7 +546,7 @@ void AugTree::updateHmatrix(Rcpp::Function sparseMatrixConstructFun) {
       concatenatedValues = join_cols(concatenatedValues, vectorise(Bmat)) ;
     }
   }
-  m_Hmat = Rcpp::as<sp_mat>(sparseMatrixConstructFun(m_HmatPos, concatenatedValues)) ;
+  m_Hmat = Rcpp::as<sp_mat>(sparseMatrixConstructFun(m_HmatPos, concatenatedValues, false)) ;
 }
 
 sp_mat AugTree::createHmatrixPred() {
@@ -661,8 +663,8 @@ void AugTree::ComputeLogPriors() {
   m_logPrior = logPrior ;
 }
 
-void AugTree::ComputeLogFCandLogCDandDataLL(Rcpp::Function funForOptim, Rcpp::Function gradCholeskiFun,
-                                            Rcpp::Function sparseMatrixConstructFun, Rcpp::Function sparseDeterminantFun) {
+void AugTree::ComputeLogFCandLogCDandDataLL(Rcpp::Function gradCholeskiFun, Rcpp::Function sparseMatrixConstructFun,
+                                            Rcpp::Function sparseDeterminantFun) {
 
   int n = m_dataset.responseValues.size() ;
   cout << "Creating matrix of Ks... \n" ;
@@ -723,8 +725,8 @@ void AugTree::ComputeLogFCandLogCDandDataLL(Rcpp::Function funForOptim, Rcpp::Fu
   m_globalLogLik = 0.5 * errorLogDet + globalLogLikExp(0) ;
 }
 
-void AugTree::ComputeLogJointPsiMarginal(Rcpp::Function funForOptim, Rcpp::Function gradCholeskiFun,
-                                         Rcpp::Function sparseMatConstructFun, Rcpp::Function sparseDeterminantFun) {
+void AugTree::ComputeLogJointPsiMarginal(Rcpp::Function gradCholeskiFun, Rcpp::Function sparseMatConstructFun,
+                                         Rcpp::Function sparseDeterminantFun) {
 
   ComputeLogPriors() ;
   cout << "Computing Wmats... \n" ;
@@ -736,7 +738,7 @@ void AugTree::ComputeLogJointPsiMarginal(Rcpp::Function funForOptim, Rcpp::Funct
     cout << "Done... \n" ;
   }
 
-  ComputeLogFCandLogCDandDataLL(funForOptim, gradCholeskiFun, sparseMatConstructFun, sparseDeterminantFun) ;
+  ComputeLogFCandLogCDandDataLL(gradCholeskiFun, sparseMatConstructFun, sparseDeterminantFun) ;
 
   printf("Observations log-lik: %.4e \n Log-prior: %.4e \n Log-Cond. dist.: %.4e \n Log-full cond.: %.4e \n \n \n",
   m_globalLogLik, m_logPrior, m_logCondDist, m_logFullCond) ;

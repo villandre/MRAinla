@@ -30,8 +30,8 @@ BEGIN_RCPP
 END_RCPP
 }
 // LogJointHyperMarginalToWrap
-double LogJointHyperMarginalToWrap(SEXP treePointer, Rcpp::List MRAhyperparas, double fixedEffSD, double errorSD, Rcpp::List MRAcovParasGammaAlphaBeta, Rcpp::NumericVector FEmuVec, NumericVector fixedEffGammaAlphaBeta, NumericVector errorGammaAlphaBeta, bool matern, double spaceNuggetSD, double timeNuggetSD, bool recordFullConditional, Rcpp::Function optimFun, Rcpp::Function gradCholeskiFun, Rcpp::Function sparseMatrixConstructFun, Rcpp::Function sparseDeterminantFun);
-RcppExport SEXP _MRAinla_LogJointHyperMarginalToWrap(SEXP treePointerSEXP, SEXP MRAhyperparasSEXP, SEXP fixedEffSDSEXP, SEXP errorSDSEXP, SEXP MRAcovParasGammaAlphaBetaSEXP, SEXP FEmuVecSEXP, SEXP fixedEffGammaAlphaBetaSEXP, SEXP errorGammaAlphaBetaSEXP, SEXP maternSEXP, SEXP spaceNuggetSDSEXP, SEXP timeNuggetSDSEXP, SEXP recordFullConditionalSEXP, SEXP optimFunSEXP, SEXP gradCholeskiFunSEXP, SEXP sparseMatrixConstructFunSEXP, SEXP sparseDeterminantFunSEXP) {
+double LogJointHyperMarginalToWrap(SEXP treePointer, Rcpp::List MRAhyperparas, double fixedEffSD, double errorSD, Rcpp::List MRAcovParasGammaAlphaBeta, Rcpp::NumericVector FEmuVec, NumericVector fixedEffGammaAlphaBeta, NumericVector errorGammaAlphaBeta, bool matern, double spaceNuggetSD, double timeNuggetSD, bool recordFullConditional, Rcpp::Function gradCholeskiFun, Rcpp::Function sparseMatrixConstructFun, Rcpp::Function sparseDeterminantFun);
+RcppExport SEXP _MRAinla_LogJointHyperMarginalToWrap(SEXP treePointerSEXP, SEXP MRAhyperparasSEXP, SEXP fixedEffSDSEXP, SEXP errorSDSEXP, SEXP MRAcovParasGammaAlphaBetaSEXP, SEXP FEmuVecSEXP, SEXP fixedEffGammaAlphaBetaSEXP, SEXP errorGammaAlphaBetaSEXP, SEXP maternSEXP, SEXP spaceNuggetSDSEXP, SEXP timeNuggetSDSEXP, SEXP recordFullConditionalSEXP, SEXP gradCholeskiFunSEXP, SEXP sparseMatrixConstructFunSEXP, SEXP sparseDeterminantFunSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -47,11 +47,10 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< double >::type spaceNuggetSD(spaceNuggetSDSEXP);
     Rcpp::traits::input_parameter< double >::type timeNuggetSD(timeNuggetSDSEXP);
     Rcpp::traits::input_parameter< bool >::type recordFullConditional(recordFullConditionalSEXP);
-    Rcpp::traits::input_parameter< Rcpp::Function >::type optimFun(optimFunSEXP);
     Rcpp::traits::input_parameter< Rcpp::Function >::type gradCholeskiFun(gradCholeskiFunSEXP);
     Rcpp::traits::input_parameter< Rcpp::Function >::type sparseMatrixConstructFun(sparseMatrixConstructFunSEXP);
     Rcpp::traits::input_parameter< Rcpp::Function >::type sparseDeterminantFun(sparseDeterminantFunSEXP);
-    rcpp_result_gen = Rcpp::wrap(LogJointHyperMarginalToWrap(treePointer, MRAhyperparas, fixedEffSD, errorSD, MRAcovParasGammaAlphaBeta, FEmuVec, fixedEffGammaAlphaBeta, errorGammaAlphaBeta, matern, spaceNuggetSD, timeNuggetSD, recordFullConditional, optimFun, gradCholeskiFun, sparseMatrixConstructFun, sparseDeterminantFun));
+    rcpp_result_gen = Rcpp::wrap(LogJointHyperMarginalToWrap(treePointer, MRAhyperparas, fixedEffSD, errorSD, MRAcovParasGammaAlphaBeta, FEmuVec, fixedEffGammaAlphaBeta, errorGammaAlphaBeta, matern, spaceNuggetSD, timeNuggetSD, recordFullConditional, gradCholeskiFun, sparseMatrixConstructFun, sparseDeterminantFun));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -94,7 +93,7 @@ END_RCPP
 
 static const R_CallMethodDef CallEntries[] = {
     {"_MRAinla_setupGridCpp", (DL_FUNC) &_MRAinla_setupGridCpp, 13},
-    {"_MRAinla_LogJointHyperMarginalToWrap", (DL_FUNC) &_MRAinla_LogJointHyperMarginalToWrap, 16},
+    {"_MRAinla_LogJointHyperMarginalToWrap", (DL_FUNC) &_MRAinla_LogJointHyperMarginalToWrap, 15},
     {"_MRAinla_GetFullCondMean", (DL_FUNC) &_MRAinla_GetFullCondMean, 1},
     {"_MRAinla_GetFullCondSDs", (DL_FUNC) &_MRAinla_GetFullCondSDs, 1},
     {"_MRAinla_ComputeCondPredStats", (DL_FUNC) &_MRAinla_ComputeCondPredStats, 4},
