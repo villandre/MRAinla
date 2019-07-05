@@ -873,15 +873,15 @@ arma::vec AugTree::ComputeEvar(const arma::sp_mat & HmatPred, Rcpp::Function spa
   double errorVar = std::pow(m_errorSD, 2) ;
   vec EvarValues(HmatPred.n_rows, fill::zeros) ;
   int obsIndex = 0 ;
-  int increment = 99 ;
-  cout << "Processing batch... \n" ;
+  int increment = 499 ;
+
   while (obsIndex < HmatPred.n_rows) {
-    printf("%i \n", obsIndex) ;
+
     int newObsIndex = std::min(obsIndex + increment, int(HmatPred.n_rows) - 1) ;
-    sp_mat bVec = HmatPred.rows(obsIndex, obsIndex + increment) ;
-    sp_mat bVecTrans = trans(HmatPred.rows(obsIndex, obsIndex + increment)) ;
+    sp_mat bVec = HmatPred.rows(obsIndex, newObsIndex) ;
+    sp_mat bVecTrans = trans(HmatPred.rows(obsIndex, newObsIndex)) ;
     sp_mat meanValue = bVecTrans % Rcpp::as<sp_mat>(sparseSolveFun(m_FullCondPrecision, bVecTrans)) ;
-    EvarValues.subvec(obsIndex, obsIndex + increment) = trans(sum(meanValue,0)) + errorVar ;
+    EvarValues.subvec(obsIndex, newObsIndex) = trans(sum(meanValue,0)) + errorVar ;
 
     obsIndex += (increment + 1) ;
   }

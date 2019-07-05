@@ -483,10 +483,8 @@ choleskiSolve <- function(hessianMat, scaledResponseHmat) {
 
 sparseInverse <- function(sparseMat, otherMat) {
   require(Matrix)
-  print("Entered sparseInverse... \n")
   sparseMat <- as(sparseMat, "dsCMatrix")
   otherMat <- as(otherMat, "dgCMatrix")
   value <- Matrix::solve(a = sparseMat, b = otherMat, sparse = TRUE)
-  print("Leaving sparseInverse... \n")
   as(value, Class = "CsparseMatrix")
 }
