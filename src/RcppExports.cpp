@@ -77,8 +77,8 @@ BEGIN_RCPP
 END_RCPP
 }
 // ComputeCondPredStats
-Rcpp::List ComputeCondPredStats(SEXP treePointer, NumericMatrix spCoordsForPredict, NumericVector timeForPredict, NumericMatrix covariateMatrixForPredict, Rcpp::Function sparseMatrixConstructFun);
-RcppExport SEXP _MRAinla_ComputeCondPredStats(SEXP treePointerSEXP, SEXP spCoordsForPredictSEXP, SEXP timeForPredictSEXP, SEXP covariateMatrixForPredictSEXP, SEXP sparseMatrixConstructFunSEXP) {
+Rcpp::List ComputeCondPredStats(SEXP treePointer, NumericMatrix spCoordsForPredict, NumericVector timeForPredict, NumericMatrix covariateMatrixForPredict, Rcpp::Function sparseMatrixConstructFun, Rcpp::Function sparseSolveFun);
+RcppExport SEXP _MRAinla_ComputeCondPredStats(SEXP treePointerSEXP, SEXP spCoordsForPredictSEXP, SEXP timeForPredictSEXP, SEXP covariateMatrixForPredictSEXP, SEXP sparseMatrixConstructFunSEXP, SEXP sparseSolveFunSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -87,7 +87,8 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< NumericVector >::type timeForPredict(timeForPredictSEXP);
     Rcpp::traits::input_parameter< NumericMatrix >::type covariateMatrixForPredict(covariateMatrixForPredictSEXP);
     Rcpp::traits::input_parameter< Rcpp::Function >::type sparseMatrixConstructFun(sparseMatrixConstructFunSEXP);
-    rcpp_result_gen = Rcpp::wrap(ComputeCondPredStats(treePointer, spCoordsForPredict, timeForPredict, covariateMatrixForPredict, sparseMatrixConstructFun));
+    Rcpp::traits::input_parameter< Rcpp::Function >::type sparseSolveFun(sparseSolveFunSEXP);
+    rcpp_result_gen = Rcpp::wrap(ComputeCondPredStats(treePointer, spCoordsForPredict, timeForPredict, covariateMatrixForPredict, sparseMatrixConstructFun, sparseSolveFun));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -97,7 +98,7 @@ static const R_CallMethodDef CallEntries[] = {
     {"_MRAinla_LogJointHyperMarginalToWrap", (DL_FUNC) &_MRAinla_LogJointHyperMarginalToWrap, 15},
     {"_MRAinla_GetFullCondMean", (DL_FUNC) &_MRAinla_GetFullCondMean, 1},
     {"_MRAinla_GetFullCondSDs", (DL_FUNC) &_MRAinla_GetFullCondSDs, 1},
-    {"_MRAinla_ComputeCondPredStats", (DL_FUNC) &_MRAinla_ComputeCondPredStats, 5},
+    {"_MRAinla_ComputeCondPredStats", (DL_FUNC) &_MRAinla_ComputeCondPredStats, 6},
     {NULL, NULL, 0}
 };
 

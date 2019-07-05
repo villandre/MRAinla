@@ -544,14 +544,16 @@ void AugTree::updateHmatrix(Rcpp::Function sparseMatrixConstructFun) {
 arma::sp_mat AugTree::updateHmatrixPred(Rcpp::Function sparseMatrixConstructFun) {
   vec concatenatedValues = vectorise(m_incrementedCovarPredictReshuffled) ;
   for (auto & tipNode : GetTipNodes()) {
-    for (auto & Umat : tipNode->GetUmatList()) {
-      concatenatedValues = join_cols(concatenatedValues, vectorise(Umat)) ;
+    if (tipNode->GetPredIndices().size() > 0) {
+      for (auto & Umat : tipNode->GetUmatList()) {
+        concatenatedValues = join_cols(concatenatedValues, vectorise(Umat)) ;
+      }
     }
   }
   return Rcpp::as<sp_mat>(sparseMatrixConstructFun(m_HmatPredPos, concatenatedValues, false)) ;
 }
 
-void AugTree::createHmatrixPosPred() {
+void AugTree::createHmatrixPredPos() {
 
   uint numObs = m_predictData.spatialCoords.n_rows ;
 
@@ -617,12 +619,13 @@ void AugTree::createHmatrixPosPred() {
         colIndex += m_vertexVector.at(nodePos)->GetNumKnots() ;
       }
       colIndex = 0 ;
-      rowIndex += observationIndices.size() ; // The B matrices should have as many rows as observations in the node...
+      rowIndex += observationIndices.size() ;
     }
   }
 
   mat transIncrementedCovar = trans(join_rows(ones<vec>(numObs), m_predictData.covariateValues)) ;
-  mat m_incrementedCovarPredictReshuffled = trans(transIncrementedCovar.cols(FmatObsOrder)) ;
+  m_incrementedCovarPredictReshuffled = trans(transIncrementedCovar.cols(FmatObsOrder)) ;
+
   m_HmatPredPos.col(1) += m_predictData.covariateValues.n_cols + 1 ;
   umat covPos = join_rows(rep(regspace<uvec>(0, m_incrementedCovarPredictReshuffled.n_rows - 1),
                               m_incrementedCovarPredictReshuffled.n_cols),
@@ -859,61 +862,28 @@ sp_mat AugTree::ComputeHpred(const mat & spCoords, const vec & time, const mat &
     }
   }
   if (m_HmatPredPos.n_rows == 0) {
-    createHmatrixPosPred() ;
+    createHmatrixPredPos() ;
   }
+
   return updateHmatrixPred(sparseMatrixConstructFun) ;
 }
 
-arma::vec AugTree::ComputeEvar(const arma::sp_mat & HmatPred) {
-  // uvec blockIndices = extractBlockIndicesFromLowerRight(m_FullCondPrecision) ;
+arma::vec AugTree::ComputeEvar(const arma::sp_mat & HmatPred, Rcpp::Function sparseSolveFun) {
+
   double errorVar = std::pow(m_errorSD, 2) ;
   vec EvarValues(HmatPred.n_rows, fill::zeros) ;
+  int obsIndex = 0 ;
+  int increment = 99 ;
+  cout << "Processing batch... \n" ;
+  while (obsIndex < HmatPred.n_rows) {
+    printf("%i \n", obsIndex) ;
+    int newObsIndex = std::min(obsIndex + increment, int(HmatPred.n_rows) - 1) ;
+    sp_mat bVec = HmatPred.rows(obsIndex, obsIndex + increment) ;
+    sp_mat bVecTrans = trans(HmatPred.rows(obsIndex, obsIndex + increment)) ;
+    sp_mat meanValue = bVecTrans % Rcpp::as<sp_mat>(sparseSolveFun(m_FullCondPrecision, bVecTrans)) ;
+    EvarValues.subvec(obsIndex, obsIndex + increment) = trans(sum(meanValue,0)) + errorVar ;
 
-  uint DblockLeftIndex = m_DmatrixBlockIndices.at(0) ;
-  uint sizeD = m_FullCondPrecision.n_cols - DblockLeftIndex ;
-  uint sizeA = m_FullCondPrecision.n_cols - sizeD ;
-
-  sp_mat Bmatrix = m_FullCondPrecision(0, sizeA, size(sizeA, sizeD)) ;
-  sp_mat Amatrix = m_FullCondPrecision(0, 0, size(sizeA, sizeA)) ;
-  sp_mat Dinverted = invertSymmBlockDiag(m_FullCondPrecision(sizeA, sizeA, size(sizeD, sizeD)), m_DmatrixBlockIndices) ;
-  mat secondTermInside = conv_to<mat>::from(Bmatrix * Dinverted * trans(Bmatrix)) ;
-  sp_mat compositeInverted = conv_to<sp_mat>::from(inv(Amatrix - secondTermInside)) ;
-  // mat compositeInverted = inv(Amatrix - secondTermInside) ;
-
-  sp_mat bVec ;
-  sp_mat b1, b2 ;
-
-  for (uint i = 0 ; i < HmatPred.n_rows ; i++) {
-    bVec = trans(HmatPred.row(i)) ;
-    b1 = bVec(0, 0, size(sizeA, 1)) ;
-    b2 = bVec(sizeA, 0, size(sizeD, 1)) ;
-
-    sp_mat DinvB2 = Dinverted * b2 ;
-    sp_mat BmatDinvB2 = Bmatrix * DinvB2 ;
-    sp_mat firstElement = b1 - BmatDinvB2 ;
-    sp_mat b1CompInv = trans(compositeInverted * b1) ;
-    sp_mat firstTerm =  b1CompInv * firstElement ;
-
-    sp_mat secondTerm = (-b1 + BmatDinvB2) ;
-    secondTerm = compositeInverted * secondTerm ;
-    secondTerm = trans(BmatDinvB2) * secondTerm + trans(DinvB2) * b2 ;
-
-    sp_mat meanVec = firstTerm + secondTerm  ;
-    // sp_mat firstElementSecondTerm = Dinverted * b2 ;
-    // firstElementSecondTerm = Bmatrix * firstElementSecondTerm ;
-    // firstElementSecondTerm = compositeInverted * firstElementSecondTerm ;
-    // sp_mat firstElementFirstTerm = conv_to<sp_mat>::from(compositeInverted) * b1 ;
-    // sp_mat firstElement =  firstElementFirstTerm - firstElementSecondTerm ;
-    //
-    // sp_mat secondElementFirstTerm = trans(Bmatrix) * firstElementFirstTerm ;
-    // secondElementFirstTerm = -Dinverted * secondElementFirstTerm ;
-    // sp_mat secondElementSecondTerm = trans(Bmatrix) * firstElementSecondTerm ;
-    // secondElementSecondTerm = Dinverted * secondElementSecondTerm ;
-    // secondElementSecondTerm = Dinverted * b2 + secondElementSecondTerm ;
-    // sp_mat secondElement = secondElementFirstTerm + secondElementSecondTerm ;
-    //
-    // sp_mat meanVec = trans(bVec) * join_cols(firstElement, secondElement) ;
-    EvarValues.at(i) = meanVec.at(0,0) + errorVar ;
+    obsIndex += (increment + 1) ;
   }
   return EvarValues ;
 }

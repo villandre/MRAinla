@@ -219,7 +219,7 @@ funForGridEst <- function(index, paraGrid, treePointer, predictionData, MRAcovPa
   aList <- list(x = x, errorSD = errorSD, fixedEffSD = fixedEffSD, MRAhyperparas = MRAlist, logJointValue = logJointValue)
   if (!is.null(predictionData) & computePrediction) {
     timeValues <- as.integer(time(predictionData@time))/(3600*24) - timeBaseline # The division is to obtain values in days.
-    aList$CondPredStats <- ComputeCondPredStats(treePointer, predictionData@sp@coords, timeValues, as.matrix(predictionData@data), sparseMatrixConstructFun = buildSparseMatrix)
+    aList$CondPredStats <- ComputeCondPredStats(treePointer, predictionData@sp@coords, timeValues, as.matrix(predictionData@data), sparseMatrixConstructFun = buildSparseMatrix, sparseSolveFun = sparseInverse)
   }
   # Running LogJointHyperMarginal stores in the tree pointed by gridPointer the full conditional mean and SDs when recordFullConditional = TRUE. We can get them with the simple functions I call now.
   aList$FullCondMean <- GetFullCondMean(treePointer)
@@ -461,12 +461,6 @@ LogJointHyperMarginal <- function(treePointer, MRAhyperparas, fixedEffSD, errorS
   # Hmat is the covariate matrix with a column of 1s at the front for the intercept, with a n x n identity matrix horizontally appended (horizontal/row merge).
   # MRAprecision has to be a sparse matrix.
   require(Matrix, quietly = TRUE)
-  choleskiSolve <- function(hessianMat, scaledResponseHmat) {
-    # hessianMat <- Matrix::forceSymmetric(hessianMat, uplo = "U")
-    hessianMat <- as(hessianMat, "symmetricMatrix")
-    value <- as.vector(Matrix::solve(hessianMat, as.vector(scaledResponseHmat), sparse = TRUE))
-    value
-  }
 
   logDetFun <- function(sparseM) {
     sparseM <- as(sparseM, "symmetricMatrix")
@@ -479,4 +473,20 @@ LogJointHyperMarginal <- function(treePointer, MRAhyperparas, fixedEffSD, errorS
 
 buildSparseMatrix <- function(posMat, values, symmetric) {
   Matrix::sparseMatrix(i = posMat[, 1], j = posMat[ , 2], x = drop(values), index1 = FALSE, symmetric = symmetric)
+}
+
+choleskiSolve <- function(hessianMat, scaledResponseHmat) {
+  hessianMat <- as(hessianMat, "symmetricMatrix")
+  value <- as.vector(Matrix::solve(hessianMat, drop(scaledResponseHmat), sparse = TRUE))
+  value
+}
+
+sparseInverse <- function(sparseMat, otherMat) {
+  require(Matrix)
+  print("Entered sparseInverse... \n")
+  sparseMat <- as(sparseMat, "dsCMatrix")
+  otherMat <- as(otherMat, "dgCMatrix")
+  value <- Matrix::solve(a = sparseMat, b = otherMat, sparse = TRUE)
+  print("Leaving sparseInverse... \n")
+  as(value, Class = "CsparseMatrix")
 }
