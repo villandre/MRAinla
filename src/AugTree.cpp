@@ -868,22 +868,21 @@ sp_mat AugTree::ComputeHpred(const mat & spCoords, const vec & time, const mat &
   return updateHmatrixPred(sparseMatrixConstructFun) ;
 }
 
-arma::vec AugTree::ComputeEvar(const arma::sp_mat & HmatPred, Rcpp::Function sparseSolveFun) {
+arma::vec AugTree::ComputeEvar(const arma::sp_mat & HmatPred, Rcpp::Function sparseSolveFun, const int batchSize) {
 
   double errorVar = std::pow(m_errorSD, 2) ;
   vec EvarValues(HmatPred.n_rows, fill::zeros) ;
   int obsIndex = 0 ;
-  int increment = 499 ;
 
   while (obsIndex < HmatPred.n_rows) {
 
-    int newObsIndex = std::min(obsIndex + increment, int(HmatPred.n_rows) - 1) ;
+    int newObsIndex = std::min(obsIndex + batchSize - 1, int(HmatPred.n_rows) - 1) ;
     sp_mat bVec = HmatPred.rows(obsIndex, newObsIndex) ;
     sp_mat bVecTrans = trans(HmatPred.rows(obsIndex, newObsIndex)) ;
     sp_mat meanValue = bVecTrans % Rcpp::as<sp_mat>(sparseSolveFun(m_FullCondPrecision, bVecTrans)) ;
     EvarValues.subvec(obsIndex, newObsIndex) = trans(sum(meanValue,0)) + errorVar ;
 
-    obsIndex += (increment + 1) ;
+    obsIndex += batchSize ;
   }
   return EvarValues ;
 }

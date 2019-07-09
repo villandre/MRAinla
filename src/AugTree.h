@@ -121,7 +121,7 @@ public:
   arma::vec GetFullCondSDs() { return m_FullCondSDs ;}
 
   arma::sp_mat ComputeHpred(const arma::mat &, const arma::vec &, const arma::mat &, Rcpp::Function ) ;
-  arma::vec ComputeEvar(const arma::sp_mat &, Rcpp::Function) ;
+  arma::vec ComputeEvar(const arma::sp_mat &, Rcpp::Function, const int) ;
 
   ~ AugTree() {
     deallocate_container(m_vertexVector) ;

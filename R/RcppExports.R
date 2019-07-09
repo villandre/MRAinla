@@ -17,7 +17,7 @@ GetFullCondSDs <- function(treePointer) {
     .Call('_MRAinla_GetFullCondSDs', PACKAGE = 'MRAinla', treePointer)
 }
 
-ComputeCondPredStats <- function(treePointer, spCoordsForPredict, timeForPredict, covariateMatrixForPredict, sparseMatrixConstructFun, sparseSolveFun) {
-    .Call('_MRAinla_ComputeCondPredStats', PACKAGE = 'MRAinla', treePointer, spCoordsForPredict, timeForPredict, covariateMatrixForPredict, sparseMatrixConstructFun, sparseSolveFun)
+ComputeCondPredStats <- function(treePointer, spCoordsForPredict, timeForPredict, covariateMatrixForPredict, sparseMatrixConstructFun, sparseSolveFun, batchSize) {
+    .Call('_MRAinla_ComputeCondPredStats', PACKAGE = 'MRAinla', treePointer, spCoordsForPredict, timeForPredict, covariateMatrixForPredict, sparseMatrixConstructFun, sparseSolveFun, batchSize)
 }
 

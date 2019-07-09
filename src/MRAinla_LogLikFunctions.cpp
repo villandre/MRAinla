@@ -135,7 +135,7 @@ arma::vec GetFullCondSDs(SEXP treePointer) {
 
 Rcpp::List ComputeCondPredStats(SEXP treePointer, NumericMatrix spCoordsForPredict, NumericVector timeForPredict,
                                  NumericMatrix covariateMatrixForPredict, Rcpp::Function sparseMatrixConstructFun,
-                                 Rcpp::Function sparseSolveFun) {
+                                 Rcpp::Function sparseSolveFun, int batchSize) {
   sp_mat Hmat, Hmean, HmeanSq ;
   mat HmeanMat ;
   vec Evar ;
@@ -151,7 +151,7 @@ Rcpp::List ComputeCondPredStats(SEXP treePointer, NumericMatrix spCoordsForPredi
     sp_mat Hmean = Hmat * conv_to<sp_mat>::from(pointedTree->GetFullCondMean()) ;
     HmeanMat = conv_to<mat>::from(Hmean) ;
     cout << "Computing Evar... \n" ;
-    Evar = pointedTree->ComputeEvar(Hmat, sparseSolveFun) ;
+    Evar = pointedTree->ComputeEvar(Hmat, sparseSolveFun, batchSize) ;
     cout << "Done. \n" ;
   }
   else
