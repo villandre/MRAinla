@@ -31,7 +31,7 @@
 #' @export
 
 MRA_INLA <- function(spacetimeData, errorSDstart, fixedEffSDstart, MRAhyperparasStart, FEmuVec, predictionData = NULL, fixedEffGammaAlphaBeta, errorGammaAlphaBeta,  MRAcovParasGammaAlphaBeta, control) {
-  defaultControl <- list(M = 1, randomSeed = 24,  cutForTimeSplit = 400, stepSize = 1, lowerThreshold = 3, maternCovariance = TRUE, nuggetSD = 0.00001, varyFixedEffSD = FALSE, varyMaternSmoothness = FALSE, varyErrorSD = TRUE, splitTime = FALSE, numKnotsRes0 = 20L, J = 2L, numValuesForGrid = 4)
+  defaultControl <- list(M = 1, randomSeed = 24,  cutForTimeSplit = 400, stepSize = 1, lowerThreshold = 3, maternCovariance = TRUE, nuggetSD = 0.00001, varyFixedEffSD = FALSE, varyMaternSmoothness = FALSE, varyErrorSD = TRUE, splitTime = FALSE, numKnotsRes0 = 20L, J = 2L, numValuesForGrid = 4, numThreads = 1)
   if (length(position <- grep(colnames(spacetimeData@sp@coords), pattern = "lon")) >= 1) {
     colnames(spacetimeData@sp@coords)[[position[[1]]]] <- "x"
   }
@@ -70,7 +70,10 @@ MRA_INLA <- function(spacetimeData, errorSDstart, fixedEffSDstart, MRAhyperparas
   timeRangeReshaped <- timeRangeReshaped - timeBaseline
 
   covariateMatrix <- as.matrix(spacetimeData@data[, -1, drop = FALSE])
-  gridPointer <- setupGridCpp(spacetimeData@data[, 1], dataCoordinates, timeValues, covariateMatrix, control$M, control$lonRange, control$latRange, timeRangeReshaped, control$randomSeed, control$cutForTimeSplit, control$splitTime, control$numKnotsRes0, control$J)
+  gridPointers <- lapply(1:control$numThreads, function(x) {
+    setupGridCpp(spacetimeData@data[, 1], dataCoordinates, timeValues, covariateMatrix, control$M, control$lonRange, control$latRange, timeRangeReshaped, control$randomSeed, control$cutForTimeSplit, control$splitTime, control$numKnotsRes0, control$J)$gridPointer
+  })
+
   # First we compute values relating to the hyperprior marginal distribution...
   xStartValues <- c(spRho = MRAhyperparasStart$space[["rho"]], timeRho = MRAhyperparasStart$time[["rho"]], scale = MRAhyperparasStart[["scale"]])
   if (control$varyFixedEffSD) {
@@ -84,7 +87,7 @@ MRA_INLA <- function(spacetimeData, errorSDstart, fixedEffSDstart, MRAhyperparas
     xStartValues[["timeSmoothness"]] <- MRAhyperparasStart$time[["smoothness"]]
   }
 
-  computedValues <- obtainGridValues(treePointer = gridPointer$gridPointer, xStartValues = xStartValues, control = control, fixedEffSDstart = fixedEffSDstart, errorSDstart = errorSDstart, MRAhyperparasStart = MRAhyperparasStart, MRAcovParasGammaAlphaBeta = MRAcovParasGammaAlphaBeta, fixedEffGammaAlphaBeta = fixedEffGammaAlphaBeta, errorGammaAlphaBeta = errorGammaAlphaBeta, FEmuVec = FEmuVec, predictionData = predictionData, timeBaseline = timeBaseline)
+  computedValues <- obtainGridValues(treePointer = gridPointers, xStartValues = xStartValues, control = control, fixedEffSDstart = fixedEffSDstart, errorSDstart = errorSDstart, MRAhyperparasStart = MRAhyperparasStart, MRAcovParasGammaAlphaBeta = MRAcovParasGammaAlphaBeta, fixedEffGammaAlphaBeta = fixedEffGammaAlphaBeta, errorGammaAlphaBeta = errorGammaAlphaBeta, FEmuVec = FEmuVec, predictionData = predictionData, timeBaseline = timeBaseline)
 
   discreteLogJointValues <- sapply(computedValues, '[[', "logJointValue")
   print(discreteLogJointValues)
@@ -114,7 +117,7 @@ MRA_INLA <- function(spacetimeData, errorSDstart, fixedEffSDstart, MRAhyperparas
   outputList
 }
 
-obtainGridValues <- function(treePointer, xStartValues, control, fixedEffSDstart, errorSDstart, MRAhyperparasStart, MRAcovParasGammaAlphaBeta, fixedEffGammaAlphaBeta, errorGammaAlphaBeta, FEmuVec, predictionData, timeBaseline) {
+obtainGridValues <- function(gridPointers, xStartValues, control, fixedEffSDstart, errorSDstart, MRAhyperparasStart, MRAcovParasGammaAlphaBeta, fixedEffGammaAlphaBeta, errorGammaAlphaBeta, FEmuVec, predictionData, timeBaseline) {
   cat("Entered obtainGridValues... \n")
 
   # A short optimisation first...
@@ -136,33 +139,43 @@ obtainGridValues <- function(treePointer, xStartValues, control, fixedEffSDstart
       timeSmoothnessArg <- xTrans[["timeSmoothness"]]
     }
     MRAlist <- list(space = list(rho = xTrans[["spRho"]], smoothness = spSmoothnessArg), time = list(rho = xTrans[["timeRho"]], smoothness = timeSmoothnessArg), scale = xTrans[["scale"]])
-    LogJointHyperMarginal(treePointer = treePointer, MRAhyperparas = MRAlist, fixedEffSD = fixedEffArg, errorSD = errorArg, MRAcovParasGammaAlphaBeta = MRAcovParasGammaAlphaBeta, FEmuVec = FEmuVec, fixedEffGammaAlphaBeta = fixedEffGammaAlphaBeta, errorGammaAlphaBeta = errorGammaAlphaBeta, matern = control$maternCovariance, spaceNuggetSD = control$nuggetSD, timeNuggetSD = control$nuggetSD, recordFullConditional = FALSE)
-    # tryCatch(expr = LogJointHyperMarginal(treePointer = treePointer, MRAhyperparas = MRAlist, fixedEffSD = fixedEffArg, errorSD = errorArg, MRAcovParasGammaAlphaBeta = MRAcovParasGammaAlphaBeta, FEmuVec = FEmuVec, fixedEffGammaAlphaBeta = fixedEffGammaAlphaBeta, errorGammaAlphaBeta = errorGammaAlphaBeta, matern = control$maternCovariance, spaceNuggetSD = control$nuggetSD, timeNuggetSD = control$nuggetSD, recordFullConditional = FALSE), error = function(e) -Inf)
+    -LogJointHyperMarginal(treePointer = gridPointers[[1]], MRAhyperparas = MRAlist, fixedEffSD = fixedEffArg, errorSD = errorArg, MRAcovParasGammaAlphaBeta = MRAcovParasGammaAlphaBeta, FEmuVec = FEmuVec, fixedEffGammaAlphaBeta = fixedEffGammaAlphaBeta, errorGammaAlphaBeta = errorGammaAlphaBeta, matern = control$maternCovariance, spaceNuggetSD = control$nuggetSD, timeNuggetSD = control$nuggetSD, recordFullConditional = FALSE)
   }
   gradForOptim <- function(x) {
     names(x) <- names(xStartValues)
     numDeriv::grad(func = funForOptim, x = x, method = "simple")
   }
-  opt <- trustOptim::trust.optim(x = log(xStartValues), fn = funForOptim,
-                                 gr = gradForOptim,
-                                 method = "SR1",
-                                 control = list(
-                                   start.trust.radius = 1,
-                                   stop.trust.radius = 1e-10,
-                                   prec = 1e-4,
-                                   report.precision = 1L,
-                                   maxit = 12L,
-                                   preconditioner = 0,
-                                   precond.refresh.freq = 1,
-                                   function.scale.factor = -1 # We are maximising, hence the -1.
-                                 ))
-  solution <- exp(opt$solution)
+  # opt <- trustOptim::trust.optim(x = log(xStartValues), fn = funForOptim,
+  #                                gr = gradForOptim,
+  #                                method = "SR1",
+  #                                control = list(
+  #                                  start.trust.radius = 1,
+  #                                  stop.trust.radius = 1e-10,
+  #                                  prec = 1e-4,
+  #                                  report.precision = 1L,
+  #                                  maxit = 12L,
+  #                                  preconditioner = 0,
+  #                                  precond.refresh.freq = 1,
+  #                                  function.scale.factor = -1 # We are maximising, hence the -1.
+  #                                ))
+  # solution <- exp(opt$solution)
+  opt <- nloptr::lbfgs(x0 = log(xStartValues), lower = rep(-10, length(xStartValues)), upper = c(rep(0, length(xStartValues) - 1), 3), fn = funForOptim, gr = gradForOptim, control = list(xtol_rel = 1e-3, maxeval = 12L))
+  # opt <- nloptr::bobyqa(x0 = log(xStartValues), lower = rep(-10, length(xStartValues)), upper = c(rep(0, length(xStartValues) - 1), 3), fn = funForOptim, control = list(xtol_rel = 1e-3, maxeval = 12L))
+  solution <- exp(opt$par)
 
   # We should perform a second short round of optimisation to define a regular grid.
 
   radius <- 0.15*solution
   i <- 0
   cat("Bounding the grid...")
+
+  if (length(gridPointers) > 1) {
+    no_cores <- length(gridPointers)
+    cl <- parallel::makeCluster(no_cores, type = "FORK") ## The FORK type cluster is the fastest on the stat machines!
+    parallel::setDefaultCluster(cl)
+    # clusterExport(varlist = c(ls())) ## Functions starting with '.' are hidden and so, must be passed explicitly to each node.
+    parallel::clusterEvalQ(expr = library(MRAinla))
+  }
   gridFct <- function(radius, numPoints, computePrediction = TRUE) {
     lowerLimit <- solution - radius
     upperLimit <- solution + radius
@@ -171,13 +184,27 @@ obtainGridValues <- function(treePointer, xStartValues, control, fixedEffSDstart
 
     names(paraRanges) <- names(xStartValues)
     paraGrid <- expand.grid(paraRanges)
-    lapply(1:nrow(paraGrid), funForGridEst, paraGrid = paraGrid, treePointer = treePointer, MRAcovParasGammaAlphaBeta = MRAcovParasGammaAlphaBeta, fixedEffGammaAlphaBeta = fixedEffGammaAlphaBeta, errorGammaAlphaBeta = errorGammaAlphaBeta, fixedEffSDstart = fixedEffSDstart, errorSDstart = errorSDstart, MRAhyperparasStart = MRAhyperparasStart, FEmuVec = FEmuVec, predictionData = predictionData, timeBaseline = timeBaseline, computePrediction = computePrediction, control = control)
+    groupAssignments <- rep(1:length(gridPointers), length.out = nrow(paraGrid))
+    listForParallel <- lapply(1:length(gridPointers), function(clIndex) {
+      indicesForNode <- which(groupAssignments == clIndex)
+      list(paraGrid = paraGrid[indicesForNode], treePointer = gridPointers[[clIndex]], predictionData = predictionData[indicesForNode])
+    })
+    if (length(gridPointers) == 1) {
+      values <- lapply(1:nrow(paraGrid), funForGridEst, paraGrid = paraGrid, treePointer = gridPointers[[1]], MRAcovParasGammaAlphaBeta = MRAcovParasGammaAlphaBeta, fixedEffGammaAlphaBeta = fixedEffGammaAlphaBeta, errorGammaAlphaBeta = errorGammaAlphaBeta, fixedEffSDstart = fixedEffSDstart, errorSDstart = errorSDstart, MRAhyperparasStart = MRAhyperparasStart, FEmuVec = FEmuVec, predictionData = predictionData, timeBaseline = timeBaseline, computePrediction = computePrediction, control = control)
+      values <- c(values) # This will flatten the list
+    } else {
+      values <- parallel::parLapply(X = listForParallel, fun = function(parallelElements) {
+        lapply(1:nrow(parallelElements$paraGrid), funForGridEst, paraGrid = parallelElements$paraGrid, treePointer = parallelElements$treePointer, MRAcovParasGammaAlphaBeta = MRAcovParasGammaAlphaBeta, fixedEffGammaAlphaBeta = fixedEffGammaAlphaBeta, errorGammaAlphaBeta = errorGammaAlphaBeta, fixedEffSDstart = fixedEffSDstart, errorSDstart = errorSDstart, MRAhyperparasStart = MRAhyperparasStart, FEmuVec = FEmuVec, predictionData = parallelElements$predictionData, timeBaseline = timeBaseline, computePrediction = computePrediction, control = control)
+      })
+    }
+    values
   }
 
   repeat {
     valuesOnGrid <- gridFct(radius, 2, FALSE) # By setting numPoints at 2, we compute grid values only on the summits of a hypercube.
     logPPvalues <- sapply(valuesOnGrid, function(x) x$logJointValue)
-    testValues <- exp(logPPvalues - opt$fval) > 0.05
+    # testValues <- exp(logPPvalues - opt$fval) > 0.05
+    testValues <- exp(logPPvalues - opt$value) > 0.05
     # We ensure that the zone has at least two points with a decent prob. mass.
     if (sum(testValues) > 1) {
        radius <- radius * 1.25
