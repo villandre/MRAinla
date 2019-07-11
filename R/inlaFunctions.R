@@ -189,13 +189,13 @@ obtainGridValues <- function(gridPointers, xStartValues, control, fixedEffSDstar
     groupAssignments <- rep(1:length(gridPointers), length.out = nrow(paraGrid))
     listForParallel <- lapply(1:length(gridPointers), function(clIndex) {
       indicesForNode <- which(groupAssignments == clIndex)
-      list(paraGrid = paraGrid[indicesForNode, ], predictionData = predictionData[indicesForNode])
+      list(paraGrid = paraGrid[indicesForNode, ])
     })
     if (length(gridPointers) == 1) {
       output <- lapply(1:nrow(paraGrid), funForGridEst, paraGrid = paraGrid, treePointer = gridPointers[[1]], MRAcovParasGammaAlphaBeta = MRAcovParasGammaAlphaBeta, fixedEffGammaAlphaBeta = fixedEffGammaAlphaBeta, errorGammaAlphaBeta = errorGammaAlphaBeta, fixedEffSDstart = fixedEffSDstart, errorSDstart = errorSDstart, MRAhyperparasStart = MRAhyperparasStart, FEmuVec = FEmuVec, predictionData = predictionData, timeBaseline = timeBaseline, computePrediction = computePrediction, control = control)
     } else {
       output <- foreach::foreach(var1 = seq_along(listForParallel), .combine = c) %dopar% {
-        lapply(1:nrow(listForParallel[[var1]]$paraGrid), funForGridEst, paraGrid = listForParallel[[var1]]$paraGrid, treePointer = gridPointers[[var1]], MRAcovParasGammaAlphaBeta = MRAcovParasGammaAlphaBeta, fixedEffGammaAlphaBeta = fixedEffGammaAlphaBeta, errorGammaAlphaBeta = errorGammaAlphaBeta, fixedEffSDstart = fixedEffSDstart, errorSDstart = errorSDstart, MRAhyperparasStart = MRAhyperparasStart, FEmuVec = FEmuVec, predictionData = listForParallel[[var1]]$predictionData, timeBaseline = timeBaseline, computePrediction = computePrediction, control = control)
+        lapply(1:nrow(listForParallel[[var1]]$paraGrid), funForGridEst, paraGrid = listForParallel[[var1]]$paraGrid, treePointer = gridPointers[[var1]], MRAcovParasGammaAlphaBeta = MRAcovParasGammaAlphaBeta, fixedEffGammaAlphaBeta = fixedEffGammaAlphaBeta, errorGammaAlphaBeta = errorGammaAlphaBeta, fixedEffSDstart = fixedEffSDstart, errorSDstart = errorSDstart, MRAhyperparasStart = MRAhyperparasStart, FEmuVec = FEmuVec, predictionData = predictionData, timeBaseline = timeBaseline, computePrediction = computePrediction, control = control)
       }
     }
     output
@@ -215,11 +215,10 @@ obtainGridValues <- function(gridPointers, xStartValues, control, fixedEffSDstar
     if (i == 5) break
     i <- i + 1
   }
-  Sys.sleep(2)
   print("Computing values on the grid...")
-  Sys.sleep(2)
   valuesOnGrid <- gridFct(radius, control$numValuesForGrid, TRUE)
   print("Grid complete... \n")
+  doParallel::stopImplicitCluster()
   keepIndices <- sapply(valuesOnGrid, function(x) class(x$logJointValue) == "numeric")
   valuesOnGrid[keepIndices]
 }
@@ -250,6 +249,7 @@ funForGridEst <- function(index, paraGrid, treePointer, predictionData, MRAcovPa
   aList <- list(x = x, errorSD = errorSD, fixedEffSD = fixedEffSD, MRAhyperparas = MRAlist, logJointValue = logJointValue)
   if (!is.null(predictionData) & computePrediction) {
     timeValues <- as.integer(time(predictionData@time))/(3600*24) - timeBaseline # The division is to obtain values in days.
+
     aList$CondPredStats <- ComputeCondPredStats(treePointer, predictionData@sp@coords, timeValues, as.matrix(predictionData@data), sparseMatrixConstructFun = buildSparseMatrix, sparseSolveFun = sparseInverse, batchSize = control$batchSizePredict)
   }
   # Running LogJointHyperMarginal stores in the tree pointed by gridPointer the full conditional mean and SDs when recordFullConditional = TRUE. We can get them with the simple functions I call now.

@@ -93,6 +93,17 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// GetNumTips
+int GetNumTips(SEXP treePointer);
+RcppExport SEXP _MRAinla_GetNumTips(SEXP treePointerSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< SEXP >::type treePointer(treePointerSEXP);
+    rcpp_result_gen = Rcpp::wrap(GetNumTips(treePointer));
+    return rcpp_result_gen;
+END_RCPP
+}
 
 static const R_CallMethodDef CallEntries[] = {
     {"_MRAinla_setupGridCpp", (DL_FUNC) &_MRAinla_setupGridCpp, 13},
@@ -100,6 +111,7 @@ static const R_CallMethodDef CallEntries[] = {
     {"_MRAinla_GetFullCondMean", (DL_FUNC) &_MRAinla_GetFullCondMean, 1},
     {"_MRAinla_GetFullCondSDs", (DL_FUNC) &_MRAinla_GetFullCondSDs, 1},
     {"_MRAinla_ComputeCondPredStats", (DL_FUNC) &_MRAinla_ComputeCondPredStats, 7},
+    {"_MRAinla_GetNumTips", (DL_FUNC) &_MRAinla_GetNumTips, 1},
     {NULL, NULL, 0}
 };
 

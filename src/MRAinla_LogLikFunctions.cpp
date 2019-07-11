@@ -160,3 +160,11 @@ Rcpp::List ComputeCondPredStats(SEXP treePointer, NumericMatrix spCoordsForPredi
   }
   return Rcpp::List::create(Named("Hmean") = HmeanMat, Named("Evar") = Evar) ;
 }
+
+// [[Rcpp::export]]
+
+int GetNumTips(SEXP treePointer) {
+  XPtr<AugTree> pointedTree(treePointer) ; // Becomes a regular pointer again.
+  int value = pointedTree->GetNumTips() ;
+  return value ;
+}

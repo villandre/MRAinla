@@ -21,3 +21,7 @@ ComputeCondPredStats <- function(treePointer, spCoordsForPredict, timeForPredict
     .Call('_MRAinla_ComputeCondPredStats', PACKAGE = 'MRAinla', treePointer, spCoordsForPredict, timeForPredict, covariateMatrixForPredict, sparseMatrixConstructFun, sparseSolveFun, batchSize)
 }
 
+GetNumTips <- function(treePointer) {
+    .Call('_MRAinla_GetNumTips', PACKAGE = 'MRAinla', treePointer)
+}
+
