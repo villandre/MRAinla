@@ -87,7 +87,7 @@ MRA_INLA <- function(spacetimeData, errorSDstart, fixedEffSDstart, MRAhyperparas
     xStartValues[["timeSmoothness"]] <- MRAhyperparasStart$time[["smoothness"]]
   }
 
-  computedValues <- obtainGridValues(treePointer = gridPointers, xStartValues = xStartValues, control = control, fixedEffSDstart = fixedEffSDstart, errorSDstart = errorSDstart, MRAhyperparasStart = MRAhyperparasStart, MRAcovParasGammaAlphaBeta = MRAcovParasGammaAlphaBeta, fixedEffGammaAlphaBeta = fixedEffGammaAlphaBeta, errorGammaAlphaBeta = errorGammaAlphaBeta, FEmuVec = FEmuVec, predictionData = predictionData, timeBaseline = timeBaseline)
+  computedValues <- obtainGridValues(gridPointers = gridPointers, xStartValues = xStartValues, control = control, fixedEffSDstart = fixedEffSDstart, errorSDstart = errorSDstart, MRAhyperparasStart = MRAhyperparasStart, MRAcovParasGammaAlphaBeta = MRAcovParasGammaAlphaBeta, fixedEffGammaAlphaBeta = fixedEffGammaAlphaBeta, errorGammaAlphaBeta = errorGammaAlphaBeta, FEmuVec = FEmuVec, predictionData = predictionData, timeBaseline = timeBaseline)
 
   discreteLogJointValues <- sapply(computedValues, '[[', "logJointValue")
   print(discreteLogJointValues)
@@ -170,11 +170,13 @@ obtainGridValues <- function(gridPointers, xStartValues, control, fixedEffSDstar
   cat("Bounding the grid...")
 
   if (length(gridPointers) > 1) {
+    require(doParallel)
     no_cores <- length(gridPointers)
-    cl <- parallel::makeCluster(no_cores, type = "FORK") ## The FORK type cluster is the fastest on the stat machines!
-    parallel::setDefaultCluster(cl)
-    # clusterExport(varlist = c(ls())) ## Functions starting with '.' are hidden and so, must be passed explicitly to each node.
-    parallel::clusterEvalQ(expr = library(MRAinla))
+    # cl <- parallel::makeCluster(no_cores, type = "PSOCK") ## The FORK type cluster is the fastest on the stat machines!
+    # parallel::setDefaultCluster(cl)
+    doParallel::registerDoParallel(cores = no_cores)# Shows the number of Parallel Workers to be used
+    # parallel::clusterExport(varlist = c("MRAcovParasGammaAlphaBeta", "fixedEffGammaAlphaBeta", "errorGammaAlphaBeta", "fixedEffSDstart", "errorSDstart", "MRAhyperparasStart", "FEmuVec", "timeBaseline", "control", "gridPointers"), envir = environment()) ## Functions starting with '.' are hidden and so, must be passed explicitly to each node.
+    # parallel::clusterEvalQ(expr = library(MRAinla))
   }
   gridFct <- function(radius, numPoints, computePrediction = TRUE) {
     lowerLimit <- solution - radius
@@ -187,17 +189,16 @@ obtainGridValues <- function(gridPointers, xStartValues, control, fixedEffSDstar
     groupAssignments <- rep(1:length(gridPointers), length.out = nrow(paraGrid))
     listForParallel <- lapply(1:length(gridPointers), function(clIndex) {
       indicesForNode <- which(groupAssignments == clIndex)
-      list(paraGrid = paraGrid[indicesForNode], treePointer = gridPointers[[clIndex]], predictionData = predictionData[indicesForNode])
+      list(paraGrid = paraGrid[indicesForNode, ], predictionData = predictionData[indicesForNode])
     })
     if (length(gridPointers) == 1) {
-      values <- lapply(1:nrow(paraGrid), funForGridEst, paraGrid = paraGrid, treePointer = gridPointers[[1]], MRAcovParasGammaAlphaBeta = MRAcovParasGammaAlphaBeta, fixedEffGammaAlphaBeta = fixedEffGammaAlphaBeta, errorGammaAlphaBeta = errorGammaAlphaBeta, fixedEffSDstart = fixedEffSDstart, errorSDstart = errorSDstart, MRAhyperparasStart = MRAhyperparasStart, FEmuVec = FEmuVec, predictionData = predictionData, timeBaseline = timeBaseline, computePrediction = computePrediction, control = control)
-      values <- c(values) # This will flatten the list
+      output <- lapply(1:nrow(paraGrid), funForGridEst, paraGrid = paraGrid, treePointer = gridPointers[[1]], MRAcovParasGammaAlphaBeta = MRAcovParasGammaAlphaBeta, fixedEffGammaAlphaBeta = fixedEffGammaAlphaBeta, errorGammaAlphaBeta = errorGammaAlphaBeta, fixedEffSDstart = fixedEffSDstart, errorSDstart = errorSDstart, MRAhyperparasStart = MRAhyperparasStart, FEmuVec = FEmuVec, predictionData = predictionData, timeBaseline = timeBaseline, computePrediction = computePrediction, control = control)
     } else {
-      values <- parallel::parLapply(X = listForParallel, fun = function(parallelElements) {
-        lapply(1:nrow(parallelElements$paraGrid), funForGridEst, paraGrid = parallelElements$paraGrid, treePointer = parallelElements$treePointer, MRAcovParasGammaAlphaBeta = MRAcovParasGammaAlphaBeta, fixedEffGammaAlphaBeta = fixedEffGammaAlphaBeta, errorGammaAlphaBeta = errorGammaAlphaBeta, fixedEffSDstart = fixedEffSDstart, errorSDstart = errorSDstart, MRAhyperparasStart = MRAhyperparasStart, FEmuVec = FEmuVec, predictionData = parallelElements$predictionData, timeBaseline = timeBaseline, computePrediction = computePrediction, control = control)
-      })
+      output <- foreach::foreach(var1 = seq_along(listForParallel), .combine = c) %dopar% {
+        lapply(1:nrow(listForParallel[[var1]]$paraGrid), funForGridEst, paraGrid = listForParallel[[var1]]$paraGrid, treePointer = gridPointers[[var1]], MRAcovParasGammaAlphaBeta = MRAcovParasGammaAlphaBeta, fixedEffGammaAlphaBeta = fixedEffGammaAlphaBeta, errorGammaAlphaBeta = errorGammaAlphaBeta, fixedEffSDstart = fixedEffSDstart, errorSDstart = errorSDstart, MRAhyperparasStart = MRAhyperparasStart, FEmuVec = FEmuVec, predictionData = listForParallel[[var1]]$predictionData, timeBaseline = timeBaseline, computePrediction = computePrediction, control = control)
+      }
     }
-    values
+    output
   }
 
   repeat {
@@ -214,11 +215,11 @@ obtainGridValues <- function(gridPointers, xStartValues, control, fixedEffSDstar
     if (i == 5) break
     i <- i + 1
   }
-  cat("Done...")
-  cat("Computing values on the grid...")
+  Sys.sleep(2)
+  print("Computing values on the grid...")
+  Sys.sleep(2)
   valuesOnGrid <- gridFct(radius, control$numValuesForGrid, TRUE)
-  cat("Done.")
-
+  print("Grid complete... \n")
   keepIndices <- sapply(valuesOnGrid, function(x) class(x$logJointValue) == "numeric")
   valuesOnGrid[keepIndices]
 }
