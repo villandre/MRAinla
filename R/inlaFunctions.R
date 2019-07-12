@@ -159,13 +159,13 @@ obtainGridValues <- function(gridPointers, xStartValues, control, fixedEffSDstar
   #                                  function.scale.factor = -1 # We are maximising, hence the -1.
   #                                ))
   # solution <- exp(opt$solution)
-  opt <- nloptr::lbfgs(x0 = log(xStartValues), lower = rep(-10, length(xStartValues)), upper = c(rep(0, length(xStartValues) - 1), 3), fn = funForOptim, gr = gradForOptim, control = list(xtol_rel = 1e-3, maxeval = 12L))
+  opt <- nloptr::lbfgs(x0 = log(xStartValues), lower = rep(-10, length(xStartValues)), upper = c(rep(0, length(xStartValues) - 1), 3), fn = funForOptim, gr = gradForOptim, control = list(xtol_rel = 1e-3, maxeval = 15L))
   # opt <- nloptr::bobyqa(x0 = log(xStartValues), lower = rep(-10, length(xStartValues)), upper = c(rep(0, length(xStartValues) - 1), 3), fn = funForOptim, control = list(xtol_rel = 1e-3, maxeval = 12L))
   solution <- exp(opt$par)
 
   # We should perform a second short round of optimisation to define a regular grid.
 
-  radius <- 0.15*solution
+  radius <- 0.25*solution
   i <- 0
   cat("Bounding the grid...")
 
