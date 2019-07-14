@@ -161,11 +161,10 @@ obtainGridValues <- function(gridPointers, xStartValues, control, fixedEffSDstar
   # solution <- exp(opt$solution)
   opt <- nloptr::lbfgs(x0 = log(xStartValues), lower = rep(-10, length(xStartValues)), upper = c(rep(0, length(xStartValues) - 1), 3), fn = funForOptim, gr = gradForOptim, control = list(xtol_rel = 1e-3, maxeval = 15L))
   # opt <- nloptr::bobyqa(x0 = log(xStartValues), lower = rep(-10, length(xStartValues)), upper = c(rep(0, length(xStartValues) - 1), 3), fn = funForOptim, control = list(xtol_rel = 1e-3, maxeval = 12L))
+  opt$value <- -opt$value # Correcting for the inversion used to maximise instead of minimise
   solution <- exp(opt$par)
 
   # We should perform a second short round of optimisation to define a regular grid.
-
-  radius <- 0.25*solution
   i <- 0
   cat("Bounding the grid...")
 
@@ -178,14 +177,22 @@ obtainGridValues <- function(gridPointers, xStartValues, control, fixedEffSDstar
     # parallel::clusterExport(varlist = c("MRAcovParasGammaAlphaBeta", "fixedEffGammaAlphaBeta", "errorGammaAlphaBeta", "fixedEffSDstart", "errorSDstart", "MRAhyperparasStart", "FEmuVec", "timeBaseline", "control", "gridPointers"), envir = environment()) ## Functions starting with '.' are hidden and so, must be passed explicitly to each node.
     # parallel::clusterEvalQ(expr = library(MRAinla))
   }
-  gridFct <- function(radius, numPoints, computePrediction = TRUE) {
-    lowerLimit <- solution - radius
-    upperLimit <- solution + radius
-    paraLimits <- cbind(lower = lowerLimit, upper = upperLimit)
-    paraRanges <- lapply(1:nrow(paraLimits), function(x) seq(from = paraLimits[x,"lower"], to = paraLimits[x,"upper"], length.out = numPoints))
+  gridFct <- function(rad, numPoints = 2, computePrediction = TRUE) {
+    if (numPoints > 0) {
+      lowerLimit <- solution - rad[seq(from = 1, to = length(rad), by = 2)]
+      upperLimit <- solution + rad[seq(from = 2, to = length(rad), by = 2)]
+      paraLimits <- cbind(lower = lowerLimit, upper = upperLimit)
+      paraRanges <- lapply(1:nrow(paraLimits), function(x) seq(from = paraLimits[x,"lower"], to = paraLimits[x,"upper"], length.out = numPoints))
 
-    names(paraRanges) <- names(xStartValues)
-    paraGrid <- expand.grid(paraRanges)
+      names(paraRanges) <- names(xStartValues)
+      paraGrid <- expand.grid(paraRanges)
+    } else {
+      paraGridList <- lapply(seq_along(solution), function(paraIndex) {
+        rbind(replace(solution, paraIndex, solution[paraIndex] - rad[2*paraIndex - 1]), replace(solution, paraIndex, solution[paraIndex] + rad[2*paraIndex]))
+      })
+      paraGrid <- do.call("rbind", paraGridList)
+      colnames(paraGrid) <- names(xStartValues)
+    }
     groupAssignments <- rep(1:length(gridPointers), length.out = nrow(paraGrid))
     listForParallel <- lapply(1:length(gridPointers), function(clIndex) {
       indicesForNode <- which(groupAssignments == clIndex)
@@ -201,22 +208,26 @@ obtainGridValues <- function(gridPointers, xStartValues, control, fixedEffSDstar
     output
   }
 
+  radii <- rep(0.75*solution, each = 2)
+  print("Summit:")
+  print(opt$value)
   repeat {
-    valuesOnGrid <- gridFct(radius, 2, FALSE) # By setting numPoints at 2, we compute grid values only on the summits of a hypercube.
+    print("Hypercube radii: \n")
+    print(radii)
+    valuesOnGrid <- gridFct(radii, 0, FALSE) # By setting numPoints at 0, we compute grid values only on a cross centered at the optimum with extremities on the faces of a hypercube.
     logPPvalues <- sapply(valuesOnGrid, function(x) x$logJointValue)
     # testValues <- exp(logPPvalues - opt$fval) > 0.05
-    testValues <- exp(logPPvalues - opt$value) > 0.05
+    testValues <- exp(logPPvalues - opt$value) > 0.01
     # We ensure that the zone has at least two points with a decent prob. mass.
-    if (sum(testValues) > 1) {
-       radius <- radius * 1.25
-    } else {
-      radius <- radius * 0.5
-    }
-    if (i == 5) break
+
+    radii[!testValues] <- radii[!testValues] * 0.75
+    if (ceiling(sum(testValues)/2) > (length(testValues)/2)) break
+    print("Iteration index: ")
+    print(i)
     i <- i + 1
   }
   print("Computing values on the grid...")
-  valuesOnGrid <- gridFct(radius, control$numValuesForGrid, TRUE)
+  valuesOnGrid <- gridFct(radii, control$numValuesForGrid, TRUE)
   print("Grid complete... \n")
   doParallel::stopImplicitCluster()
   keepIndices <- sapply(valuesOnGrid, function(x) class(x$logJointValue) == "numeric")
