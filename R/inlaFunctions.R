@@ -31,7 +31,7 @@
 #' @export
 
 MRA_INLA <- function(spacetimeData, errorSDstart, fixedEffSDstart, MRAhyperparasStart, FEmuVec, predictionData = NULL, fixedEffGammaAlphaBeta, errorGammaAlphaBeta,  MRAcovParasGammaAlphaBeta, control) {
-  defaultControl <- list(M = 1, randomSeed = 24,  cutForTimeSplit = 400, stepSize = 1, lowerThreshold = 3, maternCovariance = TRUE, nuggetSD = 0.00001, varyFixedEffSD = FALSE, varyMaternSmoothness = FALSE, varyErrorSD = TRUE, splitTime = FALSE, numKnotsRes0 = 20L, J = 2L, numValuesForGrid = 4, numThreads = 1)
+  defaultControl <- list(M = 1, randomSeed = 24,  cutForTimeSplit = 400, stepSize = 1, lowerThreshold = 3, maternCovariance = TRUE, nuggetSD = 0.00001, varyFixedEffSD = FALSE, varyMaternSmoothness = FALSE, varyErrorSD = TRUE, splitTime = FALSE, numKnotsRes0 = 20L, J = 2L, numValuesForGrid = 4, numThreads = 1, thresholdForHypercross = 0.05, radiusContractFactor = 0.75)
   if (length(position <- grep(colnames(spacetimeData@sp@coords), pattern = "lon")) >= 1) {
     colnames(spacetimeData@sp@coords)[[position[[1]]]] <- "x"
   }
@@ -177,7 +177,7 @@ obtainGridValues <- function(gridPointers, xStartValues, control, fixedEffSDstar
     # parallel::clusterExport(varlist = c("MRAcovParasGammaAlphaBeta", "fixedEffGammaAlphaBeta", "errorGammaAlphaBeta", "fixedEffSDstart", "errorSDstart", "MRAhyperparasStart", "FEmuVec", "timeBaseline", "control", "gridPointers"), envir = environment()) ## Functions starting with '.' are hidden and so, must be passed explicitly to each node.
     # parallel::clusterEvalQ(expr = library(MRAinla))
   }
-  gridFct <- function(rad, numPoints = 2, computePrediction = TRUE) {
+  gridFct <- function(rad, numPoints = 2, computePrediction = TRUE, gridEval = rep(TRUE, length(rad))) {
     if (numPoints > 0) {
       lowerLimit <- solution - rad[seq(from = 1, to = length(rad), by = 2)]
       upperLimit <- solution + rad[seq(from = 2, to = length(rad), by = 2)]
@@ -191,12 +191,13 @@ obtainGridValues <- function(gridPointers, xStartValues, control, fixedEffSDstar
         rbind(replace(solution, paraIndex, solution[paraIndex] - rad[2*paraIndex - 1]), replace(solution, paraIndex, solution[paraIndex] + rad[2*paraIndex]))
       })
       paraGrid <- do.call("rbind", paraGridList)
+      paraGrid <- paraGrid[gridEval,, drop = FALSE]
       colnames(paraGrid) <- names(xStartValues)
     }
     groupAssignments <- rep(1:length(gridPointers), length.out = nrow(paraGrid))
-    listForParallel <- lapply(1:length(gridPointers), function(clIndex) {
+    listForParallel <- lapply(1:min(length(gridPointers), nrow(paraGrid)), function(clIndex) {
       indicesForNode <- which(groupAssignments == clIndex)
-      list(paraGrid = paraGrid[indicesForNode, ])
+      list(paraGrid = paraGrid[indicesForNode,, drop = FALSE])
     })
     if (length(gridPointers) == 1) {
       output <- lapply(1:nrow(paraGrid), funForGridEst, paraGrid = paraGrid, treePointer = gridPointers[[1]], MRAcovParasGammaAlphaBeta = MRAcovParasGammaAlphaBeta, fixedEffGammaAlphaBeta = fixedEffGammaAlphaBeta, errorGammaAlphaBeta = errorGammaAlphaBeta, fixedEffSDstart = fixedEffSDstart, errorSDstart = errorSDstart, MRAhyperparasStart = MRAhyperparasStart, FEmuVec = FEmuVec, predictionData = predictionData, timeBaseline = timeBaseline, computePrediction = computePrediction, control = control)
@@ -208,22 +209,19 @@ obtainGridValues <- function(gridPointers, xStartValues, control, fixedEffSDstar
     output
   }
 
-  radii <- rep(0.75*solution, each = 2)
-  print("Summit:")
-  print(opt$value)
+  radii <- rep(0.75 * solution, each = 2)
+  evaluatePP <- rep(TRUE, length(radii))
+  logPPvalues <- rep(1, length(radii))
   repeat {
-    print("Hypercube radii: \n")
-    print(radii)
-    valuesOnGrid <- gridFct(radii, 0, FALSE) # By setting numPoints at 0, we compute grid values only on a cross centered at the optimum with extremities on the faces of a hypercube.
-    logPPvalues <- sapply(valuesOnGrid, function(x) x$logJointValue)
+    valuesOnGrid <- gridFct(radii, 0, FALSE, evaluatePP) # By setting numPoints at 0, we compute grid values only on a cross centered at the optimum with extremities on the faces of a hypercube.
+    logPPvaluesSub <- sapply(valuesOnGrid, function(x) x$logJointValue)
+    logPPvalues[evaluatePP] <- logPPvaluesSub
     # testValues <- exp(logPPvalues - opt$fval) > 0.05
-    testValues <- exp(logPPvalues - opt$value) > 0.01
+    testValues <- exp(logPPvalues - opt$value) > control$thresholdForHypercross
     # We ensure that the zone has at least two points with a decent prob. mass.
-
-    radii[!testValues] <- radii[!testValues] * 0.75
-    if (ceiling(sum(testValues)/2) > (length(testValues)/2)) break
-    print("Iteration index: ")
-    print(i)
+    evaluatePP[testValues] <- FALSE
+    radii[!testValues] <- radii[!testValues] * control$radiusContractFactor
+    if (all(testValues) | (i == 49)) break
     i <- i + 1
   }
   print("Computing values on the grid...")
