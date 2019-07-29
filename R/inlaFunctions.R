@@ -159,8 +159,8 @@ obtainGridValues <- function(gridPointers, xStartValues, control, fixedEffSDstar
   #                                  function.scale.factor = -1 # We are maximising, hence the -1.
   #                                ))
   # solution <- exp(opt$solution)
-  opt <- nloptr::lbfgs(x0 = log(xStartValues), lower = rep(-10, length(xStartValues)), upper = c(rep(0, length(xStartValues) - 1), 3), fn = funForOptim, gr = gradForOptim, control = list(xtol_rel = 1e-3, maxeval = 15L))
-  # opt <- nloptr::bobyqa(x0 = log(xStartValues), lower = rep(-10, length(xStartValues)), upper = c(rep(0, length(xStartValues) - 1), 3), fn = funForOptim, control = list(xtol_rel = 1e-3, maxeval = 12L))
+  opt <- nloptr::lbfgs(x0 = log(xStartValues), lower = rep(-10, length(xStartValues)), upper = c(rep(0, length(xStartValues) - 1), 3), fn = funForOptim, gr = gradForOptim, control = list(xtol_rel = 1e-3, maxeval = 20L))
+
   opt$value <- -opt$value # Correcting for the inversion used to maximise instead of minimise
   solution <- exp(opt$par)
 
@@ -465,13 +465,22 @@ SimulateSpacetimeData <- function(numObsPerTimeSlice = 225, covFunction, lonRang
 
   allSpaceCoordinates <- as.data.frame(expand.grid(as.data.frame(slotCoordinates)))
   numToRemove <- nrow(allSpaceCoordinates) - numObsPerTimeSlice
-  obsToRemove <- (nrow(allSpaceCoordinates) - numToRemove + 1):nrow(allSpaceCoordinates)
-  allSpaceCoordinates <- allSpaceCoordinates[-obsToRemove, ]
+
+  if (numToRemove > 0) {
+    obsToRemove <- (nrow(allSpaceCoordinates) - numToRemove + 1):nrow(allSpaceCoordinates)
+    allSpaceCoordinates <- allSpaceCoordinates[-obsToRemove, ]
+  }
 
   coordinates <- allSpaceCoordinates[rep(1:nrow(allSpaceCoordinates), length(timeValuesInPOSIXct)), ]
   coordinates$time <- rep(timeValuesInPOSIXct, each = numObsPerTimeSlice)
 
-  covariateMatrix <- cbind(1, as.matrix(sapply(covariateGenerationFctList, function(x) x(coordinates[, c("longitude", "latitude")], coordinates[, "time"]))))
+  covariateMatrix <- cbind(1, do.call("cbind", lapply(covariateGenerationFctList, function(x) {
+    covariateValues <- x(coordinates[, c("longitude", "latitude")], coordinates[, "time"])
+    if (is.null(dim(covariateValues))) {
+      dim(covariateValues) <- c(length(covariateValues), 1)
+    }
+    covariateValues
+  })))
 
   spatialDistMatrix <- dist(coordinates[, c("longitude", "latitude")])
   timeDistMatrix <- dist(coordinates[, "time"])/(3600*24)
