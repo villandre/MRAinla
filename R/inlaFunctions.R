@@ -31,7 +31,7 @@
 #' @export
 
 MRA_INLA <- function(spacetimeData, errorSDstart, fixedEffSDstart, MRAhyperparasStart, FEmuVec, predictionData = NULL, fixedEffGammaAlphaBeta, errorGammaAlphaBeta,  MRAcovParasGammaAlphaBeta, control) {
-  defaultControl <- list(M = 1, randomSeed = 24,  cutForTimeSplit = 400, stepSize = 1, lowerThreshold = 3, maternCovariance = TRUE, nuggetSD = 0.00001, varyFixedEffSD = FALSE, varyMaternSmoothness = FALSE, varyErrorSD = TRUE, splitTime = FALSE, numKnotsRes0 = 20L, J = 2L, numValuesForGrid = 4, numThreads = 1, thresholdForHypercross = 0.05, radiusContractFactor = 0.75)
+  defaultControl <- list(M = 1, randomSeed = 24,  cutForTimeSplit = 400, stepSize = 1, lowerThreshold = 3, maternCovariance = TRUE, nuggetSD = 0.00001, varyFixedEffSD = FALSE, varyMaternSmoothness = FALSE, varyErrorSD = TRUE, splitTime = FALSE, numKnotsRes0 = 20L, J = 2L, numValuesForGrid = 4, numThreads = 1, thresholdForHypercross = 0.05, radiusExpandFactor = 0.75)
   if (length(position <- grep(colnames(spacetimeData@sp@coords), pattern = "lon")) >= 1) {
     colnames(spacetimeData@sp@coords)[[position[[1]]]] <- "x"
   }
@@ -159,7 +159,7 @@ obtainGridValues <- function(gridPointers, xStartValues, control, fixedEffSDstar
   #                                  function.scale.factor = -1 # We are maximising, hence the -1.
   #                                ))
   # solution <- exp(opt$solution)
-  opt <- nloptr::lbfgs(x0 = log(xStartValues), lower = rep(-10, length(xStartValues)), upper = c(rep(0, length(xStartValues) - 1), 3), fn = funForOptim, gr = gradForOptim, control = list(xtol_rel = 1e-3, maxeval = 20L))
+  opt <- nloptr::lbfgs(x0 = log(xStartValues), lower = rep(-10, length(xStartValues)), upper = c(rep(0, length(xStartValues) - 1), 3), fn = funForOptim, gr = gradForOptim, control = list(xtol_rel = 1e-3, maxeval = 15L))
 
   opt$value <- -opt$value # Correcting for the inversion used to maximise instead of minimise
   solution <- exp(opt$par)
@@ -177,15 +177,16 @@ obtainGridValues <- function(gridPointers, xStartValues, control, fixedEffSDstar
     # parallel::clusterExport(varlist = c("MRAcovParasGammaAlphaBeta", "fixedEffGammaAlphaBeta", "errorGammaAlphaBeta", "fixedEffSDstart", "errorSDstart", "MRAhyperparasStart", "FEmuVec", "timeBaseline", "control", "gridPointers"), envir = environment()) ## Functions starting with '.' are hidden and so, must be passed explicitly to each node.
     # parallel::clusterEvalQ(expr = library(MRAinla))
   }
-  gridFct <- function(rad, numPoints = 2, computePrediction = TRUE, gridEval = rep(TRUE, length(rad))) {
+  gridFct <- function(rad, numPoints = 100, computePrediction = TRUE, gridEval = rep(TRUE, length(rad))) {
     if (numPoints > 0) {
       lowerLimit <- solution - rad[seq(from = 1, to = length(rad), by = 2)]
       upperLimit <- solution + rad[seq(from = 2, to = length(rad), by = 2)]
-      paraLimits <- cbind(lower = lowerLimit, upper = upperLimit)
-      paraRanges <- lapply(1:nrow(paraLimits), function(x) seq(from = paraLimits[x,"lower"], to = paraLimits[x,"upper"], length.out = numPoints))
-
-      names(paraRanges) <- names(xStartValues)
-      paraGrid <- expand.grid(paraRanges)
+      paraList <- lapply(seq_along(lowerLimit), FUN = function(x) {
+        runif(n = numPoints, min = lowerLimit[[x]], max = upperLimit[[x]])
+      })
+      names(paraList) <- names(solution)
+      paraGrid <- as.data.frame(paraList)
+      paraGrid <- rbind(solution, paraGrid)
     } else {
       paraGridList <- lapply(seq_along(solution), function(paraIndex) {
         rbind(replace(solution, paraIndex, solution[paraIndex] - rad[2*paraIndex - 1]), replace(solution, paraIndex, solution[paraIndex] + rad[2*paraIndex]))
@@ -209,7 +210,7 @@ obtainGridValues <- function(gridPointers, xStartValues, control, fixedEffSDstar
     output
   }
 
-  radii <- rep(0.75 * solution, each = 2)
+  radii <- rep(0.01 * solution, each = 2)
   evaluatePP <- rep(TRUE, length(radii))
   logPPvalues <- rep(1, length(radii))
   repeat {
@@ -218,10 +219,10 @@ obtainGridValues <- function(gridPointers, xStartValues, control, fixedEffSDstar
     logPPvalues[evaluatePP] <- logPPvaluesSub
     # testValues <- exp(logPPvalues - opt$fval) > 0.05
     testValues <- exp(logPPvalues - opt$value) > control$thresholdForHypercross
-    # We ensure that the zone has at least two points with a decent prob. mass.
+
     evaluatePP[testValues] <- FALSE
-    radii[!testValues] <- radii[!testValues] * control$radiusContractFactor
-    if (all(testValues) | (i == 49)) break
+    radii[!testValues] <- radii[!testValues] * control$radiusExpandFactor
+    if (all(testValues) | (i == 59)) break
     i <- i + 1
   }
   print("Computing values on the grid...")
