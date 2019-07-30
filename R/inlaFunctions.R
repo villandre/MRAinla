@@ -31,7 +31,7 @@
 #' @export
 
 MRA_INLA <- function(spacetimeData, errorSDstart, fixedEffSDstart, MRAhyperparasStart, FEmuVec, predictionData = NULL, fixedEffGammaAlphaBeta, errorGammaAlphaBeta,  MRAcovParasGammaAlphaBeta, control) {
-  defaultControl <- list(M = 1, randomSeed = 24,  cutForTimeSplit = 400, stepSize = 1, lowerThreshold = 3, maternCovariance = TRUE, nuggetSD = 0.00001, varyFixedEffSD = FALSE, varyMaternSmoothness = FALSE, varyErrorSD = TRUE, splitTime = FALSE, numKnotsRes0 = 20L, J = 2L, numValuesForGrid = 4, numThreads = 1, thresholdForHypercross = 0.05, radiusExpandFactor = 0.75)
+  defaultControl <- list(M = 1, randomSeed = 24,  cutForTimeSplit = 400, stepSize = 1, lowerThreshold = 3, maternCovariance = TRUE, nuggetSD = 0.00001, varyFixedEffSD = FALSE, varyMaternSmoothness = FALSE, varyErrorSD = TRUE, splitTime = FALSE, numKnotsRes0 = 20L, J = 2L, numValuesForGrid = 200, numThreads = 1, thresholdForHypercross = 0.05, radiusExpandFactor = 0.75)
   if (length(position <- grep(colnames(spacetimeData@sp@coords), pattern = "lon")) >= 1) {
     colnames(spacetimeData@sp@coords)[[position[[1]]]] <- "x"
   }
@@ -184,9 +184,10 @@ obtainGridValues <- function(gridPointers, xStartValues, control, fixedEffSDstar
       paraList <- lapply(seq_along(lowerLimit), FUN = function(x) {
         runif(n = numPoints, min = lowerLimit[[x]], max = upperLimit[[x]])
       })
-      names(paraList) <- names(solution)
+      names(paraList) <- names(xStartValues)
       paraGrid <- as.data.frame(paraList)
       paraGrid <- rbind(solution, paraGrid)
+      rownames(paraGrid) <- NULL
     } else {
       paraGridList <- lapply(seq_along(solution), function(paraIndex) {
         rbind(replace(solution, paraIndex, solution[paraIndex] - rad[2*paraIndex - 1]), replace(solution, paraIndex, solution[paraIndex] + rad[2*paraIndex]))
@@ -218,11 +219,11 @@ obtainGridValues <- function(gridPointers, xStartValues, control, fixedEffSDstar
     logPPvaluesSub <- sapply(valuesOnGrid, function(x) x$logJointValue)
     logPPvalues[evaluatePP] <- logPPvaluesSub
     # testValues <- exp(logPPvalues - opt$fval) > 0.05
-    testValues <- exp(logPPvalues - opt$value) > control$thresholdForHypercross
+    testValues <- exp(logPPvalues - opt$value) < control$thresholdForHypercross
 
     evaluatePP[testValues] <- FALSE
     radii[!testValues] <- radii[!testValues] * control$radiusExpandFactor
-    if (all(testValues) | (i == 59)) break
+    if (all(testValues) | (i == 19)) break
     i <- i + 1
   }
   print("Computing values on the grid...")
