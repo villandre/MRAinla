@@ -56,6 +56,7 @@ public:
   gsl_rng * GetRandomNumGenerator() {return m_randomNumGenerator ;}
   inputdata GetDataset() {return m_dataset;}
   int GetNumTips() {return m_numTips ;}
+  int GetNumKnots() {return m_numKnots ;}
   // arma::vec GetCovParameters() {return m_covParameters ;}
 
   int GetM() { return m_M ;}

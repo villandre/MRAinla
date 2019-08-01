@@ -31,12 +31,27 @@
 #' @export
 
 MRA_INLA <- function(spacetimeData, errorSDstart, fixedEffSDstart, MRAhyperparasStart, FEmuVec, predictionData = NULL, fixedEffGammaAlphaBeta, errorGammaAlphaBeta,  MRAcovParasGammaAlphaBeta, control) {
-  defaultControl <- list(M = 1, randomSeed = 24,  cutForTimeSplit = 400, stepSize = 1, lowerThreshold = 3, maternCovariance = TRUE, nuggetSD = 0.00001, varyFixedEffSD = FALSE, varyMaternSmoothness = FALSE, varyErrorSD = TRUE, splitTime = FALSE, numKnotsRes0 = 20L, J = 2L, numValuesForGrid = 200, numThreads = 1, thresholdForHypercross = 0.05, radiusExpandFactor = 0.75)
+  defaultControl <- list(M = 1, randomSeed = 24,  cutForTimeSplit = 400, stepSize = 1, lowerThreshold = 3, maternCovariance = TRUE, nuggetSD = 0.00001, varyFixedEffSD = FALSE, varyMaternSmoothness = FALSE, varyErrorSD = TRUE, splitTime = FALSE, numKnotsRes0 = 20L, J = 2L, numValuesForGrid = 200, numThreads = 1, thresholdForHypercross = 0.05, radiusExpandFactor = 0.75, numIterOptim = 15L)
   if (length(position <- grep(colnames(spacetimeData@sp@coords), pattern = "lon")) >= 1) {
     colnames(spacetimeData@sp@coords)[[position[[1]]]] <- "x"
+    if (!is.null(predictionData)) {
+      colnames(predictionData@sp@coords)[[position[[1]]]] <- "x"
+    }
   }
   if (length(position <- grep(colnames(spacetimeData@sp@coords), pattern = "lat")) >= 1) {
     colnames(spacetimeData@sp@coords)[[position[[1]]]] <- "y"
+    if (!is.null(predictionData)) {
+      colnames(predictionData@sp@coords)[[position[[1]]]] <- "y"
+    }
+  }
+  if (is.null(control$lonRange)) {
+    control$lonRange <- range(spacetimeData@sp@coords[ , "x"]) + c(-1, 1)
+  }
+  if (is.null(control$latRange)) {
+    control$latRange <- range(spacetimeData@sp@coords[ , "y"]) + c(-1, 1)
+  }
+  if (is.null(control$timeRange)) {
+    control$timeRange <- range(time(spacetimeData)) + c(-86400, 86400)
   }
   coordRanges <- mapply(dimName = c("lonRange", "latRange", "timeRange"), code = c("x", "y", "time"), function(dimName, code) {
     predCoordinates <- c()
@@ -159,7 +174,7 @@ obtainGridValues <- function(gridPointers, xStartValues, control, fixedEffSDstar
   #                                  function.scale.factor = -1 # We are maximising, hence the -1.
   #                                ))
   # solution <- exp(opt$solution)
-  opt <- nloptr::lbfgs(x0 = log(xStartValues), lower = rep(-10, length(xStartValues)), upper = c(rep(0, length(xStartValues) - 1), 3), fn = funForOptim, gr = gradForOptim, control = list(xtol_rel = 1e-3, maxeval = 15L))
+  opt <- nloptr::lbfgs(x0 = log(xStartValues), lower = rep(-10, length(xStartValues)), upper = c(rep(0, length(xStartValues) - 1), 3), fn = funForOptim, gr = gradForOptim, control = list(xtol_rel = 1e-3, maxeval = control$numIterOptim))
 
   opt$value <- -opt$value # Correcting for the inversion used to maximise instead of minimise
   solution <- exp(opt$par)
@@ -222,8 +237,16 @@ obtainGridValues <- function(gridPointers, xStartValues, control, fixedEffSDstar
     testValues <- exp(logPPvalues - opt$value) < control$thresholdForHypercross
 
     evaluatePP[testValues] <- FALSE
-    radii[!testValues] <- radii[!testValues] * control$radiusExpandFactor
-    if (all(testValues) | (i == 19)) break
+    newRadii <- replace(radii, which(!testValues), radii[!testValues] * control$radiusExpandFactor)
+    # radii[!testValues] <- radii[!testValues] * control$radiusExpandFactor
+    # We check if lower bounds are above 0. If not, we consider that the corresponding segment should not be modified anymore.
+    shortSeq <- seq(from = 1, to = length(radii), by = 2)
+    testIt <- (solution - newRadii[shortSeq]) <= 0
+    newRadii[shortSeq[testIt]] <- radii[shortSeq[testIt]]
+    radii <- newRadii
+    evaluatePP[seq(from = 1, to = length(radii), by = 2)][testIt] <- FALSE
+
+    if (all(testValues) | all(!evaluatePP) | (i == 49)) break
     i <- i + 1
   }
   print("Computing values on the grid...")
@@ -522,8 +545,8 @@ LogJointHyperMarginal <- function(treePointer, MRAhyperparas, fixedEffSD, errorS
   LogJointHyperMarginalToWrap(treePointer = treePointer, MRAhyperparas = MRAhyperparas, fixedEffSD = fixedEffSD, errorSD = errorSD, MRAcovParasGammaAlphaBeta = MRAcovParasGammaAlphaBeta, FEmuVec = FEmuVec, fixedEffGammaAlphaBeta =  fixedEffGammaAlphaBeta, errorGammaAlphaBeta = errorGammaAlphaBeta, matern = matern, spaceNuggetSD = spaceNuggetSD, timeNuggetSD = timeNuggetSD, recordFullConditional = TRUE, gradCholeskiFun = choleskiSolve, sparseMatrixConstructFun = buildSparseMatrix, sparseDeterminantFun = logDetFun)
 }
 
-buildSparseMatrix <- function(posMat, values, symmetric) {
-  Matrix::sparseMatrix(i = posMat[, 1], j = posMat[ , 2], x = drop(values), index1 = FALSE, symmetric = symmetric)
+buildSparseMatrix <- function(posMat, values, dims, symmetric) {
+  Matrix::sparseMatrix(i = posMat[, 1], j = posMat[ , 2], x = drop(values), dims = dims, index1 = FALSE, symmetric = symmetric)
 }
 
 choleskiSolve <- function(hessianMat, scaledResponseHmat) {

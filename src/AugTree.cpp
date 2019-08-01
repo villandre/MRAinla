@@ -445,7 +445,9 @@ arma::sp_mat AugTree::UpdateSigmaBetaEtaInvMat(Rcpp::Function buildSparse) {
     concatenatedValues.subvec(index,  newIndex - 1) = vectorise(*FEinvAndKinvMatrixList.at(i)) ;
     index = newIndex ;
   }
-  sp_mat FEinvAndKinvMatrices = Rcpp::as<sp_mat>(buildSparse(m_SigmaPos, concatenatedValues, false)) ;
+  uvec dims(2) ;
+  dims.fill(GetNumKnots() + m_dataset.covariateValues.n_cols + 1) ;
+  sp_mat FEinvAndKinvMatrices = Rcpp::as<sp_mat>(buildSparse(m_SigmaPos, concatenatedValues, dims, false)) ;
 
   return FEinvAndKinvMatrices ;
 }
@@ -538,7 +540,11 @@ void AugTree::updateHmatrix(Rcpp::Function sparseMatrixConstructFun) {
       concatenatedValues = join_cols(concatenatedValues, vectorise(Bmat)) ;
     }
   }
-  m_Hmat = Rcpp::as<sp_mat>(sparseMatrixConstructFun(m_HmatPos, concatenatedValues, false)) ;
+  uvec dims(2) ;
+  dims.at(0) = m_dataset.responseValues.size() ;
+  dims.at(1) = GetNumKnots() + m_dataset.covariateValues.n_cols + 1 ;
+
+  m_Hmat = Rcpp::as<sp_mat>(sparseMatrixConstructFun(m_HmatPos, concatenatedValues, dims, false)) ;
 }
 
 arma::sp_mat AugTree::updateHmatrixPred(Rcpp::Function sparseMatrixConstructFun) {
@@ -550,7 +556,11 @@ arma::sp_mat AugTree::updateHmatrixPred(Rcpp::Function sparseMatrixConstructFun)
       }
     }
   }
-  return Rcpp::as<sp_mat>(sparseMatrixConstructFun(m_HmatPredPos, concatenatedValues, false)) ;
+  uvec dims(2) ;
+  dims.at(0) = m_predictData.responseValues.size() ;
+  dims.at(1) = m_Hmat.n_cols ;
+
+  return Rcpp::as<sp_mat>(sparseMatrixConstructFun(m_HmatPredPos, concatenatedValues, dims, false)) ;
 }
 
 void AugTree::createHmatrixPredPos() {
