@@ -31,7 +31,7 @@
 #' @export
 
 MRA_INLA <- function(spacetimeData, errorSDstart, fixedEffSDstart, MRAhyperparasStart, FEmuVec, predictionData = NULL, fixedEffGammaAlphaBeta, errorGammaAlphaBeta,  MRAcovParasGammaAlphaBeta, control) {
-  defaultControl <- list(M = 1, randomSeed = 24,  cutForTimeSplit = 400, stepSize = 1, lowerThreshold = 3, maternCovariance = TRUE, nuggetSD = 0.00001, varyFixedEffSD = FALSE, varyMaternSmoothness = FALSE, varyErrorSD = TRUE, splitTime = FALSE, numKnotsRes0 = 20L, J = 2L, numValuesForGrid = 200, numThreads = 1, thresholdForHypercross = 0.05, radiusExpandFactor = 0.75, numIterOptim = 15L)
+  defaultControl <- list(M = 1, randomSeed = 24,  cutForTimeSplit = 400, stepSize = 1, lowerThreshold = 3, maternCovariance = TRUE, nuggetSD = 0.0001, varyFixedEffSD = FALSE, varyMaternSmoothness = FALSE, varyErrorSD = TRUE, splitTime = FALSE, numKnotsRes0 = 20L, J = 2L, numValuesForGrid = 200, numThreads = 1, thresholdForHypercross = 0.05, radiusExpandFactor = 0.75, numIterOptim = 15L)
   if (length(position <- grep(colnames(spacetimeData@sp@coords), pattern = "lon")) >= 1) {
     colnames(spacetimeData@sp@coords)[[position[[1]]]] <- "x"
     if (!is.null(predictionData)) {
@@ -45,13 +45,13 @@ MRA_INLA <- function(spacetimeData, errorSDstart, fixedEffSDstart, MRAhyperparas
     }
   }
   if (is.null(control$lonRange)) {
-    control$lonRange <- range(spacetimeData@sp@coords[ , "x"]) + c(-1, 1)
+    control$lonRange <- range(spacetimeData@sp@coords[ , "x"]) + c(-0.02, 0.02)
   }
   if (is.null(control$latRange)) {
-    control$latRange <- range(spacetimeData@sp@coords[ , "y"]) + c(-1, 1)
+    control$latRange <- range(spacetimeData@sp@coords[ , "y"]) + c(-0.02, 0.02)
   }
   if (is.null(control$timeRange)) {
-    control$timeRange <- range(time(spacetimeData)) + c(-86400, 86400)
+    control$timeRange <- range(time(spacetimeData)) + c(-3600, 3600)
   }
   coordRanges <- mapply(dimName = c("lonRange", "latRange", "timeRange"), code = c("x", "y", "time"), function(dimName, code) {
     predCoordinates <- c()
@@ -105,10 +105,10 @@ MRA_INLA <- function(spacetimeData, errorSDstart, fixedEffSDstart, MRAhyperparas
   computedValues <- obtainGridValues(gridPointers = gridPointers, xStartValues = xStartValues, control = control, fixedEffSDstart = fixedEffSDstart, errorSDstart = errorSDstart, MRAhyperparasStart = MRAhyperparasStart, MRAcovParasGammaAlphaBeta = MRAcovParasGammaAlphaBeta, fixedEffGammaAlphaBeta = fixedEffGammaAlphaBeta, errorGammaAlphaBeta = errorGammaAlphaBeta, FEmuVec = FEmuVec, predictionData = predictionData, timeBaseline = timeBaseline)
 
   discreteLogJointValues <- sapply(computedValues, '[[', "logJointValue")
-  print(discreteLogJointValues)
-  cat("\n \n")
-  print(max(discreteLogJointValues))
-  cat("\n \n")
+  # print(discreteLogJointValues)
+  # cat("\n \n")
+  # print(max(discreteLogJointValues))
+  # cat("\n \n")
   maxLogJointValues <- max(discreteLogJointValues)
   logStandardisingConstant <- maxLogJointValues + log(sum(exp(discreteLogJointValues - maxLogJointValues)))
 
@@ -296,7 +296,7 @@ ComputeHyperMarginalMoments <- function(hyperparaList) {
   domainCheck <- sapply(hyperparaList, function(x) x$logJointValue > -Inf)
   hyperparaList <- hyperparaList[domainCheck]
   psiAndMargDistMatrix <- t(sapply(hyperparaList, function(x) c(unlist(x$MRAhyperparas), fixedEffSD = x$fixedEffSD, errorSD = x$errorSD, jointValue = exp(x$logJointValue))))
-  print(psiAndMargDistMatrix)
+  # print(psiAndMargDistMatrix)
   rownames(psiAndMargDistMatrix) <- NULL
   funToGetParaMoments <- function(hyperparaIndex) {
     # variableValues <- sort(unique(psiAndMargDistMatrix[, hyperparaIndex]))
@@ -479,43 +479,6 @@ getIntegrationPointsAndValues <- function(optimObject, gridPointer, MRAcovParasG
     }
   }
   containerList
-}
-
-SimulateSpacetimeData <- function(numObsPerTimeSlice = 225, covFunction, lonRange, latRange, timeValuesInPOSIXct, covariateGenerationFctList, errorSD, distFun = dist, FEvalues) {
-  numSlotsPerRow <- ceiling(sqrt(numObsPerTimeSlice))
-  slotCoordinates <- sapply(list(longitude = lonRange, latitude = latRange), FUN = function(x) {
-    width <- abs(diff(x)/numSlotsPerRow)
-    seq(from = min(x) + width/2, to = max(x) - width/2, length.out = numSlotsPerRow)
-  }, USE.NAMES = TRUE)
-
-  allSpaceCoordinates <- as.data.frame(expand.grid(as.data.frame(slotCoordinates)))
-  numToRemove <- nrow(allSpaceCoordinates) - numObsPerTimeSlice
-
-  if (numToRemove > 0) {
-    obsToRemove <- (nrow(allSpaceCoordinates) - numToRemove + 1):nrow(allSpaceCoordinates)
-    allSpaceCoordinates <- allSpaceCoordinates[-obsToRemove, ]
-  }
-
-  coordinates <- allSpaceCoordinates[rep(1:nrow(allSpaceCoordinates), length(timeValuesInPOSIXct)), ]
-  coordinates$time <- rep(timeValuesInPOSIXct, each = numObsPerTimeSlice)
-
-  covariateMatrix <- cbind(1, do.call("cbind", lapply(covariateGenerationFctList, function(x) {
-    covariateValues <- x(coordinates[, c("longitude", "latitude")], coordinates[, "time"])
-    if (is.null(dim(covariateValues))) {
-      dim(covariateValues) <- c(length(covariateValues), 1)
-    }
-    covariateValues
-  })))
-
-  spatialDistMatrix <- dist(coordinates[, c("longitude", "latitude")])
-  timeDistMatrix <- dist(coordinates[, "time"])/(3600*24)
-  covarianceMat <- covFunction(spatialDistMatrix, timeDistMatrix)
-  meanVector <- drop(covariateMatrix %*% FEvalues)
-  fieldValues <- drop(mvtnorm::rmvnorm(n = 1, mean = meanVector, sigma = covarianceMat)) + rnorm(n = length(meanVector), mean = 0, sd = errorSD)
-  dataForObject <- cbind(y = fieldValues, as.data.frame(covariateMatrix[, -1]))
-  colnames(dataForObject) <- c("y", paste("Covariate", 1:(length(FEvalues) - 1), sep = ""))
-  spacetimeObj <- spacetime::STIDF(sp = sp::SpatialPoints(coordinates[, c("longitude", "latitude")]), data = dataForObject, time = coordinates$time)
-  spacetimeObj
 }
 
 # In the Wikipedia notation, smoothness corresponds to nu, and

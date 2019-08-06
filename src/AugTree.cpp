@@ -689,7 +689,7 @@ void AugTree::ComputeLogFCandLogCDandDataLL(Rcpp::Function gradCholeskiFun, Rcpp
                                             Rcpp::Function sparseDeterminantFun) {
 
   int n = m_dataset.responseValues.size() ;
-  cout << "Creating matrix of Ks... \n" ;
+  // cout << "Creating matrix of Ks... \n" ;
   sp_mat SigmaFEandEtaInv ;
   if (m_SigmaPos.n_rows == 0) {
     SigmaFEandEtaInv = CreateSigmaBetaEtaInvMat() ;
@@ -697,27 +697,27 @@ void AugTree::ComputeLogFCandLogCDandDataLL(Rcpp::Function gradCholeskiFun, Rcpp
     SigmaFEandEtaInv = UpdateSigmaBetaEtaInvMat(sparseMatrixConstructFun) ;
   }
   double logDetSigmaKFEinv = logDetBlockMatrix(SigmaFEandEtaInv, m_SigmaFEandEtaInvBlockIndices) ;
-  cout << "Done... \n" ;
+  // cout << "Done... \n" ;
 
   if (m_recomputeMRAlogLik) {
-    cout << "Obtaining H matrix... \n" ;
+    // cout << "Obtaining H matrix... \n" ;
     if (m_HmatPos.size() == 0) {
       createHmatrixPos() ;
     }
     updateHmatrix(sparseMatrixConstructFun) ;
 
-    cout << "Done... \n" ;
+    // cout << "Done... \n" ;
   }
 
   sp_mat secondTerm = std::pow(m_errorSD, -2) * trans(m_Hmat) * m_Hmat ;
-  cout << "Obtaining Q... \n" ;
+  // cout << "Obtaining Q... \n" ;
   m_FullCondPrecision = SigmaFEandEtaInv + secondTerm ;
 
-  cout << "Done... \n" ;
+  // cout << "Done... \n" ;
 
   vec responsesReshuffled = m_dataset.responseValues.elem(m_obsOrderForFmat) ;
 
-  cout << "Computing FC mean... \n" ;
+  // cout << "Computing FC mean... \n" ;
 
   sp_mat hessianMat = SigmaFEandEtaInv + secondTerm ;
   mat scaledResponse = std::pow(m_errorSD, -2) * trans(responsesReshuffled) * m_Hmat ;
@@ -751,19 +751,19 @@ void AugTree::ComputeLogJointPsiMarginal(Rcpp::Function gradCholeskiFun, Rcpp::F
                                          Rcpp::Function sparseDeterminantFun) {
 
   ComputeLogPriors() ;
-  cout << "Computing Wmats... \n" ;
+  // cout << "Computing Wmats... \n" ;
   if (m_recomputeMRAlogLik) {
-    m_MRAcovParasSpace.print("Space parameters:") ;
-    m_MRAcovParasTime.print("Time parameters:") ;
-    fflush(stdout); // Will now print everything in the stdout buffer
+    // m_MRAcovParasSpace.print("Space parameters:") ;
+    // m_MRAcovParasTime.print("Time parameters:") ;
+    // fflush(stdout); // Will now print everything in the stdout buffer
     computeWmats() ; // This will produce the K matrices required. NOTE: ADD CHECK THAT ENSURES THAT THE MRA LIK. IS ONLY RE-COMPUTED WHEN THE MRA COV. PARAMETERS CHANGE.
-    cout << "Done... \n" ;
+    // cout << "Done... \n" ;
   }
 
   ComputeLogFCandLogCDandDataLL(gradCholeskiFun, sparseMatConstructFun, sparseDeterminantFun) ;
 
-  printf("Observations log-lik: %.4e \n Log-prior: %.4e \n Log-Cond. dist.: %.4e \n Log-full cond.: %.4e \n \n \n",
-  m_globalLogLik, m_logPrior, m_logCondDist, m_logFullCond) ;
+  // printf("Observations log-lik: %.4e \n Log-prior: %.4e \n Log-Cond. dist.: %.4e \n Log-full cond.: %.4e \n \n \n",
+  // m_globalLogLik, m_logPrior, m_logCondDist, m_logFullCond) ;
   m_logJointPsiMarginal = m_globalLogLik + m_logPrior + m_logCondDist - m_logFullCond ;
   printf("Joint value: %.4e \n \n", m_logJointPsiMarginal) ;
 }
@@ -826,7 +826,7 @@ double AugTree::logDeterminantQmat(Rcpp::Function funToConstructSparse) {
   } // The determinant for the composite must be positive, because the determinant for D is positive. If it were negative, the determinant for the Q matrix would be negative, which is not allowed since it's a covariance matrix.
 
   double logDeterminant = logDeterminantD + logDeterminantComposite ;
-  cout << "Leaving logDeterminantQmat... \n" ;
+  // cout << "Leaving logDeterminantQmat... \n" ;
   return logDeterminant ;
 }
 
