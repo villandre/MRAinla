@@ -50,15 +50,20 @@ plotOutput <- function(inlaMRAoutput, trainingData, testData, rasterNrow, raster
     testDataIndices <- time(testData) == timePoint
     landRasterTraining <- raster::rasterize(x = trainingData@sp@coords[trainingDataIndices, ], y = landRaster, field = trainingData@data[trainingDataIndices , 1])
     landRasterJointSD <- NULL
+    landRasterTest <- NULL
     if (any(testDataIndices)) {
       landRasterJointSD <- raster::rasterize(x = testData@sp@coords[testDataIndices, ], y = landRaster, field = inlaMRAoutput$predictionMoments$predictSDs)
     }
     if (any(testDataIndices) & any(trainingDataIndices)) {
-      landRasterJoint <- raster::rasterize(x = rbind(testData@sp@coords[testDataIndices, ], trainingData@sp@coords[trainingDataIndices, ]), y = landRaster, field = c(inlaMRAoutput$predictionMoments$predictMeans, trainingData@data[trainingDataIndices, 1]))
+      jointCoordinates <- unname(rbind(testData@sp@coords[testDataIndices, ], trainingData@sp@coords[trainingDataIndices, ]))
+      dataObject <- data.frame(y = unname(c(inlaMRAoutput$predictionMoments$predictMeans[testDataIndices], trainingData@data[trainingDataIndices, 1])))
+      pointsDataFrame <- sp::SpatialPointsDataFrame(coords = jointCoordinates, data = dataObject)
+      landRasterJoint <- raster::rasterize(x = pointsDataFrame, y = landRaster, field = "y")
+      landRasterTest <- raster::rasterize(x = testData@sp@coords[testDataIndices, ], y = landRaster, field = inlaMRAoutput$predictionMoments$predictMeans[testDataIndices])
     } else if (any(trainingDataIndices)) {
       landRasterJoint <- landRasterTraining
     } else if (any(testDataIndices)) {
-      landRasterJoint <- raster::rasterize(x = testData@sp@coords[testDataIndices, ], y = landRaster, field = inlaMRAoutput$predictionMoments$predictMeans)
+      landRasterJoint <- raster::rasterize(x = testData@sp@coords[testDataIndices, ], y = landRaster, field = inlaMRAoutput$predictionMoments$predictMeans[testDataIndices])
     } else {
       landRasterJoint <- NULL
     }
@@ -76,9 +81,12 @@ plotOutput <- function(inlaMRAoutput, trainingData, testData, rasterNrow, raster
   names(stackedRastersList) <- rasterNames
 
   if (!is.null(filename)) {
-    graphicsEngine(filename, width = 1200, height = 1200)
+    graphicsEngine(filename, width = 1600, height = 1600)
   }
-  plot(stack(stackedRastersList$training, stackedRastersList$joint), interpolate = TRUE)
+  stackedRasters <- stack(stackedRastersList$training, stackedRastersList$joint, stackedRastersList$test)
+  rasterRanges <- sapply(as.list(stackedRasters), FUN = function(aRasterLayer) range(raster::values(aRasterLayer), na.rm = TRUE))
+  rangeForScale <- range(rasterRanges)
+  plot(stackedRasters, interpolate = TRUE, col = rev( rainbow( 20, start = 0, end = 1) ), breaks = seq(floor(rangeForScale[[1]]), ceiling(rangeForScale[[2]]), length.out = 19))
 
   if (!is.null(filename)) {
     dev.off()
