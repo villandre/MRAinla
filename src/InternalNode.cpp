@@ -132,6 +132,7 @@ void::InternalNode::DeriveD() {
 
 void InternalNode::ComputeWmat(const maternVec & covParasSp, const maternVec & covParasTime, const double & scaling, const bool matern, const double & spaceNuggetSD, const double & timeNuggetSD) {
   baseComputeWmat(covParasSp, covParasTime, scaling, matern, spaceNuggetSD, timeNuggetSD) ;
+  m_Wlist.at(m_depth) = symmatl(m_Wlist.at(m_depth)) ;
   m_K = inv_sympd(GetKmatrixInverse()) ; // The K matrix is some sort of covariance matrix, so it should always be symmetrical..
 }
 

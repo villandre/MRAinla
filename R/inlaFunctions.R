@@ -30,8 +30,8 @@
 #' }
 #' @export
 
-MRA_INLA <- function(spacetimeData, errorSDstart, fixedEffSDstart, MRAhyperparasStart, FEmuVec, predictionData = NULL, fixedEffGammaAlphaBeta, errorGammaAlphaBeta,  MRAcovParasGammaAlphaBeta, control) {
-  defaultControl <- list(M = 1, randomSeed = 24,  cutForTimeSplit = 400, stepSize = 1, lowerThreshold = 3, maternCovariance = TRUE, nuggetSD = 0.0001, varyFixedEffSD = FALSE, varyMaternSmoothness = FALSE, varyErrorSD = TRUE, splitTime = FALSE, numKnotsRes0 = 20L, J = 2L, numValuesForGrid = 200, numThreads = 1, thresholdForHypercross = 0.05, radiusExpandFactor = 0.75, numIterOptim = 15L)
+MRA_INLA <- function(spacetimeData, errorSDstart, fixedEffSDstart, MRAhyperparasStart, FEmuVec, predictionData = NULL, fixedEffGammaAlphaBeta, errorGammaAlphaBeta,  MRAcovParasGammaAlphaBeta, maximiseOnly = FALSE, control) {
+  defaultControl <- list(M = 1, randomSeed = 24,  cutForTimeSplit = 400, stepSize = 1, lowerThreshold = 3, maternCovariance = TRUE, nuggetSD = 0.00001, varyFixedEffSD = FALSE, varyMaternSmoothness = FALSE, varyErrorSD = TRUE, splitTime = FALSE, numKnotsRes0 = 20L, J = 2L, numValuesForGrid = 200, numThreads = 1, thresholdForHypercross = 0.05, radiusExpandFactor = 0.75, numIterOptim = 15L)
   if (length(position <- grep(colnames(spacetimeData@sp@coords), pattern = "lon")) >= 1) {
     colnames(spacetimeData@sp@coords)[[position[[1]]]] <- "x"
     if (!is.null(predictionData)) {
@@ -72,6 +72,9 @@ MRA_INLA <- function(spacetimeData, errorSDstart, fixedEffSDstart, MRAhyperparas
     combinedRange + c(-bufferSize, bufferSize)
   }, SIMPLIFY = FALSE)
   defaultControl <- c(defaultControl, coordRanges)
+  # 1e10 is used as a substitute for infinity, which is not understood by the C++ code.
+  if (MRAhyperparasStart$space[["smoothness"]] > 1e10) MRAhyperparasStart$space$smoothness <- 1e10
+  if (MRAhyperparasStart$time[["smoothness"]] > 1e10) MRAhyperparasStart$time$smoothness <- 1e10
 
   for (i in names(control)) {
     defaultControl[[i]] <- control[[i]]
@@ -102,7 +105,10 @@ MRA_INLA <- function(spacetimeData, errorSDstart, fixedEffSDstart, MRAhyperparas
     xStartValues[["timeSmoothness"]] <- MRAhyperparasStart$time[["smoothness"]]
   }
 
-  computedValues <- obtainGridValues(gridPointers = gridPointers, xStartValues = xStartValues, control = control, fixedEffSDstart = fixedEffSDstart, errorSDstart = errorSDstart, MRAhyperparasStart = MRAhyperparasStart, MRAcovParasGammaAlphaBeta = MRAcovParasGammaAlphaBeta, fixedEffGammaAlphaBeta = fixedEffGammaAlphaBeta, errorGammaAlphaBeta = errorGammaAlphaBeta, FEmuVec = FEmuVec, predictionData = predictionData, timeBaseline = timeBaseline)
+  computedValues <- obtainGridValues(gridPointers = gridPointers, xStartValues = xStartValues, control = control, fixedEffSDstart = fixedEffSDstart, errorSDstart = errorSDstart, MRAhyperparasStart = MRAhyperparasStart, MRAcovParasGammaAlphaBeta = MRAcovParasGammaAlphaBeta, fixedEffGammaAlphaBeta = fixedEffGammaAlphaBeta, errorGammaAlphaBeta = errorGammaAlphaBeta, FEmuVec = FEmuVec, predictionData = predictionData, timeBaseline = timeBaseline, maximiseOnly = maximiseOnly)
+  if (maximiseOnly) {
+    return(computedValues)
+  }
 
   discreteLogJointValues <- sapply(computedValues, '[[', "logJointValue")
   # print(discreteLogJointValues)
@@ -123,7 +129,7 @@ MRA_INLA <- function(spacetimeData, errorSDstart, fixedEffSDstart, MRAhyperparas
   cat("Computing moments for marginal posterior distributions...\n")
   hyperMarginalMoments <- ComputeHyperMarginalMoments(hyperparaList)
   meanMarginalMoments <- ComputeMeanMarginalMoments(hyperparaList)
-  outputList <- list(hyperMarginalMoments = hyperMarginalMoments, meanMarginalMoments = meanMarginalMoments)
+  outputList <- list(hyperMarginalMoments = hyperMarginalMoments$paraMoments, meanMarginalMoments = meanMarginalMoments, psiAndMargDistMatrix = hyperMarginalMoments$psiAndMargDistMatrix)
   cat("Computing prediction moments... \n")
   if (!is.null(predictionData)) {
     outputList$predictionMoments <- ComputeKrigingMoments(hyperparaList)
@@ -132,8 +138,7 @@ MRA_INLA <- function(spacetimeData, errorSDstart, fixedEffSDstart, MRAhyperparas
   outputList
 }
 
-obtainGridValues <- function(gridPointers, xStartValues, control, fixedEffSDstart, errorSDstart, MRAhyperparasStart, MRAcovParasGammaAlphaBeta, fixedEffGammaAlphaBeta, errorGammaAlphaBeta, FEmuVec, predictionData, timeBaseline) {
-  cat("Entered obtainGridValues... \n")
+obtainGridValues <- function(gridPointers, xStartValues, control, fixedEffSDstart, errorSDstart, MRAhyperparasStart, MRAcovParasGammaAlphaBeta, fixedEffGammaAlphaBeta, errorGammaAlphaBeta, FEmuVec, predictionData, timeBaseline, maximiseOnly = FALSE) {
 
   # A short optimisation first...
   funForOptim <- function(x) {
@@ -160,24 +165,18 @@ obtainGridValues <- function(gridPointers, xStartValues, control, fixedEffSDstar
     names(x) <- names(xStartValues)
     numDeriv::grad(func = funForOptim, x = x, method = "simple")
   }
-  # opt <- trustOptim::trust.optim(x = log(xStartValues), fn = funForOptim,
-  #                                gr = gradForOptim,
-  #                                method = "SR1",
-  #                                control = list(
-  #                                  start.trust.radius = 1,
-  #                                  stop.trust.radius = 1e-10,
-  #                                  prec = 1e-4,
-  #                                  report.precision = 1L,
-  #                                  maxit = 12L,
-  #                                  preconditioner = 0,
-  #                                  precond.refresh.freq = 1,
-  #                                  function.scale.factor = -1 # We are maximising, hence the -1.
-  #                                ))
-  # solution <- exp(opt$solution)
-  opt <- nloptr::lbfgs(x0 = log(xStartValues), lower = rep(-10, length(xStartValues)), upper = c(rep(0, length(xStartValues) - 1), 3), fn = funForOptim, gr = gradForOptim, control = list(xtol_rel = 1e-3, maxeval = control$numIterOptim))
+  upperBound <- rep(Inf, length(xStartValues))
+  names(upperBound) <- names(xStartValues)
+  upperBound <- replace(upperBound, grep(names(upperBound), pattern = "mooth"), log(50)) # This is to avoid an overflow in the computation of the Matern covariance, which for some reason does not tolerate very high smoothness values.
+  upperBound <- replace(upperBound, grep(names(upperBound), pattern = "scale"), 15) # This limits the scaling factor to exp(15) in the optimisation. This is to prevent computational issues in the sparse matrix inversion scheme.
+  opt <- nloptr::lbfgs(x0 = log(xStartValues), lower = rep(-10, length(xStartValues)), upper = upperBound, fn = funForOptim, gr = gradForOptim, control = list(xtol_rel = 1e-3, maxeval = control$numIterOptim))
 
   opt$value <- -opt$value # Correcting for the inversion used to maximise instead of minimise
   solution <- exp(opt$par)
+  if (maximiseOnly) {
+    names(solution) <- names(xStartValues)
+    return(solution)
+  }
 
   # We should perform a second short round of optimisation to define a regular grid.
   i <- 0
@@ -233,12 +232,10 @@ obtainGridValues <- function(gridPointers, xStartValues, control, fixedEffSDstar
     valuesOnGrid <- gridFct(radii, 0, FALSE, evaluatePP) # By setting numPoints at 0, we compute grid values only on a cross centered at the optimum with extremities on the faces of a hypercube.
     logPPvaluesSub <- sapply(valuesOnGrid, function(x) x$logJointValue)
     logPPvalues[evaluatePP] <- logPPvaluesSub
-    # testValues <- exp(logPPvalues - opt$fval) > 0.05
     testValues <- exp(logPPvalues - opt$value) < control$thresholdForHypercross
 
     evaluatePP[testValues] <- FALSE
     newRadii <- replace(radii, which(!testValues), radii[!testValues] * control$radiusExpandFactor)
-    # radii[!testValues] <- radii[!testValues] * control$radiusExpandFactor
     # We check if lower bounds are above 0. If not, we consider that the corresponding segment should not be modified anymore.
     shortSeq <- seq(from = 1, to = length(radii), by = 2)
     testIt <- (solution - newRadii[shortSeq]) <= 0
@@ -309,7 +306,7 @@ ComputeHyperMarginalMoments <- function(hyperparaList) {
 
   colnames(paraMoments) <- c("Mean", "StdDev")
   rownames(paraMoments) <- head(colnames(psiAndMargDistMatrix), n = -1)
-  as.data.frame(paraMoments)
+  list(paraMoments = as.data.frame(paraMoments), psiAndMargDistMatrix = psiAndMargDistMatrix)
 }
 
 ComputeMeanMarginalMoments <- function(hyperparaList) {

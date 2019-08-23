@@ -109,19 +109,19 @@ arma::uvec extractBlockIndices(const arma::sp_mat & symmSparseMatrix) {
 
 // Pretty slow. Should not be called too often.
 
-sp_mat invertSymmBlockDiag(const sp_mat & blockMatrix, const uvec & blockIndices) {
-  uint diagElement = 0 ;
-  uint numRows = blockIndices.at(blockIndices.size() - 1) ;
-  sp_mat inverted(numRows, numRows) ;
-  for (unsigned int i = 0; i < (blockIndices.size()-1); i++) {
-    int blockSize = blockIndices.at(i+1) - blockIndices.at(i) ;
-    inverted(diagElement, diagElement, size(blockSize, blockSize)) =
-      inv_sympd(mat(blockMatrix(diagElement, diagElement, size(blockSize, blockSize)))) ;
-    diagElement += blockSize ;
-  }
-
-  return inverted ;
-}
+// sp_mat invertSymmBlockDiag(const sp_mat & blockMatrix, const uvec & blockIndices) {
+//   uint diagElement = 0 ;
+//   uint numRows = blockIndices.at(blockIndices.size() - 1) ;
+//   sp_mat inverted(numRows, numRows) ;
+//   for (unsigned int i = 0; i < (blockIndices.size()-1); i++) {
+//     int blockSize = blockIndices.at(i+1) - blockIndices.at(i) ;
+//     inverted(diagElement, diagElement, size(blockSize, blockSize)) =
+//       inv_sympd(mat(blockMatrix(diagElement, diagElement, size(blockSize, blockSize)))) ;
+//     diagElement += blockSize ;
+//   }
+//
+//   return inverted ;
+// }
 
 // bool blockDiagCheck(const mat & matrixToCheck) {
 //   int newPosNextBlock = 1 ;
@@ -157,12 +157,25 @@ double maternCov(const double & distance, const double & rho,
   if (distance == 0) {
     maternValue = pow(scale, 2) + nugget ;
   } else {
-    double base = pow(2 * smoothness, 0.5) * distance / rho ;
-    double bessel = boost::math::cyl_bessel_k(smoothness, base) ;
-    maternValue = pow(scale, 2) * pow(2, 1 - smoothness) / gsl_sf_gamma(smoothness) *
-      pow(base, smoothness) * bessel ;
+    if (smoothness >= 1e6) {
+      maternValue = pow(scale, 2) * exp(-pow(distance, 2)/(2 * pow(rho, 2))) ;
+    } else if (smoothness == 0.5) {
+      maternValue = pow(scale, 2) * exp(-distance / rho) ;
+    } else if (smoothness == 1.5) {
+      maternValue = pow(scale, 2) *
+        (1 + sqrt(3) * distance / rho) *
+        exp(-sqrt(3) * distance / rho) ;
+    } else if (smoothness == 2.5) {
+      maternValue = pow(scale, 2) *
+        (1 + sqrt(5) * distance/rho + 5 * pow(distance, 2)/(3 * pow(rho, 2))) *
+        exp(-sqrt(5) * distance/rho) ;
+    } else {
+      double base = pow(2 * smoothness, 0.5) * distance / rho ;
+      double bessel = boost::math::cyl_bessel_k(smoothness, base) ;
+      maternValue = pow(scale, 2) * pow(2, 1 - smoothness) / gsl_sf_gamma(smoothness) *
+        pow(base, smoothness) * bessel ;
+    }
   }
-
   return maternValue ;
 }
 

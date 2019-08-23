@@ -35,7 +35,8 @@ SimulateSpacetimeData <- function(numObsPerTimeSlice = 225, covFunction, lonRang
   spacetimeObj
 }
 
-plotOutput <- function(inlaMRAoutput, trainingData, testData, rasterNrow, rasterNcol, filename = NULL, graphicsEngine = tiff, plotWhat = c("joint", "training", "SD")) {
+plotOutput <- function(inlaMRAoutput, trainingData, testData, rasterNrow, rasterNcol, filename = NULL, graphicsEngine = tiff, plotWhat = c("joint", "training", "SD"), control) {
+  control$width <- control$height <- 1600
   lonLatMinMax <- lapply(1:2, function(colIndex) {
     sapply(list(min, max), function(summaryFunction) {
       summaryFunction(testData@sp@coords[ , colIndex], trainingData@sp@coords[ , colIndex])
@@ -52,7 +53,7 @@ plotOutput <- function(inlaMRAoutput, trainingData, testData, rasterNrow, raster
     landRasterJointSD <- NULL
     landRasterTest <- NULL
     if (any(testDataIndices)) {
-      landRasterJointSD <- raster::rasterize(x = testData@sp@coords[testDataIndices, ], y = landRaster, field = inlaMRAoutput$predictionMoments$predictSDs)
+      landRasterJointSD <- raster::rasterize(x = testData@sp@coords[testDataIndices, ], y = landRaster, field = inlaMRAoutput$predictionMoments$predictSDs[testDataIndices])
     }
     if (any(testDataIndices) & any(trainingDataIndices)) {
       jointCoordinates <- unname(rbind(testData@sp@coords[testDataIndices, ], trainingData@sp@coords[trainingDataIndices, ]))
@@ -81,11 +82,10 @@ plotOutput <- function(inlaMRAoutput, trainingData, testData, rasterNrow, raster
   names(stackedRastersList) <- rasterNames
 
   if (!is.null(filename)) {
-    graphicsEngine(filename, width = 1600, height = 1600)
+    graphicsEngine(filename, width = control$width, height = control$height)
   }
   stackedRasters <- stack(stackedRastersList$training, stackedRastersList$joint, stackedRastersList$test)
-  rasterRanges <- sapply(as.list(stackedRasters), FUN = function(aRasterLayer) range(raster::values(aRasterLayer), na.rm = TRUE))
-  rangeForScale <- range(rasterRanges)
+  rangeForScale <- range(raster::values(stackedRasters), na.rm = TRUE)
   plot(stackedRasters, interpolate = TRUE, col = rev( rainbow( 20, start = 0, end = 1) ), breaks = seq(floor(rangeForScale[[1]]), ceiling(rangeForScale[[2]]), length.out = 19))
 
   if (!is.null(filename)) {

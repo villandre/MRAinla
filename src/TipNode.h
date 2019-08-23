@@ -46,6 +46,7 @@ public:
 
   void ComputeWmat(const maternVec & covParasSp, const maternVec & covParasTime, const double & scaling, const bool matern, const double & spaceNuggetSD, const double & timeNuggetSD) {
     baseComputeWmat(covParasSp, covParasTime, scaling, matern, spaceNuggetSD, timeNuggetSD) ;
+    m_Wlist.at(m_depth) = symmatl(m_Wlist.at(m_depth)) ; // This is added to solve numerical issues that arise when smoothness parameters take certain values and matrices turn out to be computationally non-symmetric.
     m_SigmaInverse = arma::inv_sympd(GetSigma()) ;
   }
 
