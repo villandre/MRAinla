@@ -19,48 +19,33 @@ void InternalNode::RemoveChild(TreeNode * childToRemove)
 
 void InternalNode::genRandomKnots(spatialcoor & dataCoor, const uint & numKnots, const gsl_rng * RNG) {
 
-  // if (m_depth == 0) {
-  //   double a[numKnots], b[dataCoor.timeCoords.size()] ;
-  //
-  //   for (uint i = 0; i < dataCoor.timeCoords.size() ; i++)
-  //   {
-  //     b[i] = (double) i;
-  //   }
-  //
-  //   uvec aConverted(numKnots, fill::zeros) ;
-  //
-  //   gsl_ran_choose(RNG, a, numKnots, b, dataCoor.timeCoords.size(), sizeof (double));
-  //
-  //   for (uint i = 0 ; i < numKnots ; i++) {
-  //     aConverted.at(i) = a[i] ;
-  //   }
-  //
-  //   mat jitteredSpace = dataCoor.spatialCoords.rows(aConverted) ;
-  //   vec jitteredTime = dataCoor.timeCoords.elem(aConverted) ;
-  //
-  //   for (auto & i : jitteredSpace) {
-  //     i  += gsl_ran_gaussian(RNG, 0.001) ;
-  //   }
-  //
-  //   for(auto & i : jitteredTime) {
-  //     i += gsl_ran_gaussian(RNG, 0.001) ;
-  //   }
-  //
-  //   m_knotsCoor = spatialcoor(jitteredSpace, jitteredTime) ;
-  //   m_knotsCoor.spatialCoords.print("Jittered knots res0:") ;
-  //   m_knotsCoor.timeCoords.print("Time knots res0:") ;
-  //
-  //   for (uint i = 0 ; i < m_knotsCoor.timeCoords.size(); i++) {
-  //     cout << "Spatial criterion met: " <<
-  //       (m_knotsCoor.spatialCoords(i,0) < max(m_dimensions.longitude)) *
-  //       (m_knotsCoor.spatialCoords(i,0) > min(m_dimensions.longitude)) *
-  //       (m_knotsCoor.spatialCoords(i,1) < max(m_dimensions.latitude)) *
-  //       (m_knotsCoor.spatialCoords(i,1) > min(m_dimensions.latitude)) << "\n";
-  //     cout << "Time criterion met: " <<
-  //       (m_knotsCoor.timeCoords(i) < max(m_dimensions.time)) *
-  //       (m_knotsCoor.timeCoords(i) > min(m_dimensions.time)) << "\n" ;
-  //   }
-  // } else {
+  if (m_depth == 0) {
+    double a[numKnots], b[dataCoor.timeCoords.size()] ;
+
+    for (uint i = 0; i < dataCoor.timeCoords.size() ; i++)
+    {
+      b[i] = (double) i;
+    }
+
+    uvec aConverted(numKnots, fill::zeros) ;
+
+    gsl_ran_choose(RNG, a, numKnots, b, dataCoor.timeCoords.size(), sizeof (double));
+
+    for (uint i = 0 ; i < numKnots ; i++) {
+      aConverted.at(i) = a[i] ;
+    }
+
+    mat jitteredSpace = dataCoor.spatialCoords.rows(aConverted) ;
+    vec jitteredTime = dataCoor.timeCoords.elem(aConverted) ;
+
+    for (auto & i : jitteredSpace) {
+      i  += gsl_ran_gaussian(RNG, 0.001) ;
+    }
+
+    for(auto & i : jitteredTime) {
+      i += gsl_ran_gaussian(RNG, 0.001) ;
+    }
+  } else {
     mat knotsSp(numKnots, 2, fill::zeros) ;
 
     float minLon = min(m_dimensions.longitude) ;
@@ -81,7 +66,7 @@ void InternalNode::genRandomKnots(spatialcoor & dataCoor, const uint & numKnots,
 
     time.imbue( [&]() { return double(gsl_ran_flat(RNG, minTime, maxTime)); } ) ;
     m_knotsCoor = spatialcoor(knotsSp, time) ;
-  // }
+  }
 }
 
 void InternalNode::DeriveAtilde() {

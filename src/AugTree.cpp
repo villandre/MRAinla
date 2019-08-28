@@ -47,8 +47,6 @@ AugTree::AugTree(uint & M, vec & lonRange, vec & latRange, vec & timeRange, vec 
 
   m_numKnots = 0 ;
 
-  numberNodes() ;
-
   for (uint i = 0 ; i < m_vertexVector.size() ; i++) {
     m_numKnots += m_vertexVector.at(i)->GetKnotsCoor().timeCoords.size() ;
   }
@@ -72,6 +70,7 @@ void AugTree::BuildTree(const uint & minObsForTimeSplit, const bool splitTime, c
   m_vertexVector.push_back(topNode) ;
 
   createLevels(topNode, minObsForTimeSplit, splitTime) ;
+  numberNodes() ;
 
   generateKnots(topNode, numKnots0, J) ;
 }
@@ -190,11 +189,8 @@ void AugTree::generateKnots(TreeNode * node, const unsigned int numKnotsRes0, co
 
   int numNodesAtLevel = GetLevelNodes(node->GetDepth()).size() ;
   uint numKnotsToGen = std::max(uint(std::ceil((numKnotsRes0 * pow(J, node->GetDepth()))/numNodesAtLevel)), uint(2)) ;
-  if (node->GetDepth() == 0) {
-    node->genRandomKnots(m_predictData, numKnotsRes0, m_randomNumGenerator) ;
-  } else {
-    node->genRandomKnots(m_dataset, numKnotsToGen, m_randomNumGenerator) ;
-  }
+  printf("Working on node %i, generating %i knots. \n", node->GetNodeId(), numKnotsToGen) ;
+  node->genRandomKnots(m_dataset, numKnotsToGen, m_randomNumGenerator) ;
 
   if (node->GetChildren().at(0) != NULL) {
     for (auto &i : node->GetChildren()) {
@@ -757,8 +753,8 @@ void AugTree::ComputeLogJointPsiMarginal(Rcpp::Function gradCholeskiFun, Rcpp::F
   ComputeLogPriors() ;
   // cout << "Computing Wmats... \n" ;
   if (m_recomputeMRAlogLik) {
-    // m_MRAcovParasSpace.print("Space parameters:") ;
-    // m_MRAcovParasTime.print("Time parameters:") ;
+    m_MRAcovParasSpace.print("Space parameters:") ;
+    m_MRAcovParasTime.print("Time parameters:") ;
     // fflush(stdout); // Will now print everything in the stdout buffer
     computeWmats() ; // This will produce the K matrices required. NOTE: ADD CHECK THAT ENSURES THAT THE MRA LIK. IS ONLY RE-COMPUTED WHEN THE MRA COV. PARAMETERS CHANGE.
     // cout << "Done... \n" ;

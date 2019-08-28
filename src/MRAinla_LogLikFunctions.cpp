@@ -24,7 +24,6 @@ List setupGridCpp(NumericVector responseValues, NumericMatrix spCoords, NumericM
                   uint randomSeed, uint cutForTimeSplit, bool splitTime,
                   int numKnotsRes0, int J)
 {
-  cout << "Typecasting... \n" ;
   vec lonR = as<vec>(lonRange) ;
   vec latR = as<vec>(latRange) ;
   vec timeR = as<vec>(timeRange) ;
@@ -34,7 +33,6 @@ List setupGridCpp(NumericVector responseValues, NumericMatrix spCoords, NumericM
   vec predTimeVec = as<vec>(predTime) ;
   mat predCovariates = as<mat>(predCovariateMatrix) ;
   vec time = as<vec>(obsTime) ;
-  cout << "Done typecasting... \n" ;
 
   unsigned long int seedForRNG = randomSeed ;
 
