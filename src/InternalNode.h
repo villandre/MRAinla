@@ -46,7 +46,7 @@ public:
     throw Rcpp::exception("Upred matrices need not be computed in internal nodes! \n") ;
   }
 
-  void genRandomKnots(inputdata &, const uint &, const gsl_rng *) ;
+  void genRandomKnots(spatialcoor &, const uint &, const gsl_rng *) ;
 
   InternalNode(const dimensions & dims, const uint & depth, TreeNode * parent,
                const inputdata & dataset) {

@@ -31,12 +31,13 @@ struct MVN{
   }
 };
 
-AugTree::AugTree(uint & M, vec & lonRange, vec & latRange, vec & timeRange, vec & observations, mat & obsSp, vec & obsTime, uint & minObsForTimeSplit, unsigned long int & seed, mat & covariates, const bool splitTime, const unsigned int numKnotsRes0, const unsigned int J)
+AugTree::AugTree(uint & M, vec & lonRange, vec & latRange, vec & timeRange, vec & observations, mat & obsSp, vec & obsTime, mat & predCovariates, mat & predSp, vec & predTime, uint & minObsForTimeSplit, unsigned long int & seed, mat & covariates, const bool splitTime, const unsigned int numKnotsRes0, const unsigned int J)
   : m_M(M)
 {
   m_dataset = inputdata(observations, obsSp, obsTime, covariates) ;
   m_mapDimensions = dimensions(lonRange, latRange, timeRange) ;
   m_randomNumGenerator = gsl_rng_alloc(gsl_rng_taus) ;
+  SetPredictData(predSp, predTime, predCovariates) ;
 
   gsl_rng_set(m_randomNumGenerator, seed) ;
   m_fixedEffParameters.resize(m_dataset.covariateValues.n_cols + 1) ; // An extra 1 is added to take into account the intercept.
@@ -95,7 +96,7 @@ void AugTree::createLevels(TreeNode * parent, const uint & numObsForTimeSplit, c
   std::vector<dimensions> childDimensions ;
   childDimensions.push_back(parent->GetDimensions()) ;
 
-  if (obsForMedian.n_elem < 1) {
+  if (obsForMedian.n_elem <= 1) {
     throw Rcpp::exception("Cannot split empty region or region with only one observation.\n") ;
   }
 
@@ -188,9 +189,13 @@ void AugTree::createLevels(TreeNode * parent, const uint & numObsForTimeSplit, c
 void AugTree::generateKnots(TreeNode * node, const unsigned int numKnotsRes0, const unsigned int J) {
 
   int numNodesAtLevel = GetLevelNodes(node->GetDepth()).size() ;
-  uint numKnotsToGen = std::ceil((numKnotsRes0 * pow(J, node->GetDepth()))/numNodesAtLevel) ;
+  uint numKnotsToGen = std::max(uint(std::ceil((numKnotsRes0 * pow(J, node->GetDepth()))/numNodesAtLevel)), uint(2)) ;
+  if (node->GetDepth() == 0) {
+    node->genRandomKnots(m_predictData, numKnotsRes0, m_randomNumGenerator) ;
+  } else {
+    node->genRandomKnots(m_dataset, numKnotsToGen, m_randomNumGenerator) ;
+  }
 
-  node->genRandomKnots(m_dataset, numKnotsToGen, m_randomNumGenerator) ;
   if (node->GetChildren().at(0) != NULL) {
     for (auto &i : node->GetChildren()) {
       generateKnots(i, numKnotsRes0, J) ;
@@ -860,7 +865,7 @@ uvec AugTree::extractBlockIndicesFromLowerRight(const arma::sp_mat & symmSparseM
 
 sp_mat AugTree::ComputeHpred(const mat & spCoords, const vec & time, const mat & covariateMatrix, Rcpp::Function sparseMatrixConstructFun) {
 
-  SetPredictData(spCoords, time, covariateMatrix) ;
+  // SetPredictData(spCoords, time, covariateMatrix) ;
   std::vector<TreeNode *> tipNodes = GetTipNodes() ;
 
   for (auto & i : tipNodes) {

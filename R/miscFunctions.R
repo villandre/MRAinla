@@ -35,7 +35,7 @@ SimulateSpacetimeData <- function(numObsPerTimeSlice = 225, covFunction, lonRang
   spacetimeObj
 }
 
-plotOutput <- function(inlaMRAoutput, trainingData, testData, rasterNrow, rasterNcol, filename = NULL, graphicsEngine = tiff, plotWhat = c("joint", "training", "SD"), control) {
+plotOutput <- function(inlaMRAoutput, trainingData, testData, rasterNrow, rasterNcol, filename = NULL, graphicsEngine = tiff, plotWhat = c("joint", "training", "SD"), control = list()) {
   control$width <- control$height <- 1600
   lonLatMinMax <- lapply(1:2, function(colIndex) {
     sapply(list(min, max), function(summaryFunction) {
@@ -84,9 +84,9 @@ plotOutput <- function(inlaMRAoutput, trainingData, testData, rasterNrow, raster
   if (!is.null(filename)) {
     graphicsEngine(filename, width = control$width, height = control$height)
   }
-  stackedRasters <- stack(stackedRastersList$training, stackedRastersList$joint, stackedRastersList$test)
+  stackedRasters <- raster::stack(stackedRastersList$training, stackedRastersList$joint, stackedRastersList$SD)
   rangeForScale <- range(raster::values(stackedRasters), na.rm = TRUE)
-  plot(stackedRasters, interpolate = TRUE, col = rev( rainbow( 20, start = 0, end = 1) ), breaks = seq(floor(rangeForScale[[1]]), ceiling(rangeForScale[[2]]), length.out = 19))
+  plot(stackedRasters, interpolate = FALSE, col = rev( rainbow( 20, start = 0, end = 1) ), breaks = seq(floor(rangeForScale[[1]]), ceiling(rangeForScale[[2]]), length.out = 19))
 
   if (!is.null(filename)) {
     dev.off()

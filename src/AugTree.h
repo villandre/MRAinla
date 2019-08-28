@@ -37,7 +37,7 @@ namespace MRAinla {
 class AugTree
 {
 public:
-  AugTree(uint &, arma::vec &, arma::vec &, arma::vec &, arma::vec &, arma::mat &, arma::vec &, uint &, unsigned long int &, arma::mat &, const bool, const unsigned int, const unsigned int) ;
+  AugTree(uint &, arma::vec &, arma::vec &, arma::vec &, arma::vec &, arma::mat &, arma::vec &, arma::mat &, arma::mat &, arma::vec &, uint &, unsigned long int &, arma::mat &, const bool, const unsigned int, const unsigned int) ;
 
   std::vector<TreeNode *> GetVertexVector() {return m_vertexVector ;} ;
   arma::umat m_HmatPos ;

@@ -82,14 +82,18 @@ MRA_INLA <- function(spacetimeData, errorSDstart, fixedEffSDstart, MRAhyperparas
 
   control <- defaultControl
   dataCoordinates <- spacetimeData@sp@coords
+  predCoordinates <- predictionData@sp@coords
+  predCovariates <- as.matrix(predictionData@data)
+
   timeRangeReshaped <- as.integer(control$timeRange)/(3600*24)
   timeBaseline <- min(timeRangeReshaped)
   timeValues <- as.integer(time(spacetimeData@time))/(3600*24) - timeBaseline # The division is to obtain values in days.
+  predTime <- as.integer(time(predictionData))/(3600*24) - timeBaseline
   timeRangeReshaped <- timeRangeReshaped - timeBaseline
 
   covariateMatrix <- as.matrix(spacetimeData@data[, -1, drop = FALSE])
   gridPointers <- lapply(1:control$numThreads, function(x) {
-    setupGridCpp(spacetimeData@data[, 1], dataCoordinates, timeValues, covariateMatrix, control$M, control$lonRange, control$latRange, timeRangeReshaped, control$randomSeed, control$cutForTimeSplit, control$splitTime, control$numKnotsRes0, control$J)$gridPointer
+    setupGridCpp(responseValues = spacetimeData@data[, 1], spCoords = dataCoordinates, predCoords = predCoordinates, obsTime = timeValues, predTime = predTime, covariateMatrix = covariateMatrix, predCovariateMatrix = predCovariates, M = control$M, lonRange = control$lonRange, latRange = control$latRange, timeRange = timeRangeReshaped, randomSeed = control$randomSeed, cutForTimeSplit = control$cutForTimeSplit, splitTime = control$splitTime, numKnotsRes0 = control$numKnotsRes0, J = control$J)$gridPointer
   })
 
   # First we compute values relating to the hyperprior marginal distribution...

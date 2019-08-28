@@ -88,9 +88,8 @@ public:
   arma::uvec GetPredIndices() { return m_predsInNode ;}
   void computeUpred(const maternVec &, const maternVec &, const double &, const spatialcoor &, const bool, const double &, const double &) ;
 
-  void genRandomKnots(inputdata & dataset, const uint & numKnots, const gsl_rng * RNG) {
-    m_knotsCoor = spatialcoor(dataset.spatialCoords.rows(m_obsInNode),
-                              dataset.timeCoords.elem(m_obsInNode)) ;
+  void genRandomKnots(spatialcoor & dataCoor, const uint & numKnots, const gsl_rng * RNG) {
+    m_knotsCoor = dataCoor ;
   }
 
   TipNode(const dimensions & dims, const uint & depth, TreeNode * parent,

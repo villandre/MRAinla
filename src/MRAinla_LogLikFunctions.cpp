@@ -17,23 +17,30 @@ typedef unsigned int uint ;
 
 // [[Rcpp::export]]
 
-List setupGridCpp(NumericVector responseValues, NumericMatrix spCoords, NumericVector obsTime,
-                  NumericMatrix covariateMatrix, uint M, NumericVector lonRange, NumericVector latRange,
-                  NumericVector timeRange, uint randomSeed, uint cutForTimeSplit, bool splitTime,
+List setupGridCpp(NumericVector responseValues, NumericMatrix spCoords, NumericMatrix predCoords,
+                  NumericVector obsTime,  NumericVector predTime, NumericMatrix covariateMatrix,
+                  NumericMatrix predCovariateMatrix, uint M,
+                  NumericVector lonRange, NumericVector latRange, NumericVector timeRange,
+                  uint randomSeed, uint cutForTimeSplit, bool splitTime,
                   int numKnotsRes0, int J)
 {
+  cout << "Typecasting... \n" ;
   vec lonR = as<vec>(lonRange) ;
   vec latR = as<vec>(latRange) ;
   vec timeR = as<vec>(timeRange) ;
   vec response = as<vec>(responseValues) ;
   mat sp = as<mat>(spCoords) ;
+  mat predSp = as<mat>(predCoords) ;
+  vec predTimeVec = as<vec>(predTime) ;
+  mat predCovariates = as<mat>(predCovariateMatrix) ;
   vec time = as<vec>(obsTime) ;
+  cout << "Done typecasting... \n" ;
 
   unsigned long int seedForRNG = randomSeed ;
 
   mat covariateMat = as<mat>(covariateMatrix) ;
 
-  AugTree * MRAgrid = new AugTree(M, lonR, latR, timeR, response, sp, time, cutForTimeSplit, seedForRNG, covariateMat, splitTime, numKnotsRes0, J) ;
+  AugTree * MRAgrid = new AugTree(M, lonR, latR, timeR, response, sp, time, predCovariates, predSp, predTimeVec, cutForTimeSplit, seedForRNG, covariateMat, splitTime, numKnotsRes0, J) ;
 
   XPtr<AugTree> p(MRAgrid, false) ; // Disabled automatic garbage collection.
 
