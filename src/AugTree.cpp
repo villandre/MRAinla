@@ -189,7 +189,7 @@ void AugTree::generateKnots(TreeNode * node, const unsigned int numKnotsRes0, co
 
   int numNodesAtLevel = GetLevelNodes(node->GetDepth()).size() ;
   uint numKnotsToGen = std::max(uint(std::ceil((numKnotsRes0 * pow(J, node->GetDepth()))/numNodesAtLevel)), uint(2)) ;
-  printf("Working on node %i, generating %i knots. \n", node->GetNodeId(), numKnotsToGen) ;
+
   node->genRandomKnots(m_dataset, numKnotsToGen, m_randomNumGenerator) ;
 
   if (node->GetChildren().at(0) != NULL) {
@@ -753,8 +753,9 @@ void AugTree::ComputeLogJointPsiMarginal(Rcpp::Function gradCholeskiFun, Rcpp::F
   ComputeLogPriors() ;
   // cout << "Computing Wmats... \n" ;
   if (m_recomputeMRAlogLik) {
-    m_MRAcovParasSpace.print("Space parameters:") ;
-    m_MRAcovParasTime.print("Time parameters:") ;
+    // m_MRAcovParasSpace.print("Space parameters:") ;
+    // m_MRAcovParasTime.print("Time parameters:") ;
+    // printf("Scale parameter: %.4e \n", m_spacetimeScaling) ;
     // fflush(stdout); // Will now print everything in the stdout buffer
     computeWmats() ; // This will produce the K matrices required. NOTE: ADD CHECK THAT ENSURES THAT THE MRA LIK. IS ONLY RE-COMPUTED WHEN THE MRA COV. PARAMETERS CHANGE.
     // cout << "Done... \n" ;

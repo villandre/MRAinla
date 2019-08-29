@@ -54,17 +54,35 @@ void InternalNode::genRandomKnots(spatialcoor & dataCoor, const uint & numKnots,
     float minLat = min(m_dimensions.latitude) ;
     float maxLat = max(m_dimensions.latitude) ;
 
-    for (mat::iterator iter = knotsSp.begin() ; iter != (knotsSp.begin() + knotsSp.n_rows) ; iter++) {
-      (*iter) = gsl_ran_flat(RNG, minLon, maxLon) ;
-      *(iter + knotsSp.n_rows) = float(gsl_ran_flat(RNG, minLat, maxLat)) ;
-    }
-
     float minTime = min(m_dimensions.time) ;
     float maxTime = max(m_dimensions.time) ;
 
     vec time(numKnots) ;
 
-    time.imbue( [&]() { return double(gsl_ran_flat(RNG, minTime, maxTime)); } ) ;
+    knotsSp(0, 0) = (minLon + maxLon)/2 ;
+    knotsSp(0, 1) = (minLat + maxLat)/2 ;
+    time(0) = (minTime + maxTime)/2 ;
+
+    uint numCubes = ceil(double(numKnots - 1)/8) ;
+    double shortestLonRadius = (maxLon - minLon)/(numCubes + 1) ;
+    double shortestLatRadius = (maxLat - minLat)/(numCubes + 1) ;
+    double shortestTimeRadius = (maxTime - minTime)/(numCubes + 1) ;
+
+    uint rowIndex = 1 ; // The first knot in each zone is in the exact center of the zone.
+    for (uint cubeIndex = 0 ; cubeIndex < numCubes ; cubeIndex++) {
+      for (uint vertexIndex = 0; vertexIndex < 8; vertexIndex++) {
+        int lonSign = 1 - 2 * (vertexIndex >= 4) ;
+        int latSign = 1 - 2 * (fmod(floor(vertexIndex/2), 2) == 0) ;
+        int timeSign = pow(-1, vertexIndex) ;
+
+        knotsSp(rowIndex, 0) = knotsSp(0, 0) + double(lonSign) * (double(cubeIndex) + 1) * shortestLonRadius + gsl_ran_gaussian(RNG, 0.001) ;
+        knotsSp(rowIndex, 1) = knotsSp(0, 1) + double(latSign) * (double(cubeIndex) + 1) * shortestLatRadius + gsl_ran_gaussian(RNG, 0.001) ;
+        time(rowIndex) = time(0) + double(timeSign) * (double(cubeIndex) + 1) * shortestTimeRadius + gsl_ran_gaussian(RNG, 0.001) ;
+        rowIndex += 1 ;
+        if (rowIndex >= numKnots) break ;
+      }
+      if (rowIndex >= numKnots) break ;
+    }
     m_knotsCoor = spatialcoor(knotsSp, time) ;
   }
 }

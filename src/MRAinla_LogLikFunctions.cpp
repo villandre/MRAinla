@@ -155,9 +155,7 @@ Rcpp::List ComputeCondPredStats(SEXP treePointer, NumericMatrix spCoordsForPredi
     Hmat = conv_to<mat>::from(pointedTree->ComputeHpred(spCoords, time, covariates, sparseMatrixConstructFun)) ;
     sp_mat Hmean = Hmat * conv_to<sp_mat>::from(pointedTree->GetFullCondMean()) ;
     HmeanMat = conv_to<mat>::from(Hmean) ;
-    cout << "Computing Evar... \n" ;
     Evar = pointedTree->ComputeEvar(Hmat, sparseSolveFun, batchSize) ;
-    cout << "Done. \n" ;
   }
   else
   {
