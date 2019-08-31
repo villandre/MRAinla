@@ -59,16 +59,8 @@ void InternalNode::genRandomKnots(spatialcoor & dataCoor, const uint & numKnots,
 
     vec time(numKnots) ;
 
-    knotsSp(0, 0) = (minLon + maxLon)/2 ;
-    knotsSp(0, 1) = (minLat + maxLat)/2 ;
-    time(0) = (minTime + maxTime)/2 ;
-
-    // uint numCubes = ceil(double(numKnots - 1)/8) ;
     uint cubeRadiusInPoints = ceil(double(pow(numKnots, 1/3))) ;
 
-    // double shortestLonRadius = (maxLon - minLon)/(numCubes + 1) ;
-    // double shortestLatRadius = (maxLat - minLat)/(numCubes + 1) ;
-    // double shortestTimeRadius = (maxTime - minTime)/(numCubes + 1) ;
     double offsetPerc = 0.01 ;
     double lonDist = (maxLon - minLon) * (1-offsetPerc * 2)/(cubeRadiusInPoints - 1) ;
     double latDist = (maxLat - minLat) * (1-offsetPerc * 2)/(cubeRadiusInPoints - 1) ;
@@ -88,7 +80,6 @@ void InternalNode::genRandomKnots(spatialcoor & dataCoor, const uint & numKnots,
       }
       if (rowIndex >= numKnots) break ;
     }
-
     m_knotsCoor = spatialcoor(knotsSp, time) ;
   }
 }
