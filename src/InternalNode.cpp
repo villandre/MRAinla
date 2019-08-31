@@ -63,26 +63,32 @@ void InternalNode::genRandomKnots(spatialcoor & dataCoor, const uint & numKnots,
     knotsSp(0, 1) = (minLat + maxLat)/2 ;
     time(0) = (minTime + maxTime)/2 ;
 
-    uint numCubes = ceil(double(numKnots - 1)/8) ;
-    double shortestLonRadius = (maxLon - minLon)/(numCubes + 1) ;
-    double shortestLatRadius = (maxLat - minLat)/(numCubes + 1) ;
-    double shortestTimeRadius = (maxTime - minTime)/(numCubes + 1) ;
+    // uint numCubes = ceil(double(numKnots - 1)/8) ;
+    uint cubeRadiusInPoints = ceil(double(pow(numKnots, 1/3))) ;
+
+    // double shortestLonRadius = (maxLon - minLon)/(numCubes + 1) ;
+    // double shortestLatRadius = (maxLat - minLat)/(numCubes + 1) ;
+    // double shortestTimeRadius = (maxTime - minTime)/(numCubes + 1) ;
+    double lonDist = (maxLon - minLon)/cubeRadiusInPoints ;
+    double latDist = (maxLat - minLat)/cubeRadiusInPoints ;
+    double timeDist = (maxTime - minTime)/cubeRadiusInPoints ;
 
     uint rowIndex = 1 ; // The first knot in each zone is in the exact center of the zone.
-    for (uint cubeIndex = 0 ; cubeIndex < numCubes ; cubeIndex++) {
-      for (uint vertexIndex = 0; vertexIndex < 8; vertexIndex++) {
-        int lonSign = 1 - 2 * (vertexIndex >= 4) ;
-        int latSign = 1 - 2 * (fmod(floor(vertexIndex/2), 2) == 0) ;
-        int timeSign = pow(-1, vertexIndex) ;
 
-        knotsSp(rowIndex, 0) = knotsSp(0, 0) + double(lonSign) * (double(cubeIndex) + 1) * shortestLonRadius + gsl_ran_gaussian(RNG, 0.001) ;
-        knotsSp(rowIndex, 1) = knotsSp(0, 1) + double(latSign) * (double(cubeIndex) + 1) * shortestLatRadius + gsl_ran_gaussian(RNG, 0.001) ;
-        time(rowIndex) = time(0) + double(timeSign) * (double(cubeIndex) + 1) * shortestTimeRadius + gsl_ran_gaussian(RNG, 0.001) ;
-        rowIndex += 1 ;
+    for (uint lonIndex = 0 ; lonIndex < cubeRadiusInPoints ; lonIndex++) {
+      for (uint latIndex = 0 ; latIndex < cubeRadiusInPoints ; latIndex++) {
+        for (uint timeIndex = 0 ; latIndex < cubeRadiusInPoints ; latIndex++) {
+          knotsSp(rowIndex, 0) = minLon + double(lonIndex) * lonDist + gsl_ran_gaussian(RNG, 0.001) ;
+          knotsSp(rowIndex, 1) = minLat + double(latIndex) * latDist + gsl_ran_gaussian(RNG, 0.001) ;
+          time(rowIndex) = minTime + double(timeIndex) * timeDist  + gsl_ran_gaussian(RNG, 0.001) ;
+          rowIndex += 1 ;
+          if (rowIndex >= numKnots) break ;
+        }
         if (rowIndex >= numKnots) break ;
       }
       if (rowIndex >= numKnots) break ;
     }
+
     m_knotsCoor = spatialcoor(knotsSp, time) ;
   }
 }
