@@ -146,7 +146,7 @@ public:
   virtual arma::uvec GetPredIndices()=0 ;
   virtual void computeUpred(const maternVec &, const maternVec &, const double &, const spatialcoor &, const bool, const double &, const double &)=0 ;
 
-  virtual void genRandomKnots(spatialcoor &, const uint &, const gsl_rng *) = 0;
+  virtual void genRandomKnots(spatialcoor &, const uint &, const uint &, const gsl_rng *) = 0;
 
   arma::uvec GetObsInNode() {return m_obsInNode ;}
   dimensions GetDimensions() {return m_dimensions;}

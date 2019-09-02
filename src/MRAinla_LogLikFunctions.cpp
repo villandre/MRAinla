@@ -22,7 +22,7 @@ List setupGridCpp(NumericVector responseValues, NumericMatrix spCoords, NumericM
                   NumericMatrix predCovariateMatrix, uint M,
                   NumericVector lonRange, NumericVector latRange, NumericVector timeRange,
                   uint randomSeed, uint cutForTimeSplit, bool splitTime,
-                  int numKnotsRes0, int J)
+                  int numKnotsRes0, int J, int numTimeKnotsLayers)
 {
   vec lonR = as<vec>(lonRange) ;
   vec latR = as<vec>(latRange) ;
@@ -38,7 +38,7 @@ List setupGridCpp(NumericVector responseValues, NumericMatrix spCoords, NumericM
 
   mat covariateMat = as<mat>(covariateMatrix) ;
 
-  AugTree * MRAgrid = new AugTree(M, lonR, latR, timeR, response, sp, time, predCovariates, predSp, predTimeVec, cutForTimeSplit, seedForRNG, covariateMat, splitTime, numKnotsRes0, J) ;
+  AugTree * MRAgrid = new AugTree(M, lonR, latR, timeR, response, sp, time, predCovariates, predSp, predTimeVec, cutForTimeSplit, seedForRNG, covariateMat, splitTime, numKnotsRes0, J, numTimeKnotsLayers) ;
 
   XPtr<AugTree> p(MRAgrid, false) ; // Disabled automatic garbage collection.
 

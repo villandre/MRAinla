@@ -17,7 +17,7 @@ void InternalNode::RemoveChild(TreeNode * childToRemove)
   }
 }
 
-void InternalNode::genRandomKnots(spatialcoor & dataCoor, const uint & numKnots, const gsl_rng * RNG) {
+void InternalNode::genRandomKnots(spatialcoor & dataCoor, const uint & numKnots, const uint & numTimeKnotsLayers, const gsl_rng * RNG) {
 
   if (m_depth == 0) {
     double a[numKnots], b[dataCoor.timeCoords.size()] ;
@@ -57,19 +57,19 @@ void InternalNode::genRandomKnots(spatialcoor & dataCoor, const uint & numKnots,
     float minTime = min(m_dimensions.time) ;
     float maxTime = max(m_dimensions.time) ;
 
-    vec time(numKnots) ;
+    vec time(numKnots, fill::zeros) ;
 
-    uint cubeRadiusInPoints = ceil(double(pow(numKnots, 1/3))) ;
+    double spEdgeLengthInPoints = ceil(sqrt(double(numKnots)/numTimeKnotsLayers)) ;
 
     double offsetPerc = 0.01 ;
-    double lonDist = (maxLon - minLon) * (1-offsetPerc * 2)/(cubeRadiusInPoints - 1) ;
-    double latDist = (maxLat - minLat) * (1-offsetPerc * 2)/(cubeRadiusInPoints - 1) ;
-    double timeDist = (maxTime - minTime) * (1-offsetPerc * 2)/(cubeRadiusInPoints - 1) ;
-
+    double lonDist = (maxLon - minLon) * (1-offsetPerc * 2)/(spEdgeLengthInPoints - 1) ;
+    double latDist = (maxLat - minLat) * (1-offsetPerc * 2)/(spEdgeLengthInPoints - 1) ;
+    double timeDist = (maxTime - minTime) * (1-offsetPerc * 2)/(double(numTimeKnotsLayers) - 1) ;
+    // printf("lonDist, latDist, timeDist, num. points, num. knots: %.4e %.4e %.4e %.4e %i \n", lonDist, latDist, timeDist, spEdgeLengthInPoints, numKnots) ;
     uint rowIndex = 0 ;
-    for (uint lonIndex = 0 ; lonIndex < cubeRadiusInPoints ; lonIndex++) {
-      for (uint latIndex = 0 ; latIndex < cubeRadiusInPoints ; latIndex++) {
-        for (uint timeIndex = 0 ; latIndex < cubeRadiusInPoints ; latIndex++) {
+    for (uint lonIndex = 0 ; lonIndex < spEdgeLengthInPoints ; lonIndex++) {
+      for (uint latIndex = 0 ; latIndex < spEdgeLengthInPoints ; latIndex++) {
+        for (uint timeIndex = 0 ; timeIndex < numTimeKnotsLayers ; timeIndex++) {
           knotsSp(rowIndex, 0) = minLon + (1 + offsetPerc) * (maxLon - minLon) + double(lonIndex) * lonDist + gsl_ran_gaussian(RNG, 0.001) ;
           knotsSp(rowIndex, 1) = minLat + (1 + offsetPerc) * (maxLat - minLat) + double(latIndex) * latDist + gsl_ran_gaussian(RNG, 0.001) ;
           time(rowIndex) = minTime + (1 + offsetPerc) * (maxTime - minTime) + double(timeIndex) * timeDist  + gsl_ran_gaussian(RNG, 0.001) ;
@@ -81,6 +81,8 @@ void InternalNode::genRandomKnots(spatialcoor & dataCoor, const uint & numKnots,
       if (rowIndex >= numKnots) break ;
     }
     m_knotsCoor = spatialcoor(knotsSp, time) ;
+    // m_knotsCoor.spatialCoords.print("Space:") ;
+    // m_knotsCoor.timeCoords.print("Time:") ;
   }
 }
 

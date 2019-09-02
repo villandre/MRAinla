@@ -31,7 +31,7 @@ struct MVN{
   }
 };
 
-AugTree::AugTree(uint & M, vec & lonRange, vec & latRange, vec & timeRange, vec & observations, mat & obsSp, vec & obsTime, mat & predCovariates, mat & predSp, vec & predTime, uint & minObsForTimeSplit, unsigned long int & seed, mat & covariates, const bool splitTime, const unsigned int numKnotsRes0, const unsigned int J)
+AugTree::AugTree(uint & M, vec & lonRange, vec & latRange, vec & timeRange, vec & observations, mat & obsSp, vec & obsTime, mat & predCovariates, mat & predSp, vec & predTime, uint & minObsForTimeSplit, unsigned long int & seed, mat & covariates, const bool splitTime, const unsigned int numKnotsRes0, const unsigned int J, const unsigned int & numTimeKnotsLayers)
   : m_M(M)
 {
   m_dataset = inputdata(observations, obsSp, obsTime, covariates) ;
@@ -43,7 +43,7 @@ AugTree::AugTree(uint & M, vec & lonRange, vec & latRange, vec & timeRange, vec 
   m_fixedEffParameters.resize(m_dataset.covariateValues.n_cols + 1) ; // An extra 1 is added to take into account the intercept.
   m_fixedEffParameters.randu() ;
 
-  BuildTree(minObsForTimeSplit, splitTime, numKnotsRes0, J) ;
+  BuildTree(minObsForTimeSplit, splitTime, numKnotsRes0, J, numTimeKnotsLayers) ;
 
   m_numKnots = 0 ;
 
@@ -59,7 +59,7 @@ AugTree::AugTree(uint & M, vec & lonRange, vec & latRange, vec & timeRange, vec 
   m_SigmaPos = umat(0, 2) ;
 }
 
-void AugTree::BuildTree(const uint & minObsForTimeSplit, const bool splitTime, const unsigned int numKnots0, const unsigned int J)
+void AugTree::BuildTree(const uint & minObsForTimeSplit, const bool splitTime, const unsigned int numKnots0, const unsigned int J, const uint & numTimeKnotsLayers)
 {
   m_vertexVector.reserve(1) ;
 
@@ -72,7 +72,7 @@ void AugTree::BuildTree(const uint & minObsForTimeSplit, const bool splitTime, c
   createLevels(topNode, minObsForTimeSplit, splitTime) ;
   numberNodes() ;
 
-  generateKnots(topNode, numKnots0, J) ;
+  generateKnots(topNode, numKnots0, J, numTimeKnotsLayers) ;
 }
 
 void AugTree::numberNodes() {
@@ -185,16 +185,16 @@ void AugTree::createLevels(TreeNode * parent, const uint & numObsForTimeSplit, c
   }
 }
 
-void AugTree::generateKnots(TreeNode * node, const unsigned int numKnotsRes0, const unsigned int J) {
+void AugTree::generateKnots(TreeNode * node, const unsigned int numKnotsRes0, const unsigned int J, const uint & numTimeKnotsLayers) {
 
   int numNodesAtLevel = GetLevelNodes(node->GetDepth()).size() ;
   uint numKnotsToGen = std::max(uint(std::ceil((numKnotsRes0 * pow(J, node->GetDepth()))/numNodesAtLevel)), uint(2)) ;
 
-  node->genRandomKnots(m_dataset, numKnotsToGen, m_randomNumGenerator) ;
+  node->genRandomKnots(m_dataset, numKnotsToGen, numTimeKnotsLayers, m_randomNumGenerator) ;
 
   if (node->GetChildren().at(0) != NULL) {
     for (auto &i : node->GetChildren()) {
-      generateKnots(i, numKnotsRes0, J) ;
+      generateKnots(i, numKnotsRes0, J, numTimeKnotsLayers) ;
     }
   }
 }
