@@ -528,6 +528,7 @@ void AugTree::createHmatrixPos() {
   mat transIncrementedCovar = trans(join_rows(ones<vec>(numObs), m_dataset.covariateValues)) ;
   m_incrementedCovarReshuffled = trans(transIncrementedCovar.cols(m_obsOrderForFmat)) ;
   m_HmatPos.col(1) += m_dataset.covariateValues.n_cols + 1 ;
+
   umat covPos = join_rows(rep(regspace<uvec>(0, m_incrementedCovarReshuffled.n_rows - 1), m_incrementedCovarReshuffled.n_cols),
                           rep_each(regspace<uvec>(0, m_incrementedCovarReshuffled.n_cols - 1), m_incrementedCovarReshuffled.n_rows)) ;
   m_HmatPos = join_cols(covPos, m_HmatPos) ;
@@ -535,11 +536,14 @@ void AugTree::createHmatrixPos() {
 
 void AugTree::updateHmatrix(Rcpp::Function sparseMatrixConstructFun) {
   vec concatenatedValues = vectorise(m_incrementedCovarReshuffled) ;
+
   for (auto & tipNode : GetTipNodes()) {
     for (auto & Bmat : tipNode->GetWlist()) {
       concatenatedValues = join_cols(concatenatedValues, vectorise(Bmat)) ;
     }
   }
+  uvec testVector = find(m_HmatPos.col(1) == 5) ;
+
   uvec dims(2) ;
   dims.at(0) = m_dataset.responseValues.size() ;
   dims.at(1) = GetNumKnots() + m_dataset.covariateValues.n_cols + 1 ;
@@ -721,6 +725,8 @@ void AugTree::ComputeLogFCandLogCDandDataLL(Rcpp::Function gradCholeskiFun, Rcpp
 
   sp_mat hessianMat = SigmaFEandEtaInv + secondTerm ;
   mat scaledResponse = std::pow(m_errorSD, -2) * trans(responsesReshuffled) * m_Hmat ;
+  // scaledResponse(0, 0, size(1, 10)).print("Scaled response:") ;
+  // hessianMat(0,0, size(7, 7)).print("Hessian matrix:") ;
   Rcpp::NumericVector updatedMean = gradCholeskiFun(hessianMat, scaledResponse) ;
 
   m_Vstar = updatedMean ; // Assuming there will be an implicit conversion to vec type.
@@ -736,7 +742,6 @@ void AugTree::ComputeLogFCandLogCDandDataLL(Rcpp::Function gradCholeskiFun, Rcpp
 
   // Computing p(v* | Psi)
   mat logLikTerm = -0.5 * trans(m_Vstar) * SigmaFEandEtaInv * m_Vstar ;
-
 
   m_logCondDist = logLikTerm(0,0) + 0.5 * logDetSigmaKFEinv ;
 

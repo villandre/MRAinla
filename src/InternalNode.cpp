@@ -45,6 +45,7 @@ void InternalNode::genRandomKnots(spatialcoor & dataCoor, const uint & numKnots,
     for(auto & i : jitteredTime) {
       i += gsl_ran_gaussian(RNG, 0.001) ;
     }
+    m_knotsCoor = spatialcoor(jitteredSpace, jitteredTime) ;
   } else {
     mat knotsSp(numKnots, 2, fill::zeros) ;
 
