@@ -136,7 +136,8 @@ MRA_INLA <- function(spacetimeData, errorSDstart, fixedEffSDstart, MRAhyperparas
   outputList <- list(hyperMarginalMoments = hyperMarginalMoments$paraMoments, meanMarginalMoments = meanMarginalMoments, psiAndMargDistMatrix = hyperMarginalMoments$psiAndMargDistMatrix)
   cat("Computing prediction moments... \n")
   if (!is.null(predictionData)) {
-    outputList$predictionMoments <- ComputeKrigingMoments(hyperparaList)
+    outputList$predictionMoments <- ComputeKrigingMoments(hyperparaList, gridPointers[[1]])
+    outputList$predObsOrder <- GetPredObsOrder(gridPointers[[1]]) # I picked the first one, since the grids are all copies of each other, created to ensure that there is no problem with multiple reads/writes in parallel.
   }
   cat("Returning results... \n")
   outputList
@@ -332,7 +333,7 @@ ComputeMeanMarginalMoments <- function(hyperparaList) {
   data.frame(Mean = marginalMeans, StdDev = marginalSDs)
 }
 
-ComputeKrigingMoments <- function(hyperparaList) {
+ComputeKrigingMoments <- function(hyperparaList, treePointer) {
   domainCheck <- sapply(hyperparaList, function(x) x$logJointValue > -Inf)
   hyperparaList <- hyperparaList[domainCheck]
   termsForMean <- lapply(hyperparaList, function(x) {
@@ -348,7 +349,8 @@ ComputeKrigingMoments <- function(hyperparaList) {
     drop(x$CondPredStats$Evar * exp(x$logJointValue))
   })
   Evar <- Reduce("+", termsForEvar)
-  list(predictMeans = krigingMeans, predictSDs = sqrt(varE + Evar))
+  predObsOrder <- GetPredObsOrder(treePointer = treePointer)
+  list(predictMeans = krigingMeans[order(predObsOrder)], predictSDs = sqrt(varE + Evar)[order(predObsOrder)])
 }
 
 covFunctionBiMatern <- function(rangeParaSpace = 10, rangeParaTime = 10) {

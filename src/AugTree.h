@@ -61,6 +61,7 @@ public:
 
   int GetM() { return m_M ;}
   double GetLogJointPsiMarginal() { return m_logJointPsiMarginal ;}
+  arma::uvec GetObsOrderForHpredMat() { return m_obsOrderForHpredMat ;}
 
   void SetRNG(gsl_rng * myRNG) { m_randomNumGenerator = myRNG ;}
   void IncrementVstar(const double & increment) {m_Vstar += increment ;}
@@ -205,13 +206,15 @@ private:
   void computeD() ;
 
   std::vector<TreeNode *> GetLevel(const uint) ;
+  arma::uvec m_obsOrderForFmat ;
 
   // Prediction functions
 
   void distributePredictionData() ;
   void computeBtildeInTips() ;
   inputdata m_predictData ;
-  arma::uvec m_obsOrderForFmat ;
+  arma::uvec m_obsOrderForHpredMat ;
+
 
   // INLA functions
   arma::vec m_MRArandomValues ;

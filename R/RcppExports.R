@@ -25,3 +25,7 @@ GetNumTips <- function(treePointer) {
     .Call('_MRAinla_GetNumTips', PACKAGE = 'MRAinla', treePointer)
 }
 
+GetPredObsOrder <- function(treePointer) {
+    .Call('_MRAinla_GetPredObsOrder', PACKAGE = 'MRAinla', treePointer)
+}
+

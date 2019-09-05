@@ -171,3 +171,11 @@ int GetNumTips(SEXP treePointer) {
   int value = pointedTree->GetNumTips() ;
   return value ;
 }
+
+// [[Rcpp::export]]
+
+arma::uvec GetPredObsOrder(SEXP treePointer) {
+  XPtr<AugTree> pointedTree(treePointer) ; // Becomes a regular pointer again.
+  arma::uvec value = pointedTree->GetObsOrderForHpredMat() ;
+  return value ;
+}

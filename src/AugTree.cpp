@@ -600,6 +600,16 @@ void AugTree::createHmatrixPredPos() {
     return firstSmallerThanSecond ;
   }) ; // This is supposed to reorder the tip nodes in such a way that the F matrix has contiguous blocks.
 
+  m_obsOrderForHpredMat = uvec(m_predictData.timeCoords.size(), fill::zeros) ;
+  uint elementIndex = 0 ;
+  for (auto & i : tipNodes) {
+    uint numPredObsInNode = i->GetPredIndices().size() ;
+    if (numPredObsInNode > 0) {
+      m_obsOrderForHpredMat.subvec(elementIndex, size(i->GetPredIndices())) = i->GetPredIndices() ;
+      elementIndex += i->GetPredIndices().size() ;
+    }
+  }
+
   for (auto & nodeToProcess : tipNodes) {
     uvec observationIndices = nodeToProcess->GetPredIndices() ;
 
