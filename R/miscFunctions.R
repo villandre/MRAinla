@@ -35,7 +35,7 @@ SimulateSpacetimeData <- function(numObsPerTimeSlice = 225, covFunction, lonRang
   spacetimeObj
 }
 
-plotOutput <- function(inlaMRAoutput, trainingData, testData, realTestValues = NULL, filename = NULL, graphicsEngine = tiff, plotWhat = c("joint", "training", "SD", "fittedVSrealNoSp"), control = list()) {
+plotOutput <- function(inlaMRAoutput, trainingData, testData, realTestValues = NULL, filename = NULL, graphicsEngine = tiff, plotWhat = c("joint", "training", "SD", "fittedVsRealNoSp"), control = list()) {
   if (!("width" %in% names(control))) {
     control$width <- control$height <- 1600
   }

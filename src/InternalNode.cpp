@@ -39,11 +39,11 @@ void InternalNode::genRandomKnots(spatialcoor & dataCoor, const uint & numKnots,
     vec jitteredTime = dataCoor.timeCoords.elem(aConverted) ;
 
     for (auto & i : jitteredSpace) {
-      i  += gsl_ran_gaussian(RNG, 0.001) ;
+      i  += gsl_ran_gaussian(RNG, 0.0001) ;
     }
 
     for(auto & i : jitteredTime) {
-      i += gsl_ran_gaussian(RNG, 0.001) ;
+      i += gsl_ran_gaussian(RNG, 0.0001) ;
     }
     m_knotsCoor = spatialcoor(jitteredSpace, jitteredTime) ;
   } else {
@@ -71,9 +71,9 @@ void InternalNode::genRandomKnots(spatialcoor & dataCoor, const uint & numKnots,
     for (uint lonIndex = 0 ; lonIndex < cubeRadiusInPoints ; lonIndex++) {
       for (uint latIndex = 0 ; latIndex < cubeRadiusInPoints ; latIndex++) {
         for (uint timeIndex = 0 ; latIndex < cubeRadiusInPoints ; timeIndex++) {
-          knotsSp(rowIndex, 0) = minLon + (1 + offsetPerc) * (maxLon - minLon) + double(lonIndex) * lonDist + gsl_ran_gaussian(RNG, 0.001) ;
-          knotsSp(rowIndex, 1) = minLat + (1 + offsetPerc) * (maxLat - minLat) + double(latIndex) * latDist + gsl_ran_gaussian(RNG, 0.001) ;
-          time(rowIndex) = minTime + (1 + offsetPerc) * (maxTime - minTime) + double(timeIndex) * timeDist  + gsl_ran_gaussian(RNG, 0.001) ;
+          knotsSp(rowIndex, 0) = minLon + (1 + offsetPerc) * (maxLon - minLon) + double(lonIndex) * lonDist + gsl_ran_gaussian(RNG, 0.0001) ;
+          knotsSp(rowIndex, 1) = minLat + (1 + offsetPerc) * (maxLat - minLat) + double(latIndex) * latDist + gsl_ran_gaussian(RNG, 0.0001) ;
+          time(rowIndex) = minTime + (1 + offsetPerc) * (maxTime - minTime) + double(timeIndex) * timeDist  + gsl_ran_gaussian(RNG, 0.0001) ;
           rowIndex += 1 ;
           if (rowIndex >= numKnots) break ;
         }

@@ -55,7 +55,15 @@ AugTree::AugTree(uint & M, vec & lonRange, vec & latRange, vec & timeRange, vec 
   m_Vstar = vec(m_numKnots + m_dataset.covariateValues.n_cols + 1, fill::zeros) ;
   m_Vstar.subvec(0, size(m_FEmu)) = m_FEmu ;
   m_HmatPos = umat(0, 2) ;
+  // createHmatrixPos() ;
   m_HmatPredPos = umat(0, 2) ;
+  std::vector<TreeNode *> tipNodes = GetTipNodes() ;
+
+  for (auto & i : tipNodes) {
+    i->SetPredictLocations(m_predictData) ;
+  }
+
+  createHmatrixPredPos() ;
   m_SigmaPos = umat(0, 2) ;
 }
 
@@ -612,6 +620,7 @@ void AugTree::createHmatrixPredPos() {
 
   for (auto & nodeToProcess : tipNodes) {
     uvec observationIndices = nodeToProcess->GetPredIndices() ;
+    std::vector<TreeNode *> ancestorsList = nodeToProcess->getAncestors() ;
 
     bool test =  observationIndices.size() > 0 ;
 
@@ -625,15 +634,15 @@ void AugTree::createHmatrixPredPos() {
         brickAncestors.at(i) = brickList.at(i)->GetNodeId() ;
       }
       uint index = 0 ;
+
       for (uint nodeIndex = 0; nodeIndex < m_vertexVector.size() ; nodeIndex++) {
         int nodePos = GetNodePos(nodeIndex) ;
         if (index < brickAncestors.size()) {
           if (nodeIndex == brickAncestors.at(index)) {
-            uvec rowIndices = rep(regspace<uvec>(0, nodeToProcess->GetUpred(index).n_rows - 1),
-                                  nodeToProcess->GetUpred(index).n_cols) + rowIndex ;
-            uvec colIndices = rep_each(regspace<uvec>(0, nodeToProcess->GetUpred(index).n_cols - 1),
-                                       nodeToProcess->GetUpred(index).n_rows) + colIndex ;
-
+            uvec rowIndices = rep(regspace<uvec>(0, observationIndices.size() - 1),
+                                  ancestorsList.at(index)->GetNumKnots()) + rowIndex ;
+            uvec colIndices = rep_each(regspace<uvec>(0, ancestorsList.at(index)->GetNumKnots() - 1),
+                                       observationIndices.size()) + colIndex ;
             umat positions = join_rows(rowIndices, colIndices) ;
             m_HmatPredPos = join_cols(m_HmatPredPos, positions) ; // Slow, but this is not done many times.
 
@@ -646,7 +655,6 @@ void AugTree::createHmatrixPredPos() {
       rowIndex += observationIndices.size() ;
     }
   }
-
   mat transIncrementedCovar = trans(join_rows(ones<vec>(numObs), m_predictData.covariateValues)) ;
   m_incrementedCovarPredictReshuffled = trans(transIncrementedCovar.cols(FmatObsOrder)) ;
 
@@ -881,7 +889,7 @@ sp_mat AugTree::ComputeHpred(const mat & spCoords, const vec & time, const mat &
   std::vector<TreeNode *> tipNodes = GetTipNodes() ;
 
   for (auto & i : tipNodes) {
-    i->SetPredictLocations(m_predictData) ;
+    // i->SetPredictLocations(m_predictData) ;
     uvec predictionsInLeaf = i->GetPredIndices() ;
     if (predictionsInLeaf.size() > 0) {
       i->computeUpred(m_MRAcovParasSpace, m_MRAcovParasTime, m_spacetimeScaling, m_predictData, m_matern, m_spaceNuggetSD, m_timeNuggetSD) ;
