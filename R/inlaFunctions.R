@@ -31,7 +31,7 @@
 #' @export
 
 MRA_INLA <- function(spacetimeData, errorSDstart, fixedEffSDstart, MRAhyperparasStart, FEmuVec, predictionData = NULL, fixedEffGammaAlphaBeta, errorGammaAlphaBeta,  MRAcovParasGammaAlphaBeta, maximiseOnly = FALSE, control) {
-  defaultControl <- list(M = 1, randomSeed = 24,  cutForTimeSplit = 400, stepSize = 1, lowerThreshold = 3, maternCovariance = TRUE, nuggetSD = 0.00001, varyFixedEffSD = FALSE, varyMaternSmoothness = FALSE, varyErrorSD = TRUE, splitTime = FALSE, numKnotsRes0 = 20L, J = 2L, numValuesForGrid = 200, numThreads = 1, thresholdForHypercross = 0.05, radiusExpandFactor = 0.75, numIterOptim = 15L)
+  defaultControl <- list(M = 1, randomSeed = 24,  cutForTimeSplit = 400, stepSize = 1, lowerThreshold = 3, maternCovariance = TRUE, nuggetSD = 0.00001, varyFixedEffSD = FALSE, varyMaternSmoothness = FALSE, varyErrorSD = TRUE, splitTime = FALSE, numKnotsRes0 = 20L, J = 2L, numValuesForGrid = 200, numThreads = 1, thresholdForHypercross = 0.05, radiusExpandFactor = 0.75, numIterOptim = 200L)
   if (length(position <- grep(colnames(spacetimeData@sp@coords), pattern = "lon")) >= 1) {
     colnames(spacetimeData@sp@coords)[[position[[1]]]] <- "x"
     if (!is.null(predictionData)) {
@@ -111,14 +111,11 @@ MRA_INLA <- function(spacetimeData, errorSDstart, fixedEffSDstart, MRAhyperparas
 
   computedValues <- obtainGridValues(gridPointers = gridPointers, xStartValues = xStartValues, control = control, fixedEffSDstart = fixedEffSDstart, errorSDstart = errorSDstart, MRAhyperparasStart = MRAhyperparasStart, MRAcovParasGammaAlphaBeta = MRAcovParasGammaAlphaBeta, fixedEffGammaAlphaBeta = fixedEffGammaAlphaBeta, errorGammaAlphaBeta = errorGammaAlphaBeta, FEmuVec = FEmuVec, predictionData = predictionData, timeBaseline = timeBaseline, maximiseOnly = maximiseOnly)
   if (maximiseOnly) {
-    return(computedValues)
+    return(computedValues$output)
   }
 
-  discreteLogJointValues <- sapply(computedValues, '[[', "logJointValue")
-  # print(discreteLogJointValues)
-  # cat("\n \n")
-  # print(max(discreteLogJointValues))
-  # cat("\n \n")
+  discreteLogJointValues <- sapply(computedValues$output, '[[', "logJointValue")
+
   maxLogJointValues <- max(discreteLogJointValues)
   logStandardisingConstant <- maxLogJointValues + log(sum(exp(discreteLogJointValues - maxLogJointValues)))
 
@@ -192,38 +189,22 @@ obtainGridValues <- function(gridPointers, xStartValues, control, fixedEffSDstar
     return(solution)
   }
 
-  # We should perform a second short round of optimisation to define a regular grid.
-  # i <- 0
-  # cat("Bounding the grid...")
-
   if (length(gridPointers) > 1) {
     require(doParallel)
     no_cores <- length(gridPointers)
-    # cl <- parallel::makeCluster(no_cores, type = "PSOCK") ## The FORK type cluster is the fastest on the stat machines!
-    # parallel::setDefaultCluster(cl)
     doParallel::registerDoParallel(cores = no_cores)# Shows the number of Parallel Workers to be used
-    # parallel::clusterExport(varlist = c("MRAcovParasGammaAlphaBeta", "fixedEffGammaAlphaBeta", "errorGammaAlphaBeta", "fixedEffSDstart", "errorSDstart", "MRAhyperparasStart", "FEmuVec", "timeBaseline", "control", "gridPointers"), envir = environment()) ## Functions starting with '.' are hidden and so, must be passed explicitly to each node.
-    # parallel::clusterEvalQ(expr = library(MRAinla))
   }
-  gridFct <- function(rad, numPoints = 100, computePrediction = TRUE, gridEval = rep(TRUE, length(rad))) {
-    if (numPoints > 0) {
-      lowerLimit <- solution - rad[seq(from = 1, to = length(rad), by = 2)]
-      upperLimit <- solution + rad[seq(from = 2, to = length(rad), by = 2)]
-      paraList <- lapply(seq_along(lowerLimit), FUN = function(x) {
-        runif(n = numPoints, min = lowerLimit[[x]], max = upperLimit[[x]])
-      })
-      names(paraList) <- names(xStartValues)
-      paraGrid <- as.data.frame(paraList)
-      paraGrid <- rbind(solution, paraGrid)
-      rownames(paraGrid) <- NULL
-    } else {
-      paraGridList <- lapply(seq_along(solution), function(paraIndex) {
-        rbind(replace(solution, paraIndex, solution[paraIndex] - rad[2*paraIndex - 1]), replace(solution, paraIndex, solution[paraIndex] + rad[2*paraIndex]))
-      })
-      paraGrid <- do.call("rbind", paraGridList)
-      paraGrid <- paraGrid[gridEval,, drop = FALSE]
-      colnames(paraGrid) <- names(xStartValues)
+  gridFct <- function(numPoints = 100, computePrediction = TRUE) {
+    smallMVR <- function() {
+      container <- NULL
+      repeat {
+        container <- drop(mvtnorm::rmvnorm(n = 1, mean = exp(opt$par), sigma = varCovar))
+        if (all(container > 0)) break
+      }
+      container
     }
+    paraGrid <- t(replicate(n = control$numValuesForGrid, expr = smallMVR()))
+    colnames(paraGrid) <- names(xStartValues)
     groupAssignments <- rep(1:length(gridPointers), length.out = nrow(paraGrid))
     listForParallel <- lapply(1:min(length(gridPointers), nrow(paraGrid)), function(clIndex) {
       indicesForNode <- which(groupAssignments == clIndex)
@@ -236,32 +217,11 @@ obtainGridValues <- function(gridPointers, xStartValues, control, fixedEffSDstar
         lapply(1:nrow(listForParallel[[var1]]$paraGrid), funForGridEst, paraGrid = listForParallel[[var1]]$paraGrid, treePointer = gridPointers[[var1]], MRAcovParasGammaAlphaBeta = MRAcovParasGammaAlphaBeta, fixedEffGammaAlphaBeta = fixedEffGammaAlphaBeta, errorGammaAlphaBeta = errorGammaAlphaBeta, fixedEffSDstart = fixedEffSDstart, errorSDstart = errorSDstart, MRAhyperparasStart = MRAhyperparasStart, FEmuVec = FEmuVec, predictionData = predictionData, timeBaseline = timeBaseline, computePrediction = computePrediction, control = control)
       }
     }
-    output
+    list(output = output, optimPoints = list(x = storageEnvir$x, value = storageEnvir$value, ISdistParas = list(mu = exp(opt$par), cov = varCovar)))
   }
 
-  # radii <- rep(0.01 * solution, each = 2)
-  # evaluatePP <- rep(TRUE, length(radii))
-  # logPPvalues <- rep(1, length(radii))
-  # repeat {
-  #   valuesOnGrid <- gridFct(radii, 0, FALSE, evaluatePP) # By setting numPoints at 0, we compute grid values only on a cross centered at the optimum with extremities on the faces of a hypercube.
-  #   logPPvaluesSub <- sapply(valuesOnGrid, function(x) x$logJointValue)
-  #   logPPvalues[evaluatePP] <- logPPvaluesSub
-  #   testValues <- exp(logPPvalues - opt$value) < control$thresholdForHypercross
-  #
-  #   evaluatePP[testValues] <- FALSE
-  #   newRadii <- replace(radii, which(!testValues), radii[!testValues] * control$radiusExpandFactor)
-  #   # We check if lower bounds are above 0. If not, we consider that the corresponding segment should not be modified anymore.
-  #   shortSeq <- seq(from = 1, to = length(radii), by = 2)
-  #   testIt <- (solution - newRadii[shortSeq]) <= 0
-  #   newRadii[shortSeq[testIt]] <- radii[shortSeq[testIt]]
-  #   radii <- newRadii
-  #   evaluatePP[seq(from = 1, to = length(radii), by = 2)][testIt] <- FALSE
-  #
-  #   if (all(testValues) | all(!evaluatePP) | (i == 49)) break
-  #   i <- i + 1
-  # }
   print("Computing values on the grid...")
-  valuesOnGrid <- gridFct(radii, control$numValuesForGrid, TRUE)
+  valuesOnGrid <- gridFct(control$numValuesForGrid, TRUE)
   print("Grid complete... \n")
   doParallel::stopImplicitCluster()
   keepIndices <- sapply(valuesOnGrid, function(x) class(x$logJointValue) == "numeric")
