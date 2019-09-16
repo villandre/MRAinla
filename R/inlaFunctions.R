@@ -146,7 +146,10 @@ MRA_INLA <- function(spacetimeData, errorSDstart, fixedEffSDstart, MRAhyperparas
 obtainGridValues <- function(gridPointers, xStartValues, control, fixedEffSDstart, errorSDstart, MRAhyperparasStart, MRAcovParasGammaAlphaBeta, fixedEffGammaAlphaBeta, errorGammaAlphaBeta, FEmuVec, predictionData, timeBaseline, maximiseOnly = FALSE) {
 
   # A short optimisation first...
-  funForOptim <- function(x) {
+  storageEnvir <- new.env()
+  assign(x = "x", value = NULL, envir = storageEnvir)
+  assign(x = "value", value = NULL, envir = storageEnvir)
+  funForOptim <- function(x, envirToSaveValues) {
     names(x) <- names(xStartValues)
     xTrans <- exp(x)
     fixedEffArg <- fixedEffSDstart
@@ -164,19 +167,25 @@ obtainGridValues <- function(gridPointers, xStartValues, control, fixedEffSDstar
       timeSmoothnessArg <- xTrans[["timeSmoothness"]]
     }
     MRAlist <- list(space = list(rho = xTrans[["spRho"]], smoothness = spSmoothnessArg), time = list(rho = xTrans[["timeRho"]], smoothness = timeSmoothnessArg), scale = xTrans[["scale"]])
-    -LogJointHyperMarginal(treePointer = gridPointers[[1]], MRAhyperparas = MRAlist, fixedEffSD = fixedEffArg, errorSD = errorArg, MRAcovParasGammaAlphaBeta = MRAcovParasGammaAlphaBeta, FEmuVec = FEmuVec, fixedEffGammaAlphaBeta = fixedEffGammaAlphaBeta, errorGammaAlphaBeta = errorGammaAlphaBeta, matern = control$maternCovariance, spaceNuggetSD = control$nuggetSD, timeNuggetSD = control$nuggetSD, recordFullConditional = FALSE)
+    returnedValue <- -LogJointHyperMarginal(treePointer = gridPointers[[1]], MRAhyperparas = MRAlist, fixedEffSD = fixedEffArg, errorSD = errorArg, MRAcovParasGammaAlphaBeta = MRAcovParasGammaAlphaBeta, FEmuVec = FEmuVec, fixedEffGammaAlphaBeta = fixedEffGammaAlphaBeta, errorGammaAlphaBeta = errorGammaAlphaBeta, matern = control$maternCovariance, spaceNuggetSD = control$nuggetSD, timeNuggetSD = control$nuggetSD, recordFullConditional = FALSE)
+    assign(x = "x", value = cbind(get(x = "x", envir = envirToSaveValues), exp(x)), envir = envirToSaveValues)
+    assign(x = "value", value = c(get(x = "value", envir = envirToSaveValues), -returnedValue), envir = envirToSaveValues)
+    returnedValue
   }
-  gradForOptim <- function(x) {
-    names(x) <- names(xStartValues)
-    numDeriv::grad(func = funForOptim, x = x, method = "simple")
-  }
+  # gradForOptim <- function(x) {
+  #   names(x) <- names(xStartValues)
+  #   numDeriv::grad(func = funForOptim, x = x, method = "simple")
+  # }
   upperBound <- rep(Inf, length(xStartValues))
   names(upperBound) <- names(xStartValues)
   upperBound <- replace(upperBound, grep(names(upperBound), pattern = "mooth"), log(50)) # This is to avoid an overflow in the computation of the Matern covariance, which for some reason does not tolerate very high smoothness values.
   upperBound <- replace(upperBound, grep(names(upperBound), pattern = "scale"), 15) # This limits the scaling factor to exp(15) in the optimisation. This is to prevent computational issues in the sparse matrix inversion scheme.
-  opt <- nloptr::lbfgs(x0 = log(xStartValues), lower = rep(-10, length(xStartValues)), upper = upperBound, fn = funForOptim, gr = gradForOptim, control = list(xtol_rel = 1e-3, maxeval = control$numIterOptim))
-
+  # opt <- nloptr::lbfgs(x0 = log(xStartValues), lower = rep(-10, length(xStartValues)), upper = upperBound, fn = funForOptim, gr = gradForOptim, control = list(xtol_rel = 1e-3, maxeval = control$numIterOptim))
+  opt <- nloptr::cobyla(x0 = log(xStartValues), lower = rep(-10, length(xStartValues)), upper = upperBound, fn = funForOptim, control = list(xtol_rel = 5e-4, maxeval = control$numIterOptim), envirToSaveValues = storageEnvir)
   opt$value <- -opt$value # Correcting for the inversion used to maximise instead of minimise
+  sampleWeights <- exp(storageEnvir$value - max(storageEnvir$value))
+  sampleWeights <- sampleWeights/sum(sampleWeights)
+  varCovar <- cov.wt(x = t(storageEnvir$x), wt = sampleWeights)$cov
   solution <- exp(opt$par)
   if (maximiseOnly) {
     names(solution) <- names(xStartValues)
@@ -184,8 +193,8 @@ obtainGridValues <- function(gridPointers, xStartValues, control, fixedEffSDstar
   }
 
   # We should perform a second short round of optimisation to define a regular grid.
-  i <- 0
-  cat("Bounding the grid...")
+  # i <- 0
+  # cat("Bounding the grid...")
 
   if (length(gridPointers) > 1) {
     require(doParallel)
@@ -230,27 +239,27 @@ obtainGridValues <- function(gridPointers, xStartValues, control, fixedEffSDstar
     output
   }
 
-  radii <- rep(0.01 * solution, each = 2)
-  evaluatePP <- rep(TRUE, length(radii))
-  logPPvalues <- rep(1, length(radii))
-  repeat {
-    valuesOnGrid <- gridFct(radii, 0, FALSE, evaluatePP) # By setting numPoints at 0, we compute grid values only on a cross centered at the optimum with extremities on the faces of a hypercube.
-    logPPvaluesSub <- sapply(valuesOnGrid, function(x) x$logJointValue)
-    logPPvalues[evaluatePP] <- logPPvaluesSub
-    testValues <- exp(logPPvalues - opt$value) < control$thresholdForHypercross
-
-    evaluatePP[testValues] <- FALSE
-    newRadii <- replace(radii, which(!testValues), radii[!testValues] * control$radiusExpandFactor)
-    # We check if lower bounds are above 0. If not, we consider that the corresponding segment should not be modified anymore.
-    shortSeq <- seq(from = 1, to = length(radii), by = 2)
-    testIt <- (solution - newRadii[shortSeq]) <= 0
-    newRadii[shortSeq[testIt]] <- radii[shortSeq[testIt]]
-    radii <- newRadii
-    evaluatePP[seq(from = 1, to = length(radii), by = 2)][testIt] <- FALSE
-
-    if (all(testValues) | all(!evaluatePP) | (i == 49)) break
-    i <- i + 1
-  }
+  # radii <- rep(0.01 * solution, each = 2)
+  # evaluatePP <- rep(TRUE, length(radii))
+  # logPPvalues <- rep(1, length(radii))
+  # repeat {
+  #   valuesOnGrid <- gridFct(radii, 0, FALSE, evaluatePP) # By setting numPoints at 0, we compute grid values only on a cross centered at the optimum with extremities on the faces of a hypercube.
+  #   logPPvaluesSub <- sapply(valuesOnGrid, function(x) x$logJointValue)
+  #   logPPvalues[evaluatePP] <- logPPvaluesSub
+  #   testValues <- exp(logPPvalues - opt$value) < control$thresholdForHypercross
+  #
+  #   evaluatePP[testValues] <- FALSE
+  #   newRadii <- replace(radii, which(!testValues), radii[!testValues] * control$radiusExpandFactor)
+  #   # We check if lower bounds are above 0. If not, we consider that the corresponding segment should not be modified anymore.
+  #   shortSeq <- seq(from = 1, to = length(radii), by = 2)
+  #   testIt <- (solution - newRadii[shortSeq]) <= 0
+  #   newRadii[shortSeq[testIt]] <- radii[shortSeq[testIt]]
+  #   radii <- newRadii
+  #   evaluatePP[seq(from = 1, to = length(radii), by = 2)][testIt] <- FALSE
+  #
+  #   if (all(testValues) | all(!evaluatePP) | (i == 49)) break
+  #   i <- i + 1
+  # }
   print("Computing values on the grid...")
   valuesOnGrid <- gridFct(radii, control$numValuesForGrid, TRUE)
   print("Grid complete... \n")
