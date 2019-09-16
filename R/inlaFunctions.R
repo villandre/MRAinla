@@ -128,12 +128,14 @@ MRA_INLA <- function(spacetimeData, errorSDstart, fixedEffSDstart, MRAhyperparas
 
   # Now, we obtain the marginal distribution of all mean parameters.
   cat("Computing moments for marginal posterior distributions...\n")
-  hyperMarginalMoments <- ComputeHyperMarginalMoments(hyperparaList)
-  meanMarginalMoments <- ComputeMeanMarginalMoments(hyperparaList)
+  hyperparaVectors <- sapply(hyperparaList, function(element) element$x)
+  weightModifs <- sapply(hyperparaVectors, mvtnorm::dmvnorm, mean = computedValues$ISdistParas$mu, sigma = computedValues$ISdistParas$cov, log = TRUE)
+  hyperMarginalMoments <- ComputeHyperMarginalMoments(hyperparaList, computedValues$optimPoints)
+  meanMarginalMoments <- ComputeMeanMarginalMoments(hyperparaList, weightModifs)
   outputList <- list(hyperMarginalMoments = hyperMarginalMoments$paraMoments, meanMarginalMoments = meanMarginalMoments, psiAndMargDistMatrix = hyperMarginalMoments$psiAndMargDistMatrix)
   cat("Computing prediction moments... \n")
   if (!is.null(predictionData)) {
-    outputList$predictionMoments <- ComputeKrigingMoments(hyperparaList, gridPointers[[1]])
+    outputList$predictionMoments <- ComputeKrigingMoments(hyperparaList, gridPointers[[1]], weightModifs)
     outputList$predObsOrder <- GetPredObsOrder(gridPointers[[1]]) # I picked the first one, since the grids are all copies of each other, created to ensure that there is no problem with multiple reads/writes in parallel.
   }
   cat("Returning results... \n")
@@ -224,8 +226,8 @@ obtainGridValues <- function(gridPointers, xStartValues, control, fixedEffSDstar
   valuesOnGrid <- gridFct(control$numValuesForGrid, TRUE)
   print("Grid complete... \n")
   doParallel::stopImplicitCluster()
-  keepIndices <- sapply(valuesOnGrid, function(x) class(x$logJointValue) == "numeric")
-  valuesOnGrid[keepIndices]
+  keepIndices <- sapply(valuesOnGrid$output, function(x) class(x$logJointValue) == "numeric")
+  valuesOnGrid$output[keepIndices]
 }
 
 funForGridEst <- function(index, paraGrid, treePointer, predictionData, MRAcovParasGammaAlphaBeta, fixedEffGammaAlphaBeta, errorGammaAlphaBeta, fixedEffSDstart, errorSDstart, MRAhyperparasStart, FEmuVec, timeBaseline, computePrediction, control) {
@@ -263,11 +265,20 @@ funForGridEst <- function(index, paraGrid, treePointer, predictionData, MRAcovPa
   aList
 }
 
-ComputeHyperMarginalMoments <- function(hyperparaList) {
+ComputeHyperMarginalMoments <- function(hyperparaList, optimOutput) {
   domainCheck <- sapply(hyperparaList, function(x) x$logJointValue > -Inf)
   hyperparaList <- hyperparaList[domainCheck]
   psiAndMargDistMatrix <- t(sapply(hyperparaList, function(x) c(unlist(x$MRAhyperparas), fixedEffSD = x$fixedEffSD, errorSD = x$errorSD, jointValue = exp(x$logJointValue))))
-  # print(psiAndMargDistMatrix)
+  hyperparaNames <- names(hyperparaList[[1]]$MRAhyperparas)
+  errorSD <- hyperparaList[[1]]$errorSD
+  if ("errorSD" %in% colnames(optimOutput$x)) {
+    errorSD <- optimOutput$x[, "errorSD"]
+  }
+  fixedEffSD <- hyperparaList[[1]]$fixedEffSD
+  if ("fixedEffSD" %in% colnames(optimOutput$x)) {
+    fixedEffSD <- optimOutput$x[, "fixedEffSD"]
+  }
+  psiAndMargDistMatrix <- cbind(psiAndMargDistMatrix, cbind(optimOutput$x[hyperparaNames], errorSD, fixedEffSD, optimOutput$value))
   rownames(psiAndMargDistMatrix) <- NULL
   funToGetParaMoments <- function(hyperparaIndex) {
     # variableValues <- sort(unique(psiAndMargDistMatrix[, hyperparaIndex]))
@@ -283,11 +294,12 @@ ComputeHyperMarginalMoments <- function(hyperparaList) {
   list(paraMoments = as.data.frame(paraMoments), psiAndMargDistMatrix = psiAndMargDistMatrix)
 }
 
-ComputeMeanMarginalMoments <- function(hyperparaList) {
+ComputeMeanMarginalMoments <- function(hyperparaList, ISlogWeightModifiers) {
   domainCheck <- sapply(hyperparaList, function(x) x$logJointValue > -Inf)
   hyperparaList <- hyperparaList[domainCheck]
   numMeanParas <- length(hyperparaList[[1]]$FullCondMean)
-  weights <- exp(sapply(hyperparaList, "[[", "logJointValue"))
+
+  weights <- exp(sapply(hyperparaList, "[[", "logJointValue") - ISlogWeightModifiers)
   marginalMeans <- sapply(1:numMeanParas, function(paraIndex) {
     meanVector <- sapply(hyperparaList, function(x) x$FullCondMean[[paraIndex]])
     sum(meanVector * weights)
@@ -302,7 +314,12 @@ ComputeMeanMarginalMoments <- function(hyperparaList) {
   data.frame(Mean = marginalMeans, StdDev = marginalSDs)
 }
 
-ComputeKrigingMoments <- function(hyperparaList, treePointer) {
+ComputeKrigingMoments <- function(hyperparaList, treePointer, ISlogWeightModifiers) {
+  # This loops modifies the weights, i.e. log-joint probabilities, to take into account IS.
+  hyperparaList <- lapply(seq_along(hyperparaList), function(index) {
+    hyperparaList[[index]]$logJointValue <- hyperparaList[[index]]$logJointValue - ISlogWeightModifiers[[index]]
+    hyperparaList[[index]]
+  })
   domainCheck <- sapply(hyperparaList, function(x) x$logJointValue > -Inf)
   hyperparaList <- hyperparaList[domainCheck]
   termsForMean <- lapply(hyperparaList, function(x) {
@@ -328,129 +345,6 @@ covFunctionBiMatern <- function(rangeParaSpace = 10, rangeParaTime = 10) {
     timeDist <- outer(zoo::index(spacetime2@time), zoo::index(spacetime1@time), function(x, y) as.numeric(abs(difftime(x, y, units = "days"))))
     fields::Exponential(euclidDist, range = 10)*t(fields::Exponential(timeDist, range = 10))
   }
-}
-
-# When lowerThreshold is 3, the exploration stops if the value being tested is at least 20 times smaller than the value at the peak of the hyperparameter marginal a posteriori distribution.
-getIntegrationPointsAndValues <- function(optimObject, gridPointer, MRAcovParasGammaAlphaBeta, FEmuVec, fixedEffGammaAlphaBeta, errorGammaAlphaBeta, stepSize = 1, lowerThreshold = 3, matern = FALSE, predictionData = NULL, timeBaseline, otherGridPointers = NULL, clusterAddress = NULL, spaceNuggetSD, timeNuggetSD, MRAhyperparasStart, errorSDstart, fixedEffSDstart) {
-
-  decomposition <- eigen(solve(-optimObject$hessian), symmetric = TRUE)
-
-  if (any(decomposition$values < 0)) {
-    stop("Error: The negative Hessian matrix has negative eigenvalues. The values found in the optimisation is not a maximum. \n \n")
-  }
-
-  getPsi <- function(z) {
-    sqrtEigenValueMatrix <- base::diag(sqrt(decomposition$values))
-    drop(optimObject$par + decomposition$vectors %*% sqrtEigenValueMatrix %*% z)
-  }
-
-  getContainerElement <- function(z) {
-    Psis <- getPsi(z)
-    if (any(Psis <= 0)) {
-      return(list(logJointValue = -Inf))
-    }
-    names(Psis) <- names(optimObject$par)
-    MRAhyperList <- MRAhyperparasStart
-    # spaceVars <- grep(pattern = "sp", x = names(z), value = TRUE)
-    # timeVars <- grep(pattern = "time", x = names(z), value = TRUE)
-    for (j in names(Psis)) {
-      if (j == "spRho") {
-        MRAhyperList$space[["rho"]] <- Psis[[j]]
-      }
-      if (j == "spSmoothness") {
-        MRAhyperList$space[["smoothness"]] <- Psis[[j]]
-      }
-      if (j == "timeRho") {
-        MRAhyperList$time[["rho"]] <- Psis[[j]]
-      }
-      if (j == "timeSmoothness") {
-        MRAhyperList$time[["smoothness"]] <- Psis[[j]]
-      }
-      if (j == "scale") {
-        MRAhyperList$scale <- Psis[[j]]
-      }
-    }
-    errorSD <- ifelse(any(grepl(pattern = "error", x = names(Psis))), Psis[[grep(pattern = "error", x = names(Psis), value = TRUE)]], errorSDstart)
-    fixedEffSD <- ifelse(any(grepl(pattern = "fixedEff", x = names(Psis))), Psis[[grep(pattern = "fixedEff", x = names(Psis), value = TRUE)]], fixedEffSDstart)
-
-    aList <- list(z = z, errorSD = errorSD, fixedEffSD = fixedEffSD, MRAhyperparas = MRAhyperList)
-
-    aList$logJointValue <- LogJointHyperMarginal(treePointer = gridPointer, MRAhyperparas = MRAhyperList, fixedEffSD = fixedEffSD, errorSD = errorSD, MRAcovParasGammaAlphaBeta = MRAcovParasGammaAlphaBeta, FEmuVec = FEmuVec, fixedEffGammaAlphaBeta =  fixedEffGammaAlphaBeta, errorGammaAlphaBeta = errorGammaAlphaBeta, matern = matern, spaceNuggetSD = spaceNuggetSD, timeNuggetSD = timeNuggetSD, recordFullConditional = TRUE)
-    if (!is.null(predictionData)) {
-      timeValues <- as.integer(time(predictionData@time))/(3600*24) - timeBaseline # The division is to obtain values in days.
-      aList$CondPredStats <- ComputeCondPredStats(gridPointer, predictionData@sp@coords, timeValues, as.matrix(predictionData@data), sparseMatrixConstructFun = buildSparseMatrix)
-    }
-    # Running LogJointHyperMarginal stores in the tree pointed by gridPointer the full conditional mean and SDs when recordFullConditional = TRUE. We can get them with the simple functions I call now.
-    aList$FullCondMean <- GetFullCondMean(gridPointer)
-    aList$FullCondSDs <- GetFullCondSDs(gridPointer)
-    aList
-  }
-
-  numDims <- length(optimObject$par)
-  centerList <- list() # We'll be growing this list, but considering that we'll be having only a few hundred elements in final, this should be inconsequential.
-
-  centerList[[1]] <- getContainerElement(rep(0,numDims))
-  peakLogJointValue <- centerList[[1]]$logJointValue
-  counter <- 1
-  # This explores the distribution strictly along the axes defining centers for exploration at points not on the axes.
-  exploreCombinations <- expand.grid(dimNumber = 1:numDims, direction = c(-1, 1))
-  exploreList <- lapply(as.list(as.data.frame(t(exploreCombinations))), function(x) {
-    names(x) <- colnames(exploreCombinations)
-    x
-  })
-  # for (dimNumber in 1:numDims) {
-  #   for (direction in c(-1, 1)) {
-  centerListList <- lapply(exploreList, function(x) {
-    centers <- list()
-    counter <- 0
-    currentZ <- rep(0, numDims)
-    currentZ[x[["dimNumber"]]] <- stepSize*x[["direction"]]
-    repeat {
-      elementToAdd <- getContainerElement(currentZ)
-      # The following check compares the value at the peak of the distribution with that at the current location. Since values are on the log-scale, the criterion is multiplicative: if the log of the ratio of the two density values is greater than the threshold, it means there was a steep enough drop, and that the density at the point considered is low enough that it won't matter much in the computation of the normalizing constant.
-      if ((peakLogJointValue - elementToAdd$logJointValue) > lowerThreshold) break
-
-      counter <- counter + 1
-      centers[[counter]] <- elementToAdd
-      currentZ[x[["dimNumber"]]] <- currentZ[x[["dimNumber"]]] + x[["direction"]]*stepSize
-    }
-    centers
-  })
-  #   }
-  # }
-  centerList <- do.call("c", centerListList)
-
-  zMatrix <- t(sapply(centerList, '[[', "z"))
-  containerList <- centerList
-  counter <- length(containerList)
-  # The following explores the distribution at points not found on the axes.
-  for (centerIndex in 2:length(centerList)) {
-    for (dimNumber in 1:numDims) {
-      for (direction in c(-1, 1)) {
-        currentZ <- centerList[[centerIndex]]$z
-        repeat {
-          currentZ[[dimNumber]] <- currentZ[[dimNumber]] + direction*stepSize
-          # First, check if value is available
-          rowNumber <- which(apply(zMatrix, MARGIN = 1, identical, currentZ))
-
-          if (test <- length(rowNumber) == 0) { # This syntax actually works...
-            containerElement <- getContainerElement(currentZ)
-          } else {
-            containerElement <- containerList[[rowNumber]]
-          }
-
-          if ((centerList[[1]]$logJointValue - containerElement$logJointValue) > lowerThreshold) break
-
-          if (test) {
-            counter <- counter + 1
-            containerList[[counter]] <- containerElement
-            zMatrix <- rbind(zMatrix, currentZ)
-          }
-        }
-      }
-    }
-  }
-  containerList
 }
 
 # In the Wikipedia notation, smoothness corresponds to nu, and
