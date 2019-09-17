@@ -114,28 +114,22 @@ MRA_INLA <- function(spacetimeData, errorSDstart, fixedEffSDstart, MRAhyperparas
     return(computedValues$output)
   }
 
+  hyperparaVectors <- sapply(computedValues$output, function(element) element$x)
+  weightModifs <- apply(hyperparaVectors, MARGIN = 2, mvtnorm::dmvnorm, mean = computedValues$ISdistParas$mu, sigma = computedValues$ISdistParas$cov, log = TRUE)
   discreteLogJointValues <- sapply(computedValues$output, '[[', "logJointValue")
-
-  maxLogJointValues <- max(discreteLogJointValues)
-  logStandardisingConstant <- maxLogJointValues + log(sum(exp(discreteLogJointValues - maxLogJointValues)))
-
-  # The following normalises the joint distribution.
-  cat("Standardising empirical distribution...\n") ;
-  hyperparaList <- lapply(computedValues$output, function(x) {
-    x$logJointValue <- x$logJointValue - logStandardisingConstant
-    x
-  })
-
+  logWeights <- discreteLogJointValues - weightModifs
+  maxLogWeights <- max(logWeights)
+  logPropConstantIS <- maxLogWeights + log(sum(exp(logWeights - maxLogWeights)))
+  logStandardisedWeights <- logWeights - logPropConstantIS
   # Now, we obtain the marginal distribution of all mean parameters.
   cat("Computing moments for marginal posterior distributions...\n")
-  hyperparaVectors <- sapply(hyperparaList, function(element) element$x)
-  weightModifs <- apply(hyperparaVectors, MARGIN = 2, mvtnorm::dmvnorm, mean = computedValues$ISdistParas$mu, sigma = computedValues$ISdistParas$cov, log = TRUE)
-  hyperMarginalMoments <- ComputeHyperMarginalMoments(hyperparaList, computedValues$optimPoints)
-  meanMarginalMoments <- ComputeMeanMarginalMoments(hyperparaList, weightModifs)
+
+  hyperMarginalMoments <- ComputeHyperMarginalMoments(computedValues$output, logStandardisedWeights)
+  meanMarginalMoments <- ComputeMeanMarginalMoments(computedValues$output, logStandardisedWeights)
   outputList <- list(hyperMarginalMoments = hyperMarginalMoments$paraMoments, meanMarginalMoments = meanMarginalMoments, psiAndMargDistMatrix = hyperMarginalMoments$psiAndMargDistMatrix)
   cat("Computing prediction moments... \n")
   if (!is.null(predictionData)) {
-    outputList$predictionMoments <- ComputeKrigingMoments(hyperparaList, gridPointers[[1]], weightModifs)
+    outputList$predictionMoments <- ComputeKrigingMoments(computedValues$output, gridPointers[[1]], logStandardisedWeights)
     outputList$predObsOrder <- GetPredObsOrder(gridPointers[[1]]) # I picked the first one, since the grids are all copies of each other, created to ensure that there is no problem with multiple reads/writes in parallel.
   }
   cat("Returning results... \n")
@@ -267,16 +261,10 @@ funForGridEst <- function(index, paraGrid, treePointer, predictionData, MRAcovPa
   aList
 }
 
-ComputeHyperMarginalMoments <- function(hyperparaList, ISlogWeightModifiers) {
+ComputeHyperMarginalMoments <- function(hyperparaList, logISmodProbWeights) {
   domainCheck <- sapply(hyperparaList, function(x) x$logJointValue > -Inf)
   hyperparaList <- hyperparaList[domainCheck]
-  psiAndMargDistMatrix <- t(sapply(hyperparaList, function(x) c(unlist(x$MRAhyperparas), fixedEffSD = x$fixedEffSD, errorSD = x$errorSD, jointValue = exp(x$logJointValue))))
-
-  errorSD <- hyperparaList[[1]]$errorSD
-
-  fixedEffSD <- hyperparaList[[1]]$fixedEffSD
-
-  numOptimPoints <- length(optimOutput$value)
+  psiAndMargDistMatrix <- t(sapply(seq_along(hyperparaList), function(hyperparaIndex) c(unlist(hyperparaList[[hyperparaIndex]]$MRAhyperparas), fixedEffSD = hyperparaList[[hyperparaIndex]]$fixedEffSD, errorSD = hyperparaList[[hyperparaIndex]]$errorSD, jointValue = exp(logISmodProbWeights[hyperparaIndex]))))
   rownames(psiAndMargDistMatrix) <- NULL
   funToGetParaMoments <- function(hyperparaIndex) {
     meanValue <- sum(psiAndMargDistMatrix[, hyperparaIndex] * psiAndMargDistMatrix[, ncol(psiAndMargDistMatrix)])
@@ -290,45 +278,40 @@ ComputeHyperMarginalMoments <- function(hyperparaList, ISlogWeightModifiers) {
   list(paraMoments = as.data.frame(paraMoments), psiAndMargDistMatrix = psiAndMargDistMatrix)
 }
 
-ComputeMeanMarginalMoments <- function(hyperparaList, ISlogWeightModifiers) {
-  domainCheck <- sapply(hyperparaList, function(x) x$logJointValue > -Inf)
-  hyperparaList <- hyperparaList[domainCheck]
+ComputeMeanMarginalMoments <- function(hyperparaList, logISmodProbWeights) {
+  # domainCheck <- sapply(hyperparaList, function(x) x$logJointValue > -Inf)
+  # hyperparaList <- hyperparaList[domainCheck]
   numMeanParas <- length(hyperparaList[[1]]$FullCondMean)
 
-  weights <- exp(sapply(hyperparaList, "[[", "logJointValue") - ISlogWeightModifiers)
   marginalMeans <- sapply(1:numMeanParas, function(paraIndex) {
     meanVector <- sapply(hyperparaList, function(x) x$FullCondMean[[paraIndex]])
-    sum(meanVector * weights)
+    sum(meanVector * exp(logISmodProbWeights))
   })
   marginalSecondMoments <- sapply(1:numMeanParas, function(paraIndex) {
     meanVector <- sapply(hyperparaList, function(x) x$FullCondMean[[paraIndex]])
     sdVector <- sapply(hyperparaList, function(x) x$FullCondSDs[[paraIndex]])
     secondMomentVec <- sdVector^2 + meanVector^2
-    sum(secondMomentVec * weights)
+    sum(secondMomentVec * exp(logISmodProbWeights))
   })
   marginalSDs <- marginalSecondMoments - marginalMeans^2
   data.frame(Mean = marginalMeans, StdDev = marginalSDs)
 }
 
-ComputeKrigingMoments <- function(hyperparaList, treePointer, ISlogWeightModifiers) {
-  # This loops modifies the weights, i.e. log-joint probabilities, to take into account IS.
-  hyperparaList <- lapply(seq_along(hyperparaList), function(index) {
-    hyperparaList[[index]]$logJointValue <- hyperparaList[[index]]$logJointValue - ISlogWeightModifiers[[index]]
-    hyperparaList[[index]]
-  })
-  domainCheck <- sapply(hyperparaList, function(x) x$logJointValue > -Inf)
-  hyperparaList <- hyperparaList[domainCheck]
+ComputeKrigingMoments <- function(hyperparaList, treePointer, logISmodProbWeights) {
+
+  # domainCheck <- sapply(hyperparaList, function(x) x$logJointValue > -Inf)
+  # hyperparaList <- hyperparaList[domainCheck]
   termsForMean <- lapply(hyperparaList, function(x) {
-    drop(x$CondPredStats$Hmean * exp(x$logJointValue))
+    drop(x$CondPredStats$Hmean * exp(logISmodProbWeights))
   })
   krigingMeans <- Reduce("+", termsForMean)
   termsForVarE1 <- lapply(hyperparaList, FUN = function(x) {
-    drop(x$CondPredStats$Hmean^2 * exp(x$logJointValue))
+    drop(x$CondPredStats$Hmean^2 * exp(logISmodProbWeights))
   })
   varE <- Reduce('+', termsForVarE1) - krigingMeans^2
 
   termsForEvar <- lapply(hyperparaList, function(x) {
-    drop(x$CondPredStats$Evar * exp(x$logJointValue))
+    drop(x$CondPredStats$Evar * exp(logISmodProbWeights))
   })
   Evar <- Reduce("+", termsForEvar)
   predObsOrder <- GetPredObsOrder(treePointer = treePointer)
