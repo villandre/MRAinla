@@ -121,7 +121,7 @@ MRA_INLA <- function(spacetimeData, errorSDstart, fixedEffSDstart, MRAhyperparas
 
   # The following normalises the joint distribution.
   cat("Standardising empirical distribution...\n") ;
-  hyperparaList <- lapply(computedValues, function(x) {
+  hyperparaList <- lapply(computedValues$output, function(x) {
     x$logJointValue <- x$logJointValue - logStandardisingConstant
     x
   })
@@ -129,7 +129,7 @@ MRA_INLA <- function(spacetimeData, errorSDstart, fixedEffSDstart, MRAhyperparas
   # Now, we obtain the marginal distribution of all mean parameters.
   cat("Computing moments for marginal posterior distributions...\n")
   hyperparaVectors <- sapply(hyperparaList, function(element) element$x)
-  weightModifs <- sapply(hyperparaVectors, mvtnorm::dmvnorm, mean = computedValues$ISdistParas$mu, sigma = computedValues$ISdistParas$cov, log = TRUE)
+  weightModifs <- apply(hyperparaVectors, MARGIN = 2, mvtnorm::dmvnorm, mean = computedValues$ISdistParas$mu, sigma = computedValues$ISdistParas$cov, log = TRUE)
   hyperMarginalMoments <- ComputeHyperMarginalMoments(hyperparaList, computedValues$optimPoints)
   meanMarginalMoments <- ComputeMeanMarginalMoments(hyperparaList, weightModifs)
   outputList <- list(hyperMarginalMoments = hyperMarginalMoments$paraMoments, meanMarginalMoments = meanMarginalMoments, psiAndMargDistMatrix = hyperMarginalMoments$psiAndMargDistMatrix)
@@ -219,7 +219,7 @@ obtainGridValues <- function(gridPointers, xStartValues, control, fixedEffSDstar
         lapply(1:nrow(listForParallel[[var1]]$paraGrid), funForGridEst, paraGrid = listForParallel[[var1]]$paraGrid, treePointer = gridPointers[[var1]], MRAcovParasGammaAlphaBeta = MRAcovParasGammaAlphaBeta, fixedEffGammaAlphaBeta = fixedEffGammaAlphaBeta, errorGammaAlphaBeta = errorGammaAlphaBeta, fixedEffSDstart = fixedEffSDstart, errorSDstart = errorSDstart, MRAhyperparasStart = MRAhyperparasStart, FEmuVec = FEmuVec, predictionData = predictionData, timeBaseline = timeBaseline, computePrediction = computePrediction, control = control)
       }
     }
-    list(output = output, optimPoints = list(x = storageEnvir$x, value = storageEnvir$value, ISdistParas = list(mu = exp(opt$par), cov = varCovar)))
+    list(output = output, optimPoints = list(x = storageEnvir$x, value = storageEnvir$value))
   }
 
   print("Computing values on the grid...")
@@ -227,7 +227,9 @@ obtainGridValues <- function(gridPointers, xStartValues, control, fixedEffSDstar
   print("Grid complete... \n")
   doParallel::stopImplicitCluster()
   keepIndices <- sapply(valuesOnGrid$output, function(x) class(x$logJointValue) == "numeric")
-  valuesOnGrid$output[keepIndices]
+  valuesOnGrid$output <- valuesOnGrid$output[keepIndices]
+  valuesOnGrid$ISdistParas <- list(mu = exp(opt$par), cov = varCovar)
+  valuesOnGrid
 }
 
 funForGridEst <- function(index, paraGrid, treePointer, predictionData, MRAcovParasGammaAlphaBeta, fixedEffGammaAlphaBeta, errorGammaAlphaBeta, fixedEffSDstart, errorSDstart, MRAhyperparasStart, FEmuVec, timeBaseline, computePrediction, control) {
@@ -265,24 +267,18 @@ funForGridEst <- function(index, paraGrid, treePointer, predictionData, MRAcovPa
   aList
 }
 
-ComputeHyperMarginalMoments <- function(hyperparaList, optimOutput) {
+ComputeHyperMarginalMoments <- function(hyperparaList, ISlogWeightModifiers) {
   domainCheck <- sapply(hyperparaList, function(x) x$logJointValue > -Inf)
   hyperparaList <- hyperparaList[domainCheck]
   psiAndMargDistMatrix <- t(sapply(hyperparaList, function(x) c(unlist(x$MRAhyperparas), fixedEffSD = x$fixedEffSD, errorSD = x$errorSD, jointValue = exp(x$logJointValue))))
-  hyperparaNames <- names(hyperparaList[[1]]$MRAhyperparas)
+
   errorSD <- hyperparaList[[1]]$errorSD
-  if ("errorSD" %in% colnames(optimOutput$x)) {
-    errorSD <- optimOutput$x[, "errorSD"]
-  }
+
   fixedEffSD <- hyperparaList[[1]]$fixedEffSD
-  if ("fixedEffSD" %in% colnames(optimOutput$x)) {
-    fixedEffSD <- optimOutput$x[, "fixedEffSD"]
-  }
-  psiAndMargDistMatrix <- cbind(psiAndMargDistMatrix, cbind(optimOutput$x[hyperparaNames], errorSD, fixedEffSD, optimOutput$value))
+
+  numOptimPoints <- length(optimOutput$value)
   rownames(psiAndMargDistMatrix) <- NULL
   funToGetParaMoments <- function(hyperparaIndex) {
-    # variableValues <- sort(unique(psiAndMargDistMatrix[, hyperparaIndex]))
-    # massValues <- do.call("c", by(psiAndMargDistMatrix, INDICES = variableValues, FUN = function(block) sum(block[, ncol(block)]), simplify = FALSE))
     meanValue <- sum(psiAndMargDistMatrix[, hyperparaIndex] * psiAndMargDistMatrix[, ncol(psiAndMargDistMatrix)])
     sdValue <- sqrt(sum(psiAndMargDistMatrix[, hyperparaIndex]^2 * psiAndMargDistMatrix[, ncol(psiAndMargDistMatrix)]) - meanValue^2)
     c(mean = meanValue, StdDev = sdValue)
