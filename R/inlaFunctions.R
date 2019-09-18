@@ -165,16 +165,16 @@ obtainGridValues <- function(gridPointers, xStartValues, control, fixedEffSDstar
     assign(x = "value", value = c(get(x = "value", envir = envirToSaveValues), -returnedValue), envir = envirToSaveValues)
     returnedValue
   }
-  # gradForOptim <- function(x) {
-  #   names(x) <- names(xStartValues)
-  #   numDeriv::grad(func = funForOptim, x = x, method = "simple")
-  # }
+  gradForOptim <- function(x, envirToSaveValues) {
+    names(x) <- names(xStartValues)
+    numDeriv::grad(func = funForOptim, x = x, method = "simple", envirToSaveValues = envirToSaveValues)
+  }
   upperBound <- rep(Inf, length(xStartValues))
   names(upperBound) <- names(xStartValues)
   upperBound <- replace(upperBound, grep(names(upperBound), pattern = "mooth"), log(50)) # This is to avoid an overflow in the computation of the Matern covariance, which for some reason does not tolerate very high smoothness values.
   upperBound <- replace(upperBound, grep(names(upperBound), pattern = "scale"), 15) # This limits the scaling factor to exp(15) in the optimisation. This is to prevent computational issues in the sparse matrix inversion scheme.
-  # opt <- nloptr::lbfgs(x0 = log(xStartValues), lower = rep(-10, length(xStartValues)), upper = upperBound, fn = funForOptim, gr = gradForOptim, control = list(xtol_rel = 1e-3, maxeval = control$numIterOptim))
-  opt <- nloptr::cobyla(x0 = log(xStartValues), lower = rep(-10, length(xStartValues)), upper = upperBound, fn = funForOptim, control = list(xtol_rel = 5e-4, maxeval = control$numIterOptim), envirToSaveValues = storageEnvir)
+  opt <- nloptr::lbfgs(x0 = log(xStartValues), lower = rep(-10, length(xStartValues)), upper = upperBound, fn = funForOptim, gr = gradForOptim, control = list(xtol_rel = 1e-3, maxeval = control$numIterOptim), envirToSaveValues = storageEnvir)
+  # opt <- nloptr::cobyla(x0 = log(xStartValues), lower = rep(-10, length(xStartValues)), upper = upperBound, fn = funForOptim, control = list(xtol_rel = 5e-4, maxeval = control$numIterOptim), envirToSaveValues = storageEnvir)
   opt$value <- -opt$value # Correcting for the inversion used to maximise instead of minimise
   sampleWeights <- exp(storageEnvir$value - max(storageEnvir$value))
   sampleWeights <- sampleWeights/sum(sampleWeights)
@@ -279,8 +279,7 @@ ComputeHyperMarginalMoments <- function(hyperparaList, logISmodProbWeights) {
 }
 
 ComputeMeanMarginalMoments <- function(hyperparaList, logISmodProbWeights) {
-  # domainCheck <- sapply(hyperparaList, function(x) x$logJointValue > -Inf)
-  # hyperparaList <- hyperparaList[domainCheck]
+
   numMeanParas <- length(hyperparaList[[1]]$FullCondMean)
 
   marginalMeans <- sapply(1:numMeanParas, function(paraIndex) {
@@ -299,19 +298,17 @@ ComputeMeanMarginalMoments <- function(hyperparaList, logISmodProbWeights) {
 
 ComputeKrigingMoments <- function(hyperparaList, treePointer, logISmodProbWeights) {
 
-  # domainCheck <- sapply(hyperparaList, function(x) x$logJointValue > -Inf)
-  # hyperparaList <- hyperparaList[domainCheck]
-  termsForMean <- lapply(hyperparaList, function(x) {
-    drop(x$CondPredStats$Hmean * exp(logISmodProbWeights))
+  termsForMean <- lapply(seq_along(hyperparaList), function(index) {
+    drop(hyperparaList[[index]]$CondPredStats$Hmean * exp(logISmodProbWeights[[index]]))
   })
   krigingMeans <- Reduce("+", termsForMean)
-  termsForVarE1 <- lapply(hyperparaList, FUN = function(x) {
-    drop(x$CondPredStats$Hmean^2 * exp(logISmodProbWeights))
+  termsForVarE1 <- lapply(seq_along(hyperparaList), FUN = function(index) {
+    drop(hyperparaList[[index]]$CondPredStats$Hmean^2 * exp(logISmodProbWeights[[index]]))
   })
   varE <- Reduce('+', termsForVarE1) - krigingMeans^2
 
-  termsForEvar <- lapply(hyperparaList, function(x) {
-    drop(x$CondPredStats$Evar * exp(logISmodProbWeights))
+  termsForEvar <- lapply(seq_along(hyperparaList), function(index) {
+    drop(hyperparaList[[index]]$CondPredStats$Evar * exp(logISmodProbWeights[[index]]))
   })
   Evar <- Reduce("+", termsForEvar)
   predObsOrder <- GetPredObsOrder(treePointer = treePointer)
