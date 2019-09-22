@@ -49,7 +49,7 @@ public:
   void ComputeMRAlogLikAlt(const bool WmatsAvailable = false) ;
   std::vector<GaussDistParas> ComputeConditionalPrediction(const inputdata &) ;
 
-  void ComputeLogFCandLogCDandDataLL(Rcpp::Function, Rcpp::Function, Rcpp::Function) ;
+  void ComputeLogFCandLogCDandDataLL(Rcpp::Function, Rcpp::Function, Rcpp::Function, Rcpp::Function) ;
   void ComputeLogPriors() ;
 
   double GetMRAlogLik() const {return m_MRAlogLik ;}
@@ -62,6 +62,8 @@ public:
   int GetM() { return m_M ;}
   double GetLogJointPsiMarginal() { return m_logJointPsiMarginal ;}
   arma::uvec GetObsOrderForHpredMat() { return m_obsOrderForHpredMat ;}
+  arma::umat GetHmatPos() { return m_HmatPos ;}
+  arma::sp_mat GetFullCondPrecisionChol() { return m_FullCondPrecisionChol ;}
 
   void SetRNG(gsl_rng * myRNG) { m_randomNumGenerator = myRNG ;}
   void IncrementVstar(const double & increment) {m_Vstar += increment ;}
@@ -117,7 +119,7 @@ public:
   arma::sp_mat UpdateSigmaBetaEtaInvMat(Rcpp::Function) ;
   arma::sp_mat createQ() ;
 
-  void ComputeLogJointPsiMarginal(Rcpp::Function, Rcpp::Function, Rcpp::Function) ;
+  void ComputeLogJointPsiMarginal(Rcpp::Function, Rcpp::Function, Rcpp::Function, Rcpp::Function) ;
   // double ComputeJointPsiMarginalPropConstant(const arma::vec &, const double, const double, const double, const double) ;
   arma::vec GetFullCondMean() { return m_FullCondMean ;}
   arma::vec GetFullCondSDs() { return m_FullCondSDs ;}
@@ -223,7 +225,7 @@ private:
   arma::vec m_MRAvalues ;
   arma::vec m_FullCondMean ;
   arma::vec m_FullCondSDs ;
-  arma::sp_mat m_FullCondPrecision ;
+  arma::sp_mat m_FullCondPrecisionChol ;
   arma::sp_mat m_Hmat ;
 
   bool m_recordFullConditional{ false } ;

@@ -5,8 +5,8 @@ setupGridCpp <- function(responseValues, spCoords, predCoords, obsTime, predTime
     .Call('_MRAinla_setupGridCpp', PACKAGE = 'MRAinla', responseValues, spCoords, predCoords, obsTime, predTime, covariateMatrix, predCovariateMatrix, M, lonRange, latRange, timeRange, randomSeed, cutForTimeSplit, splitTime, numKnotsRes0, J)
 }
 
-LogJointHyperMarginalToWrap <- function(treePointer, MRAhyperparas, fixedEffSD, errorSD, MRAcovParasGammaAlphaBeta, FEmuVec, fixedEffGammaAlphaBeta, errorGammaAlphaBeta, matern, spaceNuggetSD, timeNuggetSD, recordFullConditional, gradCholeskiFun, sparseMatrixConstructFun, sparseDeterminantFun) {
-    .Call('_MRAinla_LogJointHyperMarginalToWrap', PACKAGE = 'MRAinla', treePointer, MRAhyperparas, fixedEffSD, errorSD, MRAcovParasGammaAlphaBeta, FEmuVec, fixedEffGammaAlphaBeta, errorGammaAlphaBeta, matern, spaceNuggetSD, timeNuggetSD, recordFullConditional, gradCholeskiFun, sparseMatrixConstructFun, sparseDeterminantFun)
+LogJointHyperMarginalToWrap <- function(treePointer, MRAhyperparas, fixedEffSD, errorSD, MRAcovParasGammaAlphaBeta, FEmuVec, fixedEffGammaAlphaBeta, errorGammaAlphaBeta, matern, spaceNuggetSD, timeNuggetSD, recordFullConditional, gradCholeskiFun, sparseMatrixConstructFun, sparseDeterminantFun, choleskiDecompFun) {
+    .Call('_MRAinla_LogJointHyperMarginalToWrap', PACKAGE = 'MRAinla', treePointer, MRAhyperparas, fixedEffSD, errorSD, MRAcovParasGammaAlphaBeta, FEmuVec, fixedEffGammaAlphaBeta, errorGammaAlphaBeta, matern, spaceNuggetSD, timeNuggetSD, recordFullConditional, gradCholeskiFun, sparseMatrixConstructFun, sparseDeterminantFun, choleskiDecompFun)
 }
 
 GetFullCondMean <- function(treePointer) {
@@ -27,5 +27,9 @@ GetNumTips <- function(treePointer) {
 
 GetPredObsOrder <- function(treePointer) {
     .Call('_MRAinla_GetPredObsOrder', PACKAGE = 'MRAinla', treePointer)
+}
+
+GetHmatPos <- function(treePointer) {
+    .Call('_MRAinla_GetHmatPos', PACKAGE = 'MRAinla', treePointer)
 }
 

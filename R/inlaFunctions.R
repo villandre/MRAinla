@@ -174,6 +174,8 @@ obtainGridValues <- function(gridPointers, xStartValues, control, fixedEffSDstar
   upperBound <- replace(upperBound, grep(names(upperBound), pattern = "mooth"), log(50)) # This is to avoid an overflow in the computation of the Matern covariance, which for some reason does not tolerate very high smoothness values.
   upperBound <- replace(upperBound, grep(names(upperBound), pattern = "scale"), 15) # This limits the scaling factor to exp(15) in the optimisation. This is to prevent computational issues in the sparse matrix inversion scheme.
   opt <- nloptr::lbfgs(x0 = log(xStartValues), lower = rep(-10, length(xStartValues)), upper = upperBound, fn = funForOptim, gr = gradForOptim, control = list(xtol_rel = 1e-3, maxeval = control$numIterOptim), envirToSaveValues = storageEnvir)
+  # cl <- parallel::makeForkCluster(nnodes = 4) ;
+  # opt <- optimParallel::optimParallel(par = log(xStartValues), lower = rep(-10, length(xStartValues)), upper = upperBound, fn = funForOptim, gr = gradForOptim, control = list(xtol_rel = 1e-3, maxeval = control$numIterOptim), envirToSaveValues = storageEnvir)
   # opt <- nloptr::cobyla(x0 = log(xStartValues), lower = rep(-10, length(xStartValues)), upper = upperBound, fn = funForOptim, control = list(xtol_rel = 5e-4, maxeval = control$numIterOptim), envirToSaveValues = storageEnvir)
   opt$value <- -opt$value # Correcting for the inversion used to maximise instead of minimise
   sampleWeights <- exp(storageEnvir$value - max(storageEnvir$value))
@@ -253,11 +255,11 @@ funForGridEst <- function(index, paraGrid, treePointer, predictionData, MRAcovPa
   if (!is.null(predictionData) & computePrediction) {
     timeValues <- as.integer(time(predictionData@time))/(3600*24) - timeBaseline # The division is to obtain values in days.
 
-    aList$CondPredStats <- ComputeCondPredStats(treePointer, predictionData@sp@coords, timeValues, as.matrix(predictionData@data), sparseMatrixConstructFun = buildSparseMatrix, sparseSolveFun = sparseInverse, batchSize = control$batchSizePredict)
+    aList$CondPredStats <- ComputeCondPredStats(treePointer, predictionData@sp@coords, timeValues, as.matrix(predictionData@data), sparseMatrixConstructFun = buildSparseMatrix, sparseSolveFun = choleskiSolve, batchSize = control$batchSizePredict)
   }
   # Running LogJointHyperMarginal stores in the tree pointed by gridPointer the full conditional mean and SDs when recordFullConditional = TRUE. We can get them with the simple functions I call now.
   aList$FullCondMean <- GetFullCondMean(treePointer)
-  aList$FullCondSDs <- GetFullCondSDs(treePointer)
+  aList$FullCondSDs <- GetFullCondSDs(treePointer) #This returns a bunch of zeros
   aList
 }
 
@@ -341,29 +343,44 @@ LogJointHyperMarginal <- function(treePointer, MRAhyperparas, fixedEffSD, errorS
   # MRAprecision has to be a sparse matrix.
   require(Matrix, quietly = TRUE)
 
-  logDetFun <- function(sparseM) {
-    sparseM <- as(sparseM, "symmetricMatrix")
-    value <- Matrix::determinant(x = sparseM, logarithm = TRUE)
-    value$modulus
+  logDetFun <- function(cholM) {
+    cholM <- as(cholM, "dgCMatrix")
+    2*sum(log(diag(cholM)))
   }
 
-  LogJointHyperMarginalToWrap(treePointer = treePointer, MRAhyperparas = MRAhyperparas, fixedEffSD = fixedEffSD, errorSD = errorSD, MRAcovParasGammaAlphaBeta = MRAcovParasGammaAlphaBeta, FEmuVec = FEmuVec, fixedEffGammaAlphaBeta =  fixedEffGammaAlphaBeta, errorGammaAlphaBeta = errorGammaAlphaBeta, matern = matern, spaceNuggetSD = spaceNuggetSD, timeNuggetSD = timeNuggetSD, recordFullConditional = TRUE, gradCholeskiFun = choleskiSolve, sparseMatrixConstructFun = buildSparseMatrix, sparseDeterminantFun = logDetFun)
+  LogJointHyperMarginalToWrap(treePointer = treePointer, MRAhyperparas = MRAhyperparas, fixedEffSD = fixedEffSD, errorSD = errorSD, MRAcovParasGammaAlphaBeta = MRAcovParasGammaAlphaBeta, FEmuVec = FEmuVec, fixedEffGammaAlphaBeta =  fixedEffGammaAlphaBeta, errorGammaAlphaBeta = errorGammaAlphaBeta, matern = matern, spaceNuggetSD = spaceNuggetSD, timeNuggetSD = timeNuggetSD, recordFullConditional = TRUE, gradCholeskiFun = choleskiSolve, sparseMatrixConstructFun = buildSparseMatrix, sparseDeterminantFun = logDetFun, choleskiDecompFun = createCholeski)
 }
 
 buildSparseMatrix <- function(posMat, values, dims, symmetric) {
   Matrix::sparseMatrix(i = posMat[, 1], j = posMat[ , 2], x = drop(values), dims = dims, index1 = FALSE, symmetric = symmetric)
 }
 
-choleskiSolve <- function(hessianMat, scaledResponseHmat) {
-  hessianMat <- as(hessianMat, "symmetricMatrix")
-  value <- as.vector(Matrix::solve(hessianMat, drop(scaledResponseHmat), sparse = TRUE))
+choleskiSolve <- function(cholMat, scaledResponse) {
+  print("Converting to dtcMatrix... \n")
+  cholMat <- as(cholMat, "dtCMatrix")
+  print("Done! Solving... \n")
+  value <- as.vector(Matrix::solve(cholMat, drop(scaledResponse), sparse = TRUE))
+  print("Done! Exiting... \n")
   value
 }
 
-sparseInverse <- function(sparseMat, otherMat) {
-  require(Matrix)
-  sparseMat <- as(sparseMat, "dsCMatrix")
-  otherMat <- as(otherMat, "dgCMatrix")
-  value <- Matrix::solve(a = sparseMat, b = otherMat, sparse = TRUE)
-  as(value, Class = "CsparseMatrix")
+# sparseInverse <- function(sparseMat, otherMat) {
+#   require(Matrix)
+#   # sparseMat <- as(sparseMat, "dsCMatrix")
+#   sparseMat <- as(sparseMat, "symmetricMatrix")
+#   otherMat <- as(otherMat, "dgCMatrix")
+#   value <- Matrix::solve(a = sparseMat, b = otherMat, sparse = TRUE)
+#   as(value, Class = "CsparseMatrix")
+# }
+
+createCholeski <- function(sparseMat) {
+  print("Coding as symmetric! \n")
+  sparseMat <- as(sparseMat, "symmetricMatrix")
+  cat("Matrix size: ", nrow(sparseMat), ncol(sparseMat), "\n")
+  print("Done! Computing Choleski... \n")
+  foo <- Matrix::chol(sparseMat, pivot = TRUE)
+  cat("Decomposition size: ", object.size(foo), "\n")
+  cat("Original size: ", object.size(sparseMat), "\n")
+  print("Done! Exiting createCholeski... \n")
+  foo
 }

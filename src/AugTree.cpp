@@ -707,8 +707,10 @@ void AugTree::ComputeLogPriors() {
   m_logPrior = logPrior ;
 }
 
-void AugTree::ComputeLogFCandLogCDandDataLL(Rcpp::Function gradCholeskiFun, Rcpp::Function sparseMatrixConstructFun,
-                                            Rcpp::Function sparseDeterminantFun) {
+void AugTree::ComputeLogFCandLogCDandDataLL(Rcpp::Function gradCholeskiFun,
+                                            Rcpp::Function sparseMatrixConstructFun,
+                                            Rcpp::Function sparseDeterminantFun,
+                                            Rcpp::Function choleskiDecompFun) {
 
   int n = m_dataset.responseValues.size() ;
   // cout << "Creating matrix of Ks... \n" ;
@@ -732,30 +734,30 @@ void AugTree::ComputeLogFCandLogCDandDataLL(Rcpp::Function gradCholeskiFun, Rcpp
   }
 
   sp_mat secondTerm = std::pow(m_errorSD, -2) * trans(m_Hmat) * m_Hmat ;
-  // cout << "Obtaining Q... \n" ;
-  m_FullCondPrecision = SigmaFEandEtaInv + secondTerm ;
-
+  cout << "Obtaining Qchol... \n" ;
+  m_FullCondPrecisionChol = Rcpp::as<sp_mat>(choleskiDecompFun(conv_to<sp_mat>::from(SigmaFEandEtaInv + secondTerm))) ;
+  cout << "Done! \n" ;
+  // m_FullCondSDs = sqrt(m_FullCondPrecisionChol.diag()) ;
   // cout << "Done... \n" ;
 
   vec responsesReshuffled = m_dataset.responseValues.elem(m_obsOrderForFmat) ;
 
-  // cout << "Computing FC mean... \n" ;
-
-  sp_mat hessianMat = SigmaFEandEtaInv + secondTerm ;
+  // sp_mat hessianMat = SigmaFEandEtaInv + secondTerm ;
   mat scaledResponse = std::pow(m_errorSD, -2) * trans(responsesReshuffled) * m_Hmat ;
-  // scaledResponse(0, 0, size(1, 10)).print("Scaled response:") ;
-  // hessianMat(0,0, size(7, 7)).print("Hessian matrix:") ;
-  Rcpp::NumericVector updatedMean = gradCholeskiFun(hessianMat, scaledResponse) ;
+
+  Rcpp::NumericVector updatedMean = gradCholeskiFun(m_FullCondPrecisionChol, scaledResponse) ;
 
   m_Vstar = updatedMean ; // Assuming there will be an implicit conversion to vec type.
+
   m_FullCondMean = m_Vstar ;
 
   vec fixedEffMeans = m_Vstar.head(m_fixedEffParameters.size()) ;
   SetFixedEffParameters(fixedEffMeans) ;
 
   // double logDetQmat = logDeterminantQmat(sparseMatrixConstructFun) ;
-  double logDetQmat = Rcpp::as<double>(sparseDeterminantFun(m_FullCondPrecision)) ;
-
+  // double logDetQmat = Rcpp::as<double>(sparseDeterminantFun(m_FullCondPrecisionChol)) ;
+  vec diagonal(m_FullCondPrecisionChol.diag()) ;
+  double logDetQmat = 2 * sum(log(diagonal)) ;
   m_logFullCond = 0.5 * logDetQmat ; // Since we arbitrarily evaluate always at the full-conditional mean, the exponential part of the distribution reduces to 0.
 
   // Computing p(v* | Psi)
@@ -770,8 +772,10 @@ void AugTree::ComputeLogFCandLogCDandDataLL(Rcpp::Function gradCholeskiFun, Rcpp
   m_globalLogLik = 0.5 * errorLogDet + globalLogLikExp(0) ;
 }
 
-void AugTree::ComputeLogJointPsiMarginal(Rcpp::Function gradCholeskiFun, Rcpp::Function sparseMatConstructFun,
-                                         Rcpp::Function sparseDeterminantFun) {
+void AugTree::ComputeLogJointPsiMarginal(Rcpp::Function gradCholeskiFun,
+                                         Rcpp::Function sparseMatConstructFun,
+                                         Rcpp::Function sparseDeterminantFun,
+                                         Rcpp::Function choleskiDecompFun) {
 
   ComputeLogPriors() ;
   // cout << "Computing Wmats... \n" ;
@@ -784,75 +788,13 @@ void AugTree::ComputeLogJointPsiMarginal(Rcpp::Function gradCholeskiFun, Rcpp::F
     // cout << "Done... \n" ;
   }
 
-  ComputeLogFCandLogCDandDataLL(gradCholeskiFun, sparseMatConstructFun, sparseDeterminantFun) ;
+  ComputeLogFCandLogCDandDataLL(gradCholeskiFun, sparseMatConstructFun, sparseDeterminantFun, choleskiDecompFun) ;
 
   // printf("Observations log-lik: %.4e \n Log-prior: %.4e \n Log-Cond. dist.: %.4e \n Log-full cond.: %.4e \n \n \n",
   // m_globalLogLik, m_logPrior, m_logCondDist, m_logFullCond) ;
   m_logJointPsiMarginal = m_globalLogLik + m_logPrior + m_logCondDist - m_logFullCond ;
   // printf("Joint value: %.4e \n \n", m_logJointPsiMarginal) ;
 }
-
-// This inversion is based on recursive partitioning of the Q matrix. It is based on the observation that it is
-// possible to form block-diagonal matrices on the diagonal which can be easily inverted.
-// The challenge in inverting Qmat was the very heavy memory burden.
-// This function involves much smaller matrices, which will make the operations easier to handle.
-// double AugTree::logDeterminantQmat(Rcpp::Function funToConstructSparse) {
-//
-//   if (m_DmatrixBlockIndices.size() == 0) {
-//     m_DmatrixBlockIndices = extractBlockIndicesFromLowerRight(m_FullCondPrecision) ;
-//
-//     uint basicIndex = 0 ;
-//     for (uint i = 0 ; i < m_DmatrixBlockIndices.size() - 1 ; i++) {
-//       uint blockIndex = m_DmatrixBlockIndices.at(i) ;
-//       uint nextBlockIndex = m_DmatrixBlockIndices.at(i+1) ;
-//       uint numRows = nextBlockIndex - blockIndex ;
-//       umat blockPos = join_rows(rep(regspace<uvec>(0, numRows - 1), numRows),
-//                                 rep_each(regspace<uvec>(0, numRows - 1), numRows)) + basicIndex ;
-//       m_DinFCmatPos = join_cols(m_DinFCmatPos, blockPos) ;
-//       basicIndex += numRows ;
-//     }
-//   }
-//
-//   int numRowsD = m_FullCondPrecision.n_rows - m_DmatrixBlockIndices(0) ;
-//   int numRowsA = m_DmatrixBlockIndices(0) ;
-//
-//   int shift = m_DmatrixBlockIndices.at(0) ;
-//
-//   uvec shiftedBlockIndices = m_DmatrixBlockIndices - shift ;
-//
-//   vec concatenatedValues ;
-//
-//   for (uint i = 0 ; i < m_DmatrixBlockIndices.size() - 1 ; i++) {
-//     uint index = m_DmatrixBlockIndices.at(i) ;
-//     uint numRows = m_DmatrixBlockIndices.at(i + 1) - index ;
-//     vec vectorisedInverse = vectorise(inv_sympd(mat(m_FullCondPrecision(index, index, size(numRows, numRows))))) ;
-//     concatenatedValues = join_cols(concatenatedValues, vectorisedInverse) ;
-//   }
-//
-//   sp_mat Dinv = Rcpp::as<sp_mat>(funToConstructSparse(m_DinFCmatPos, concatenatedValues)) ;
-//
-//   double logDeterminantD = logDetBlockMatrix(m_FullCondPrecision(m_DmatrixBlockIndices.at(0), m_DmatrixBlockIndices.at(0), size(numRowsD, numRowsD)), shiftedBlockIndices) ;
-//
-//   sp_mat Amatrix = m_FullCondPrecision(0, 0, size(numRowsA, numRowsA)) ;
-//
-//   double logDeterminantComposite, sign1 ;
-//   // uint AmatrixSize = DmatrixBlockIndices.at(0) ;
-//
-//   sp_mat Bmatrix = m_FullCondPrecision(0, m_DmatrixBlockIndices.at(0), size(numRowsA, numRowsD)) ;
-//   // The next few lines ensure that the matrix whose determinant needs to be computed is
-//   // really symmetric. Else computational zeros will ruin the symmetry.
-//   sp_mat compositeMat = Amatrix - Bmatrix * Dinv * trans(Bmatrix) ;
-//
-//   log_det(logDeterminantComposite, sign1, mat(compositeMat)) ;
-//
-//   if (sign1 < 0) {
-//     throw Rcpp::exception("Error in logDeterminantQmat! sign1 should be positive. \n") ;
-//   } // The determinant for the composite must be positive, because the determinant for D is positive. If it were negative, the determinant for the Q matrix would be negative, which is not allowed since it's a covariance matrix.
-//
-//   double logDeterminant = logDeterminantD + logDeterminantComposite ;
-//   // cout << "Leaving logDeterminantQmat... \n" ;
-//   return logDeterminant ;
-// }
 
 uvec AugTree::extractBlockIndicesFromLowerRight(const arma::sp_mat & symmSparseMatrix) {
   std::vector<uint> blockIndices ;
@@ -913,7 +855,7 @@ arma::vec AugTree::ComputeEvar(const arma::sp_mat & HmatPred, Rcpp::Function spa
     int newObsIndex = std::min(obsIndex + batchSize - 1, int(HmatPred.n_rows) - 1) ;
     sp_mat bVec = HmatPred.rows(obsIndex, newObsIndex) ;
     sp_mat bVecTrans = trans(HmatPred.rows(obsIndex, newObsIndex)) ;
-    sp_mat meanValue = bVecTrans % Rcpp::as<sp_mat>(sparseSolveFun(m_FullCondPrecision, bVecTrans)) ;
+    sp_mat meanValue = bVecTrans % Rcpp::as<sp_mat>(sparseSolveFun(m_FullCondPrecisionChol, bVecTrans)) ;
     EvarValues.subvec(obsIndex, newObsIndex) = trans(sum(meanValue,0)) + errorVar ;
 
     obsIndex += batchSize ;

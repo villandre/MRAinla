@@ -33,8 +33,8 @@ BEGIN_RCPP
 END_RCPP
 }
 // LogJointHyperMarginalToWrap
-double LogJointHyperMarginalToWrap(SEXP treePointer, Rcpp::List MRAhyperparas, double fixedEffSD, double errorSD, Rcpp::List MRAcovParasGammaAlphaBeta, Rcpp::NumericVector FEmuVec, NumericVector fixedEffGammaAlphaBeta, NumericVector errorGammaAlphaBeta, bool matern, double spaceNuggetSD, double timeNuggetSD, bool recordFullConditional, Rcpp::Function gradCholeskiFun, Rcpp::Function sparseMatrixConstructFun, Rcpp::Function sparseDeterminantFun);
-RcppExport SEXP _MRAinla_LogJointHyperMarginalToWrap(SEXP treePointerSEXP, SEXP MRAhyperparasSEXP, SEXP fixedEffSDSEXP, SEXP errorSDSEXP, SEXP MRAcovParasGammaAlphaBetaSEXP, SEXP FEmuVecSEXP, SEXP fixedEffGammaAlphaBetaSEXP, SEXP errorGammaAlphaBetaSEXP, SEXP maternSEXP, SEXP spaceNuggetSDSEXP, SEXP timeNuggetSDSEXP, SEXP recordFullConditionalSEXP, SEXP gradCholeskiFunSEXP, SEXP sparseMatrixConstructFunSEXP, SEXP sparseDeterminantFunSEXP) {
+double LogJointHyperMarginalToWrap(SEXP treePointer, Rcpp::List MRAhyperparas, double fixedEffSD, double errorSD, Rcpp::List MRAcovParasGammaAlphaBeta, Rcpp::NumericVector FEmuVec, NumericVector fixedEffGammaAlphaBeta, NumericVector errorGammaAlphaBeta, bool matern, double spaceNuggetSD, double timeNuggetSD, bool recordFullConditional, Rcpp::Function gradCholeskiFun, Rcpp::Function sparseMatrixConstructFun, Rcpp::Function sparseDeterminantFun, Rcpp::Function choleskiDecompFun);
+RcppExport SEXP _MRAinla_LogJointHyperMarginalToWrap(SEXP treePointerSEXP, SEXP MRAhyperparasSEXP, SEXP fixedEffSDSEXP, SEXP errorSDSEXP, SEXP MRAcovParasGammaAlphaBetaSEXP, SEXP FEmuVecSEXP, SEXP fixedEffGammaAlphaBetaSEXP, SEXP errorGammaAlphaBetaSEXP, SEXP maternSEXP, SEXP spaceNuggetSDSEXP, SEXP timeNuggetSDSEXP, SEXP recordFullConditionalSEXP, SEXP gradCholeskiFunSEXP, SEXP sparseMatrixConstructFunSEXP, SEXP sparseDeterminantFunSEXP, SEXP choleskiDecompFunSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -53,7 +53,8 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< Rcpp::Function >::type gradCholeskiFun(gradCholeskiFunSEXP);
     Rcpp::traits::input_parameter< Rcpp::Function >::type sparseMatrixConstructFun(sparseMatrixConstructFunSEXP);
     Rcpp::traits::input_parameter< Rcpp::Function >::type sparseDeterminantFun(sparseDeterminantFunSEXP);
-    rcpp_result_gen = Rcpp::wrap(LogJointHyperMarginalToWrap(treePointer, MRAhyperparas, fixedEffSD, errorSD, MRAcovParasGammaAlphaBeta, FEmuVec, fixedEffGammaAlphaBeta, errorGammaAlphaBeta, matern, spaceNuggetSD, timeNuggetSD, recordFullConditional, gradCholeskiFun, sparseMatrixConstructFun, sparseDeterminantFun));
+    Rcpp::traits::input_parameter< Rcpp::Function >::type choleskiDecompFun(choleskiDecompFunSEXP);
+    rcpp_result_gen = Rcpp::wrap(LogJointHyperMarginalToWrap(treePointer, MRAhyperparas, fixedEffSD, errorSD, MRAcovParasGammaAlphaBeta, FEmuVec, fixedEffGammaAlphaBeta, errorGammaAlphaBeta, matern, spaceNuggetSD, timeNuggetSD, recordFullConditional, gradCholeskiFun, sparseMatrixConstructFun, sparseDeterminantFun, choleskiDecompFun));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -118,15 +119,27 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// GetHmatPos
+arma::umat GetHmatPos(SEXP treePointer);
+RcppExport SEXP _MRAinla_GetHmatPos(SEXP treePointerSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< SEXP >::type treePointer(treePointerSEXP);
+    rcpp_result_gen = Rcpp::wrap(GetHmatPos(treePointer));
+    return rcpp_result_gen;
+END_RCPP
+}
 
 static const R_CallMethodDef CallEntries[] = {
     {"_MRAinla_setupGridCpp", (DL_FUNC) &_MRAinla_setupGridCpp, 16},
-    {"_MRAinla_LogJointHyperMarginalToWrap", (DL_FUNC) &_MRAinla_LogJointHyperMarginalToWrap, 15},
+    {"_MRAinla_LogJointHyperMarginalToWrap", (DL_FUNC) &_MRAinla_LogJointHyperMarginalToWrap, 16},
     {"_MRAinla_GetFullCondMean", (DL_FUNC) &_MRAinla_GetFullCondMean, 1},
     {"_MRAinla_GetFullCondSDs", (DL_FUNC) &_MRAinla_GetFullCondSDs, 1},
     {"_MRAinla_ComputeCondPredStats", (DL_FUNC) &_MRAinla_ComputeCondPredStats, 7},
     {"_MRAinla_GetNumTips", (DL_FUNC) &_MRAinla_GetNumTips, 1},
     {"_MRAinla_GetPredObsOrder", (DL_FUNC) &_MRAinla_GetPredObsOrder, 1},
+    {"_MRAinla_GetHmatPos", (DL_FUNC) &_MRAinla_GetHmatPos, 1},
     {NULL, NULL, 0}
 };
 
