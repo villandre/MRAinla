@@ -54,8 +54,9 @@ struct spatialcoor {
   spatialcoor(mat f_sp, vec f_time) : spatialCoords(f_sp), timeCoords(f_time) { } ;
 
   spatialcoor subset(uvec & indices)  const {
-    mat subSpatialCoords = spatialCoords.rows(indices) ;
-    vec subTimeCoords = timeCoords.rows(indices) ;
+    Eigen::PermutationMatrix perm(indices) ;
+    mat subSpatialCoords = perm * spatialCoords ;
+    vec subTimeCoords = perm * timeCoords ;
     return spatialcoor(subSpatialCoords, subTimeCoords) ;
   };
 };
@@ -69,20 +70,22 @@ struct inputdata : public spatialcoor {
     : spatialcoor(f_sp, f_time), responseValues(f_responses), covariateValues(f_covariates) {  } ;
 
   inputdata subset(uvec & indices)  const {
-    mat subSpatialCoords = spatialCoords.rows(indices) ;
-    vec subTimeCoords = timeCoords.elem(indices) ;
-    vec subResponseValues = responseValues.elem(indices) ;
-    mat subCovariates = covariateValues.rows(indices) ;
+    Eigen::PermutationMatrix perm(indices) ;
+    mat subSpatialCoords = perm * spatialCoords ;
+    vec subTimeCoords = perm * timeCoords ;
+    vec subResponseValues = perm * responseValues ;
+    mat subCovariates = perm * covariateValues ;
     return inputdata(subResponseValues, subSpatialCoords, subTimeCoords, subCovariates) ;
   }
 
   void reshuffle(uvec indices) {
-    mat spatialCoordsTrans = trans(spatialCoords) ;
-    spatialCoords = trans(spatialCoordsTrans.cols(indices)) ;
-    timeCoords = timeCoords.elem(indices) ;
-    mat covariateValuesTrans = trans(covariateValues) ;
-    covariateValues = trans(covariateValuesTrans.cols(indices)) ;
-    responseValues = responseValues.elem(indices) ;
+    mat spatialCoordsTrans = spatialCoords.transpose() ;
+    Eigen::PermutationMatrix perm(indices) ;
+    spatialCoords = (spatialCoordsTrans * perm).transpose() ;
+    timeCoords = perm * timeCoords ;
+    mat covariateValuesTrans = covariateValues.transpose() ;
+    covariateValues = (covariateValuesTrans * perm).transpose() ;
+    responseValues = perm * responseValues ;
   }
 };
 

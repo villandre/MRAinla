@@ -16,6 +16,7 @@ typedef Eigen::MatrixXf mat ;
 typedef Eigen::SparseMatrix<float> sp_mat ;
 typedef Eigen::VectorXi uvec ;
 typedef Eigen::MatrixXi umat ;
+typedef Eigen::Triplet<double> Triplet;
 
 Spatiotemprange sptimeDistance(const vec & spCoor1, const double & time1, const vec & spCoor2,
                                const double & time2) {
@@ -33,21 +34,20 @@ Spatiotemprange sptimeDistance(const vec & spCoor1, const double & time1, const 
 sp_mat createBlockMatrix(std::vector<mat *> listOfMatrices) {
   uint numRows = 0 ;
   uint numCols = 0 ;
-  for (auto & i : listOfMatrices) {
-    numRows += i->n_rows ;
-    numCols += i->n_cols ;
-  }
-  sp_mat X(numRows, numCols);
 
-  int idxRows = 0;
-  int idxCols = 0 ;
+  std::vector<Triplet> tripletList;
 
-  for(int i = 0; i < listOfMatrices.size(); i++) {
-    sp_mat dereferencedMatrix = conv_to<sp_mat>::from(*(listOfMatrices.at(i))) ;
-    X(idxRows, idxCols, arma::size(dereferencedMatrix.n_rows, dereferencedMatrix.n_cols)) = dereferencedMatrix ;
-    idxRows += dereferencedMatrix.n_rows ;
-    idxCols += dereferencedMatrix.n_cols ;
+  int offset = 0 ;
+  for (auto & aMatrix : listOfMatrices) {
+    for (uint j = 0; j < aMatrix->cols(); j++) {
+      for (uint i = 0; i < aMatrix->rows() ; i++) {
+        tripletList.push_back(Triplet(i,j,(*aMatrix(i + offset,j + offset)))) ;
+      }
+    }
+    offset += aMatrix->rows() ;
   }
+  sp_mat X(offset, offset);
+  X.setFromTriplets(tripletList.begin(), tripletList.end()) ;
 
   return X ;
 }
@@ -64,7 +64,14 @@ uvec extractBlockIndices(const sp_mat & symmSparseMatrix) {
     newPosNextBlock = posNextBlock + 1 ;
     for (int i = posNextBlock; i < newPosNextBlock; i++) {
       vec myCol = vec(symmSparseMatrix.col(i)) ;
+
       uvec nonZeroElements = arma::find(myCol) ;
+      bool nonZeroCheck = false ;
+      int lastNonZero = myCol.size()-1 ;
+      for (auto & i : myCol.reverse()) {
+        if (i > 0)
+      }
+
       int lastNonZero = nonZeroElements.tail(1)(0) ;
       if ((lastNonZero + 1) > newPosNextBlock) {
         newPosNextBlock = lastNonZero + 1;

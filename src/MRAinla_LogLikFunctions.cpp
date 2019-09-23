@@ -48,11 +48,8 @@ double LogJointHyperMarginalToWrap(SEXP treePointer, Rcpp::List MRAhyperparas,
          double fixedEffSD, double errorSD, Rcpp::List MRAcovParasGammaAlphaBeta,
          Rcpp::NumericVector FEmuVec, NumericVector fixedEffGammaAlphaBeta,
          NumericVector errorGammaAlphaBeta, bool matern, double spaceNuggetSD, double timeNuggetSD,
-         bool recordFullConditional, Rcpp::Function gradCholeskiFun,
-         Rcpp::Function sparseMatrixConstructFun,
-         Rcpp::Function sparseDeterminantFun,
-         Rcpp::Function choleskiDecompFun) {
-  arma::mat posteriorMatrix ;
+         bool recordFullConditional) {
+  mat posteriorMatrix ;
   double outputValue = 0 ;
 
   if (!(treePointer == NULL))
@@ -83,15 +80,8 @@ double LogJointHyperMarginalToWrap(SEXP treePointer, Rcpp::List MRAhyperparas,
 
     pointedTree->SetMRAcovParas(MRAhyperparas) ;
     pointedTree->SetRecordFullConditional(recordFullConditional) ;
-    // if (pointedTree->m_HmatPos.size() > 0) {
-    //   ProfilerStart("/home/luc/Downloads/myprofile.log") ;
-    //   pointedTree->ComputeLogJointPsiMarginal(gradCholeskiFun, sparseMatrixConstructFun, sparseDeterminantFun) ;
-    //   ProfilerStop() ;
-    //   throw Rcpp::exception("Stop for profiling... \n") ;
-    // }
-    // else {
-      pointedTree->ComputeLogJointPsiMarginal(gradCholeskiFun, sparseMatrixConstructFun, sparseDeterminantFun, choleskiDecompFun) ;
-    // }
+
+    pointedTree->ComputeLogJointPsiMarginal() ;
 
     outputValue = pointedTree->GetLogJointPsiMarginal() ;
     // printf("Marginal joint Psi: %.4e \n \n \n", pointedTree->GetLogJointPsiMarginal()) ;
@@ -105,7 +95,7 @@ double LogJointHyperMarginalToWrap(SEXP treePointer, Rcpp::List MRAhyperparas,
 
 // [[Rcpp::export]]
 
-arma::vec GetFullCondMean(SEXP treePointer) {
+vec GetFullCondMean(SEXP treePointer) {
   vec outputVec ;
   if (!(treePointer == NULL))
   {
@@ -121,7 +111,7 @@ arma::vec GetFullCondMean(SEXP treePointer) {
 
 // [[Rcpp::export]]
 
-arma::vec GetFullCondSDs(SEXP treePointer) {
+vec GetFullCondSDs(SEXP treePointer) {
   vec outputVec ;
   if (!(treePointer == NULL))
   {
@@ -138,8 +128,7 @@ arma::vec GetFullCondSDs(SEXP treePointer) {
 // [[Rcpp::export]]
 
 Rcpp::List ComputeCondPredStats(SEXP treePointer, NumericMatrix spCoordsForPredict, NumericVector timeForPredict,
-                                 NumericMatrix covariateMatrixForPredict, Rcpp::Function sparseMatrixConstructFun,
-                                 Rcpp::Function sparseSolveFun, int batchSize) {
+                                 NumericMatrix covariateMatrixForPredict, int batchSize) {
   sp_mat Hmat, Hmean, HmeanSq ;
   mat HmeanMat ;
   vec Evar ;
@@ -151,11 +140,11 @@ Rcpp::List ComputeCondPredStats(SEXP treePointer, NumericMatrix spCoordsForPredi
     vec time = Rcpp::as<vec>(timeForPredict) ;
     mat covariates = Rcpp::as<mat>(covariateMatrixForPredict) ;
 
-    Hmat = conv_to<mat>::from(pointedTree->ComputeHpred(spCoords, time, covariates, sparseMatrixConstructFun)) ;
+    Hmat = conv_to<mat>::from(pointedTree->ComputeHpred(spCoords, time, covariates)) ;
     sp_mat Hmean = Hmat * conv_to<sp_mat>::from(pointedTree->GetFullCondMean()) ;
     HmeanMat = conv_to<mat>::from(Hmean) ;
     cout << "Computing Evar! \n" ;
-    Evar = pointedTree->ComputeEvar(Hmat, sparseSolveFun, batchSize) ;
+    Evar = pointedTree->ComputeEvar(Hmat, batchSize) ;
     cout << "Done! \n" ;
   }
   else
@@ -175,18 +164,16 @@ int GetNumTips(SEXP treePointer) {
 
 // [[Rcpp::export]]
 
-arma::uvec GetPredObsOrder(SEXP treePointer) {
+uvec GetPredObsOrder(SEXP treePointer) {
   XPtr<AugTree> pointedTree(treePointer) ; // Becomes a regular pointer again.
-  arma::uvec value = pointedTree->GetObsOrderForHpredMat() ;
+  uvec value = pointedTree->GetObsOrderForHpredMat() ;
   return value ;
 }
 
 // [[Rcpp::export]]
 
-arma::umat GetHmatPos(SEXP treePointer) {
+umat GetHmatPos(SEXP treePointer) {
   XPtr<AugTree> pointedTree(treePointer) ; // Becomes a regular pointer again.
-  arma::uvec value = pointedTree->GetHmatPos() ;
+  uvec value = pointedTree->GetHmatPos() ;
   return value ;
 }
-
-

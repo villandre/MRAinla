@@ -7,7 +7,7 @@ using namespace arma ;
 using namespace MRAinla ;
 using namespace std ;
 
-arma::uvec TreeNode::deriveObsInNode(const spatialcoor & dataset) {
+uvec TreeNode::deriveObsInNode(const spatialcoor & dataset) {
   uvec lonCheck = (dataset.spatialCoords.col(0) > min(m_dimensions.longitude)) %
     (dataset.spatialCoords.col(0) <= max(m_dimensions.longitude)) ; // Longitude check
   uvec latCheck = (dataset.spatialCoords.col(1) > min(m_dimensions.latitude)) %
@@ -58,7 +58,7 @@ void TreeNode::baseComputeWmat(const maternVec & covParasSp, const maternVec & c
     for (uint k = 0; k < l ; k++) {
       secondMat += m_Wlist.at(k) *
         brickList.at(k)->GetKmatrix() *
-        trans(brickList.at(l)->GetWlist().at(k)) ;
+        brickList.at(l)->GetWlist().at(k).transpose() ;
     }
     m_Wlist.at(l) = firstMat - secondMat ;
     if (l == m_depth) {
@@ -106,27 +106,3 @@ mat TreeNode::computeCovMat(const spatialcoor & spTime1, const spatialcoor & spT
 
   return covMat ;
 }
-
-// void TreeNode::initiateBknots(const vec & covParas) {
-//   std::vector<TreeNode *> brickList = getAncestors() ;
-//   if (m_depth > 0) {
-//     m_bKnots.resize(m_depth) ;
-//     m_bKnots.at(0) = computeCovMat(m_knotsCoor, brickList.at(0)->GetKnotsCoor(), covParas) ;
-//   }
-// }
-
-// void TreeNode::completeBknots(const vec & covParas, const uint level) {
-//   std::vector<TreeNode *> brickList = getAncestors() ;
-//   mat currentV = computeCovMat(m_knotsCoor, brickList.at(level)->GetKnotsCoor(), covParas) ;
-//   if (level > 0) {
-//     for (uint i = 0; i < level ; i++) {
-//       currentV -= m_bKnots.at(i) * brickList.at(i)->GetKmatrix() * trans(brickList.at(level)->GetBknots().at(i)) ;
-//     }
-//   }
-//   m_bKnots.at(level) = currentV ;
-//   if (GetChildren().at(0) != NULL) {
-//     for (auto & i : GetChildren()) {
-//       i->completeBknots(covParas, level) ;
-//     }
-//   }
-// }

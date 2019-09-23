@@ -5,7 +5,8 @@ using namespace arma ;
 using namespace MRAinla ;
 
 void TipNode::DeriveOmega(const vec & responseValues) {
-  vec subResponses = responseValues.elem(m_obsInNode) ;
+  Eigen::PermutationMatrix perm(m_obsInNode) ;
+  vec subResponses = perm * responseValues ;
   for (uint i = 0 ; i < m_depth; i++) {
     m_omegaTilde.at(i) = GetB(i).transpose() * m_SigmaInverse * subResponses ;
   }
@@ -24,7 +25,7 @@ void TipNode::computeUpred(const maternVec & covParasSp, const maternVec & covPa
       mat firstTerm = computeCovMat(subLocations, brickList.at(l)->GetKnotsCoor(), covParasSp, covParasTime, scaling, matern, spaceNuggetSD, timeNuggetSD) ;
       mat secondTerm(firstTerm.n_rows, firstTerm.n_cols, fill::zeros) ;
       for (uint k = 0 ; k <= l-1; k++) {
-         secondTerm += m_UmatList.at(k) * brickList.at(k)->GetKmatrix() * trans(brickList.at(l)->GetWlist().at(k)) ;
+         secondTerm += m_UmatList.at(k) * brickList.at(k)->GetKmatrix() * brickList.at(l)->GetWlist().at(k).transpose() ;
       }
       m_UmatList.at(l) = firstTerm - secondTerm ;
     }

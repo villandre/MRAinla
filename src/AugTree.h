@@ -40,16 +40,12 @@ public:
   AugTree(uint &, vec &, vec &, vec &, vec &, mat &, vec &, mat &, mat &, vec &, uint &, unsigned long int &, mat &, const bool, const unsigned int, const unsigned int) ;
 
   std::vector<TreeNode *> GetVertexVector() {return m_vertexVector ;} ;
-  umat m_HmatPos ;
-  umat m_HmatPredPos ;
-  umat m_SigmaPos ;
   umat m_DinFCmatPos ;
 
-  // void ComputeMRAlogLik(const bool WmatsAvailable = false) ;
   void ComputeMRAlogLikAlt(const bool WmatsAvailable = false) ;
   std::vector<GaussDistParas> ComputeConditionalPrediction(const inputdata &) ;
 
-  void ComputeLogFCandLogCDandDataLL(Rcpp::Function, Rcpp::Function, Rcpp::Function, Rcpp::Function) ;
+  void ComputeLogFCandLogCDandDataLL() ;
   void ComputeLogPriors() ;
 
   double GetMRAlogLik() const {return m_MRAlogLik ;}
@@ -116,16 +112,16 @@ public:
 
   void createHmatrixPredPos() ;
   sp_mat CreateSigmaBetaEtaInvMat() ;
-  sp_mat UpdateSigmaBetaEtaInvMat(Rcpp::Function) ;
+  sp_mat UpdateSigmaBetaEtaInvMat() ;
   sp_mat createQ() ;
 
-  void ComputeLogJointPsiMarginal(Rcpp::Function, Rcpp::Function, Rcpp::Function, Rcpp::Function) ;
+  void ComputeLogJointPsiMarginal() ;
   // double ComputeJointPsiMarginalPropConstant(const vec &, const double, const double, const double, const double) ;
   vec GetFullCondMean() { return m_FullCondMean ;}
   vec GetFullCondSDs() { return m_FullCondSDs ;}
 
-  sp_mat ComputeHpred(const mat &, const vec &, const mat &, Rcpp::Function ) ;
-  vec ComputeEvar(const sp_mat &, Rcpp::Function, const int) ;
+  sp_mat ComputeHpred(const mat &, const vec &, const mat &) ;
+  vec ComputeEvar(const sp_mat &, const int) ;
 
   ~ AugTree() {
     deallocate_container(m_vertexVector) ;
@@ -225,8 +221,9 @@ private:
   vec m_MRAvalues ;
   vec m_FullCondMean ;
   vec m_FullCondSDs ;
-  sp_mat m_FullCondPrecisionChol ;
+  Eigen::SimplicialCholeskyLDLT m_FullCondPrecisionChol ;
   sp_mat m_Hmat ;
+  sp_mat m_HmatPred ;
 
   bool m_recordFullConditional{ false } ;
   bool m_GammaParasSet{ false } ;
@@ -243,10 +240,10 @@ private:
   }
 
   void createHmatrixPos() ;
-  void updateHmatrix(Rcpp::Function) ;
-  sp_mat updateHmatrixPred(Rcpp::Function) ;
+  void updateHmatrix() ;
+  void updateHmatrixPred() ;
   vec optimJointHyperMarg(const vec &, const double, const double, const double, const double) ;
-  double logDeterminantQmat(Rcpp::Function) ;
+  double logDeterminantQmat() ;
   uvec extractBlockIndicesFromLowerRight(const sp_mat &) ;
   // void invFromDecomposition(const sp_mat &, const sp_mat &, const sp_mat &, sp_mat *,
   //                                const uvec &) ;

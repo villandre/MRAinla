@@ -26,7 +26,7 @@ struct MVN{
   MVN(const vec & mu, const sp_mat & precision): mu(mu), precision(precision) {} ;
 
   double ComputeExpTerm(const vec & coordinate) {
-    vec output = -0.5 * trans(coordinate - mu) * precision * (coordinate - mu) ;
+    vec output = -0.5 * (coordinate - mu).transpose() * precision * (coordinate - mu) ;
     return output(0) ;
   }
 };
@@ -64,7 +64,6 @@ AugTree::AugTree(uint & M, vec & lonRange, vec & latRange, vec & timeRange, vec 
   }
 
   createHmatrixPredPos() ;
-  m_SigmaPos = umat(0, 2) ;
 }
 
 void AugTree::BuildTree(const uint & minObsForTimeSplit, const bool splitTime, const unsigned int numKnots0, const unsigned int J)
@@ -99,11 +98,12 @@ void AugTree::numberNodes() {
 // We make sure that splits don't result in empty regions
 void AugTree::createLevels(TreeNode * parent, const uint & numObsForTimeSplit, const bool splitTime) {
   uvec obsForMedian = parent->GetObsInNode() ;
+  Eigen::PermutationMatrix perm(obsForMedian) ;
   uvec childMembership(obsForMedian.size(), fill::zeros) ;
   std::vector<dimensions> childDimensions ;
   childDimensions.push_back(parent->GetDimensions()) ;
 
-  if (obsForMedian.n_elem <= 1) {
+  if (obsForMedian.size() <= 1) {
     throw Rcpp::exception("Cannot split empty region or region with only one observation.\n") ;
   }
 
@@ -114,8 +114,8 @@ void AugTree::createLevels(TreeNode * parent, const uint & numObsForTimeSplit, c
   for (auto & j : currentChildIndices) {
     uvec elementsInChild = find(childMembership == j) ;
     vec column = m_dataset.spatialCoords.col(0) ;
-    vec subColumn = column.elem(obsForMedian) ;
-    double colMedian = median(subColumn.elem(elementsInChild)) ;
+    vec subColumn = perm * column ;
+    double colMedian = subColumn(elementsInChild).median() ;
     vec updatedLongitude{childDimensions.at(j).longitude.at(0), colMedian} ;
     vec newChildLongitude{colMedian, childDimensions.at(j).longitude.at(1)} ;
     dimensions newDimensions = childDimensions.at(j) ;
@@ -132,7 +132,7 @@ void AugTree::createLevels(TreeNode * parent, const uint & numObsForTimeSplit, c
   currentChildIndices = regspace<uvec>(0, newChildIndex - 1) ;
   for (auto & j : currentChildIndices) {
     vec column = m_dataset.spatialCoords.col(1) ;
-    vec subColumn = column.elem(obsForMedian) ;
+    vec subColumn = perm * column ;
     uvec elementsInChild = find(childMembership == j) ;
     double colMedian = median(subColumn.elem(elementsInChild)) ;
     vec updatedLatitude{childDimensions.at(j).latitude.at(0), colMedian} ;
@@ -150,9 +150,10 @@ void AugTree::createLevels(TreeNode * parent, const uint & numObsForTimeSplit, c
     // Handling time
     currentChildIndices = regspace<uvec>(0, newChildIndex - 1) ;
     for (auto & j : currentChildIndices) {
-      vec time = m_dataset.timeCoords.elem(obsForMedian) ;
+      vec time = perm * m_dataset.timeCoords ;
       uvec elementsInChild = find(childMembership == j) ;
-      vec elementsForMedian = time.elem(elementsInChild) ;
+      Sparse::PermutationMatrix permElementsInChild(elementsInChild) ;
+      vec elementsForMedian = permElementsInChild * time ;
       uvec uniqueTimeValues = find_unique(elementsForMedian) ;
 
       if (uniqueTimeValues.size() > 1) {
@@ -163,9 +164,13 @@ void AugTree::createLevels(TreeNode * parent, const uint & numObsForTimeSplit, c
         newDimensions.time = newChildTime ;
         childDimensions.push_back(newDimensions) ;
         childDimensions.at(j).time = updatedTime ;
-        uvec greaterElements = find(time.elem(elementsInChild) > colMedian) ;
-        uvec updateIndices = elementsInChild.elem(greaterElements) ;
-        childMembership.elem(updateIndices).fill(newChildIndex) ;
+        uvec greaterElements = find(permElementsInChild * time > colMedian) ;
+        Eigen::PermutationMatrix permGreaterElements(greaterElements) ;
+        uvec updateIndices = permGreaterElements * greaterElements ;
+
+        for (auto & i : updateIndices) {
+          childMembership(i) = newChildIndex ;
+        }
         newChildIndex += 1 ;
       }
     }
@@ -206,30 +211,6 @@ void AugTree::generateKnots(TreeNode * node, const unsigned int numKnotsRes0, co
     }
   }
 }
-
-// void AugTree::ComputeMRAlogLik(const bool WmatsAvailable)
-// {
-//   cout << "Entered ComputeMRAlogLik... \n" ;
-//   if (!WmatsAvailable) {
-//     computeWmats() ;
-//   }
-//   deriveAtildeMatrices() ;
-//
-//   computeOmegas() ;
-//   computeU() ;
-//   computeD() ;
-//
-//   // The log-likelihood is a function of d and u computed at the root node, being at the
-//   // head of m_vertexVector, since it's the first one we ever created.
-//
-//   double tempLogLik = (m_vertexVector.at(0)->GetD() + m_vertexVector.at(0)->GetU()) ;
-//
-//   tempLogLik = -tempLogLik/2 ;
-//   // We set m_newHyperParas=false to indicate that covariance computations with the current hyperparameters
-//   // have been perfomed, and need not be performed again, unless we change the hyperparameters.
-//   m_recomputeMRAlogLik = false ;
-//   m_MRAlogLik = tempLogLik ;
-// }
 
 void AugTree::ComputeMRAlogLikAlt(const bool WmatsAvailable)
 {
@@ -289,100 +270,12 @@ void AugTree::deriveAtildeMatrices() {
     uint levelRecast = (uint) level ;
     std::vector<TreeNode *> levelNodes = GetLevelNodes(levelRecast) ;
 
-    // for (auto & i : levelNodes) {
-    //   i->DeriveAtilde() ;
-    // }
     // #pragma omp parallel for
     for (std::vector<TreeNode *>::iterator it = levelNodes.begin(); it < levelNodes.end(); it++) {
       (*it)->DeriveAtilde() ;
     }
   }
 }
-
-// void AugTree::computeOmegas() {
-//   for (int level = m_M; level >= 0 ; level--) {
-//     uint levelRecast = (uint) level ;
-//     std::vector<TreeNode *> levelNodes = GetLevelNodes(levelRecast) ;
-//     for (auto & i : levelNodes) {
-//       i->DeriveOmega(m_MRAvalues) ;
-//     }
-//   }
-// }
-//
-// void AugTree::computeU() {
-//   for (int level = m_M; level >= 0 ; level--) {
-//     uint levelRecast = (uint) level ;
-//     std::vector<TreeNode *> levelNodes = GetLevelNodes(levelRecast) ;
-//     for (auto & i : levelNodes) {
-//       i->DeriveU(m_MRAvalues) ;
-//     }
-//   }
-// };
-//
-// void AugTree::computeD() {
-//   for (int level = m_M; level >= 0 ; level--) {
-//     uint levelRecast = (uint) level ;
-//     std::vector<TreeNode *> levelNodes = GetLevelNodes(levelRecast) ;
-//
-//     // Trying openmp. We need to have a standard looping structure.
-//
-//     // #pragma omp parallel for
-//     for (std::vector<TreeNode *>::iterator it = levelNodes.begin(); it < levelNodes.end(); it++) {
-//       (*it)->DeriveD() ;
-//     }
-//   }
-// }
-
-// std::vector<GaussDistParas> AugTree::ComputeConditionalPrediction(const inputdata & predictionData) {
-//   distributePredictionData(predictionData) ;
-//
-//   for (int level = m_M; level >= 0 ; level--) {
-//     uint levelRecast = (uint) level ;
-//     std::vector<TreeNode *> levelNodes = GetLevel(levelRecast) ;
-//     // #pragma omp parallel for
-//     for (std::vector<TreeNode *>::iterator it = levelNodes.begin(); it < levelNodes.end(); it++) {
-//     // for (auto & i : levelNodes) {
-//       (*it)->ComputeParasEtaDeltaTilde(predictionData, m_dataset, m_MRAcovParas) ;
-//     }
-//   }
-//   computeBtildeInTips() ;
-//
-//   std::vector<vec> predictionsFromEachSection ;
-//   std::vector<TreeNode *> tipNodes = GetLevel(m_M) ;
-//
-//   std::vector<GaussDistParas> distParasFromEachZone ;
-//   // #pragma omp parallel for
-//   for (std::vector<TreeNode *>::iterator it = tipNodes.begin(); it < tipNodes.end(); it++) {
-//   // for (auto & i : tipNodes) {
-//     distParasFromEachZone.push_back((*it)->CombineEtaDelta(predictionData, m_fixedEffParameters)) ;
-//   }
-//
-//   return distParasFromEachZone ;
-// }
-
-
-//
-// void AugTree::computeBtildeInTips() {
-//   std::vector<std::vector<TreeNode *>> nodesAtLevels(m_M+1) ;
-//   for (uint i = 0 ; i <= m_M ; i++) {
-//     nodesAtLevels.at(i) = GetLevel(i) ;
-//   }
-//   // The two following loops cannot be joined.
-//   for (uint level = 1; level <= m_M ; level++) {
-//     for (auto & i : nodesAtLevels.at(level)) {
-//       i->initiateBknots(m_MRAcovParas) ;
-//     }
-//   }
-//   for (uint level = 1; level < m_M ; level++) {
-//     for (auto & i : nodesAtLevels.at(level+1)) {
-//       i->completeBknots(m_MRAcovParas, level) ;
-//     }
-//   }
-//   for (auto & i : nodesAtLevels.at(m_M)) {
-//     i->computeBpred(m_predictLocations, m_MRAcovParas) ;
-//     i->deriveBtilde(m_predictLocations) ;
-//   }
-// }
 
 std::vector<TreeNode *> AugTree::GetLevel(const uint level) {
   std::vector<TreeNode *> nodesAtLevel;
@@ -433,29 +326,39 @@ sp_mat AugTree::CreateSigmaBetaEtaInvMat() {
     m_SigmaPos = join_cols(m_SigmaPos, blockPos) ;
     basicIndex += numRows ;
   }
-  // uvec keepIndices = find(m_SigmaPos.col(0) >= m_SigmaPos.col(1)) ;
-  // m_SigmaPos = m_SigmaPos.rows(keepIndices) ;
+
   return SigmaFEandEtaInv ;
 }
 
-sp_mat AugTree::UpdateSigmaBetaEtaInvMat(Rcpp::Function buildSparse) {
+sp_mat AugTree::UpdateSigmaBetaEtaInvMat() {
   std::vector<mat *> FEinvAndKinvMatrixList = getKmatricesInversePointers() ;
-  mat FEinvMatrix = pow(m_fixedEffSD, -2) * eye<mat>(m_fixedEffParameters.size(), m_fixedEffParameters.size()) ;
+
+  for (auto & i : FEinvAndKinvMatrixList) { // This would not need to be done everytime an update is processed, as numElements doesn't change, but it's probably very fast, so it shouldn't matter.
+
+  }
+
+  mat FEinvMatrix = pow(m_fixedEffSD, -2) * mat::Identity(m_fixedEffParameters.size(), m_fixedEffParameters.size()) ;
   FEinvAndKinvMatrixList.insert(FEinvAndKinvMatrixList.begin(), &FEinvMatrix) ;
   uint accSize = 0 ;
 
-  vec concatenatedValues(m_SigmaPos.n_rows) ;
-  concatenatedValues.subvec(0, size(FEinvMatrix.diag())) = FEinvMatrix.diag() ;
+  vec concatenatedValues(numElements) ;
+  concatenatedValues.segment(0, m_fixedEffParameters.size()) = FEinvMatrix.diagonal() ;
   uint index = FEinvMatrix.n_rows ;
-  uint newIndex ;
+  int numElements = m_fixedEffParameters.size() ;
   for (uint i = 1; i < FEinvAndKinvMatrixList.size(); i++) {
-    newIndex = index + FEinvAndKinvMatrixList.at(i)->size() ;
-    concatenatedValues.subvec(index,  newIndex - 1) = vectorise(*FEinvAndKinvMatrixList.at(i)) ;
-    index = newIndex ;
+    concatenatedValues.segment(index,  FEinvAndKinvMatrixList.at(i)->size()) = Map<vec>((*FEinvAndKinvMatrixList.at(i)).data(), (*FEinvAndKinvMatrixList.at(i)).cols() * (*FEinvAndKinvMatrixList.at(i)).rows()) ;
+    index += FEinvAndKinvMatrixList.at(i)->size() ;
   }
-  uvec dims(2) ;
-  dims.fill(GetNumKnots() + m_dataset.covariateValues.n_cols + 1) ;
-  sp_mat FEinvAndKinvMatrices = Rcpp::as<sp_mat>(buildSparse(m_SigmaPos, concatenatedValues, dims, false)) ;
+
+  int loopIndex = 0 ;
+  sp_mat FEinvAndKinvMatrices(numElements, numElements);
+  for (int k = 0; k < FEinvAndKinvMatrices.outerSize(); ++k) {
+    for (SparseMatrix<double>::InnerIterator it(FEinvAndKinvMatrices, k); it; ++it)
+    {
+      it.valueRef = concatenatedValues(loopIndex) ;
+      loopIndex += 1 ;
+    }
+  }
 
   return FEinvAndKinvMatrices ;
 }
@@ -533,8 +436,9 @@ void AugTree::createHmatrixPos() {
 
   m_obsOrderForFmat = FmatObsOrder ;
 
-  mat transIncrementedCovar = trans(join_rows(ones<vec>(numObs), m_dataset.covariateValues)) ;
-  m_incrementedCovarReshuffled = trans(transIncrementedCovar.cols(m_obsOrderForFmat)) ;
+  Eigen::PermutationMatrix perm(m_obsOrderForFmat) ;
+  mat transIncrementedCovar = (join_rows(ones<vec>(numObs), m_dataset.covariateValues)).tranpose() ;
+  m_incrementedCovarReshuffled = (transIncrementedCovar * perm).transpose() ;
   m_HmatPos.col(1) += m_dataset.covariateValues.n_cols + 1 ;
 
   umat covPos = join_rows(rep(regspace<uvec>(0, m_incrementedCovarReshuffled.n_rows - 1), m_incrementedCovarReshuffled.n_cols),
@@ -542,24 +446,39 @@ void AugTree::createHmatrixPos() {
   m_HmatPos = join_cols(covPos, m_HmatPos) ;
 }
 
-void AugTree::updateHmatrix(Rcpp::Function sparseMatrixConstructFun) {
-  vec concatenatedValues = vectorise(m_incrementedCovarReshuffled) ;
-
+void AugTree::updateHmatrix() {
+  int numElementsInH = m_incrementedCovarReshuffled.size() ;
   for (auto & tipNode : GetTipNodes()) {
     for (auto & Bmat : tipNode->GetWlist()) {
-      concatenatedValues = join_cols(concatenatedValues, vectorise(Bmat)) ;
+      numElementsInH += Bmat.size() ;
     }
   }
-  uvec testVector = find(m_HmatPos.col(1) == 5) ;
+  vec concatenatedValues(numElementsInH) ;
+  concatenatedValues.segment(0, m_incrementedCovarReshuffled.size()) = Map<vec>(m_incrementedCovarReshuffled, m_incrementedCovarReshuffled.size()) ;
+  int index = m_incrementedCovarReshuffled.size() ;
+  for (auto & tipNode : GetTipNodes()) {
+    for (auto & Bmat : tipNode->GetWlist()) {
+      concatenatedValues.segment(index, Bmat.size()) = Map<vec>(Bmat, Bmat.size()) ;
+      index += Bmat.size() ;
+    }
+  }
+
 
   uvec dims(2) ;
   dims.at(0) = m_dataset.responseValues.size() ;
   dims.at(1) = GetNumKnots() + m_dataset.covariateValues.n_cols + 1 ;
 
-  m_Hmat = Rcpp::as<sp_mat>(sparseMatrixConstructFun(m_HmatPos, concatenatedValues, dims, false)) ;
+  int loopIndex = 0 ;
+  for (int k=0; k<m_Hmat.outerSize(); ++k) {
+    for (sp_mat::InnerIterator it(m_Hmat, k); it; ++it)
+    {
+      it.valueRef = concatenatedValues(loopIndex) ;
+      loopIndex += 1 ;
+    }
+  }
 }
 
-sp_mat AugTree::updateHmatrixPred(Rcpp::Function sparseMatrixConstructFun) {
+void AugTree::updateHmatrixPred() {
   vec concatenatedValues = vectorise(m_incrementedCovarPredictReshuffled) ;
   for (auto & tipNode : GetTipNodes()) {
     if (tipNode->GetPredIndices().size() > 0) {
@@ -568,11 +487,15 @@ sp_mat AugTree::updateHmatrixPred(Rcpp::Function sparseMatrixConstructFun) {
       }
     }
   }
-  uvec dims(2) ;
-  dims.at(0) = m_predictData.responseValues.size() ;
-  dims.at(1) = m_Hmat.n_cols ;
 
-  return Rcpp::as<sp_mat>(sparseMatrixConstructFun(m_HmatPredPos, concatenatedValues, dims, false)) ;
+  int loopIndex = 0 ;
+  for (int k = 0; k < m_HmatPred.outerSize(); ++k) {
+    for (SparseMatrix<double>::InnerIterator it(m_HmatPred, k); it; ++it)
+    {
+      it.valueRef = concatenatedValues(loopIndex) ;
+      loopIndex += 1 ;
+    }
+  }
 }
 
 void AugTree::createHmatrixPredPos() {
@@ -655,8 +578,10 @@ void AugTree::createHmatrixPredPos() {
       rowIndex += observationIndices.size() ;
     }
   }
-  mat transIncrementedCovar = trans(join_rows(ones<vec>(numObs), m_predictData.covariateValues)) ;
-  m_incrementedCovarPredictReshuffled = trans(transIncrementedCovar.cols(FmatObsOrder)) ;
+  Eigen::PermutationMatrix perm(FmatObsOrder) ;
+
+  mat transIncrementedCovar = (join_rows(ones<vec>(numObs), m_predictData.covariateValues)).transpose() ;
+  m_incrementedCovarPredictReshuffled = (transIncrementedCovar * perm).transpose() ;
 
   m_HmatPredPos.col(1) += m_predictData.covariateValues.n_cols + 1 ;
   umat covPos = join_rows(rep(regspace<uvec>(0, m_incrementedCovarPredictReshuffled.n_rows - 1),
@@ -707,10 +632,7 @@ void AugTree::ComputeLogPriors() {
   m_logPrior = logPrior ;
 }
 
-void AugTree::ComputeLogFCandLogCDandDataLL(Rcpp::Function gradCholeskiFun,
-                                            Rcpp::Function sparseMatrixConstructFun,
-                                            Rcpp::Function sparseDeterminantFun,
-                                            Rcpp::Function choleskiDecompFun) {
+void AugTree::ComputeLogFCandLogCDandDataLL() {
 
   int n = m_dataset.responseValues.size() ;
   // cout << "Creating matrix of Ks... \n" ;
@@ -718,7 +640,7 @@ void AugTree::ComputeLogFCandLogCDandDataLL(Rcpp::Function gradCholeskiFun,
   if (m_SigmaPos.n_rows == 0) {
     SigmaFEandEtaInv = CreateSigmaBetaEtaInvMat() ;
   } else {
-    SigmaFEandEtaInv = UpdateSigmaBetaEtaInvMat(sparseMatrixConstructFun) ;
+    SigmaFEandEtaInv = UpdateSigmaBetaEtaInvMat() ;
   }
   double logDetSigmaKFEinv = logDetBlockMatrix(SigmaFEandEtaInv, m_SigmaFEandEtaInvBlockIndices) ;
   // cout << "Done... \n" ;
@@ -728,23 +650,24 @@ void AugTree::ComputeLogFCandLogCDandDataLL(Rcpp::Function gradCholeskiFun,
     if (m_HmatPos.size() == 0) {
       createHmatrixPos() ;
     }
-    updateHmatrix(sparseMatrixConstructFun) ;
+    updateHmatrix() ;
 
     // cout << "Done... \n" ;
   }
 
-  sp_mat secondTerm = std::pow(m_errorSD, -2) * trans(m_Hmat) * m_Hmat ;
-  vec responsesReshuffled = m_dataset.responseValues.elem(m_obsOrderForFmat) ;
+  sp_mat secondTerm = std::pow(m_errorSD, -2) * m_Hmat.transpose() * m_Hmat ;
+  vec responsesReshuffled = m_dataset.responseValues(m_obsOrderForFmat) ;
 
   // sp_mat hessianMat = SigmaFEandEtaInv + secondTerm ;
-  mat scaledResponse = std::pow(m_errorSD, -2) * trans(responsesReshuffled) * m_Hmat ;
+  mat scaledResponse = std::pow(m_errorSD, -2) * responsesReshuffled.transpose() * m_Hmat ;
   cout << "Obtaining Qchol... \n" ;
-  m_FullCondPrecisionChol = Rcpp::as<sp_mat>(choleskiDecompFun(conv_to<sp_mat>::from(SigmaFEandEtaInv + secondTerm))) ;
+  Eigen::SimplicialLDLT<sp_mat> FullCondCholeski ;
+  m_FullCondPrecisionChol = FullCondCholeski(SigmaFEandEtaInv + secondTerm) ;
   cout << "Done! \n" ;
   // m_FullCondSDs = sqrt(m_FullCondPrecisionChol.diag()) ;
   // cout << "Done... \n" ;
 
-  Rcpp::NumericVector updatedMean = gradCholeskiFun(m_FullCondPrecisionChol, scaledResponse) ;
+  Rcpp::NumericVector updatedMean = m_FullCondPrecisionChol.solve(scaledResponse) ;
 
   m_Vstar = updatedMean ; // Assuming there will be an implicit conversion to vec type.
 
@@ -753,28 +676,22 @@ void AugTree::ComputeLogFCandLogCDandDataLL(Rcpp::Function gradCholeskiFun,
   vec fixedEffMeans = m_Vstar.head(m_fixedEffParameters.size()) ;
   SetFixedEffParameters(fixedEffMeans) ;
 
-  // double logDetQmat = logDeterminantQmat(sparseMatrixConstructFun) ;
-  // double logDetQmat = Rcpp::as<double>(sparseDeterminantFun(m_FullCondPrecisionChol)) ;
-  vec diagonal(m_FullCondPrecisionChol.diag()) ;
-  double logDetQmat = 2 * sum(log(diagonal)) ;
+  double logDetQmat = m_FullCondPrecisionChol.logDeterminant() ;
   m_logFullCond = 0.5 * logDetQmat ; // Since we arbitrarily evaluate always at the full-conditional mean, the exponential part of the distribution reduces to 0.
 
   // Computing p(v* | Psi)
-  mat logLikTerm = -0.5 * trans(m_Vstar) * SigmaFEandEtaInv * m_Vstar ;
+  mat logLikTerm = -0.5 * m_Vstar.transpose() * SigmaFEandEtaInv * m_Vstar ;
 
   m_logCondDist = logLikTerm(0,0) + 0.5 * logDetSigmaKFEinv ;
 
   // Computing p(y | v*, Psi)
   double errorLogDet = -2 * n * log(m_errorSD) ;
   vec recenteredY = responsesReshuffled - m_Hmat * m_Vstar ;
-  vec globalLogLikExp = -0.5 * std::pow(m_errorSD, -2) * trans(recenteredY) * recenteredY ;
+  vec globalLogLikExp = -0.5 * std::pow(m_errorSD, -2) * recenteredY.transpose() * recenteredY ;
   m_globalLogLik = 0.5 * errorLogDet + globalLogLikExp(0) ;
 }
 
-void AugTree::ComputeLogJointPsiMarginal(Rcpp::Function gradCholeskiFun,
-                                         Rcpp::Function sparseMatConstructFun,
-                                         Rcpp::Function sparseDeterminantFun,
-                                         Rcpp::Function choleskiDecompFun) {
+void AugTree::ComputeLogJointPsiMarginal() {
 
   ComputeLogPriors() ;
   // cout << "Computing Wmats... \n" ;
@@ -787,7 +704,7 @@ void AugTree::ComputeLogJointPsiMarginal(Rcpp::Function gradCholeskiFun,
     // cout << "Done... \n" ;
   }
 
-  ComputeLogFCandLogCDandDataLL(gradCholeskiFun, sparseMatConstructFun, sparseDeterminantFun, choleskiDecompFun) ;
+  ComputeLogFCandLogCDandDataLL() ;
 
   // printf("Observations log-lik: %.4e \n Log-prior: %.4e \n Log-Cond. dist.: %.4e \n Log-full cond.: %.4e \n \n \n",
   // m_globalLogLik, m_logPrior, m_logCondDist, m_logFullCond) ;
@@ -824,7 +741,7 @@ uvec AugTree::extractBlockIndicesFromLowerRight(const sp_mat & symmSparseMatrix)
   return conv_to<uvec>::from(blockIndices) ;
 }
 
-sp_mat AugTree::ComputeHpred(const mat & spCoords, const vec & time, const mat & covariateMatrix, Rcpp::Function sparseMatrixConstructFun) {
+sp_mat AugTree::ComputeHpred(const mat & spCoords, const vec & time, const mat & covariateMatrix) {
 
   // SetPredictData(spCoords, time, covariateMatrix) ;
   std::vector<TreeNode *> tipNodes = GetTipNodes() ;
@@ -840,10 +757,10 @@ sp_mat AugTree::ComputeHpred(const mat & spCoords, const vec & time, const mat &
     createHmatrixPredPos() ;
   }
 
-  return updateHmatrixPred(sparseMatrixConstructFun) ;
+  return updateHmatrixPred() ;
 }
 
-vec AugTree::ComputeEvar(const sp_mat & HmatPred, Rcpp::Function sparseSolveFun, const int batchSize) {
+vec AugTree::ComputeEvar(const sp_mat & HmatPred, const int batchSize) {
 
   double errorVar = std::pow(m_errorSD, 2) ;
   vec EvarValues(HmatPred.n_rows, fill::zeros) ;
@@ -852,10 +769,9 @@ vec AugTree::ComputeEvar(const sp_mat & HmatPred, Rcpp::Function sparseSolveFun,
   while (obsIndex < HmatPred.n_rows) {
 
     int newObsIndex = std::min(obsIndex + batchSize - 1, int(HmatPred.n_rows) - 1) ;
-    sp_mat bVec = HmatPred.rows(obsIndex, newObsIndex) ;
-    sp_mat bVecTrans = trans(HmatPred.rows(obsIndex, newObsIndex)) ;
-    sp_mat meanValue = bVecTrans % Rcpp::as<sp_mat>(sparseSolveFun(m_FullCondPrecisionChol, bVecTrans)) ;
-    EvarValues.subvec(obsIndex, newObsIndex) = trans(sum(meanValue,0)) + errorVar ;
+    sp_mat bVecTrans = HmatPred.block(obsIndex, 0, newObsIndex - obsIndex + 1, HmatPred.cols()).transpose() ;
+    sp_mat meanValue = bVecTrans % m_FullCondPrecisionChol.solve(bVecTrans) ;
+    EvarValues.subvec(obsIndex, newObsIndex) = (sum(meanValue,0)).transpose() + errorVar ;
 
     obsIndex += batchSize ;
   }

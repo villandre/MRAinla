@@ -255,7 +255,7 @@ funForGridEst <- function(index, paraGrid, treePointer, predictionData, MRAcovPa
   if (!is.null(predictionData) & computePrediction) {
     timeValues <- as.integer(time(predictionData@time))/(3600*24) - timeBaseline # The division is to obtain values in days.
 
-    aList$CondPredStats <- ComputeCondPredStats(treePointer, predictionData@sp@coords, timeValues, as.matrix(predictionData@data), sparseMatrixConstructFun = buildSparseMatrix, sparseSolveFun = choleskiSolve, batchSize = control$batchSizePredict)
+    aList$CondPredStats <- ComputeCondPredStats(treePointer, predictionData@sp@coords, timeValues, as.matrix(predictionData@data), batchSize = control$batchSizePredict)
   }
   # Running LogJointHyperMarginal stores in the tree pointed by gridPointer the full conditional mean and SDs when recordFullConditional = TRUE. We can get them with the simple functions I call now.
   aList$FullCondMean <- GetFullCondMean(treePointer)
@@ -348,39 +348,5 @@ LogJointHyperMarginal <- function(treePointer, MRAhyperparas, fixedEffSD, errorS
     2*sum(log(diag(cholM)))
   }
 
-  LogJointHyperMarginalToWrap(treePointer = treePointer, MRAhyperparas = MRAhyperparas, fixedEffSD = fixedEffSD, errorSD = errorSD, MRAcovParasGammaAlphaBeta = MRAcovParasGammaAlphaBeta, FEmuVec = FEmuVec, fixedEffGammaAlphaBeta =  fixedEffGammaAlphaBeta, errorGammaAlphaBeta = errorGammaAlphaBeta, matern = matern, spaceNuggetSD = spaceNuggetSD, timeNuggetSD = timeNuggetSD, recordFullConditional = TRUE, gradCholeskiFun = choleskiSolve, sparseMatrixConstructFun = buildSparseMatrix, sparseDeterminantFun = logDetFun, choleskiDecompFun = createCholeski)
-}
-
-buildSparseMatrix <- function(posMat, values, dims, symmetric) {
-  Matrix::sparseMatrix(i = posMat[, 1], j = posMat[ , 2], x = drop(values), dims = dims, index1 = FALSE, symmetric = symmetric)
-}
-
-choleskiSolve <- function(cholMat, scaledResponse) {
-  print("Converting to dtcMatrix... \n")
-  cholMat <- as(cholMat, "dtCMatrix")
-  print("Done! Solving... \n")
-  value <- as.vector(Matrix::solve(cholMat, drop(scaledResponse), sparse = TRUE))
-  print("Done! Exiting... \n")
-  value
-}
-
-# sparseInverse <- function(sparseMat, otherMat) {
-#   require(Matrix)
-#   # sparseMat <- as(sparseMat, "dsCMatrix")
-#   sparseMat <- as(sparseMat, "symmetricMatrix")
-#   otherMat <- as(otherMat, "dgCMatrix")
-#   value <- Matrix::solve(a = sparseMat, b = otherMat, sparse = TRUE)
-#   as(value, Class = "CsparseMatrix")
-# }
-
-createCholeski <- function(sparseMat) {
-  print("Coding as symmetric! \n")
-  sparseMat <- as(sparseMat, "symmetricMatrix")
-  cat("Matrix size: ", nrow(sparseMat), ncol(sparseMat), "\n")
-  print("Done! Computing Choleski... \n")
-  foo <- Matrix::chol(sparseMat, pivot = TRUE)
-  cat("Decomposition size: ", object.size(foo), "\n")
-  cat("Original size: ", object.size(sparseMat), "\n")
-  print("Done! Exiting createCholeski... \n")
-  foo
+  LogJointHyperMarginalToWrap(treePointer = treePointer, MRAhyperparas = MRAhyperparas, fixedEffSD = fixedEffSD, errorSD = errorSD, MRAcovParasGammaAlphaBeta = MRAcovParasGammaAlphaBeta, FEmuVec = FEmuVec, fixedEffGammaAlphaBeta =  fixedEffGammaAlphaBeta, errorGammaAlphaBeta = errorGammaAlphaBeta, matern = matern, spaceNuggetSD = spaceNuggetSD, timeNuggetSD = timeNuggetSD, recordFullConditional = TRUE)
 }

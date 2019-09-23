@@ -35,8 +35,9 @@ void InternalNode::genRandomKnots(spatialcoor & dataCoor, const uint & numKnots,
       aConverted.at(i) = a[i] ;
     }
 
-    mat jitteredSpace = dataCoor.spatialCoords.rows(aConverted) ;
-    vec jitteredTime = dataCoor.timeCoords.elem(aConverted) ;
+    Eigen::PermutationMatrix perm(aConverted) ;
+    mat jitteredSpace = perm * dataCoor.spatialCoords  ;
+    vec jitteredTime = perm * timeCoords ;
 
     for (auto & i : jitteredSpace) {
       i  += gsl_ran_gaussian(RNG, 0.0001) ;
@@ -103,13 +104,13 @@ void InternalNode::DeriveAtilde() {
   // }
   m_KtildeInverse = GetKmatrixInverse() + m_Alist.at(m_depth).at(m_depth) ;
 
-  m_Ktilde = inv_sympd(m_KtildeInverse) ;
+  m_Ktilde = m_KtildeInverse.colPivHouseholderQr().solve(mat::Identity(m_KtildeInverse.rows(), m_KtildeInverse.rows())) ;
 
   for (uint k = 0; k <= m_depth ; k++) {
     for (uint l = 0; l <= k ; l++) {
 
       m_AtildeList.at(k).at(l) = m_Alist.at(k).at(l) -
-        trans(m_Alist.at(m_depth).at(k)) * m_Ktilde * m_Alist.at(m_depth).at(l) ;
+        m_Alist.at(m_depth).at(k).transpose() * m_Ktilde * m_Alist.at(m_depth).at(l) ;
     }
   }
 }
@@ -131,18 +132,15 @@ void InternalNode::DeriveOmega(const vec & responseValues) {
   // }
 
   for (uint k = 0; k <= m_depth ; k++) {
-    vec secondTerm = trans(m_Alist.at(m_depth).at(k)) * m_Ktilde * m_omega.at(m_depth) ;
+    vec secondTerm = m_Alist.at(m_depth).at(k).transpose() * m_Ktilde * m_omega.at(m_depth) ;
     m_omegaTilde.at(k) = m_omega.at(k) -  secondTerm;
   }
 }
 
 void InternalNode::DeriveU(const vec & responseValues) {
-  mat firstTerm = -trans(m_omega.at(m_depth)) * m_Ktilde * m_omega.at(m_depth) ;
+  mat firstTerm = -m_omega.at(m_depth).transpose() * m_Ktilde * m_omega.at(m_depth) ;
   double secondTerm = 0 ;
-  // secondTerm = std::accumulate(m_children.begin(), m_children.end(), secondTerm,
-  //                              [](double a, TreeNode * b) {
-  //                                return a + b->GetU();
-  //                              }) ;
+
   for (auto & i : m_children) {
     secondTerm += i->GetU() ;
   }
@@ -177,5 +175,5 @@ void::InternalNode::DeriveD() {
 void InternalNode::ComputeWmat(const maternVec & covParasSp, const maternVec & covParasTime, const double & scaling, const bool matern, const double & spaceNuggetSD, const double & timeNuggetSD) {
   baseComputeWmat(covParasSp, covParasTime, scaling, matern, spaceNuggetSD, timeNuggetSD) ;
   m_Wlist.at(m_depth) = symmatl(m_Wlist.at(m_depth)) ;
-  m_K = inv_sympd(GetKmatrixInverse()) ; // The K matrix is some sort of covariance matrix, so it should always be symmetrical..
+  m_K = GetKmatrixInverse().ldlt().solve(mat::Identity(GetKmatrixInverse().rows(), GetKmatrixInverse().cols())) ; // The K matrix is some sort of covariance matrix, so it should always be symmetrical..
 }
