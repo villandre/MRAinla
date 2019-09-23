@@ -46,6 +46,7 @@ public:
 
   void ComputeWmat(const maternVec & covParasSp, const maternVec & covParasTime, const double & scaling, const bool matern, const double & spaceNuggetSD, const double & timeNuggetSD) {
     baseComputeWmat(covParasSp, covParasTime, scaling, matern, spaceNuggetSD, timeNuggetSD) ;
+    m_Wlist.at(m_depth) = symmatl(m_Wlist.at(m_depth)) ; // This is added to solve numerical issues that arise when smoothness parameters take certain values and matrices turn out to be computationally non-symmetric.
     m_SigmaInverse = arma::inv_sympd(GetSigma()) ;
   }
 
@@ -80,15 +81,16 @@ public:
   void SetUncorrSD(const double & sd) {
     m_uncorrSD = sd ;
   }
-  arma::mat GetUpred(const uint & l) { return m_UmatList.at(l) ;} ;
+  arma::mat GetUpred(const uint & l) { return m_UmatList.at(l) ;}
+  std::vector<arma::mat> GetUmatList() { return m_UmatList ;}
 
   void SetPredictLocations(const inputdata &) ;
   arma::uvec GetPredIndices() { return m_predsInNode ;}
   void computeUpred(const maternVec &, const maternVec &, const double &, const spatialcoor &, const bool, const double &, const double &) ;
 
-  void genRandomKnots(inputdata & dataset, const uint & numKnots, const gsl_rng * RNG) {
-    m_knotsCoor = spatialcoor(dataset.spatialCoords.rows(m_obsInNode),
-                              dataset.timeCoords.elem(m_obsInNode)) ;
+  void genRandomKnots(spatialcoor & dataCoor, const uint & numKnots, const gsl_rng * RNG) {
+    m_knotsCoor = spatialcoor(dataCoor.spatialCoords.rows(m_obsInNode),
+                              dataCoor.timeCoords.elem(m_obsInNode)) ;
   }
 
   TipNode(const dimensions & dims, const uint & depth, TreeNode * parent,
@@ -105,7 +107,6 @@ protected:
 
   arma::mat m_SigmaInverse ;
   double m_uncorrSD ;
-
 
   // Prediction components (should probably be freed once computations are done)
 

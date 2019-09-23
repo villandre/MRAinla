@@ -37,25 +37,31 @@ namespace MRAinla {
 class AugTree
 {
 public:
-  AugTree(uint &, arma::vec &, arma::vec &, arma::vec &, arma::vec &, arma::mat &, arma::vec &, uint &, unsigned long int &, arma::mat &, const bool, const unsigned int, const unsigned int) ;
+  AugTree(uint &, arma::vec &, arma::vec &, arma::vec &, arma::vec &, arma::mat &, arma::vec &, arma::mat &, arma::mat &, arma::vec &, uint &, unsigned long int &, arma::mat &, const bool, const unsigned int, const unsigned int) ;
 
   std::vector<TreeNode *> GetVertexVector() {return m_vertexVector ;} ;
+  arma::umat m_HmatPos ;
+  arma::umat m_HmatPredPos ;
+  arma::umat m_SigmaPos ;
+  arma::umat m_DinFCmatPos ;
 
   // void ComputeMRAlogLik(const bool WmatsAvailable = false) ;
   void ComputeMRAlogLikAlt(const bool WmatsAvailable = false) ;
   std::vector<GaussDistParas> ComputeConditionalPrediction(const inputdata &) ;
 
-  void ComputeLogFCandLogCDandDataLL(Rcpp::Function, Rcpp::Function) ;
+  void ComputeLogFCandLogCDandDataLL(Rcpp::Function, Rcpp::Function, Rcpp::Function) ;
   void ComputeLogPriors() ;
 
   double GetMRAlogLik() const {return m_MRAlogLik ;}
   gsl_rng * GetRandomNumGenerator() {return m_randomNumGenerator ;}
   inputdata GetDataset() {return m_dataset;}
   int GetNumTips() {return m_numTips ;}
+  int GetNumKnots() {return m_numKnots ;}
   // arma::vec GetCovParameters() {return m_covParameters ;}
 
   int GetM() { return m_M ;}
   double GetLogJointPsiMarginal() { return m_logJointPsiMarginal ;}
+  arma::uvec GetObsOrderForHpredMat() { return m_obsOrderForHpredMat ;}
 
   void SetRNG(gsl_rng * myRNG) { m_randomNumGenerator = myRNG ;}
   void IncrementVstar(const double & increment) {m_Vstar += increment ;}
@@ -77,6 +83,7 @@ public:
   void SetMRAcovParas(const Rcpp::List &) ;
 
   std::vector<TreeNode *> GetLevelNodes(const uint & level) ;
+  std::vector<TreeNode *> GetTipNodes() { return GetLevelNodes(m_M) ;}
 
   void SetErrorGammaAlphaBeta(const GammaHyperParas & alphaBeta) {m_errorGammaAlphaBeta = alphaBeta ;}
   void SetFixedEffGammaAlphaBeta(const GammaHyperParas & alphaBeta) {m_fixedEffGammaAlphaBeta = alphaBeta ;}
@@ -104,17 +111,19 @@ public:
 
   void CleanPredictionComponents() ;
   void CenterResponse() ;
-  arma::sp_mat createHstar() ;
-  arma::sp_mat CombineFEinvAndKinvMatrices() ;
+
+  void createHmatrixPredPos() ;
+  arma::sp_mat CreateSigmaBetaEtaInvMat() ;
+  arma::sp_mat UpdateSigmaBetaEtaInvMat(Rcpp::Function) ;
   arma::sp_mat createQ() ;
 
-  void ComputeLogJointPsiMarginal(Rcpp::Function, Rcpp::Function) ;
+  void ComputeLogJointPsiMarginal(Rcpp::Function, Rcpp::Function, Rcpp::Function) ;
   // double ComputeJointPsiMarginalPropConstant(const arma::vec &, const double, const double, const double, const double) ;
   arma::vec GetFullCondMean() { return m_FullCondMean ;}
   arma::vec GetFullCondSDs() { return m_FullCondSDs ;}
 
-  arma::sp_mat ComputeHpred(const arma::mat &, const arma::vec &, const arma::mat &) ;
-  arma::vec ComputeEvar(const arma::sp_mat &) ;
+  arma::sp_mat ComputeHpred(const arma::mat &, const arma::vec &, const arma::mat &, Rcpp::Function ) ;
+  arma::vec ComputeEvar(const arma::sp_mat &, Rcpp::Function, const int) ;
 
   ~ AugTree() {
     deallocate_container(m_vertexVector) ;
@@ -146,6 +155,12 @@ private:
   bool m_matern ;
   double m_spaceNuggetSD ;
   double m_timeNuggetSD ;
+  arma::mat m_incrementedCovarReshuffled ;
+  arma::mat m_incrementedCovarPredictReshuffled ;
+
+  // The next few members are to improve computational efficiency
+  arma::uvec m_DmatrixBlockIndices ;
+  arma::uvec m_SigmaFEandEtaInvBlockIndices ;
 
   int m_M{ 0 } ;
   int m_numTips{ 0 } ;
@@ -191,13 +206,15 @@ private:
   void computeD() ;
 
   std::vector<TreeNode *> GetLevel(const uint) ;
+  arma::uvec m_obsOrderForFmat ;
 
   // Prediction functions
 
   void distributePredictionData() ;
   void computeBtildeInTips() ;
   inputdata m_predictData ;
-  arma::uvec m_obsOrderForFmat ;
+  arma::uvec m_obsOrderForHpredMat ;
+
 
   // INLA functions
   arma::vec m_MRArandomValues ;
@@ -207,7 +224,8 @@ private:
   arma::vec m_FullCondMean ;
   arma::vec m_FullCondSDs ;
   arma::sp_mat m_FullCondPrecision ;
-  arma::sp_mat m_Hstar ;
+  arma::sp_mat m_Hmat ;
+
   bool m_recordFullConditional{ false } ;
   bool m_GammaParasSet{ false } ;
 
@@ -221,10 +239,12 @@ private:
     for (auto & i : m_vertexVector) KmatrixList.at(i->GetNodeId()) = i->GetKmatrixAddress() ;
     return KmatrixList ;
   }
-  // arma::sp_mat createFmatrix() ;
-  arma::sp_mat createFmatrixAlt(const bool) ;
+
+  void createHmatrixPos() ;
+  void updateHmatrix(Rcpp::Function) ;
+  arma::sp_mat updateHmatrixPred(Rcpp::Function) ;
   arma::vec optimJointHyperMarg(const arma::vec &, const double, const double, const double, const double) ;
-  double logDeterminantQmat() ;
+  double logDeterminantQmat(Rcpp::Function) ;
   arma::uvec extractBlockIndicesFromLowerRight(const arma::sp_mat &) ;
   // void invFromDecomposition(const arma::sp_mat &, const arma::sp_mat &, const arma::sp_mat &, arma::sp_mat *,
   //                                const arma::uvec &) ;

@@ -17,28 +17,72 @@ void InternalNode::RemoveChild(TreeNode * childToRemove)
   }
 }
 
-void InternalNode::genRandomKnots(inputdata & dataset, const uint & numKnots, const gsl_rng * RNG) {
+void InternalNode::genRandomKnots(spatialcoor & dataCoor, const uint & numKnots, const gsl_rng * RNG) {
 
-  mat knotsSp(numKnots, 2, fill::zeros) ;
+  if (m_depth == 0) {
+    double a[numKnots], b[dataCoor.timeCoords.size()] ;
 
-  float minLon = min(m_dimensions.longitude) ;
-  float maxLon = max(m_dimensions.longitude) ;
+    for (uint i = 0; i < dataCoor.timeCoords.size() ; i++)
+    {
+      b[i] = (double) i;
+    }
 
-  float minLat = min(m_dimensions.latitude) ;
-  float maxLat = max(m_dimensions.latitude) ;
+    uvec aConverted(numKnots, fill::zeros) ;
 
-  for (mat::iterator iter = knotsSp.begin() ; iter != (knotsSp.begin() + knotsSp.n_rows) ; iter++) {
-    (*iter) = gsl_ran_flat(RNG, minLon, maxLon) ;
-    *(iter + knotsSp.n_rows) = float(gsl_ran_flat(RNG, minLat, maxLat)) ;
+    gsl_ran_choose(RNG, a, numKnots, b, dataCoor.timeCoords.size(), sizeof (double));
+
+    for (uint i = 0 ; i < numKnots ; i++) {
+      aConverted.at(i) = a[i] ;
+    }
+
+    mat jitteredSpace = dataCoor.spatialCoords.rows(aConverted) ;
+    vec jitteredTime = dataCoor.timeCoords.elem(aConverted) ;
+
+    for (auto & i : jitteredSpace) {
+      i  += gsl_ran_gaussian(RNG, 0.0001) ;
+    }
+
+    for(auto & i : jitteredTime) {
+      i += gsl_ran_gaussian(RNG, 0.0001) ;
+    }
+    m_knotsCoor = spatialcoor(jitteredSpace, jitteredTime) ;
+  } else {
+    mat knotsSp(numKnots, 2, fill::zeros) ;
+
+    float minLon = min(m_dimensions.longitude) ;
+    float maxLon = max(m_dimensions.longitude) ;
+
+    float minLat = min(m_dimensions.latitude) ;
+    float maxLat = max(m_dimensions.latitude) ;
+
+    float minTime = min(m_dimensions.time) ;
+    float maxTime = max(m_dimensions.time) ;
+
+    vec time(numKnots) ;
+
+    double cubeRadiusInPoints = ceil(double(cbrt(numKnots))) ;
+
+    double offsetPerc = 0.01 ;
+    double lonDist = (maxLon - minLon) * (1-offsetPerc * 2)/(cubeRadiusInPoints - 1) ;
+    double latDist = (maxLat - minLat) * (1-offsetPerc * 2)/(cubeRadiusInPoints - 1) ;
+    double timeDist = (maxTime - minTime) * (1-offsetPerc * 2)/(cubeRadiusInPoints - 1) ;
+
+    uint rowIndex = 0 ;
+    for (uint lonIndex = 0 ; lonIndex < cubeRadiusInPoints ; lonIndex++) {
+      for (uint latIndex = 0 ; latIndex < cubeRadiusInPoints ; latIndex++) {
+        for (uint timeIndex = 0 ; latIndex < cubeRadiusInPoints ; timeIndex++) {
+          knotsSp(rowIndex, 0) = minLon + (1 + offsetPerc) * (maxLon - minLon) + double(lonIndex) * lonDist + gsl_ran_gaussian(RNG, 0.0001) ;
+          knotsSp(rowIndex, 1) = minLat + (1 + offsetPerc) * (maxLat - minLat) + double(latIndex) * latDist + gsl_ran_gaussian(RNG, 0.0001) ;
+          time(rowIndex) = minTime + (1 + offsetPerc) * (maxTime - minTime) + double(timeIndex) * timeDist  + gsl_ran_gaussian(RNG, 0.0001) ;
+          rowIndex += 1 ;
+          if (rowIndex >= numKnots) break ;
+        }
+        if (rowIndex >= numKnots) break ;
+      }
+      if (rowIndex >= numKnots) break ;
+    }
+    m_knotsCoor = spatialcoor(knotsSp, time) ;
   }
-
-  float minTime = min(m_dimensions.time) ;
-  float maxTime = max(m_dimensions.time) ;
-
-  vec time(numKnots) ;
-
-  time.imbue( [&]() { return double(gsl_ran_flat(RNG, minTime, maxTime)); } ) ;
-  m_knotsCoor = spatialcoor(knotsSp, time) ;
 }
 
 void InternalNode::DeriveAtilde() {
@@ -132,6 +176,7 @@ void::InternalNode::DeriveD() {
 
 void InternalNode::ComputeWmat(const maternVec & covParasSp, const maternVec & covParasTime, const double & scaling, const bool matern, const double & spaceNuggetSD, const double & timeNuggetSD) {
   baseComputeWmat(covParasSp, covParasTime, scaling, matern, spaceNuggetSD, timeNuggetSD) ;
+  m_Wlist.at(m_depth) = symmatl(m_Wlist.at(m_depth)) ;
   m_K = inv_sympd(GetKmatrixInverse()) ; // The K matrix is some sort of covariance matrix, so it should always be symmetrical..
 }
 

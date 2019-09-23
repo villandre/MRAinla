@@ -30,13 +30,28 @@
 #' }
 #' @export
 
-MRA_INLA <- function(spacetimeData, errorSDstart, fixedEffSDstart, MRAhyperparasStart, FEmuVec, predictionData = NULL, fixedEffGammaAlphaBeta, errorGammaAlphaBeta,  MRAcovParasGammaAlphaBeta, control) {
-  defaultControl <- list(M = 1, randomSeed = 24,  cutForTimeSplit = 400, stepSize = 1, lowerThreshold = 3, maternCovariance = TRUE, nuggetSD = 0.00001, varyFixedEffSD = FALSE, varyMaternSmoothness = FALSE, varyErrorSD = TRUE, splitTime = FALSE, numKnotsRes0 = 20L, J = 2L, numValuesForGrid = 4)
+MRA_INLA <- function(spacetimeData, errorSDstart, fixedEffSDstart, MRAhyperparasStart, FEmuVec, predictionData = NULL, fixedEffGammaAlphaBeta, errorGammaAlphaBeta,  MRAcovParasGammaAlphaBeta, maximiseOnly = FALSE, control) {
+  defaultControl <- list(M = 1, randomSeed = 24,  cutForTimeSplit = 400, stepSize = 1, lowerThreshold = 3, maternCovariance = TRUE, nuggetSD = 0.00001, varyFixedEffSD = FALSE, varyMaternSmoothness = FALSE, varyErrorSD = TRUE, splitTime = FALSE, numKnotsRes0 = 20L, J = 4L, numValuesForGrid = 200, numThreads = 1, numIterOptim = 200L)
   if (length(position <- grep(colnames(spacetimeData@sp@coords), pattern = "lon")) >= 1) {
     colnames(spacetimeData@sp@coords)[[position[[1]]]] <- "x"
+    if (!is.null(predictionData)) {
+      colnames(predictionData@sp@coords)[[position[[1]]]] <- "x"
+    }
   }
   if (length(position <- grep(colnames(spacetimeData@sp@coords), pattern = "lat")) >= 1) {
     colnames(spacetimeData@sp@coords)[[position[[1]]]] <- "y"
+    if (!is.null(predictionData)) {
+      colnames(predictionData@sp@coords)[[position[[1]]]] <- "y"
+    }
+  }
+  if (is.null(control$lonRange)) {
+    control$lonRange <- range(spacetimeData@sp@coords[ , "x"]) + c(-0.02, 0.02)
+  }
+  if (is.null(control$latRange)) {
+    control$latRange <- range(spacetimeData@sp@coords[ , "y"]) + c(-0.02, 0.02)
+  }
+  if (is.null(control$timeRange)) {
+    control$timeRange <- range(time(spacetimeData)) + c(-3600, 3600)
   }
   coordRanges <- mapply(dimName = c("lonRange", "latRange", "timeRange"), code = c("x", "y", "time"), function(dimName, code) {
     predCoordinates <- c()
@@ -57,6 +72,9 @@ MRA_INLA <- function(spacetimeData, errorSDstart, fixedEffSDstart, MRAhyperparas
     combinedRange + c(-bufferSize, bufferSize)
   }, SIMPLIFY = FALSE)
   defaultControl <- c(defaultControl, coordRanges)
+  # 1e10 is used as a substitute for infinity, which is not understood by the C++ code.
+  if (MRAhyperparasStart$space[["smoothness"]] > 1e10) MRAhyperparasStart$space$smoothness <- 1e10
+  if (MRAhyperparasStart$time[["smoothness"]] > 1e10) MRAhyperparasStart$time$smoothness <- 1e10
 
   for (i in names(control)) {
     defaultControl[[i]] <- control[[i]]
@@ -64,13 +82,20 @@ MRA_INLA <- function(spacetimeData, errorSDstart, fixedEffSDstart, MRAhyperparas
 
   control <- defaultControl
   dataCoordinates <- spacetimeData@sp@coords
+  predCoordinates <- predictionData@sp@coords
+  predCovariates <- as.matrix(predictionData@data)
+
   timeRangeReshaped <- as.integer(control$timeRange)/(3600*24)
   timeBaseline <- min(timeRangeReshaped)
   timeValues <- as.integer(time(spacetimeData@time))/(3600*24) - timeBaseline # The division is to obtain values in days.
+  predTime <- as.integer(time(predictionData))/(3600*24) - timeBaseline
   timeRangeReshaped <- timeRangeReshaped - timeBaseline
 
   covariateMatrix <- as.matrix(spacetimeData@data[, -1, drop = FALSE])
-  gridPointer <- setupGridCpp(spacetimeData@data[, 1], dataCoordinates, timeValues, covariateMatrix, control$M, control$lonRange, control$latRange, timeRangeReshaped, control$randomSeed, control$cutForTimeSplit, control$splitTime, control$numKnotsRes0, control$J)
+  gridPointers <- lapply(1:control$numThreads, function(x) {
+    setupGridCpp(responseValues = spacetimeData@data[, 1], spCoords = dataCoordinates, predCoords = predCoordinates, obsTime = timeValues, predTime = predTime, covariateMatrix = covariateMatrix, predCovariateMatrix = predCovariates, M = control$M, lonRange = control$lonRange, latRange = control$latRange, timeRange = timeRangeReshaped, randomSeed = control$randomSeed, cutForTimeSplit = control$cutForTimeSplit, splitTime = control$splitTime, numKnotsRes0 = control$numKnotsRes0, J = control$J)$gridPointer
+  })
+
   # First we compute values relating to the hyperprior marginal distribution...
   xStartValues <- c(spRho = MRAhyperparasStart$space[["rho"]], timeRho = MRAhyperparasStart$time[["rho"]], scale = MRAhyperparasStart[["scale"]])
   if (control$varyFixedEffSD) {
@@ -84,42 +109,40 @@ MRA_INLA <- function(spacetimeData, errorSDstart, fixedEffSDstart, MRAhyperparas
     xStartValues[["timeSmoothness"]] <- MRAhyperparasStart$time[["smoothness"]]
   }
 
-  computedValues <- obtainGridValues(treePointer = gridPointer$gridPointer, xStartValues = xStartValues, control = control, fixedEffSDstart = fixedEffSDstart, errorSDstart = errorSDstart, MRAhyperparasStart = MRAhyperparasStart, MRAcovParasGammaAlphaBeta = MRAcovParasGammaAlphaBeta, fixedEffGammaAlphaBeta = fixedEffGammaAlphaBeta, errorGammaAlphaBeta = errorGammaAlphaBeta, FEmuVec = FEmuVec)
+  computedValues <- obtainGridValues(gridPointers = gridPointers, xStartValues = xStartValues, control = control, fixedEffSDstart = fixedEffSDstart, errorSDstart = errorSDstart, MRAhyperparasStart = MRAhyperparasStart, MRAcovParasGammaAlphaBeta = MRAcovParasGammaAlphaBeta, fixedEffGammaAlphaBeta = fixedEffGammaAlphaBeta, errorGammaAlphaBeta = errorGammaAlphaBeta, FEmuVec = FEmuVec, predictionData = predictionData, timeBaseline = timeBaseline, maximiseOnly = maximiseOnly)
+  if (maximiseOnly) {
+    return(computedValues$output)
+  }
 
-  discreteLogJointValues <- sapply(computedValues, '[[', "logJointValue")
-  print(discreteLogJointValues)
-  cat("\n \n")
-  print(max(discreteLogJointValues))
-  cat("\n \n")
-  maxLogJointValues <- max(discreteLogJointValues)
-  logStandardisingConstant <- maxLogJointValues + log(sum(exp(discreteLogJointValues - maxLogJointValues)))
-
-  # The following normalises the joint distribution.
-  cat("Standardising empirical distribution...\n") ;
-  hyperparaList <- lapply(computedValues, function(x) {
-    x$logJointValue <- x$logJointValue - logStandardisingConstant
-    x
-  })
-
+  hyperparaVectors <- sapply(computedValues$output, function(element) element$x)
+  weightModifs <- apply(hyperparaVectors, MARGIN = 2, mvtnorm::dmvnorm, mean = computedValues$ISdistParas$mu, sigma = computedValues$ISdistParas$cov, log = TRUE)
+  discreteLogJointValues <- sapply(computedValues$output, '[[', "logJointValue")
+  logWeights <- discreteLogJointValues - weightModifs
+  maxLogWeights <- max(logWeights)
+  logPropConstantIS <- maxLogWeights + log(sum(exp(logWeights - maxLogWeights)))
+  logStandardisedWeights <- logWeights - logPropConstantIS
   # Now, we obtain the marginal distribution of all mean parameters.
   cat("Computing moments for marginal posterior distributions...\n")
-  hyperMarginalMoments <- ComputeHyperMarginalMoments(hyperparaList)
-  meanMarginalMoments <- ComputeMeanMarginalMoments(hyperparaList)
-  outputList <- list(hyperMarginalMoments = hyperMarginalMoments, meanMarginalMoments = meanMarginalMoments)
+
+  hyperMarginalMoments <- ComputeHyperMarginalMoments(computedValues$output, logStandardisedWeights)
+  meanMarginalMoments <- ComputeMeanMarginalMoments(computedValues$output, logStandardisedWeights)
+  outputList <- list(hyperMarginalMoments = hyperMarginalMoments$paraMoments, meanMarginalMoments = meanMarginalMoments, psiAndMargDistMatrix = hyperMarginalMoments$psiAndMargDistMatrix)
   cat("Computing prediction moments... \n")
   if (!is.null(predictionData)) {
-    outputList$predictionMoments <- ComputeKrigingMoments(hyperparaList)
+    outputList$predictionMoments <- ComputeKrigingMoments(computedValues$output, gridPointers[[1]], logStandardisedWeights)
+    outputList$predObsOrder <- GetPredObsOrder(gridPointers[[1]]) # I picked the first one, since the grids are all copies of each other, created to ensure that there is no problem with multiple reads/writes in parallel.
   }
   cat("Returning results... \n")
   outputList
 }
 
-obtainGridValues <- function(treePointer, xStartValues, control, fixedEffSDstart, errorSDstart, MRAhyperparasStart, MRAcovParasGammaAlphaBeta, fixedEffGammaAlphaBeta, errorGammaAlphaBeta, FEmuVec) {
-
-  cat("Entered obtainGridValues... \n")
+obtainGridValues <- function(gridPointers, xStartValues, control, fixedEffSDstart, errorSDstart, MRAhyperparasStart, MRAcovParasGammaAlphaBeta, fixedEffGammaAlphaBeta, errorGammaAlphaBeta, FEmuVec, predictionData, timeBaseline, maximiseOnly = FALSE) {
 
   # A short optimisation first...
-  funForOptim <- function(x) {
+  storageEnvir <- new.env()
+  assign(x = "x", value = NULL, envir = storageEnvir)
+  assign(x = "value", value = NULL, envir = storageEnvir)
+  funForOptim <- function(x, envirToSaveValues) {
     names(x) <- names(xStartValues)
     xTrans <- exp(x)
     fixedEffArg <- fixedEffSDstart
@@ -137,42 +160,76 @@ obtainGridValues <- function(treePointer, xStartValues, control, fixedEffSDstart
       timeSmoothnessArg <- xTrans[["timeSmoothness"]]
     }
     MRAlist <- list(space = list(rho = xTrans[["spRho"]], smoothness = spSmoothnessArg), time = list(rho = xTrans[["timeRho"]], smoothness = timeSmoothnessArg), scale = xTrans[["scale"]])
-    tryCatch(expr = LogJointHyperMarginal(treePointer = treePointer, MRAhyperparas = MRAlist, fixedEffSD = fixedEffArg, errorSD = errorArg, MRAcovParasGammaAlphaBeta = MRAcovParasGammaAlphaBeta, FEmuVec = FEmuVec, fixedEffGammaAlphaBeta = fixedEffGammaAlphaBeta, errorGammaAlphaBeta = errorGammaAlphaBeta, matern = control$maternCovariance, spaceNuggetSD = control$nuggetSD, timeNuggetSD = control$nuggetSD, recordFullConditional = FALSE), error = function(e) -Inf)
+    returnedValue <- -LogJointHyperMarginal(treePointer = gridPointers[[1]], MRAhyperparas = MRAlist, fixedEffSD = fixedEffArg, errorSD = errorArg, MRAcovParasGammaAlphaBeta = MRAcovParasGammaAlphaBeta, FEmuVec = FEmuVec, fixedEffGammaAlphaBeta = fixedEffGammaAlphaBeta, errorGammaAlphaBeta = errorGammaAlphaBeta, matern = control$maternCovariance, spaceNuggetSD = control$nuggetSD, timeNuggetSD = control$nuggetSD, recordFullConditional = FALSE)
+    assign(x = "x", value = cbind(get(x = "x", envir = envirToSaveValues), exp(x)), envir = envirToSaveValues)
+    assign(x = "value", value = c(get(x = "value", envir = envirToSaveValues), -returnedValue), envir = envirToSaveValues)
+    returnedValue
   }
-  gradForOptim <- function(x) {
+  gradForOptim <- function(x, envirToSaveValues) {
     names(x) <- names(xStartValues)
-    numDeriv::grad(func = funForOptim, x = x, method = "simple")
+    numDeriv::grad(func = funForOptim, x = x, method = "simple", envirToSaveValues = envirToSaveValues)
   }
-  opt <- trustOptim::trust.optim(x = log(xStartValues), fn = funForOptim,
-                                 gr = gradForOptim,
-                                 method = "SR1",
-                                 control = list(
-                                   start.trust.radius = 1,
-                                   stop.trust.radius = 1e-10,
-                                   prec = 1e-4,
-                                   report.precision = 1L,
-                                   maxit = 12L,
-                                   preconditioner = 0,
-                                   precond.refresh.freq = 1,
-                                   function.scale.factor = -1 # We are maximising, hence the -1.
-                                 ))
-  solution <- exp(opt$solution)
-  cat("The solution: ", solution, "\n")
+  upperBound <- rep(Inf, length(xStartValues))
+  names(upperBound) <- names(xStartValues)
+  upperBound <- replace(upperBound, grep(names(upperBound), pattern = "mooth"), log(50)) # This is to avoid an overflow in the computation of the Matern covariance, which for some reason does not tolerate very high smoothness values.
+  upperBound <- replace(upperBound, grep(names(upperBound), pattern = "scale"), 15) # This limits the scaling factor to exp(15) in the optimisation. This is to prevent computational issues in the sparse matrix inversion scheme.
+  opt <- nloptr::lbfgs(x0 = log(xStartValues), lower = rep(-10, length(xStartValues)), upper = upperBound, fn = funForOptim, gr = gradForOptim, control = list(xtol_rel = 1e-3, maxeval = control$numIterOptim), envirToSaveValues = storageEnvir)
+  # opt <- nloptr::cobyla(x0 = log(xStartValues), lower = rep(-10, length(xStartValues)), upper = upperBound, fn = funForOptim, control = list(xtol_rel = 5e-4, maxeval = control$numIterOptim), envirToSaveValues = storageEnvir)
+  opt$value <- -opt$value # Correcting for the inversion used to maximise instead of minimise
+  sampleWeights <- exp(storageEnvir$value - max(storageEnvir$value))
+  sampleWeights <- sampleWeights/sum(sampleWeights)
+  varCovar <- cov.wt(x = t(storageEnvir$x), wt = sampleWeights)$cov
+  solution <- exp(opt$par)
+  if (maximiseOnly) {
+    names(solution) <- names(xStartValues)
+    return(solution)
+  }
 
-  radius <- 0.05*solution
+  if (length(gridPointers) > 1) {
+    require(doParallel)
+    no_cores <- length(gridPointers)
+    doParallel::registerDoParallel(cores = no_cores)# Shows the number of Parallel Workers to be used
+  }
+  gridFct <- function(numPoints = 100, computePrediction = TRUE) {
+    smallMVR <- function() {
+      container <- NULL
+      repeat {
+        container <- drop(mvtnorm::rmvnorm(n = 1, mean = exp(opt$par), sigma = varCovar))
+        if (all(container > 0)) break
+      }
+      container
+    }
+    paraGrid <- t(replicate(n = control$numValuesForGrid, expr = smallMVR()))
+    colnames(paraGrid) <- names(xStartValues)
+    groupAssignments <- rep(1:length(gridPointers), length.out = nrow(paraGrid))
+    listForParallel <- lapply(1:min(length(gridPointers), nrow(paraGrid)), function(clIndex) {
+      indicesForNode <- which(groupAssignments == clIndex)
+      list(paraGrid = paraGrid[indicesForNode,, drop = FALSE])
+    })
+    if (length(gridPointers) == 1) {
+      output <- lapply(1:nrow(paraGrid), funForGridEst, paraGrid = paraGrid, treePointer = gridPointers[[1]], MRAcovParasGammaAlphaBeta = MRAcovParasGammaAlphaBeta, fixedEffGammaAlphaBeta = fixedEffGammaAlphaBeta, errorGammaAlphaBeta = errorGammaAlphaBeta, fixedEffSDstart = fixedEffSDstart, errorSDstart = errorSDstart, MRAhyperparasStart = MRAhyperparasStart, FEmuVec = FEmuVec, predictionData = predictionData, timeBaseline = timeBaseline, computePrediction = computePrediction, control = control)
+    } else {
+      output <- foreach::foreach(var1 = seq_along(listForParallel), .combine = c) %dopar% {
+        lapply(1:nrow(listForParallel[[var1]]$paraGrid), funForGridEst, paraGrid = listForParallel[[var1]]$paraGrid, treePointer = gridPointers[[var1]], MRAcovParasGammaAlphaBeta = MRAcovParasGammaAlphaBeta, fixedEffGammaAlphaBeta = fixedEffGammaAlphaBeta, errorGammaAlphaBeta = errorGammaAlphaBeta, fixedEffSDstart = fixedEffSDstart, errorSDstart = errorSDstart, MRAhyperparasStart = MRAhyperparasStart, FEmuVec = FEmuVec, predictionData = predictionData, timeBaseline = timeBaseline, computePrediction = computePrediction, control = control)
+      }
+    }
+    list(output = output, optimPoints = list(x = storageEnvir$x, value = storageEnvir$value))
+  }
 
-  lowerLimit <- solution - radius
-  upperLimit <- solution + radius
-  paraLimits <- cbind(lower = lowerLimit, upper = upperLimit)
-  paraRanges <- lapply(1:nrow(paraLimits), function(x) seq(from = paraLimits[x,"lower"], to = paraLimits[x,"upper"], length.out = control$numValuesForGrid))
-  names(paraRanges) <- names(xStartValues)
-  paraGrid <- expand.grid(paraRanges)
-  valuesOnGrid <- lapply(1:nrow(paraGrid), funForGridEst, paraGrid = paraGrid, treePointer = treePointer, MRAcovParasGammaAlphaBeta = MRAcovParasGammaAlphaBeta, fixedEffGammaAlphaBeta = fixedEffGammaAlphaBeta, errorGammaAlphaBeta = errorGammaAlphaBeta, fixedEffSDstart = fixedEffSDstart, errorSDstart = errorSDstart, MRAhyperparasStart = MRAhyperparasStart, FEmuVec = FEmuVec, control = control)
-  keepIndices <- sapply(valuesOnGrid, function(x) class(x$logJointValue) == "numeric")
-  valuesOnGrid[keepIndices]
+  print("Computing values on the grid...")
+  valuesOnGrid <- gridFct(control$numValuesForGrid, TRUE)
+  print("Grid complete... \n")
+  doParallel::stopImplicitCluster()
+  keepIndices <- sapply(valuesOnGrid$output, function(x) class(x$logJointValue) == "numeric")
+  valuesOnGrid$output <- valuesOnGrid$output[keepIndices]
+  valuesOnGrid$ISdistParas <- list(mu = exp(opt$par), cov = varCovar)
+  valuesOnGrid
 }
 
-funForGridEst <- function(index, paraGrid, treePointer, MRAcovParasGammaAlphaBeta, fixedEffGammaAlphaBeta, errorGammaAlphaBeta, fixedEffSDstart, errorSDstart, MRAhyperparasStart, FEmuVec, control) {
+funForGridEst <- function(index, paraGrid, treePointer, predictionData, MRAcovParasGammaAlphaBeta, fixedEffGammaAlphaBeta, errorGammaAlphaBeta, fixedEffSDstart, errorSDstart, MRAhyperparasStart, FEmuVec, timeBaseline, computePrediction, control) {
+  if (is.null(control$batchSizePredict)) {
+    control$batchSizePredict <- 500
+  }
   x <- unlist(paraGrid[index, ])
   fixedEffArg <- fixedEffSDstart
   if (control$varyFixedEffSD) {
@@ -193,20 +250,23 @@ funForGridEst <- function(index, paraGrid, treePointer, MRAcovParasGammaAlphaBet
   errorSD <- ifelse(any(grepl(pattern = "error", x = names(x))), x[[grep(pattern = "error", x = names(x), value = TRUE)]], errorSDstart)
   fixedEffSD <- ifelse(any(grepl(pattern = "fixedEff", x = names(x))), x[[grep(pattern = "fixedEff", x = names(x), value = TRUE)]], fixedEffSDstart)
   aList <- list(x = x, errorSD = errorSD, fixedEffSD = fixedEffSD, MRAhyperparas = MRAlist, logJointValue = logJointValue)
+  if (!is.null(predictionData) & computePrediction) {
+    timeValues <- as.integer(time(predictionData@time))/(3600*24) - timeBaseline # The division is to obtain values in days.
+
+    aList$CondPredStats <- ComputeCondPredStats(treePointer, predictionData@sp@coords, timeValues, as.matrix(predictionData@data), sparseMatrixConstructFun = buildSparseMatrix, sparseSolveFun = sparseInverse, batchSize = control$batchSizePredict)
+  }
+  # Running LogJointHyperMarginal stores in the tree pointed by gridPointer the full conditional mean and SDs when recordFullConditional = TRUE. We can get them with the simple functions I call now.
   aList$FullCondMean <- GetFullCondMean(treePointer)
   aList$FullCondSDs <- GetFullCondSDs(treePointer)
   aList
 }
 
-ComputeHyperMarginalMoments <- function(hyperparaList) {
+ComputeHyperMarginalMoments <- function(hyperparaList, logISmodProbWeights) {
   domainCheck <- sapply(hyperparaList, function(x) x$logJointValue > -Inf)
   hyperparaList <- hyperparaList[domainCheck]
-  psiAndMargDistMatrix <- t(sapply(hyperparaList, function(x) c(unlist(x$MRAhyperparas), fixedEffSD = x$fixedEffSD, errorSD = x$errorSD, jointValue = exp(x$logJointValue))))
-  print(psiAndMargDistMatrix)
+  psiAndMargDistMatrix <- t(sapply(seq_along(hyperparaList), function(hyperparaIndex) c(unlist(hyperparaList[[hyperparaIndex]]$MRAhyperparas), fixedEffSD = hyperparaList[[hyperparaIndex]]$fixedEffSD, errorSD = hyperparaList[[hyperparaIndex]]$errorSD, jointValue = exp(logISmodProbWeights[hyperparaIndex]))))
   rownames(psiAndMargDistMatrix) <- NULL
   funToGetParaMoments <- function(hyperparaIndex) {
-    # variableValues <- sort(unique(psiAndMargDistMatrix[, hyperparaIndex]))
-    # massValues <- do.call("c", by(psiAndMargDistMatrix, INDICES = variableValues, FUN = function(block) sum(block[, ncol(block)]), simplify = FALSE))
     meanValue <- sum(psiAndMargDistMatrix[, hyperparaIndex] * psiAndMargDistMatrix[, ncol(psiAndMargDistMatrix)])
     sdValue <- sqrt(sum(psiAndMargDistMatrix[, hyperparaIndex]^2 * psiAndMargDistMatrix[, ncol(psiAndMargDistMatrix)]) - meanValue^2)
     c(mean = meanValue, StdDev = sdValue)
@@ -215,45 +275,44 @@ ComputeHyperMarginalMoments <- function(hyperparaList) {
 
   colnames(paraMoments) <- c("Mean", "StdDev")
   rownames(paraMoments) <- head(colnames(psiAndMargDistMatrix), n = -1)
-  as.data.frame(paraMoments)
+  list(paraMoments = as.data.frame(paraMoments), psiAndMargDistMatrix = psiAndMargDistMatrix)
 }
 
-ComputeMeanMarginalMoments <- function(hyperparaList) {
-  domainCheck <- sapply(hyperparaList, function(x) x$logJointValue > -Inf)
-  hyperparaList <- hyperparaList[domainCheck]
+ComputeMeanMarginalMoments <- function(hyperparaList, logISmodProbWeights) {
+
   numMeanParas <- length(hyperparaList[[1]]$FullCondMean)
-  weights <- exp(sapply(hyperparaList, "[[", "logJointValue"))
+
   marginalMeans <- sapply(1:numMeanParas, function(paraIndex) {
     meanVector <- sapply(hyperparaList, function(x) x$FullCondMean[[paraIndex]])
-    sum(meanVector * weights)
+    sum(meanVector * exp(logISmodProbWeights))
   })
   marginalSecondMoments <- sapply(1:numMeanParas, function(paraIndex) {
     meanVector <- sapply(hyperparaList, function(x) x$FullCondMean[[paraIndex]])
     sdVector <- sapply(hyperparaList, function(x) x$FullCondSDs[[paraIndex]])
     secondMomentVec <- sdVector^2 + meanVector^2
-    sum(secondMomentVec * weights)
+    sum(secondMomentVec * exp(logISmodProbWeights))
   })
   marginalSDs <- marginalSecondMoments - marginalMeans^2
   data.frame(Mean = marginalMeans, StdDev = marginalSDs)
 }
 
-ComputeKrigingMoments <- function(hyperparaList) {
-  domainCheck <- sapply(hyperparaList, function(x) x$logJointValue > -Inf)
-  hyperparaList <- hyperparaList[domainCheck]
-  termsForMean <- lapply(hyperparaList, function(x) {
-    drop(x$CondPredStats$Hmean * exp(x$logJointValue))
+ComputeKrigingMoments <- function(hyperparaList, treePointer, logISmodProbWeights) {
+
+  termsForMean <- lapply(seq_along(hyperparaList), function(index) {
+    drop(hyperparaList[[index]]$CondPredStats$Hmean * exp(logISmodProbWeights[[index]]))
   })
   krigingMeans <- Reduce("+", termsForMean)
-  termsForVarE1 <- lapply(hyperparaList, FUN = function(x) {
-    drop(x$CondPredStats$Hmean^2 * exp(x$logJointValue))
+  termsForVarE1 <- lapply(seq_along(hyperparaList), FUN = function(index) {
+    drop(hyperparaList[[index]]$CondPredStats$Hmean^2 * exp(logISmodProbWeights[[index]]))
   })
   varE <- Reduce('+', termsForVarE1) - krigingMeans^2
 
-  termsForEvar <- lapply(hyperparaList, function(x) {
-    drop(x$CondPredStats$Evar * exp(x$logJointValue))
+  termsForEvar <- lapply(seq_along(hyperparaList), function(index) {
+    drop(hyperparaList[[index]]$CondPredStats$Evar * exp(logISmodProbWeights[[index]]))
   })
   Evar <- Reduce("+", termsForEvar)
-  list(predictMeans = krigingMeans, predictSDs = sqrt(varE + Evar))
+  predObsOrder <- GetPredObsOrder(treePointer = treePointer)
+  list(predictMeans = krigingMeans[order(predObsOrder)], predictSDs = sqrt(varE + Evar)[order(predObsOrder)])
 }
 
 covFunctionBiMatern <- function(rangeParaSpace = 10, rangeParaTime = 10) {
@@ -262,196 +321,6 @@ covFunctionBiMatern <- function(rangeParaSpace = 10, rangeParaTime = 10) {
     timeDist <- outer(zoo::index(spacetime2@time), zoo::index(spacetime1@time), function(x, y) as.numeric(abs(difftime(x, y, units = "days"))))
     fields::Exponential(euclidDist, range = 10)*t(fields::Exponential(timeDist, range = 10))
   }
-}
-
-# When lowerThreshold is 3, the exploration stops if the value being tested is at least 20 times smaller than the value at the peak of the hyperparameter marginal a posteriori distribution.
-getIntegrationPointsAndValues <- function(optimObject, gridPointer, MRAcovParasGammaAlphaBeta, FEmuVec, fixedEffGammaAlphaBeta, errorGammaAlphaBeta, stepSize = 1, lowerThreshold = 3, matern = FALSE, predictionData = NULL, timeBaseline, otherGridPointers = NULL, clusterAddress = NULL, spaceNuggetSD, timeNuggetSD, MRAhyperparasStart, errorSDstart, fixedEffSDstart) {
-
-  decomposition <- eigen(solve(-optimObject$hessian), symmetric = TRUE)
-
-  if (any(decomposition$values < 0)) {
-    stop("Error: The negative Hessian matrix has negative eigenvalues. The values found in the optimisation is not a maximum. \n \n")
-  }
-
-  getPsi <- function(z) {
-    sqrtEigenValueMatrix <- base::diag(sqrt(decomposition$values))
-    drop(optimObject$par + decomposition$vectors %*% sqrtEigenValueMatrix %*% z)
-  }
-
-  getContainerElement <- function(z) {
-    Psis <- getPsi(z)
-    if (any(Psis <= 0)) {
-      return(list(logJointValue = -Inf))
-    }
-    names(Psis) <- names(optimObject$par)
-    MRAhyperList <- MRAhyperparasStart
-    # spaceVars <- grep(pattern = "sp", x = names(z), value = TRUE)
-    # timeVars <- grep(pattern = "time", x = names(z), value = TRUE)
-    for (j in names(Psis)) {
-      if (j == "spRho") {
-        MRAhyperList$space[["rho"]] <- Psis[[j]]
-      }
-      if (j == "spSmoothness") {
-        MRAhyperList$space[["smoothness"]] <- Psis[[j]]
-      }
-      if (j == "timeRho") {
-        MRAhyperList$time[["rho"]] <- Psis[[j]]
-      }
-      if (j == "timeSmoothness") {
-        MRAhyperList$time[["smoothness"]] <- Psis[[j]]
-      }
-      if (j == "scale") {
-        MRAhyperList$scale <- Psis[[j]]
-      }
-    }
-    errorSD <- ifelse(any(grepl(pattern = "error", x = names(Psis))), Psis[[grep(pattern = "error", x = names(Psis), value = TRUE)]], errorSDstart)
-    fixedEffSD <- ifelse(any(grepl(pattern = "fixedEff", x = names(Psis))), Psis[[grep(pattern = "fixedEff", x = names(Psis), value = TRUE)]], fixedEffSDstart)
-
-    aList <- list(z = z, errorSD = errorSD, fixedEffSD = fixedEffSD, MRAhyperparas = MRAhyperList)
-
-    aList$logJointValue <- LogJointHyperMarginal(treePointer = gridPointer, MRAhyperparas = MRAhyperList, fixedEffSD = fixedEffSD, errorSD = errorSD, MRAcovParasGammaAlphaBeta = MRAcovParasGammaAlphaBeta, FEmuVec = FEmuVec, fixedEffGammaAlphaBeta =  fixedEffGammaAlphaBeta, errorGammaAlphaBeta = errorGammaAlphaBeta, matern = matern, spaceNuggetSD = spaceNuggetSD, timeNuggetSD = timeNuggetSD, recordFullConditional = TRUE)
-    if (!is.null(predictionData)) {
-      timeValues <- as.integer(time(predictionData@time))/(3600*24) - timeBaseline # The division is to obtain values in days.
-      aList$CondPredStats <- ComputeCondPredStats(gridPointer, predictionData@sp@coords, timeValues, as.matrix(predictionData@data))
-    }
-    # Running LogJointHyperMarginal stores in the tree pointed by gridPointer the full conditional mean and SDs when recordFullConditional = TRUE. We can get them with the simple functions I call now.
-    aList$FullCondMean <- GetFullCondMean(gridPointer)
-    aList$FullCondSDs <- GetFullCondSDs(gridPointer)
-    aList
-  }
-
-  numDims <- length(optimObject$par)
-  centerList <- list() # We'll be growing this list, but considering that we'll be having only a few hundred elements in final, this should be inconsequential.
-
-  centerList[[1]] <- getContainerElement(rep(0,numDims))
-  peakLogJointValue <- centerList[[1]]$logJointValue
-  counter <- 1
-  # This explores the distribution strictly along the axes defining centers for exploration at points not on the axes.
-  exploreCombinations <- expand.grid(dimNumber = 1:numDims, direction = c(-1, 1))
-  exploreList <- lapply(as.list(as.data.frame(t(exploreCombinations))), function(x) {
-    names(x) <- colnames(exploreCombinations)
-    x
-  })
-  # for (dimNumber in 1:numDims) {
-  #   for (direction in c(-1, 1)) {
-  centerListList <- lapply(exploreList, function(x) {
-    centers <- list()
-    counter <- 0
-    currentZ <- rep(0, numDims)
-    currentZ[x[["dimNumber"]]] <- stepSize*x[["direction"]]
-    repeat {
-      elementToAdd <- getContainerElement(currentZ)
-      # The following check compares the value at the peak of the distribution with that at the current location. Since values are on the log-scale, the criterion is multiplicative: if the log of the ratio of the two density values is greater than the threshold, it means there was a steep enough drop, and that the density at the point considered is low enough that it won't matter much in the computation of the normalizing constant.
-      if ((peakLogJointValue - elementToAdd$logJointValue) > lowerThreshold) break
-
-      counter <- counter + 1
-      centers[[counter]] <- elementToAdd
-      currentZ[x[["dimNumber"]]] <- currentZ[x[["dimNumber"]]] + x[["direction"]]*stepSize
-    }
-    centers
-  })
-  #   }
-  # }
-  centerList <- do.call("c", centerListList)
-
-  zMatrix <- t(sapply(centerList, '[[', "z"))
-  containerList <- centerList
-  counter <- length(containerList)
-  # The following explores the distribution at points not found on the axes.
-  for (centerIndex in 2:length(centerList)) {
-    for (dimNumber in 1:numDims) {
-      for (direction in c(-1, 1)) {
-        currentZ <- centerList[[centerIndex]]$z
-        repeat {
-          currentZ[[dimNumber]] <- currentZ[[dimNumber]] + direction*stepSize
-          # First, check if value is available
-          rowNumber <- which(apply(zMatrix, MARGIN = 1, identical, currentZ))
-
-          if (test <- length(rowNumber) == 0) { # This syntax actually works...
-            containerElement <- getContainerElement(currentZ)
-          } else {
-            containerElement <- containerList[[rowNumber]]
-          }
-
-          if ((centerList[[1]]$logJointValue - containerElement$logJointValue) > lowerThreshold) break
-
-          if (test) {
-            counter <- counter + 1
-            containerList[[counter]] <- containerElement
-            zMatrix <- rbind(zMatrix, currentZ)
-          }
-        }
-      }
-    }
-  }
-  containerList
-}
-
-# SimulateSpacetimeData <- function(numObsPerTimeSlice = 2025, covFunction, lonRange, latRange, timeValuesInPOSIXct, covariateDistributionList, errorSD, distFun = dist, FEvalues, tiltSpaceSD = 0, tiltTime = FALSE) {
-#   numSlotsPerRow <- ceiling(sqrt(numObsPerTimeSlice))
-#   slotCoordinates <- sapply(list(longitude = lonRange, latitude = latRange), FUN = function(x) {
-#     width <- abs(diff(x)/numSlotsPerRow)
-#     seq(from = min(x) + width/2, to = max(x) - width/2, length.out = numSlotsPerRow)
-#   }, USE.NAMES = TRUE)
-#
-#   allSpaceCoordinates <- as.data.frame(expand.grid(as.data.frame(slotCoordinates)))
-#
-#   timeLayerFct <- function(timeValue) {
-#     selectedRows <- sample.int(n = nrow(allSpaceCoordinates), size = numObsPerTimeSlice, replace = FALSE)
-#     layerCoordinates <- allSpaceCoordinates[selectedRows, ]
-#     layerCoordinates$time <- rep(timeValue, nrow(layerCoordinates))
-#     if (tiltTime) {
-#       numObs <- length(selectedRows)
-#       numObsDiv2 <- floor(numObs/2)
-#       layerCoordinates$time <- layerCoordinates$time +  seq(from = -numObsDiv2, to = numObsDiv2 - ((numObs %% 2) == 0))
-#     }
-#     covariateFrame <- as.data.frame(sapply(covariateDistributionList, function(x) sample(x[[1]], size = nrow(layerCoordinates), prob = x[[2]], replace = TRUE)))
-#     colnames(covariateFrame) <- paste("Covariate", seq_along(covariateFrame), sep = "")
-#     cbind(layerCoordinates, covariateFrame)
-#   }
-#
-#   coordinates <- lapply(timeValuesInPOSIXct, FUN = timeLayerFct)
-#   coordinates <- do.call("rbind", coordinates)
-#
-#   spatialDistMatrix <- dist(coordinates[, c("longitude", "latitude")])
-#   timeDistMatrix <- dist(coordinates[, "time"])/(3600*24)
-#   covarianceMat <- covFunction(spatialDistMatrix, timeDistMatrix)
-#   meanVector <- cbind(1, as.matrix(coordinates[ , grep(pattern = "Covariate", colnames(coordinates))])) %*% FEvalues
-#   fieldValues <- mvtnorm::rmvnorm(n = 1, mean = as.numeric(meanVector), sigma = covarianceMat) + rnorm(n = length(meanVector), mean = 0, sd = errorSD)
-#   dataForObject <- cbind(data.frame(y = fieldValues[1, ]), coordinates[ , grep(pattern = "Covariate", colnames(coordinates))])
-#   spacetimeObj <- spacetime::STIDF(sp = sp::SpatialPoints(coordinates[, c("longitude", "latitude")]), data = dataForObject, time = coordinates$time)
-#   if (tiltSpaceSD > 0) {
-#     spacetimeObj@sp@coords <- spacetimeObj@sp@coords + rnorm(length(spacetimeObj@sp@coords), 0, tiltSpaceSD)
-#   }
-#   spacetimeObj
-# }
-
-SimulateSpacetimeData <- function(numObsPerTimeSlice = 225, covFunction, lonRange, latRange, timeValuesInPOSIXct, covariateGenerationFctList, errorSD, distFun = dist, FEvalues) {
-  numSlotsPerRow <- ceiling(sqrt(numObsPerTimeSlice))
-  slotCoordinates <- sapply(list(longitude = lonRange, latitude = latRange), FUN = function(x) {
-    width <- abs(diff(x)/numSlotsPerRow)
-    seq(from = min(x) + width/2, to = max(x) - width/2, length.out = numSlotsPerRow)
-  }, USE.NAMES = TRUE)
-
-  allSpaceCoordinates <- as.data.frame(expand.grid(as.data.frame(slotCoordinates)))
-  numToRemove <- nrow(allSpaceCoordinates) - numObsPerTimeSlice
-  obsToRemove <- (nrow(allSpaceCoordinates) - numToRemove + 1):nrow(allSpaceCoordinates)
-  allSpaceCoordinates <- allSpaceCoordinates[-obsToRemove, ]
-
-  coordinates <- allSpaceCoordinates[rep(1:nrow(allSpaceCoordinates), length(timeValuesInPOSIXct)), ]
-  coordinates$time <- rep(timeValuesInPOSIXct, each = numObsPerTimeSlice)
-
-  covariateMatrix <- cbind(1, as.matrix(sapply(covariateGenerationFctList, function(x) x(coordinates[, c("longitude", "latitude")], coordinates[, "time"]))))
-
-  spatialDistMatrix <- dist(coordinates[, c("longitude", "latitude")])
-  timeDistMatrix <- dist(coordinates[, "time"])/(3600*24)
-  covarianceMat <- covFunction(spatialDistMatrix, timeDistMatrix)
-  meanVector <- drop(covariateMatrix %*% FEvalues)
-  fieldValues <- drop(mvtnorm::rmvnorm(n = 1, mean = meanVector, sigma = covarianceMat)) + rnorm(n = length(meanVector), mean = 0, sd = errorSD)
-  dataForObject <- cbind(y = fieldValues, as.data.frame(covariateMatrix[, -1]))
-  colnames(dataForObject) <- c("y", paste("Covariate", 1:(length(FEvalues) - 1), sep = ""))
-  spacetimeObj <- spacetime::STIDF(sp = sp::SpatialPoints(coordinates[, c("longitude", "latitude")]), data = dataForObject, time = coordinates$time)
-  spacetimeObj
 }
 
 # In the Wikipedia notation, smoothness corresponds to nu, and
@@ -471,55 +340,30 @@ LogJointHyperMarginal <- function(treePointer, MRAhyperparas, fixedEffSD, errorS
   # Hmat is the covariate matrix with a column of 1s at the front for the intercept, with a n x n identity matrix horizontally appended (horizontal/row merge).
   # MRAprecision has to be a sparse matrix.
   require(Matrix, quietly = TRUE)
-  choleskiSolve <- function(hessianMat, scaledResponseHmat) {
-    hessianMat <- as(hessianMat, "symmetricMatrix")
-    value <- as.vector(Matrix::solve(hessianMat, as.vector(scaledResponseHmat), sparse = TRUE))
-    value
+
+  logDetFun <- function(sparseM) {
+    sparseM <- as(sparseM, "symmetricMatrix")
+    value <- Matrix::determinant(x = sparseM, logarithm = TRUE)
+    value$modulus
   }
 
-  funForTrustOptim <- function(start, sigmaSqEpsilon, MRAprecision, responseVec, Hmat) {
-    cat("Entered funForTrustOptim...")
+  LogJointHyperMarginalToWrap(treePointer = treePointer, MRAhyperparas = MRAhyperparas, fixedEffSD = fixedEffSD, errorSD = errorSD, MRAcovParasGammaAlphaBeta = MRAcovParasGammaAlphaBeta, FEmuVec = FEmuVec, fixedEffGammaAlphaBeta =  fixedEffGammaAlphaBeta, errorGammaAlphaBeta = errorGammaAlphaBeta, matern = matern, spaceNuggetSD = spaceNuggetSD, timeNuggetSD = timeNuggetSD, recordFullConditional = TRUE, gradCholeskiFun = choleskiSolve, sparseMatrixConstructFun = buildSparseMatrix, sparseDeterminantFun = logDetFun)
+}
 
-    funForOptim <- function(x) {
-      recenteredResponse <- responseVec - Hmat %*% x
-      firstTerm <- t(x) %*% MRAprecision %*% x
-      secondTerm <- 1/sigmaSqEpsilon * Matrix::t(recenteredResponse) %*% recenteredResponse
-      value <- -0.5 * (firstTerm + secondTerm)
-      value[1, 1]
-    }
+buildSparseMatrix <- function(posMat, values, dims, symmetric) {
+  Matrix::sparseMatrix(i = posMat[, 1], j = posMat[ , 2], x = drop(values), dims = dims, index1 = FALSE, symmetric = symmetric)
+}
 
-    hessianMat <- -MRAprecision - 1/sigmaSqEpsilon * Matrix::t(Hmat) %*% Hmat
-    intercept <- 1/sigmaSqEpsilon * t(responseVec) %*% Hmat
+choleskiSolve <- function(hessianMat, scaledResponseHmat) {
+  hessianMat <- as(hessianMat, "symmetricMatrix")
+  value <- as.vector(Matrix::solve(hessianMat, drop(scaledResponseHmat), sparse = TRUE))
+  value
+}
 
-    gradForOptim <- function(x) {
-      value <- t(x) %*% hessianMat + intercept
-      value[1, ]
-    }
-
-    if (!("dgCMatrix" %in% class(hessianMat))) {
-      stop("R error: Hessian is supposed to be sparse. \n")
-    }
-
-    hessianForOptim <- function(x) {
-      hessianMat
-    }
-
-    opt <- trustOptim::trust.optim(x = drop(start), fn = funForOptim,
-                       gr = gradForOptim,
-                       hs = hessianForOptim,
-                       method = "Sparse",
-                       control = list(
-                         start.trust.radius = 3,
-                         stop.trust.radius = 1e-4,
-                         prec = 1e-4,
-                         report.precision = 1L,
-                         maxit = 15L, # Since we are solving a linear problem, convergence is in one iteration.
-                         preconditioner = 0,
-                         precond.refresh.freq = 1,
-                         function.scale.factor = -1 # We are maximising, hence the -1.
-                       ))
-    cat("Partial solution: ", opt$solution[1:8])
-    opt$solution
-  }
-  LogJointHyperMarginalToWrap(treePointer = treePointer, MRAhyperparas = MRAhyperparas, fixedEffSD = fixedEffSD, errorSD = errorSD, MRAcovParasGammaAlphaBeta = MRAcovParasGammaAlphaBeta, FEmuVec = FEmuVec, fixedEffGammaAlphaBeta =  fixedEffGammaAlphaBeta, errorGammaAlphaBeta = errorGammaAlphaBeta, matern = matern, spaceNuggetSD = spaceNuggetSD, timeNuggetSD = timeNuggetSD, recordFullConditional = TRUE, optimFun = funForTrustOptim, gradCholeskiFun = choleskiSolve)
+sparseInverse <- function(sparseMat, otherMat) {
+  require(Matrix)
+  sparseMat <- as(sparseMat, "dsCMatrix")
+  otherMat <- as(otherMat, "dgCMatrix")
+  value <- Matrix::solve(a = sparseMat, b = otherMat, sparse = TRUE)
+  as(value, Class = "CsparseMatrix")
 }

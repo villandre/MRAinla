@@ -24,19 +24,25 @@ Spatiotemprange sptimeDistance(const arma::vec & spCoor1, const double & time1, 
   return Spatiotemprange(sp, timeDiff) ;
 };
 
+// Pretty slow. Should not be called too often.
+
 arma::sp_mat createBlockMatrix(std::vector<arma::mat *> listOfMatrices) {
-  int numMatrices = listOfMatrices.size() ;
-  int dimen = 0 ;
-  for (auto & i : listOfMatrices) dimen += i->n_rows ;
-  arma::ivec dimvec(numMatrices) ;
+  uint numRows = 0 ;
+  uint numCols = 0 ;
+  for (auto & i : listOfMatrices) {
+    numRows += i->n_rows ;
+    numCols += i->n_cols ;
+  }
+  arma::sp_mat X(numRows, numCols);
 
-  arma::sp_mat X(dimen, dimen);
+  int idxRows = 0;
+  int idxCols = 0 ;
 
-  int idx=0;
-  for(int i = 0; i < numMatrices; i++) {
+  for(int i = 0; i < listOfMatrices.size(); i++) {
     sp_mat dereferencedMatrix = conv_to<sp_mat>::from(*(listOfMatrices.at(i))) ;
-    X(idx, idx, arma::size(dereferencedMatrix.n_rows, dereferencedMatrix.n_cols)) = dereferencedMatrix ;
-    idx += dereferencedMatrix.n_rows ;
+    X(idxRows, idxCols, arma::size(dereferencedMatrix.n_rows, dereferencedMatrix.n_cols)) = dereferencedMatrix ;
+    idxRows += dereferencedMatrix.n_rows ;
+    idxCols += dereferencedMatrix.n_cols ;
   }
 
   return X ;
@@ -101,20 +107,21 @@ arma::uvec extractBlockIndices(const arma::sp_mat & symmSparseMatrix) {
 //   return Bmatrix ;
 // }
 
-sp_mat invertSymmBlockDiag(const sp_mat & blockMatrix, const uvec & blockIndices) {
-  int numRows = blockMatrix.n_rows ;
-  sp_mat inverted(numRows, numRows) ;
-  unsigned int diagElement = 0 ;
-  unsigned int blockSize ;
+// Pretty slow. Should not be called too often.
 
-  for (unsigned int i = 0; i < (blockIndices.size()-1); i++) {
-    blockSize = blockIndices.at(i+1) - blockIndices.at(i) ;
-    inverted(diagElement, diagElement, size(blockSize, blockSize)) =
-      inv_sympd(mat(blockMatrix(diagElement, diagElement, size(blockSize, blockSize)))) ;
-    diagElement += blockSize ;
-  }
-  return inverted ;
-}
+// sp_mat invertSymmBlockDiag(const sp_mat & blockMatrix, const uvec & blockIndices) {
+//   uint diagElement = 0 ;
+//   uint numRows = blockIndices.at(blockIndices.size() - 1) ;
+//   sp_mat inverted(numRows, numRows) ;
+//   for (unsigned int i = 0; i < (blockIndices.size()-1); i++) {
+//     int blockSize = blockIndices.at(i+1) - blockIndices.at(i) ;
+//     inverted(diagElement, diagElement, size(blockSize, blockSize)) =
+//       inv_sympd(mat(blockMatrix(diagElement, diagElement, size(blockSize, blockSize)))) ;
+//     diagElement += blockSize ;
+//   }
+//
+//   return inverted ;
+// }
 
 // bool blockDiagCheck(const mat & matrixToCheck) {
 //   int newPosNextBlock = 1 ;
@@ -150,17 +157,30 @@ double maternCov(const double & distance, const double & rho,
   if (distance == 0) {
     maternValue = pow(scale, 2) + nugget ;
   } else {
-    double base = pow(2 * smoothness, 0.5) * distance / rho ;
-    double bessel = boost::math::cyl_bessel_k(smoothness, base) ;
-    maternValue = pow(scale, 2) * pow(2, 1 - smoothness) / gsl_sf_gamma(smoothness) *
-      pow(base, smoothness) * bessel ;
+    if (smoothness >= 1e6) {
+      maternValue = pow(scale, 2) * exp(-pow(distance, 2)/(2 * pow(rho, 2))) ;
+    } else if (smoothness == 0.5) {
+      maternValue = pow(scale, 2) * exp(-distance / rho) ;
+    } else if (smoothness == 1.5) {
+      maternValue = pow(scale, 2) *
+        (1 + sqrt(3) * distance / rho) *
+        exp(-sqrt(3) * distance / rho) ;
+    } else if (smoothness == 2.5) {
+      maternValue = pow(scale, 2) *
+        (1 + sqrt(5) * distance/rho + 5 * pow(distance, 2)/(3 * pow(rho, 2))) *
+        exp(-sqrt(5) * distance/rho) ;
+    } else {
+      double base = pow(2 * smoothness, 0.5) * distance / rho ;
+      double bessel = boost::math::cyl_bessel_k(smoothness, base) ;
+      maternValue = pow(scale, 2) * pow(2, 1 - smoothness) / gsl_sf_gamma(smoothness) *
+        pow(base, smoothness) * bessel ;
+    }
   }
-
   return maternValue ;
 }
 
-double logDetBlockMatrix(const arma::sp_mat & blockMatrix) {
-  uvec blockIndices = extractBlockIndices(blockMatrix) ;
+double logDetBlockMatrix(const arma::sp_mat & blockMatrix, const arma::uvec & blockIndices) {
+  // uvec blockIndices = extractBlockIndices(blockMatrix) ;
   double logDeterminant = 0 ;
   for (unsigned int i = 0 ; i < (blockIndices.size() - 1) ; i++) {
     double value = 0 ;

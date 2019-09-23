@@ -7,7 +7,7 @@ Maintainer: Luc Villandre <yourself@somewhere.net>
 Description: More about what it does (maybe more than one line)
     Use four spaces when indenting paragraphs within the Description.
 Imports:
-    sp (>= 1.3-1), Matrix (>= 1.2-14), raster (>= 2.6-7), spacetime (>= 1.2-2), Rcpp (>= 0.12.9)
+    sp (>= 1.3-1), Matrix (>= 1.2-14), raster (>= 2.6-7), spacetime (>= 1.2-2), Rcpp (>= 0.12.9), numDeriv (>= 2016.8-1.1), nloptr (>= 1.2.1), mvtnorm (>= 1.0-10), doParallel (>= 1.0.14)
 License: What license is it under?
 Encoding: UTF-8
 LazyData: true

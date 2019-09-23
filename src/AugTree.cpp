@@ -2,7 +2,6 @@
 // #include <omp.h>
 #include <gsl/gsl_sf_gamma.h>
 #include <gsl/gsl_multimin.h>
-#include "gperftools/heap-profiler.h"
 
 #include "AugTree.h"
 #include "TipNode.h"
@@ -32,16 +31,13 @@ struct MVN{
   }
 };
 
-AugTree::AugTree(uint & M, vec & lonRange, vec & latRange, vec & timeRange, vec & observations, mat & obsSp, vec & obsTime, uint & minObsForTimeSplit, unsigned long int & seed, mat & covariates, const bool splitTime, const unsigned int numKnotsRes0, const unsigned int J)
+AugTree::AugTree(uint & M, vec & lonRange, vec & latRange, vec & timeRange, vec & observations, mat & obsSp, vec & obsTime, mat & predCovariates, mat & predSp, vec & predTime, uint & minObsForTimeSplit, unsigned long int & seed, mat & covariates, const bool splitTime, const unsigned int numKnotsRes0, const unsigned int J)
   : m_M(M)
 {
-  // Jittering time a bit might help with estimation.
-  // vec jitter = randn<vec>(obsTime.size()) ;
-  //
-  // m_dataset = inputdata(observations, obsSp, obsTime + 1e-4 * jitter, covariates) ;
   m_dataset = inputdata(observations, obsSp, obsTime, covariates) ;
   m_mapDimensions = dimensions(lonRange, latRange, timeRange) ;
   m_randomNumGenerator = gsl_rng_alloc(gsl_rng_taus) ;
+  SetPredictData(predSp, predTime, predCovariates) ;
 
   gsl_rng_set(m_randomNumGenerator, seed) ;
   m_fixedEffParameters.resize(m_dataset.covariateValues.n_cols + 1) ; // An extra 1 is added to take into account the intercept.
@@ -51,8 +47,6 @@ AugTree::AugTree(uint & M, vec & lonRange, vec & latRange, vec & timeRange, vec 
 
   m_numKnots = 0 ;
 
-  numberNodes() ;
-
   for (uint i = 0 ; i < m_vertexVector.size() ; i++) {
     m_numKnots += m_vertexVector.at(i)->GetKnotsCoor().timeCoords.size() ;
   }
@@ -60,6 +54,17 @@ AugTree::AugTree(uint & M, vec & lonRange, vec & latRange, vec & timeRange, vec 
   m_FullCondSDs = vec(m_numKnots + m_fixedEffParameters.size(), fill::zeros) ;
   m_Vstar = vec(m_numKnots + m_dataset.covariateValues.n_cols + 1, fill::zeros) ;
   m_Vstar.subvec(0, size(m_FEmu)) = m_FEmu ;
+  m_HmatPos = umat(0, 2) ;
+  // createHmatrixPos() ;
+  m_HmatPredPos = umat(0, 2) ;
+  std::vector<TreeNode *> tipNodes = GetTipNodes() ;
+
+  for (auto & i : tipNodes) {
+    i->SetPredictLocations(m_predictData) ;
+  }
+
+  createHmatrixPredPos() ;
+  m_SigmaPos = umat(0, 2) ;
 }
 
 void AugTree::BuildTree(const uint & minObsForTimeSplit, const bool splitTime, const unsigned int numKnots0, const unsigned int J)
@@ -73,6 +78,7 @@ void AugTree::BuildTree(const uint & minObsForTimeSplit, const bool splitTime, c
   m_vertexVector.push_back(topNode) ;
 
   createLevels(topNode, minObsForTimeSplit, splitTime) ;
+  numberNodes() ;
 
   generateKnots(topNode, numKnots0, J) ;
 }
@@ -89,80 +95,6 @@ void AugTree::numberNodes() {
   }
 }
 
-// void AugTree::createLevels(TreeNode * parent, const uint & numObsForTimeSplit) {
-//   uvec obsForMedian(m_dataset.responseValues.size(), fill::zeros) ;
-//   obsForMedian = parent->GetObsInNode() ;
-//
-//   if (obsForMedian.n_elem == 0) {
-//     throw Rcpp::exception("Empty region.") ;
-//   }
-//   mat spMediansMat = median(m_dataset.spatialCoords.rows(obsForMedian), 0) ;
-//   Row<double> spMedians = spMediansMat.row(0) ;
-//
-//   vec sortedTimes = sort(m_dataset.timeCoords.elem(obsForMedian)) ;
-//   double timeMedian = sortedTimes.at(std::ceil((obsForMedian.size()-1)/2));
-//
-//   std::vector<dimensions> dimensionsForChildren ;
-//   vec lonRange(2, fill::zeros), latRange(2, fill::zeros) ;
-//
-//   if (parent->GetObsInNode().size() < numObsForTimeSplit) {
-//     for (uint i = 0; i < 2; i++) {
-//       for (uint j = 0 ; j < 2; j++) {
-//         lonRange.at(0) = parent->GetDimensions().longitude.at(i) ;
-//         lonRange.at(1) = spMedians.at(0);
-//         lonRange = sort(lonRange);
-//
-//         latRange.at(0) = parent->GetDimensions().latitude.at(j) ;
-//         latRange.at(1) = spMedians.at(1);
-//         latRange = sort(latRange);
-//
-//         dimensionsForChildren.push_back(dimensions(lonRange, latRange, parent->GetDimensions().time)) ;
-//       }
-//     }
-//   } else {
-//     vec timeRange(2, fill::zeros) ;
-//     for (uint i = 0; i < 2; i++) {
-//       for (uint j = 0; j < 2; j++) {
-//         for(uint k = 0; k < 2; k++) {
-//           lonRange.at(0) = parent->GetDimensions().longitude.at(i) ;
-//           lonRange.at(1) = spMedians.at(0);
-//           lonRange = sort(lonRange);
-//
-//           latRange.at(0) = parent->GetDimensions().latitude.at(j) ;
-//           latRange.at(1) = spMedians.at(1);
-//           latRange = sort(latRange);
-//
-//           timeRange.at(0) = parent->GetDimensions().time.at(k) ;
-//           timeRange.at(1) = timeMedian ;
-//           timeRange = sort(timeRange) ;
-//
-//           dimensionsForChildren.push_back(dimensions(lonRange, latRange, timeRange)) ;
-//         }
-//       }
-//     }
-//   }
-//   int incrementedDepth = parent->GetDepth()+1 ;
-//
-//   for (auto &&i : dimensionsForChildren) {
-//     if (parent->GetDepth() < m_M-1) {
-//       InternalNode * newNode = new InternalNode(i, incrementedDepth, parent, m_dataset) ;
-//       m_vertexVector.push_back(newNode) ;
-//       parent->AddChild(newNode) ;
-//     } else {
-//       TipNode * newNode = new TipNode(i, incrementedDepth, parent, m_dataset) ;
-//       m_numTips = m_numTips+1 ;
-//       m_vertexVector.push_back(newNode) ;
-//       parent->AddChild(newNode) ;
-//     }
-//   }
-//   if (incrementedDepth < m_M) {
-//     incrementedDepth = incrementedDepth + 1 ;
-//     for (auto && i : parent->GetChildren()) {
-//       createLevels(i, numObsForTimeSplit) ;
-//     }
-//   }
-// }
-
 // In this version, we first split the latitude, then the latitude, and finally time.
 // We make sure that splits don't result in empty regions
 void AugTree::createLevels(TreeNode * parent, const uint & numObsForTimeSplit, const bool splitTime) {
@@ -171,7 +103,7 @@ void AugTree::createLevels(TreeNode * parent, const uint & numObsForTimeSplit, c
   std::vector<dimensions> childDimensions ;
   childDimensions.push_back(parent->GetDimensions()) ;
 
-  if (obsForMedian.n_elem < 1) {
+  if (obsForMedian.n_elem <= 1) {
     throw Rcpp::exception("Cannot split empty region or region with only one observation.\n") ;
   }
 
@@ -264,9 +196,10 @@ void AugTree::createLevels(TreeNode * parent, const uint & numObsForTimeSplit, c
 void AugTree::generateKnots(TreeNode * node, const unsigned int numKnotsRes0, const unsigned int J) {
 
   int numNodesAtLevel = GetLevelNodes(node->GetDepth()).size() ;
-  uint numKnotsToGen = std::ceil((numKnotsRes0 * pow(J, node->GetDepth()))/numNodesAtLevel) ;
+  uint numKnotsToGen = std::max(uint(std::ceil((numKnotsRes0 * pow(J, node->GetDepth()))/numNodesAtLevel)), uint(2)) ;
 
   node->genRandomKnots(m_dataset, numKnotsToGen, m_randomNumGenerator) ;
+
   if (node->GetChildren().at(0) != NULL) {
     for (auto &i : node->GetChildren()) {
       generateKnots(i, numKnotsRes0, J) ;
@@ -309,7 +242,6 @@ void AugTree::ComputeMRAlogLikAlt(const bool WmatsAvailable)
   for (auto & i : m_vertexVector) {
     int lastIndex = currentIndex + i->GetNumKnots() - 1 ;
     vec etas = m_Vstar.subvec(currentIndex, lastIndex) ;
-    // etas.print("Eta vector:") ;
 
     double logDeterminantValue = 0 ;
     double sign = 0 ;
@@ -479,7 +411,7 @@ void AugTree::CenterResponse() {
   m_dataset.responseValues -= meanVec ;
 }
 
-arma::sp_mat AugTree::CombineFEinvAndKinvMatrices() {
+arma::sp_mat AugTree::CreateSigmaBetaEtaInvMat() {
   std::vector<mat *> FEinvAndKinvMatrixList = getKmatricesInversePointers() ;
   mat FEinvMatrix = pow(m_fixedEffSD, -2) * eye<mat>(m_fixedEffParameters.size(), m_fixedEffParameters.size()) ;
   FEinvAndKinvMatrixList.insert(FEinvAndKinvMatrixList.begin(), &FEinvMatrix) ;
@@ -487,41 +419,58 @@ arma::sp_mat AugTree::CombineFEinvAndKinvMatrices() {
   // This is because we want the Q matrix to have a block-diagonal component in the lower-right corner,
   // which prompted us to make H* = [X,F] rather than H* = [F, X], like in Eidsvik.
 
-  sp_mat FEinvAndKinvMatrices = createBlockMatrix(FEinvAndKinvMatrixList) ;
+  sp_mat SigmaFEandEtaInv = createBlockMatrix(FEinvAndKinvMatrixList) ;
+  m_SigmaFEandEtaInvBlockIndices = extractBlockIndices(SigmaFEandEtaInv) ;
+
+  uint basicIndex = 0 ;
+  for (uint i = 0 ; i < m_SigmaFEandEtaInvBlockIndices.size() - 1 ; i++) {
+    uint blockIndex = m_SigmaFEandEtaInvBlockIndices.at(i) ;
+    uint nextBlockIndex = m_SigmaFEandEtaInvBlockIndices.at(i+1) ;
+    uint numRows = nextBlockIndex - blockIndex ;
+    umat blockPos = join_rows(rep(regspace<uvec>(0, numRows - 1), numRows),
+                              rep_each(regspace<uvec>(0, numRows - 1), numRows)) + basicIndex ;
+
+    m_SigmaPos = join_cols(m_SigmaPos, blockPos) ;
+    basicIndex += numRows ;
+  }
+  // uvec keepIndices = find(m_SigmaPos.col(0) >= m_SigmaPos.col(1)) ;
+  // m_SigmaPos = m_SigmaPos.rows(keepIndices) ;
+  return SigmaFEandEtaInv ;
+}
+
+arma::sp_mat AugTree::UpdateSigmaBetaEtaInvMat(Rcpp::Function buildSparse) {
+  std::vector<mat *> FEinvAndKinvMatrixList = getKmatricesInversePointers() ;
+  mat FEinvMatrix = pow(m_fixedEffSD, -2) * eye<mat>(m_fixedEffParameters.size(), m_fixedEffParameters.size()) ;
+  FEinvAndKinvMatrixList.insert(FEinvAndKinvMatrixList.begin(), &FEinvMatrix) ;
+  uint accSize = 0 ;
+
+  vec concatenatedValues(m_SigmaPos.n_rows) ;
+  concatenatedValues.subvec(0, size(FEinvMatrix.diag())) = FEinvMatrix.diag() ;
+  uint index = FEinvMatrix.n_rows ;
+  uint newIndex ;
+  for (uint i = 1; i < FEinvAndKinvMatrixList.size(); i++) {
+    newIndex = index + FEinvAndKinvMatrixList.at(i)->size() ;
+    concatenatedValues.subvec(index,  newIndex - 1) = vectorise(*FEinvAndKinvMatrixList.at(i)) ;
+    index = newIndex ;
+  }
+  uvec dims(2) ;
+  dims.fill(GetNumKnots() + m_dataset.covariateValues.n_cols + 1) ;
+  sp_mat FEinvAndKinvMatrices = Rcpp::as<sp_mat>(buildSparse(m_SigmaPos, concatenatedValues, dims, false)) ;
 
   return FEinvAndKinvMatrices ;
 }
 
-// arma::sp_mat AugTree::createHstar() {
-//   sp_mat Fmatrix = createFmatrixAlt() ;
-//
-//   vec intercept = ones<vec>(m_dataset.covariateValues.n_rows) ;
-//   mat covarCopy = m_dataset.covariateValues ;
-//   covarCopy.insert_cols(0, intercept) ;
-//   sp_mat incrementedCovar = conv_to<sp_mat>::from(covarCopy) ;
-//   sp_mat Hstar = join_rows(conv_to<sp_mat>::from(incrementedCovar), Fmatrix) ;
-//   return Hstar ;
-// }
-
-arma::sp_mat AugTree::createFmatrixAlt(const bool predictionMode) {
+void AugTree::createHmatrixPos() {
 
   int numObs = m_dataset.spatialCoords.n_rows ;
-  if (predictionMode) {
-    numObs = m_predictData.spatialCoords.n_rows ;
-  }
-  sp_mat Fmat ;
+  std::vector<std::vector<double *>> memAddressesVec(m_numKnots) ;
+
   std::vector<uvec> FmatNodeOrder(m_M) ;
   uvec FmatObsOrder(numObs, fill::zeros) ;
   uint rowIndex = 0 ;
-  // uvec colIndicesPerNodeId(m_vertexVector.size(), fill::zeros) ;
+  uint colIndex = 0 ;
 
-  // uint colIndex = 0 ;
-  // for (uint i = 0 ; i < m_vertexVector.size() ; i++) {
-  //   colIndicesPerNodeId.at(m_vertexVector.at(i)->GetNodeId()) = colIndex ;
-  //   colIndex += m_vertexVector.at(i)->GetNumKnots() ;
-  // }
-
-  std::vector<TreeNode *> tipNodes = GetLevelNodes(m_M) ;
+  std::vector<TreeNode *> tipNodes = GetTipNodes() ;
   int numTips = tipNodes.size() ;
 
   std::vector<uvec> ancestorIdsVec(numTips) ;
@@ -548,27 +497,13 @@ arma::sp_mat AugTree::createFmatrixAlt(const bool predictionMode) {
   for (auto & nodeToProcess : tipNodes) {
     uvec observationIndices = nodeToProcess->GetObsInNode() ;
 
-    if (predictionMode) {
-      observationIndices = nodeToProcess->GetPredIndices() ;
-    }
     bool test =  observationIndices.size() > 0 ;
 
     if (test) {
       FmatObsOrder.subvec(rowIndex, size(observationIndices)) = observationIndices ;
 
       std::vector<TreeNode *> brickList = nodeToProcess->getAncestors() ;
-      sp_mat rowMat ;
 
-      // for (uint resolution = 0; resolution <= m_M; resolution++) {
-      //   uint nodeId = brickList.at(resolution)->GetNodeId() ;
-      //   mat matToAdd ;
-      //   if (predictionMode) {
-      //     matToAdd = nodeToProcess->GetUpred(resolution) ;
-      //   } else {
-      //     matToAdd = nodeToProcess->GetB(resolution) ;
-      //   }
-      //   Fmat(rowIndex, colIndicesPerNodeId.at(nodeId), size(matToAdd)) = matToAdd ;
-      // }
       uvec brickAncestors(brickList.size()) ;
       for (uint i = 0 ; i < brickAncestors.size() ; i++) {
         brickAncestors.at(i) = brickList.at(i)->GetNodeId() ;
@@ -577,33 +512,158 @@ arma::sp_mat AugTree::createFmatrixAlt(const bool predictionMode) {
       for (uint nodeIndex = 0; nodeIndex < m_vertexVector.size() ; nodeIndex++) {
         int nodePos = GetNodePos(nodeIndex) ;
         if (index < brickAncestors.size()) {
-          if (nodeIndex != brickAncestors.at(index)) {
-            rowMat = join_rows(rowMat, sp_mat(nodeToProcess->GetObsInNode().size(), m_vertexVector.at(nodePos)->GetNumKnots())) ;
-          }
-          else {
-            sp_mat matToAdd ;
-            if (predictionMode) {
-              matToAdd = nodeToProcess->GetUpred(index) ;
-            } else {
-              matToAdd = nodeToProcess->GetB(index) ;
-            }
-            rowMat = join_rows(rowMat, matToAdd) ;
+          if (nodeIndex == brickAncestors.at(index)) {
+            uvec rowIndices = rep(regspace<uvec>(0, nodeToProcess->GetB(index).n_rows - 1),
+                                  nodeToProcess->GetB(index).n_cols) + rowIndex ;
+            uvec colIndices = rep_each(regspace<uvec>(0, nodeToProcess->GetB(index).n_cols - 1),
+                                       nodeToProcess->GetB(index).n_rows) + colIndex ;
+
+            umat positions = join_rows(rowIndices, colIndices) ;
+            m_HmatPos = join_cols(m_HmatPos, positions) ; // Slow, but this is not done many times.
+
             index += 1 ;
           }
-        } else {
-          rowMat = join_rows(rowMat, sp_mat(nodeToProcess->GetObsInNode().size(), m_vertexVector.at(nodePos)->GetNumKnots())) ;
         }
-
+        colIndex += m_vertexVector.at(nodePos)->GetNumKnots() ;
       }
-      // rowIndex += nodeToProcess->GetB(0).n_rows ; // The B(0), B(1), ..., B(M) all have the same number of rows.
-      rowIndex += observationIndices.size() ; // The B matrices should have as may rows as observations in the node...
-      Fmat = join_rows(Fmat, trans(rowMat)) ;
+      colIndex = 0 ;
+      rowIndex += observationIndices.size() ; // The B matrices should have as many rows as observations in the node...
     }
   }
 
   m_obsOrderForFmat = FmatObsOrder ;
 
-  return trans(Fmat) ;
+  mat transIncrementedCovar = trans(join_rows(ones<vec>(numObs), m_dataset.covariateValues)) ;
+  m_incrementedCovarReshuffled = trans(transIncrementedCovar.cols(m_obsOrderForFmat)) ;
+  m_HmatPos.col(1) += m_dataset.covariateValues.n_cols + 1 ;
+
+  umat covPos = join_rows(rep(regspace<uvec>(0, m_incrementedCovarReshuffled.n_rows - 1), m_incrementedCovarReshuffled.n_cols),
+                          rep_each(regspace<uvec>(0, m_incrementedCovarReshuffled.n_cols - 1), m_incrementedCovarReshuffled.n_rows)) ;
+  m_HmatPos = join_cols(covPos, m_HmatPos) ;
+}
+
+void AugTree::updateHmatrix(Rcpp::Function sparseMatrixConstructFun) {
+  vec concatenatedValues = vectorise(m_incrementedCovarReshuffled) ;
+
+  for (auto & tipNode : GetTipNodes()) {
+    for (auto & Bmat : tipNode->GetWlist()) {
+      concatenatedValues = join_cols(concatenatedValues, vectorise(Bmat)) ;
+    }
+  }
+  uvec testVector = find(m_HmatPos.col(1) == 5) ;
+
+  uvec dims(2) ;
+  dims.at(0) = m_dataset.responseValues.size() ;
+  dims.at(1) = GetNumKnots() + m_dataset.covariateValues.n_cols + 1 ;
+
+  m_Hmat = Rcpp::as<sp_mat>(sparseMatrixConstructFun(m_HmatPos, concatenatedValues, dims, false)) ;
+}
+
+arma::sp_mat AugTree::updateHmatrixPred(Rcpp::Function sparseMatrixConstructFun) {
+  vec concatenatedValues = vectorise(m_incrementedCovarPredictReshuffled) ;
+  for (auto & tipNode : GetTipNodes()) {
+    if (tipNode->GetPredIndices().size() > 0) {
+      for (auto & Umat : tipNode->GetUmatList()) {
+        concatenatedValues = join_cols(concatenatedValues, vectorise(Umat)) ;
+      }
+    }
+  }
+  uvec dims(2) ;
+  dims.at(0) = m_predictData.responseValues.size() ;
+  dims.at(1) = m_Hmat.n_cols ;
+
+  return Rcpp::as<sp_mat>(sparseMatrixConstructFun(m_HmatPredPos, concatenatedValues, dims, false)) ;
+}
+
+void AugTree::createHmatrixPredPos() {
+
+  uint numObs = m_predictData.spatialCoords.n_rows ;
+
+  std::vector<uvec> FmatNodeOrder(m_M) ;
+  uvec FmatObsOrder(numObs, fill::zeros) ;
+  uint rowIndex = 0 ;
+  uint colIndex = 0 ;
+
+  std::vector<TreeNode *> tipNodes = GetTipNodes() ;
+  int numTips = tipNodes.size() ;
+
+  std::vector<uvec> ancestorIdsVec(numTips) ;
+
+  for (uint i = 0 ; i < tipNodes.size(); i++) {
+    uvec idVec = tipNodes.at(i)->GetAncestorIds() ; // Last element is tip node.
+    ancestorIdsVec.at(i) = idVec ;
+  }
+
+  std::sort(tipNodes.begin(), tipNodes.end(), [] (TreeNode * first, TreeNode * second) {
+    uvec firstAncestorIds = first->GetAncestorIds() ;
+    uvec secondAncestorIds = second->GetAncestorIds() ;
+    bool firstSmallerThanSecond = false ;
+    for (uint i = 1 ; i < firstAncestorIds.size() ; i++) { // The ultimate ancestor is always node 0, hence the loop starting at 1.
+      bool test = (firstAncestorIds.at(i) == secondAncestorIds.at(i)) ;
+      if (!test) {
+        firstSmallerThanSecond = (firstAncestorIds.at(i) < secondAncestorIds.at(i)) ;
+        break ;
+      }
+    }
+    return firstSmallerThanSecond ;
+  }) ; // This is supposed to reorder the tip nodes in such a way that the F matrix has contiguous blocks.
+
+  m_obsOrderForHpredMat = uvec(m_predictData.timeCoords.size(), fill::zeros) ;
+  uint elementIndex = 0 ;
+  for (auto & i : tipNodes) {
+    uint numPredObsInNode = i->GetPredIndices().size() ;
+    if (numPredObsInNode > 0) {
+      m_obsOrderForHpredMat.subvec(elementIndex, size(i->GetPredIndices())) = i->GetPredIndices() ;
+      elementIndex += i->GetPredIndices().size() ;
+    }
+  }
+
+  for (auto & nodeToProcess : tipNodes) {
+    uvec observationIndices = nodeToProcess->GetPredIndices() ;
+    std::vector<TreeNode *> ancestorsList = nodeToProcess->getAncestors() ;
+
+    bool test =  observationIndices.size() > 0 ;
+
+    if (test) {
+      FmatObsOrder.subvec(rowIndex, size(observationIndices)) = observationIndices ;
+
+      std::vector<TreeNode *> brickList = nodeToProcess->getAncestors() ;
+
+      uvec brickAncestors(brickList.size()) ;
+      for (uint i = 0 ; i < brickAncestors.size() ; i++) {
+        brickAncestors.at(i) = brickList.at(i)->GetNodeId() ;
+      }
+      uint index = 0 ;
+
+      for (uint nodeIndex = 0; nodeIndex < m_vertexVector.size() ; nodeIndex++) {
+        int nodePos = GetNodePos(nodeIndex) ;
+        if (index < brickAncestors.size()) {
+          if (nodeIndex == brickAncestors.at(index)) {
+            uvec rowIndices = rep(regspace<uvec>(0, observationIndices.size() - 1),
+                                  ancestorsList.at(index)->GetNumKnots()) + rowIndex ;
+            uvec colIndices = rep_each(regspace<uvec>(0, ancestorsList.at(index)->GetNumKnots() - 1),
+                                       observationIndices.size()) + colIndex ;
+            umat positions = join_rows(rowIndices, colIndices) ;
+            m_HmatPredPos = join_cols(m_HmatPredPos, positions) ; // Slow, but this is not done many times.
+
+            index += 1 ;
+          }
+        }
+        colIndex += m_vertexVector.at(nodePos)->GetNumKnots() ;
+      }
+      colIndex = 0 ;
+      rowIndex += observationIndices.size() ;
+    }
+  }
+  mat transIncrementedCovar = trans(join_rows(ones<vec>(numObs), m_predictData.covariateValues)) ;
+  m_incrementedCovarPredictReshuffled = trans(transIncrementedCovar.cols(FmatObsOrder)) ;
+
+  m_HmatPredPos.col(1) += m_predictData.covariateValues.n_cols + 1 ;
+  umat covPos = join_rows(rep(regspace<uvec>(0, m_incrementedCovarPredictReshuffled.n_rows - 1),
+                              m_incrementedCovarPredictReshuffled.n_cols),
+                          rep_each(regspace<uvec>(0, m_incrementedCovarPredictReshuffled.n_cols - 1),
+                                   m_incrementedCovarPredictReshuffled.n_rows)) ;
+  m_HmatPredPos = join_cols(covPos, m_HmatPredPos) ;
 }
 
 std::vector<TreeNode *> AugTree::Descendants(std::vector<TreeNode *> nodeList) {
@@ -647,174 +707,152 @@ void AugTree::ComputeLogPriors() {
   m_logPrior = logPrior ;
 }
 
-// void AugTree::ComputeLogJointCondTheta() {
-//   // if (m_recomputeMRAlogLik) {
-//     ComputeMRAlogLikAlt(true) ; // Getting the eta values requires computing the K matrices, hence KmatricesAvailable = true.
-//   // }
-//
-//   double fixedEffLogLik = 0 ;
-//
-//   for (uint i = 0; i < m_fixedEffParameters.size(); i++) {
-//     fixedEffLogLik += std::log(normpdf(m_fixedEffParameters.at(i), m_FEmu.at(i), m_fixedEffSD)) ;
-//   }
-//
-//   m_logCondDist = m_MRAlogLik + fixedEffLogLik ;
-// }
-
-
-void AugTree::ComputeLogFCandLogCDandDataLL(Rcpp::Function funForOptim, Rcpp::Function gradCholeskiFun) {
+void AugTree::ComputeLogFCandLogCDandDataLL(Rcpp::Function gradCholeskiFun, Rcpp::Function sparseMatrixConstructFun,
+                                            Rcpp::Function sparseDeterminantFun) {
 
   int n = m_dataset.responseValues.size() ;
-  cout << "Creating matrix of Ks... \n" ;
-  sp_mat SigmaFEandEtaInv = CombineFEinvAndKinvMatrices() ;
-  cout << "Done... \n" ;
-  sp_mat Fmatrix ;
+  // cout << "Creating matrix of Ks... \n" ;
+  sp_mat SigmaFEandEtaInv ;
+  if (m_SigmaPos.n_rows == 0) {
+    SigmaFEandEtaInv = CreateSigmaBetaEtaInvMat() ;
+  } else {
+    SigmaFEandEtaInv = UpdateSigmaBetaEtaInvMat(sparseMatrixConstructFun) ;
+  }
+  double logDetSigmaKFEinv = logDetBlockMatrix(SigmaFEandEtaInv, m_SigmaFEandEtaInvBlockIndices) ;
+  // cout << "Done... \n" ;
 
   if (m_recomputeMRAlogLik) {
-    cout << "Computing Fmatrix... \n" ;
-    Fmatrix = createFmatrixAlt(false) ;
-    cout << "Done... \n" ;
-  }
-  //We re-shuffle the X matrix in such a way that the lines match those in the F matrix, based on
-  // m_obsOrderForFmat.
-  mat transIncrementedCovar = trans(join_rows(ones<vec>(n), m_dataset.covariateValues)) ;
-  mat incrementedCovarReshuffled = trans(transIncrementedCovar.cols(m_obsOrderForFmat)) ;
+    // cout << "Obtaining H matrix... \n" ;
+    if (m_HmatPos.size() == 0) {
+      createHmatrixPos() ;
+    }
+    updateHmatrix(sparseMatrixConstructFun) ;
 
-  if (m_recomputeMRAlogLik) {
-    cout << "Forming Hstar... \n" ;
-    m_Hstar = join_rows(conv_to<sp_mat>::from(incrementedCovarReshuffled), Fmatrix) ;
-    cout << "Done... \n" ;
+    // cout << "Done... \n" ;
   }
 
-  // sp_mat TepsilonInverse = std::pow(m_errorSD, -2) * eye<sp_mat>(n, n) ;
-
-  sp_mat secondTerm = std::pow(m_errorSD, -2) * trans(m_Hstar) * m_Hstar ;
-  cout << "Obtaining Q... \n" ;
+  sp_mat secondTerm = std::pow(m_errorSD, -2) * trans(m_Hmat) * m_Hmat ;
+  // cout << "Obtaining Q... \n" ;
   m_FullCondPrecision = SigmaFEandEtaInv + secondTerm ;
-  // mat(m_FullCondPrecision(0, 0, size(1000, 1000))).save("/home/luc/Documents/Qmatrix.info", raw_ascii) ;
-  cout << "Done... \n" ;
 
-  // We must fix numerical errors to ensure the matrix is perfectly symmetric. Hopefully, this is not too demanding...
-
-  // m_FullCondPrecision = symmatl(m_FullCondPrecision) ;
+  // cout << "Done... \n" ;
 
   vec responsesReshuffled = m_dataset.responseValues.elem(m_obsOrderForFmat) ;
 
-  // vec bVec = trans(std::pow(m_errorSD, -2) * trans(responsesReshuffled) * m_Hstar) ; // This should be equal to trans(trans(responsesReshuffled) * TepsilonInverse * m_Hstar)
+  // cout << "Computing FC mean... \n" ;
 
-  // vec updatedMean = ComputeFullConditionalMean(bVec) ;
-
-  // NumericVector updatedMean = funForOptim(m_Vstar, std::pow(m_errorSD, 2), SigmaFEandEtaInv, responsesReshuffled, m_Hstar) ;
-
-  cout << "Computing FC mean... \n" ;
-  sp_mat hessianMat = SigmaFEandEtaInv + std::pow(m_errorSD, -2) * trans(m_Hstar) * m_Hstar ;
-  mat scaledResponse = std::pow(m_errorSD, -2) * trans(responsesReshuffled) * m_Hstar ;
+  sp_mat hessianMat = SigmaFEandEtaInv + secondTerm ;
+  mat scaledResponse = std::pow(m_errorSD, -2) * trans(responsesReshuffled) * m_Hmat ;
+  // scaledResponse(0, 0, size(1, 10)).print("Scaled response:") ;
+  // hessianMat(0,0, size(7, 7)).print("Hessian matrix:") ;
   Rcpp::NumericVector updatedMean = gradCholeskiFun(hessianMat, scaledResponse) ;
 
   m_Vstar = updatedMean ; // Assuming there will be an implicit conversion to vec type.
   m_FullCondMean = m_Vstar ;
 
-  // m_MRAvalues = m_Fmatrix * updatedMean.tail(m_numKnots) ;
-
   vec fixedEffMeans = m_Vstar.head(m_fixedEffParameters.size()) ;
   SetFixedEffParameters(fixedEffMeans) ;
 
-  double logDetQmat = logDeterminantQmat() ;
-
-  // sp_mat Kmatrices = createSparseMatrix(KmatrixList) ;
+  // double logDetQmat = logDeterminantQmat(sparseMatrixConstructFun) ;
+  double logDetQmat = Rcpp::as<double>(sparseDeterminantFun(m_FullCondPrecision)) ;
 
   m_logFullCond = 0.5 * logDetQmat ; // Since we arbitrarily evaluate always at the full-conditional mean, the exponential part of the distribution reduces to 0.
 
   // Computing p(v* | Psi)
   mat logLikTerm = -0.5 * trans(m_Vstar) * SigmaFEandEtaInv * m_Vstar ;
-  double logDetSigmaKFEinv = logDetBlockMatrix(SigmaFEandEtaInv) ;
+
   m_logCondDist = logLikTerm(0,0) + 0.5 * logDetSigmaKFEinv ;
 
   // Computing p(y | v*, Psi)
   double errorLogDet = -2 * n * log(m_errorSD) ;
-  vec recenteredY = responsesReshuffled - m_Hstar * m_Vstar ;
+  vec recenteredY = responsesReshuffled - m_Hmat * m_Vstar ;
   vec globalLogLikExp = -0.5 * std::pow(m_errorSD, -2) * trans(recenteredY) * recenteredY ;
   m_globalLogLik = 0.5 * errorLogDet + globalLogLikExp(0) ;
 }
 
-// void AugTree::ComputeGlobalLogLik() {
-//   mat incrementedCovar = m_dataset.covariateValues ;
-//   incrementedCovar.insert_cols(0, 1) ;
-//   incrementedCovar.col(0).fill(1) ;
-//   mat incrementedCovarTrans = trans(incrementedCovar) ;
-//   incrementedCovar = trans(incrementedCovarTrans.cols(m_obsOrderForFmat)) ;
-//   vec meanVec(m_dataset.responseValues.size(), fill::zeros) ;
-//   meanVec = incrementedCovar * m_fixedEffParameters + m_MRAvalues ;
-//
-//   vec sdVec(m_dataset.responseValues.size(), fill::zeros) ;
-//
-//   sdVec.fill(m_errorSD) ;
-//   vec logDensVec(m_dataset.responseValues.size(), fill::zeros) ;
-//   // logDensVec = log(normpdf(m_dataset.responseValues, meanVec, sdVec)) ;
-//   double logDensity = logNormPDF(m_dataset.responseValues.elem(m_obsOrderForFmat), meanVec, sdVec) ;
-//   m_recomputeGlobalLogLik = false ;
-//   m_globalLogLik = logDensity ;
-// }
-
-void AugTree::ComputeLogJointPsiMarginal(Rcpp::Function funForOptim, Rcpp::Function gradCholeskiFun) {
+void AugTree::ComputeLogJointPsiMarginal(Rcpp::Function gradCholeskiFun, Rcpp::Function sparseMatConstructFun,
+                                         Rcpp::Function sparseDeterminantFun) {
 
   ComputeLogPriors() ;
-  cout << "Computing Wmats... \n" ;
+  // cout << "Computing Wmats... \n" ;
   if (m_recomputeMRAlogLik) {
-    m_MRAcovParasSpace.print("Space parameters:") ;
-    m_MRAcovParasTime.print("Time parameters:") ;
-    fflush(stdout); // Will now print everything in the stdout buffer
+    // m_MRAcovParasSpace.print("Space parameters:") ;
+    // m_MRAcovParasTime.print("Time parameters:") ;
+    // printf("Scale parameter: %.4e \n", m_spacetimeScaling) ;
+    // fflush(stdout); // Will now print everything in the stdout buffer
     computeWmats() ; // This will produce the K matrices required. NOTE: ADD CHECK THAT ENSURES THAT THE MRA LIK. IS ONLY RE-COMPUTED WHEN THE MRA COV. PARAMETERS CHANGE.
-    cout << "Done... \n" ;
+    // cout << "Done... \n" ;
   }
 
-  ComputeLogFCandLogCDandDataLL(funForOptim, gradCholeskiFun) ;
+  ComputeLogFCandLogCDandDataLL(gradCholeskiFun, sparseMatConstructFun, sparseDeterminantFun) ;
 
   // printf("Observations log-lik: %.4e \n Log-prior: %.4e \n Log-Cond. dist.: %.4e \n Log-full cond.: %.4e \n \n \n",
-  //  m_globalLogLik, m_logPrior, m_logCondDist, m_logFullCond) ;
+  // m_globalLogLik, m_logPrior, m_logCondDist, m_logFullCond) ;
   m_logJointPsiMarginal = m_globalLogLik + m_logPrior + m_logCondDist - m_logFullCond ;
-  printf("Joint value: %.4e \n \n", m_logJointPsiMarginal) ;
+  // printf("Joint value: %.4e \n \n", m_logJointPsiMarginal) ;
 }
 
 // This inversion is based on recursive partitioning of the Q matrix. It is based on the observation that it is
 // possible to form block-diagonal matrices on the diagonal which can be easily inverted.
 // The challenge in inverting Qmat was the very heavy memory burden.
 // This function involves much smaller matrices, which will make the operations easier to handle.
-double AugTree::logDeterminantQmat() {
-  uvec DmatrixBlockIndices = extractBlockIndicesFromLowerRight(m_FullCondPrecision) ;
-
-  int numRowsD = m_FullCondPrecision.n_rows - DmatrixBlockIndices(0) ;
-  int numRowsA = DmatrixBlockIndices(0) ;
-
-  int shift = DmatrixBlockIndices.at(0) ;
-
-  uvec shiftedBlockIndices = DmatrixBlockIndices - shift ;
-  sp_mat Dinv = invertSymmBlockDiag(m_FullCondPrecision(DmatrixBlockIndices.at(0),
-                                         DmatrixBlockIndices.at(0),
-                                         size(numRowsD, numRowsD)),
-                                         shiftedBlockIndices) ;
-
-  double logDeterminantD = logDetBlockMatrix(m_FullCondPrecision(DmatrixBlockIndices.at(0), DmatrixBlockIndices.at(0), size(numRowsD, numRowsD))) ;
-
-  sp_mat Amatrix = m_FullCondPrecision(0, 0, size(numRowsA, numRowsA)) ;
-
-  double logDeterminantComposite, sign1 ;
-  // uint AmatrixSize = DmatrixBlockIndices.at(0) ;
-
-  sp_mat Bmatrix = m_FullCondPrecision(0, DmatrixBlockIndices.at(0), size(numRowsA, numRowsD)) ;
-  // The next few lines ensure that the matrix whose determinant needs to be computed is
-  // really symmetric. Else computational zeros will ruin the symmetry.
-  sp_mat compositeMat = Amatrix - Bmatrix * Dinv * trans(Bmatrix) ;
-
-  log_det(logDeterminantComposite, sign1, mat(compositeMat)) ;
-
-  if (sign1 < 0) {
-    throw Rcpp::exception("Error in logDeterminantQmat! sign1 should be positive. \n") ;
-  } // The determinant for the composite must be positive, because the determinant for D is positive. If it were negative, the determinant for the Q matrix would be negative, which is not allowed since it's a covariance matrix.
-
-  double logDeterminant = logDeterminantD + logDeterminantComposite ;
-  return logDeterminant ;
-}
+// double AugTree::logDeterminantQmat(Rcpp::Function funToConstructSparse) {
+//
+//   if (m_DmatrixBlockIndices.size() == 0) {
+//     m_DmatrixBlockIndices = extractBlockIndicesFromLowerRight(m_FullCondPrecision) ;
+//
+//     uint basicIndex = 0 ;
+//     for (uint i = 0 ; i < m_DmatrixBlockIndices.size() - 1 ; i++) {
+//       uint blockIndex = m_DmatrixBlockIndices.at(i) ;
+//       uint nextBlockIndex = m_DmatrixBlockIndices.at(i+1) ;
+//       uint numRows = nextBlockIndex - blockIndex ;
+//       umat blockPos = join_rows(rep(regspace<uvec>(0, numRows - 1), numRows),
+//                                 rep_each(regspace<uvec>(0, numRows - 1), numRows)) + basicIndex ;
+//       m_DinFCmatPos = join_cols(m_DinFCmatPos, blockPos) ;
+//       basicIndex += numRows ;
+//     }
+//   }
+//
+//   int numRowsD = m_FullCondPrecision.n_rows - m_DmatrixBlockIndices(0) ;
+//   int numRowsA = m_DmatrixBlockIndices(0) ;
+//
+//   int shift = m_DmatrixBlockIndices.at(0) ;
+//
+//   uvec shiftedBlockIndices = m_DmatrixBlockIndices - shift ;
+//
+//   vec concatenatedValues ;
+//
+//   for (uint i = 0 ; i < m_DmatrixBlockIndices.size() - 1 ; i++) {
+//     uint index = m_DmatrixBlockIndices.at(i) ;
+//     uint numRows = m_DmatrixBlockIndices.at(i + 1) - index ;
+//     vec vectorisedInverse = vectorise(inv_sympd(mat(m_FullCondPrecision(index, index, size(numRows, numRows))))) ;
+//     concatenatedValues = join_cols(concatenatedValues, vectorisedInverse) ;
+//   }
+//
+//   sp_mat Dinv = Rcpp::as<sp_mat>(funToConstructSparse(m_DinFCmatPos, concatenatedValues)) ;
+//
+//   double logDeterminantD = logDetBlockMatrix(m_FullCondPrecision(m_DmatrixBlockIndices.at(0), m_DmatrixBlockIndices.at(0), size(numRowsD, numRowsD)), shiftedBlockIndices) ;
+//
+//   sp_mat Amatrix = m_FullCondPrecision(0, 0, size(numRowsA, numRowsA)) ;
+//
+//   double logDeterminantComposite, sign1 ;
+//   // uint AmatrixSize = DmatrixBlockIndices.at(0) ;
+//
+//   sp_mat Bmatrix = m_FullCondPrecision(0, m_DmatrixBlockIndices.at(0), size(numRowsA, numRowsD)) ;
+//   // The next few lines ensure that the matrix whose determinant needs to be computed is
+//   // really symmetric. Else computational zeros will ruin the symmetry.
+//   sp_mat compositeMat = Amatrix - Bmatrix * Dinv * trans(Bmatrix) ;
+//
+//   log_det(logDeterminantComposite, sign1, mat(compositeMat)) ;
+//
+//   if (sign1 < 0) {
+//     throw Rcpp::exception("Error in logDeterminantQmat! sign1 should be positive. \n") ;
+//   } // The determinant for the composite must be positive, because the determinant for D is positive. If it were negative, the determinant for the Q matrix would be negative, which is not allowed since it's a covariance matrix.
+//
+//   double logDeterminant = logDeterminantD + logDeterminantComposite ;
+//   // cout << "Leaving logDeterminantQmat... \n" ;
+//   return logDeterminant ;
+// }
 
 uvec AugTree::extractBlockIndicesFromLowerRight(const arma::sp_mat & symmSparseMatrix) {
   std::vector<uint> blockIndices ;
@@ -845,380 +883,40 @@ uvec AugTree::extractBlockIndicesFromLowerRight(const arma::sp_mat & symmSparseM
   return conv_to<uvec>::from(blockIndices) ;
 }
 
-// double AugTree::logDeterminantFullConditional(const sp_mat & SigmaMat) {
-//   uint n = m_dataset.timeCoords.size() ;
-//   sp_mat compositeAmatrix = join_rows(eye<sp_mat>(n,n),
-//     join_rows(conv_to<sp_mat>::from(vec(n, fill::ones)),
-//       conv_to<sp_mat>::from(conv_to<mat>::from(m_dataset.covariateValues)))) ;
-//
-//   sp_mat Bmatrix = 1/pow(m_errorSD,2) * trans(compositeAmatrix) * eye<sp_mat>(n,n) * compositeAmatrix ;
-//   sp_mat Cinverse = SigmaMat ;
-//   sp_mat Bk(Bmatrix.n_rows , Bmatrix.n_cols) ;
-//
-//   for (uint i = 0 ; i < 4 ; i++) {
-//
-//     uint j = Bmatrix.n_cols - i - 1;
-//     Bk.col(j) = Bmatrix.col(j) ;
-//     // double gk = 1/(1+ trace(Cinverse * trans(BkT))) ;
-//     double gk = 1;
-//
-//     Cinverse = Cinverse - gk * Cinverse * Bk * Cinverse ;
-//     Bk.zeros() ;
-//   } ;
-//   throw Rcpp::exception("Stop now!!! \n") ;
-//   return logDeterminantQmat(Cinverse) ;
-// }
+sp_mat AugTree::ComputeHpred(const mat & spCoords, const vec & time, const mat & covariateMatrix, Rcpp::Function sparseMatrixConstructFun) {
 
-// void AugTree::invFromDecomposition(const sp_mat & A, const sp_mat & B, const sp_mat & D,
-//                                   sp_mat * Dinv, const uvec & blockDiagAindices) {
-//   cout << "Entering invFromDecomposition... \n" ;
-//   sp_mat Ainv ;
-//   // Typecasting those sparse matrices will be required for inversions.
-//   // mat Amat = mat(A) ;
-//   // mat Dmat = mat(D) ;
-//   // mat Bmat = mat(B) ;
-//   cout << "Inverting A... \n" ;
-//   if (blockDiagAindices.size() > 1) {
-//     Ainv = invertSymmBlockDiag(A, blockDiagAindices) ;
-//   } else {
-//     Ainv = sp_mat(inv_sympd(mat(A))) ;
-//   }
-//   cout << "Generating components... \n" ;
-//   printf("A size: %i %i \n B size %i %i \n", A.n_rows, A.n_cols, B.n_rows, B.n_cols) ;
-//   // Ainverse(0,0, size(161, 10)).print("Inverse of A:") ;
-//   sp_mat M11 = sp_mat(inv(mat(A - B * (*Dinv) * trans(B)))) ;
-//   cout << "Obtained M11... \n" ;
-//   printf("M11 size: %i %i \n", M11.n_rows, M11.n_cols) ;
-//   sp_mat M12 = -M11 * B * (*Dinv) ;
-//   cout << "Obtained M12... \n" ;
-//   printf("M12 size: %i %i \n", M12.n_rows, M12.n_cols) ;
-//   printf("trans(B) size: %i %i \n", B.n_cols, B.n_rows) ;
-//   sp_mat identity = sp_mat((*Dinv).n_rows, (*Dinv).n_cols) ;
-//   identity.diag().ones() ;
-//   sp_mat difference((*Dinv).n_rows, (*Dinv).n_cols) ;
-//   sp_mat difference1 = (*Dinv) * trans(B) ;
-//   difference1(0,0,size(difference1.n_rows, 1)).print("First column 1:") ;
-//   sp_mat difference2 = difference1 * M12 ;
-//   difference2(0,0,size(difference2.n_rows, 1)).print("First column 2:") ;
-//   throw Rcpp::exception("Stop here for now...\n") ;
-//   cout << "Assigned identity... \n" ;
-//   cout << "Number of zeros: " << approx_equal(difference, sp_mat(difference.n_cols, difference.n_cols), "absdiff", 1e-6) << "\n";
-//
-//   cout << "Found difference. \n" ;
-//   printf("difference size: %i %i \n", difference.n_rows, difference.n_cols) ;
-//
-//   // sp_mat multiplier = identity - difference ;
-//   // cout << "Got multiplier... \n" ;
-//   // sp_mat M22 = (*Dinv) * multiplier ;
-//   // cout << "Obtained M22... \n" ;
-//   // cout << "Creating the inverse matrix... \n" ;
-//   // *Dinv = join_rows(join_cols(M11, trans(M12)), join_cols(M12, M22)) ; // Will the memory be freed once the function is done running?
-//   // cout << "Leaving invFromDecomposition... \n" ;
-// }
-
-// std::vector<uvec> AugTree::splitBlocksDiagMatrix(std::vector<uvec> splitBlockList, uint blockSizeLimit) {
-//
-//   for (auto & i : splitBlockList) {
-//     uint splitPos = 0 ;
-//     uvec shiftedIndices = i - i.at(0) ;
-//     uvec cumulativeSizes ;
-//     uint cutPosition ;
-//     if (i.tail(1)(0) > blockSizeLimit) {
-//       cumulativeSizes = cumsum(shiftedIndices) ;
-//       uvec bigPositions = find(cumulativeSizes > blockSizeLimit) ;
-//       cutPosition = bigPositions.at(0) - 1 ;
-//
-//     }
-//   }
-// }
-
-// double AugTree::ComputeJointPsiMarginalPropConstant(const vec & MRAhyperStart,
-//                                 const double fixedEffSDstart, const double errorSDstart,
-//                                 const double hyperAlpha, const double hyperBeta) {
-//   cout << "Entered ComputeJointPsiMarginalPropConstant... \n" ;
-//   vec jointFunPeak = optimJointHyperMarg(MRAhyperStart, errorSDstart, fixedEffSDstart, hyperAlpha, hyperBeta) ;
-//   jointFunPeak.print("Optimised values:") ;
-//   return 0;
-// }
-
-// This is for running Nelder-Mead directly in C++. It's not working yet. If optim in R doesn't deliver,
-// Uncomment and fix the following.
-
-// double my_f (const gsl_vector *v, void *params)  {
-//
-//     gridPair *p = (gridPair *)params;
-//     vec MRAhyperParas(2, fill::zeros) ;
-//     MRAhyperParas(0)  = gsl_vector_get(v, 0) ;
-//     MRAhyperParas(1) = gsl_vector_get(v, 1) ;
-//     // The '-' is because we want to maximise. Finding the position of the minimum of "-function" is equivalent to
-//     // finding the position of the maximum of "function".
-//     return -p->grid->ComputeJointPsiMarginal() ;
-//   }
-//
-// vec AugTree::optimJointHyperMarg(const vec & MRAhyperStart, const double fixedEffSDstart,
-//                   const double errorSDstart,  const double hyperAlpha, const double hyperBeta) {
-//   cout << "Entered optimJointHyperMarg... \n" ;
-//   vec parasToOptim = MRAhyperStart ;
-//   parasToOptim.resize(MRAhyperStart.size() + 2) ;
-//   parasToOptim(MRAhyperStart.size()) = fixedEffSDstart ;
-//   parasToOptim(MRAhyperStart.size()+1) = errorSDstart ;
-//   parasToOptim = log(parasToOptim) ;
-//
-//   uint n = parasToOptim.n_rows ;
-//   gridPair par ;
-//
-//   par.vector.set_size(2) ;
-//   par.vector.at(0) = hyperAlpha;
-//   par.vector.at(1) = hyperBeta;
-//   par.grid = this;
-//   gridPair * parPoint = &par ;
-//   cout << "Initializing mimimizer... \n" ;
-//   const gsl_multimin_fminimizer_type *T = gsl_multimin_fminimizer_nmsimplex2;
-//   gsl_multimin_fminimizer *s = NULL;
-//   gsl_vector *ss, *x;
-//   gsl_multimin_function minex_func;
-//
-//   size_t iter = 0;
-//   int status;
-//   double size;
-//
-//   /* Starting point */
-//   x = gsl_vector_alloc(n);
-//
-//   for (int i = 0 ; i < n ; i++) {
-//     gsl_vector_set(x, i, parasToOptim.at(i));
-//   }
-//
-//   /* Set initial step sizes to 0.5 */
-//   ss = gsl_vector_alloc(n);
-//   gsl_vector_set_all(ss, 0.5);
-//
-//   /* Initialize method and iterate */
-//   minex_func.n = n ;
-//   minex_func.f = my_f ;
-//   minex_func.params = (void *)parPoint ;
-//
-//   s = gsl_multimin_fminimizer_alloc(T, n);
-//   gsl_multimin_fminimizer_set(s, &minex_func, x, ss);
-//   cout << "Entering minimisation loop... \n" ;
-//   // do
-//   // {
-//   //   iter++;
-//   //   status = gsl_multimin_fminimizer_iterate(s);
-//   //
-//   //   if (status)
-//   //     break;
-//   //
-//   //   size = gsl_multimin_fminimizer_size(s);
-//   //   status = gsl_multimin_test_size(size, 1e-2);
-//   //
-//   //   if (status == GSL_SUCCESS)
-//   //   {
-//   //     printf ("converged to minimum at\n");
-//   //   }
-//   // }
-//   // while (status == GSL_CONTINUE && iter < 500);
-//   cout << "Minimisation complete! \n" ;
-//   vec optimalParas(x->size, fill::zeros) ;
-//
-//   for (uint i = 0 ; i < x->size ; i++) {
-//     optimalParas(i) = gsl_vector_get(x, i) ;
-//   }
-//
-//   gsl_vector_free(x);
-//   gsl_vector_free(ss);
-//   gsl_multimin_fminimizer_free (s);
-//   cout << "Returning values... \n" ;
-//   return optimalParas ;
-// }
-
-// arma::vec AugTree::ComputeFullConditionalMean(const arma::vec & bVec) {
-//
-//   uvec blockIndices = extractBlockIndicesFromLowerRight(m_FullCondPrecision) ;
-//
-//   uint DblockLeftIndex = blockIndices.at(0) ;
-//   uint sizeD = m_FullCondPrecision.n_cols - DblockLeftIndex ;
-//   uint sizeA = m_FullCondPrecision.n_cols - sizeD ;
-//
-//   vec b1 = bVec.subvec(0, sizeA - 1) ;
-//   vec b2 = bVec.subvec(sizeA, bVec.size() - 1) ;
-//
-//   sp_mat Bmatrix = m_FullCondPrecision(0, sizeA, size(sizeA, sizeD)) ;
-//   sp_mat Amatrix = m_FullCondPrecision(0, 0, size(sizeA, sizeA)) ;
-//
-//   sp_mat Dinverted = invertSymmBlockDiag(m_FullCondPrecision(sizeA, sizeA, size(sizeD, sizeD)), blockIndices) ;
-//
-//   mat secondTermInside = conv_to<mat>::from(Bmatrix * Dinverted * trans(Bmatrix)) ;
-//
-//   mat compositeInverted = inv(Amatrix - secondTermInside) ;
-//
-//   sp_mat firstElementSecondTerm = Dinverted * conv_to<sp_mat>::from(b2) ;
-//   firstElementSecondTerm = Bmatrix * firstElementSecondTerm ;
-//   firstElementSecondTerm = compositeInverted * firstElementSecondTerm ;
-//   vec firstElementFirstTerm = compositeInverted * b1 ;
-//   vec firstElement =  firstElementFirstTerm - firstElementSecondTerm ;
-//
-//   vec secondElementFirstTerm = trans(Bmatrix) * firstElementFirstTerm ;
-//   secondElementFirstTerm = -Dinverted * secondElementFirstTerm ;
-//   sp_mat secondElementSecondTerm = trans(Bmatrix) * firstElementSecondTerm ;
-//   secondElementSecondTerm = Dinverted * secondElementSecondTerm ;
-//   secondElementSecondTerm = Dinverted * b2 + secondElementSecondTerm ;
-//   vec secondElement = secondElementFirstTerm + secondElementSecondTerm ;
-//
-//   vec meanVec = join_cols<vec>(firstElement, secondElement) ;
-//
-//   if (m_recordFullConditional) {
-//     vec firstDiag = sqrt(compositeInverted.diag()) ;
-//     m_FullCondSDs.subvec(0, size(firstDiag)) = firstDiag ;
-//
-//     for (uint i = 0 ; i < Dinverted.n_rows ; i++) {
-//       sp_mat firstExp = Bmatrix * Dinverted.col(i) ;
-//       mat secondExp = compositeInverted * conv_to<mat>::from(firstExp) ;
-//       mat thirdExp = trans(Bmatrix) * secondExp ;
-//       mat finalExp = Dinverted.col(i) + Dinverted * thirdExp ;
-//       m_FullCondSDs.at(i + compositeInverted.n_rows) = sqrt(finalExp(i, 0)) ;
-//     }
-//
-//     m_FullCondMean = meanVec ;
-//   }
-//
-//   return meanVec ;
-// }
-
-/* The basic function */
-
-double
-  my_f (const gsl_vector *v, void *params)
-  {
-
-    auto p = (MVN *) params;
-
-    vec coordinateVec(v->size, fill::zeros) ;
-
-    for (int i = 0; i < v->size; i++) {
-      coordinateVec.at(i) = gsl_vector_get(v, i);
-    }
-    return -0.5 * p->ComputeExpTerm(coordinateVec) ;
-  }
-
-/* The gradient of f, df = (df/dx, df/dy). */
-void
-  my_df (const gsl_vector *v, void *params,
-         gsl_vector *df)
-  {
-    double x, y;
-    double *p = (double *)params;
-
-    x = gsl_vector_get(v, 0);
-    y = gsl_vector_get(v, 1);
-
-    gsl_vector_set(df, 0, 2.0 * p[2] * (x - p[0]));
-    gsl_vector_set(df, 1, 2.0 * p[3] * (y - p[1]));
-  }
-
-/* Compute both f and df together. */
-void
-  my_fdf (const gsl_vector *x, void *params,
-          double *f, gsl_vector *df)
-  {
-    *f = my_f(x, params);
-    my_df(x, params, df);
-  }
-
-
-// arma::vec AugTree::ComputeFullConditionalMean() {
-//   int n = m_FEmu.size() + m_dataset.timeCoords.size() ;
-//   gsl_multimin_fminimizer * minimiser = gsl_multimin_fminimizer_alloc(const gsl_multimin_fminimizer_type * T, n) ;
-//   int gsl_multimin_fminimizer_set(minimiser, gsl_multimin_function * f, const gsl_vector * x, const gsl_vector * step_size) ;
-//   gsl_multimin_fminimizer_free(minimiser) ;
-//
-//   double p[n] ;
-//
-//   for (int i = 0; i < m_FEmu.size(); i++) {
-//     p[i] = m_FEmu.at(i) ;
-//   }
-//
-//   for (int i = m_FEmu.size(); i < n - m_FEmu.size(); i++) {
-//     p[i] = 0 ;
-//   }
-//
-//   gsl_multimin_function_fdf my_func;
-//   my_func.n = 2;  /* number of function components */
-//   my_func.f = &my_f;
-//   my_func.df = &my_df;
-//   my_func.fdf = &my_fdf;
-//   my_func.params = (void *)p;
-// }
-
-sp_mat AugTree::ComputeHpred(const mat & spCoords, const vec & time, const mat & covariateMatrix) {
-
-  SetPredictData(spCoords, time, covariateMatrix) ;
-  std::vector<TreeNode *> tipNodes = GetLevelNodes(m_M) ;
+  // SetPredictData(spCoords, time, covariateMatrix) ;
+  std::vector<TreeNode *> tipNodes = GetTipNodes() ;
 
   for (auto & i : tipNodes) {
-    i->SetPredictLocations(m_predictData) ;
+    // i->SetPredictLocations(m_predictData) ;
     uvec predictionsInLeaf = i->GetPredIndices() ;
     if (predictionsInLeaf.size() > 0) {
       i->computeUpred(m_MRAcovParasSpace, m_MRAcovParasTime, m_spacetimeScaling, m_predictData, m_matern, m_spaceNuggetSD, m_timeNuggetSD) ;
     }
   }
-  sp_mat FmatrixPred = createFmatrixAlt(true) ;
-  mat incrementedCovariate = join_rows(vec(covariateMatrix.n_rows, fill::ones), covariateMatrix) ;
-  sp_mat HmatrixPred = join_rows(conv_to<sp_mat>::from(incrementedCovariate), FmatrixPred) ;
-  // conv_to<mat>::from(HmatrixPred).save("/home/luc/Documents/HmatrixPred.info", raw_ascii) ;
-  return HmatrixPred ;
+  if (m_HmatPredPos.n_rows == 0) {
+    createHmatrixPredPos() ;
+  }
+
+  return updateHmatrixPred(sparseMatrixConstructFun) ;
 }
 
-arma::vec AugTree::ComputeEvar(const arma::sp_mat & HmatPred) {
-  uvec blockIndices = extractBlockIndicesFromLowerRight(m_FullCondPrecision) ;
+arma::vec AugTree::ComputeEvar(const arma::sp_mat & HmatPred, Rcpp::Function sparseSolveFun, const int batchSize) {
+
   double errorVar = std::pow(m_errorSD, 2) ;
   vec EvarValues(HmatPred.n_rows, fill::zeros) ;
+  int obsIndex = 0 ;
 
-  uint DblockLeftIndex = blockIndices.at(0) ;
-  uint sizeD = m_FullCondPrecision.n_cols - DblockLeftIndex ;
-  uint sizeA = m_FullCondPrecision.n_cols - sizeD ;
+  while (obsIndex < HmatPred.n_rows) {
 
-  sp_mat Bmatrix = m_FullCondPrecision(0, sizeA, size(sizeA, sizeD)) ;
-  sp_mat Amatrix = m_FullCondPrecision(0, 0, size(sizeA, sizeA)) ;
-  sp_mat Dinverted = invertSymmBlockDiag(m_FullCondPrecision(sizeA, sizeA, size(sizeD, sizeD)), blockIndices) ;
-  mat secondTermInside = conv_to<mat>::from(Bmatrix * Dinverted * trans(Bmatrix)) ;
-  sp_mat compositeInverted = conv_to<sp_mat>::from(inv(Amatrix - secondTermInside)) ;
-  // mat compositeInverted = inv(Amatrix - secondTermInside) ;
+    int newObsIndex = std::min(obsIndex + batchSize - 1, int(HmatPred.n_rows) - 1) ;
+    sp_mat bVec = HmatPred.rows(obsIndex, newObsIndex) ;
+    sp_mat bVecTrans = trans(HmatPred.rows(obsIndex, newObsIndex)) ;
+    sp_mat meanValue = bVecTrans % Rcpp::as<sp_mat>(sparseSolveFun(m_FullCondPrecision, bVecTrans)) ;
+    EvarValues.subvec(obsIndex, newObsIndex) = trans(sum(meanValue,0)) + errorVar ;
 
-  sp_mat bVec ;
-  sp_mat b1, b2 ;
-
-  for (uint i = 0 ; i < HmatPred.n_rows ; i++) {
-    bVec = trans(HmatPred.row(i)) ;
-    b1 = bVec(0, 0, size(sizeA, 1)) ;
-    b2 = bVec(sizeA, 0, size(sizeD, 1)) ;
-
-    sp_mat DinvB2 = Dinverted * b2 ;
-    sp_mat BmatDinvB2 = Bmatrix * DinvB2 ;
-    sp_mat firstElement = b1 - BmatDinvB2 ;
-    sp_mat b1CompInv = trans(compositeInverted * b1) ;
-    sp_mat firstTerm =  b1CompInv * firstElement ;
-
-    sp_mat secondTerm = (-b1 + BmatDinvB2) ;
-    secondTerm = compositeInverted * secondTerm ;
-    secondTerm = trans(BmatDinvB2) * secondTerm + trans(DinvB2) * b2 ;
-
-    sp_mat meanVec = firstTerm + secondTerm  ;
-    // sp_mat firstElementSecondTerm = Dinverted * b2 ;
-    // firstElementSecondTerm = Bmatrix * firstElementSecondTerm ;
-    // firstElementSecondTerm = compositeInverted * firstElementSecondTerm ;
-    // sp_mat firstElementFirstTerm = conv_to<sp_mat>::from(compositeInverted) * b1 ;
-    // sp_mat firstElement =  firstElementFirstTerm - firstElementSecondTerm ;
-    //
-    // sp_mat secondElementFirstTerm = trans(Bmatrix) * firstElementFirstTerm ;
-    // secondElementFirstTerm = -Dinverted * secondElementFirstTerm ;
-    // sp_mat secondElementSecondTerm = trans(Bmatrix) * firstElementSecondTerm ;
-    // secondElementSecondTerm = Dinverted * secondElementSecondTerm ;
-    // secondElementSecondTerm = Dinverted * b2 + secondElementSecondTerm ;
-    // sp_mat secondElement = secondElementFirstTerm + secondElementSecondTerm ;
-    //
-    // sp_mat meanVec = trans(bVec) * join_cols(firstElement, secondElement) ;
-    EvarValues.at(i) = meanVec.at(0,0) + errorVar ;
+    obsIndex += batchSize ;
   }
   return EvarValues ;
 }
