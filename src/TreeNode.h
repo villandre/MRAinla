@@ -1,5 +1,5 @@
 // [[Rcpp::depends(RcppGSL)]]
-// [[Rcpp::depends(RcppArmadillo)]]
+// [[Rcpp::depends(RcppEigen)]]
 
 #include <algorithm>
 #include <vector>
@@ -11,9 +11,8 @@
 #include <gsl/gsl_rng.h>
 #include <gsl/gsl_sf_log.h>
 
-#include <RcppArmadillo.h>
 #include <RcppGSL.h>
-
+#include <RcppEigen.h>
 #include "helper.h"
 
 #ifndef TREENODE_H
@@ -22,6 +21,12 @@
 namespace MRAinla
 {
 typedef unsigned int uint ;
+typedef unsigned int uint ;
+typedef Eigen::VectorXf vec ;
+typedef Eigen::MatrixXf mat ;
+typedef Eigen::SparseMatrix<float> sp_mat ;
+typedef Eigen::VectorXi uvec ;
+typedef Eigen::MatrixXi umat ;
 
 struct maternVec{
   double m_rho ;
@@ -42,56 +47,56 @@ struct maternVec{
 };
 
 struct spatialcoor {
-  arma::mat spatialCoords = arma::mat(1, 2, arma::fill::zeros) ;
-  arma::vec timeCoords = arma::vec(1, arma::fill::zeros) ;
+  mat spatialCoords = mat(1, 2) ;
+  vec timeCoords = vec(1) ;
 
   spatialcoor() { } ;
-  spatialcoor(arma::mat f_sp, arma::vec f_time) : spatialCoords(f_sp), timeCoords(f_time) { } ;
+  spatialcoor(mat f_sp, vec f_time) : spatialCoords(f_sp), timeCoords(f_time) { } ;
 
-  spatialcoor subset(arma::uvec & indices)  const {
-    arma::mat subSpatialCoords = spatialCoords.rows(indices) ;
-    arma::vec subTimeCoords = timeCoords.rows(indices) ;
+  spatialcoor subset(uvec & indices)  const {
+    mat subSpatialCoords = spatialCoords.rows(indices) ;
+    vec subTimeCoords = timeCoords.rows(indices) ;
     return spatialcoor(subSpatialCoords, subTimeCoords) ;
   };
 };
 
 struct inputdata : public spatialcoor {
-  arma::vec responseValues = arma::vec(1, arma::fill::zeros) ;
-  arma::mat covariateValues = arma::mat(1, 1, arma::fill::zeros) ;
+  vec responseValues = vec(1) ;
+  mat covariateValues = mat(1, 1) ;
 
   inputdata() : spatialcoor() {};
-  inputdata(arma::vec f_responses, arma::mat f_sp, arma::vec f_time, arma::mat f_covariates)
+  inputdata(vec f_responses, mat f_sp, vec f_time, mat f_covariates)
     : spatialcoor(f_sp, f_time), responseValues(f_responses), covariateValues(f_covariates) {  } ;
 
-  inputdata subset(arma::uvec & indices)  const {
-    arma::mat subSpatialCoords = spatialCoords.rows(indices) ;
-    arma::vec subTimeCoords = timeCoords.elem(indices) ;
-    arma::vec subResponseValues = responseValues.elem(indices) ;
-    arma::mat subCovariates = covariateValues.rows(indices) ;
+  inputdata subset(uvec & indices)  const {
+    mat subSpatialCoords = spatialCoords.rows(indices) ;
+    vec subTimeCoords = timeCoords.elem(indices) ;
+    vec subResponseValues = responseValues.elem(indices) ;
+    mat subCovariates = covariateValues.rows(indices) ;
     return inputdata(subResponseValues, subSpatialCoords, subTimeCoords, subCovariates) ;
   }
 
-  void reshuffle(arma::uvec indices) {
-    arma::mat spatialCoordsTrans = trans(spatialCoords) ;
+  void reshuffle(uvec indices) {
+    mat spatialCoordsTrans = trans(spatialCoords) ;
     spatialCoords = trans(spatialCoordsTrans.cols(indices)) ;
     timeCoords = timeCoords.elem(indices) ;
-    arma::mat covariateValuesTrans = trans(covariateValues) ;
+    mat covariateValuesTrans = trans(covariateValues) ;
     covariateValues = trans(covariateValuesTrans.cols(indices)) ;
     responseValues = responseValues.elem(indices) ;
   }
 };
 
 struct dimensions {
-  arma::vec longitude{arma::vec(2, arma::fill::zeros)} ;
-  arma::vec latitude{arma::vec(2, arma::fill::zeros)} ;
-  arma::vec time{arma::vec(2, arma::fill::zeros)} ;
+  vec longitude{vec(2)} ;
+  vec latitude{vec(2)} ;
+  vec time{vec(2)} ;
 
   dimensions() { } ;
 
-  dimensions(arma::vec f_lon, arma::vec f_lat, arma::vec f_time)
+  dimensions(vec f_lon, vec f_lat, vec f_time)
     : longitude(f_lon), latitude(f_lat), time(f_time) {
-    uint firstCompare = (arma::size(f_lon) == arma::size(f_lat)) ;
-    uint secondCompare = (arma::size(f_lat) == arma::size(f_time)) ;
+    uint firstCompare = (f_lon.size() == f_lat.size()) ;
+    uint secondCompare = (f_lat.size() == f_time.size()) ;
     if ((firstCompare * secondCompare) == 0) {
       throw Rcpp::exception("Incompatible data specifications. \n") ;
     }
@@ -99,17 +104,17 @@ struct dimensions {
 };
 
 struct SpatiotempCoor{
-  arma::vec sp = arma::vec(2, arma::fill::zeros) ;
+  vec sp = vec(2) ;
   double time = 0 ;
-  SpatiotempCoor(arma::vec & sp, double & time) : sp(sp), time(time) { } ;
+  SpatiotempCoor(vec & sp, double & time) : sp(sp), time(time) { } ;
   SpatiotempCoor() { } ;
 };
 
 struct GaussDistParas {
-  arma::vec meanPara ;
-  arma::mat covPara ;
+  vec meanPara ;
+  mat covPara ;
   GaussDistParas() { }
-  GaussDistParas(arma::vec & meanVec, arma::mat & covMat) : meanPara(meanVec), covPara(covMat) { }
+  GaussDistParas(vec & meanVec, mat & covMat) : meanPara(meanVec), covPara(covMat) { }
 };
 
 class TreeNode
@@ -121,43 +126,43 @@ public:
   virtual void RemoveChildren()=0;
   virtual int GetM()=0;
   virtual void DeriveAtilde()=0 ;
-  virtual void DeriveOmega(const arma::vec &)=0 ;
-  virtual void DeriveU(const arma::vec &)=0 ;
+  virtual void DeriveOmega(const vec &)=0 ;
+  virtual void DeriveU(const vec &)=0 ;
   virtual void DeriveD()=0 ;
   virtual void ComputeWmat(const maternVec &, const maternVec &, const double &, const bool, const double &, const double &)=0 ;
-  // virtual void ComputeParasEtaDeltaTilde(const spatialcoor &, const inputdata &, const arma::vec &)=0 ;
-  virtual std::vector<std::vector<arma::mat>> GetAlist() const = 0;
-  virtual arma::mat GetKtilde() const = 0;
+  // virtual void ComputeParasEtaDeltaTilde(const spatialcoor &, const inputdata &, const vec &)=0 ;
+  virtual std::vector<std::vector<mat>> GetAlist() const = 0;
+  virtual mat GetKtilde() const = 0;
   // virtual void deriveBtilde(const spatialcoor & )=0 ;
-  // virtual void computeBpred(const spatialcoor &, const arma::vec &)=0 ;
-  // virtual GaussDistParas CombineEtaDelta(const inputdata &, const arma::vec &)=0 ;
+  // virtual void computeBpred(const spatialcoor &, const vec &)=0 ;
+  // virtual GaussDistParas CombineEtaDelta(const inputdata &, const vec &)=0 ;
   // virtual GaussDistParas GetEtaDelta() const =0 ;
-  virtual arma::mat GetB(const uint & l)=0 ;
-  virtual arma::mat GetSigma()=0 ;
-  virtual arma::mat GetKmatrix()=0 ;
-  virtual arma::mat * GetKmatrixAddress()=0 ;
-  virtual arma::mat * GetKmatrixInverseAddress()=0 ;
-  virtual arma::mat GetKmatrixInverse()=0 ;
-  virtual arma::vec GetOmega(const uint &)=0 ;
+  virtual mat GetB(const uint & l)=0 ;
+  virtual mat GetSigma()=0 ;
+  virtual mat GetKmatrix()=0 ;
+  virtual mat * GetKmatrixAddress()=0 ;
+  virtual mat * GetKmatrixInverseAddress()=0 ;
+  virtual mat GetKmatrixInverse()=0 ;
+  virtual vec GetOmega(const uint &)=0 ;
   virtual void SetUncorrSD(const double &)=0 ;
-  virtual arma::mat GetUpred(const uint & l)=0 ;
-  virtual std::vector<arma::mat> GetUmatList()=0 ;
+  virtual mat GetUpred(const uint & l)=0 ;
+  virtual std::vector<mat> GetUmatList()=0 ;
   virtual void SetPredictLocations(const inputdata &)=0 ;
-  virtual arma::uvec GetPredIndices()=0 ;
+  virtual uvec GetPredIndices()=0 ;
   virtual void computeUpred(const maternVec &, const maternVec &, const double &, const spatialcoor &, const bool, const double &, const double &)=0 ;
 
   virtual void genRandomKnots(spatialcoor &, const uint &, const gsl_rng *) = 0;
 
-  arma::uvec GetObsInNode() {return m_obsInNode ;}
+  uvec GetObsInNode() {return m_obsInNode ;}
   dimensions GetDimensions() {return m_dimensions;}
   int GetDepth() {return m_depth ;}
 
-  arma::mat GetAtildeList(uint & i, uint & j) {return m_AtildeList.at(i).at(j) ;}
-  std::vector<arma::vec> GetOmegaTilde() {return m_omegaTilde ;}
-  arma::mat GetOmegaTilde(uint & k) { return m_omegaTilde.at(k) ;}
+  mat GetAtildeList(uint & i, uint & j) {return m_AtildeList.at(i).at(j) ;}
+  std::vector<vec> GetOmegaTilde() {return m_omegaTilde ;}
+  mat GetOmegaTilde(uint & k) { return m_omegaTilde.at(k) ;}
   spatialcoor GetKnotsCoor() {return m_knotsCoor;}
 
-  std::vector<arma::mat>& GetWlist() {return m_Wlist ;}
+  std::vector<mat>& GetWlist() {return m_Wlist ;}
   uint GetNodeId() { return m_nodeId ;}
 
   double GetU() {return m_u ;}
@@ -166,21 +171,21 @@ public:
 
   virtual ~ TreeNode() { } ;
 
-  // void SetAtildeList(arma::mat & matrix, uint &i, uint &j) {m_AtildeList.at(i).at(j) = matrix ;}
+  // void SetAtildeList(mat & matrix, uint &i, uint &j) {m_AtildeList.at(i).at(j) = matrix ;}
   void SetPredictLocations(const spatialcoor & predictLocations) ;
 
-  arma::uvec deriveObsInNode(const spatialcoor &) ;
-  void initiateBknots(const arma::vec &) ;
-  void completeBknots(const arma::vec &, const uint) ;
-  std::vector<arma::mat> GetBknots() const { return m_bKnots ;}
+  uvec deriveObsInNode(const spatialcoor &) ;
+  void initiateBknots(const vec &) ;
+  void completeBknots(const vec &, const uint) ;
+  std::vector<mat> GetBknots() const { return m_bKnots ;}
 
 
   void clearAtildeList() {m_AtildeList.clear() ;}
   void clearOmegaTilde() {m_omegaTilde.clear() ;}
 
-  arma::uvec GetAncestorIds() {
+  uvec GetAncestorIds() {
     std::vector<TreeNode *> ancestorsList = getAncestors() ;
-    arma::uvec ancestorIds(ancestorsList.size()) ;
+    uvec ancestorIds(ancestorsList.size()) ;
     for (uint i = 0 ; i < ancestorsList.size() ; i++) {
       ancestorIds.at(i) = ancestorsList.at(i)->GetNodeId() ;
     }
@@ -203,26 +208,26 @@ public:
 protected:
 
   TreeNode * m_parent ;
-  arma::uvec m_obsInNode ;
+  uvec m_obsInNode ;
   int m_depth ;
   dimensions m_dimensions ; // First dimension is longitude, second is latitude, last is time.
   spatialcoor m_knotsCoor ;  // First element is spatial coordinates (longitude, latitude), second is time.
   int m_nodeId ;
 
-  std::vector<std::vector<arma::mat>>& GetAtildeList() {return m_AtildeList ;}
+  std::vector<std::vector<mat>>& GetAtildeList() {return m_AtildeList ;}
   void baseComputeWmat(const maternVec &, const maternVec &, const double &, const bool, const double &, const double &) ;
   void SetParent(TreeNode * vertexParentPoint) {m_parent = vertexParentPoint ;}
 
-  std::vector<std::vector<arma::mat>> m_AtildeList ;
-  std::vector<arma::mat> m_Wlist ;
-  std::vector<arma::vec> m_omegaTilde ;
+  std::vector<std::vector<mat>> m_AtildeList ;
+  std::vector<mat> m_Wlist ;
+  std::vector<vec> m_omegaTilde ;
   double m_u ;
   double m_d ;
 
   double SqExpCovFunction(const Spatiotemprange &, const double &, const double &, const double &, const double &) ;
   double MaternCovFunction(const Spatiotemprange &, const maternVec &, const maternVec &, const double &, const double &, const double &) ;
 
-  arma::mat computeCovMat(const spatialcoor &, const spatialcoor &, const maternVec &, const maternVec &, const double &, const bool, const double &, const double &) ;
+  mat computeCovMat(const spatialcoor &, const spatialcoor &, const maternVec &, const maternVec &, const double &, const bool, const double &, const double &) ;
   void baseInitialise(const dimensions & dims, const uint & depth, TreeNode * parent, const inputdata & dataset) {
     m_dimensions = dims;
     m_depth = depth ;
@@ -234,12 +239,12 @@ protected:
     }
     m_omegaTilde.resize(m_depth + 1) ;
   }
-  // arma::mat ComputeCovMatrix(const arma::vec &) ;
+  // mat ComputeCovMatrix(const vec &) ;
 
   // For prediction
   void computeBknots() ;
 
-  std::vector<arma::mat> m_bKnots ;
+  std::vector<mat> m_bKnots ;
 };
 }
 #endif /* TREENODE_H */

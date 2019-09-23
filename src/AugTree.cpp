@@ -411,7 +411,7 @@ void AugTree::CenterResponse() {
   m_dataset.responseValues -= meanVec ;
 }
 
-arma::sp_mat AugTree::CreateSigmaBetaEtaInvMat() {
+sp_mat AugTree::CreateSigmaBetaEtaInvMat() {
   std::vector<mat *> FEinvAndKinvMatrixList = getKmatricesInversePointers() ;
   mat FEinvMatrix = pow(m_fixedEffSD, -2) * eye<mat>(m_fixedEffParameters.size(), m_fixedEffParameters.size()) ;
   FEinvAndKinvMatrixList.insert(FEinvAndKinvMatrixList.begin(), &FEinvMatrix) ;
@@ -438,7 +438,7 @@ arma::sp_mat AugTree::CreateSigmaBetaEtaInvMat() {
   return SigmaFEandEtaInv ;
 }
 
-arma::sp_mat AugTree::UpdateSigmaBetaEtaInvMat(Rcpp::Function buildSparse) {
+sp_mat AugTree::UpdateSigmaBetaEtaInvMat(Rcpp::Function buildSparse) {
   std::vector<mat *> FEinvAndKinvMatrixList = getKmatricesInversePointers() ;
   mat FEinvMatrix = pow(m_fixedEffSD, -2) * eye<mat>(m_fixedEffParameters.size(), m_fixedEffParameters.size()) ;
   FEinvAndKinvMatrixList.insert(FEinvAndKinvMatrixList.begin(), &FEinvMatrix) ;
@@ -559,7 +559,7 @@ void AugTree::updateHmatrix(Rcpp::Function sparseMatrixConstructFun) {
   m_Hmat = Rcpp::as<sp_mat>(sparseMatrixConstructFun(m_HmatPos, concatenatedValues, dims, false)) ;
 }
 
-arma::sp_mat AugTree::updateHmatrixPred(Rcpp::Function sparseMatrixConstructFun) {
+sp_mat AugTree::updateHmatrixPred(Rcpp::Function sparseMatrixConstructFun) {
   vec concatenatedValues = vectorise(m_incrementedCovarPredictReshuffled) ;
   for (auto & tipNode : GetTipNodes()) {
     if (tipNode->GetPredIndices().size() > 0) {
@@ -734,16 +734,15 @@ void AugTree::ComputeLogFCandLogCDandDataLL(Rcpp::Function gradCholeskiFun,
   }
 
   sp_mat secondTerm = std::pow(m_errorSD, -2) * trans(m_Hmat) * m_Hmat ;
+  vec responsesReshuffled = m_dataset.responseValues.elem(m_obsOrderForFmat) ;
+
+  // sp_mat hessianMat = SigmaFEandEtaInv + secondTerm ;
+  mat scaledResponse = std::pow(m_errorSD, -2) * trans(responsesReshuffled) * m_Hmat ;
   cout << "Obtaining Qchol... \n" ;
   m_FullCondPrecisionChol = Rcpp::as<sp_mat>(choleskiDecompFun(conv_to<sp_mat>::from(SigmaFEandEtaInv + secondTerm))) ;
   cout << "Done! \n" ;
   // m_FullCondSDs = sqrt(m_FullCondPrecisionChol.diag()) ;
   // cout << "Done... \n" ;
-
-  vec responsesReshuffled = m_dataset.responseValues.elem(m_obsOrderForFmat) ;
-
-  // sp_mat hessianMat = SigmaFEandEtaInv + secondTerm ;
-  mat scaledResponse = std::pow(m_errorSD, -2) * trans(responsesReshuffled) * m_Hmat ;
 
   Rcpp::NumericVector updatedMean = gradCholeskiFun(m_FullCondPrecisionChol, scaledResponse) ;
 
@@ -796,7 +795,7 @@ void AugTree::ComputeLogJointPsiMarginal(Rcpp::Function gradCholeskiFun,
   // printf("Joint value: %.4e \n \n", m_logJointPsiMarginal) ;
 }
 
-uvec AugTree::extractBlockIndicesFromLowerRight(const arma::sp_mat & symmSparseMatrix) {
+uvec AugTree::extractBlockIndicesFromLowerRight(const sp_mat & symmSparseMatrix) {
   std::vector<uint> blockIndices ;
   blockIndices.push_back(symmSparseMatrix.n_rows) ; // We start by adding a bound on the right, although other points in the vector correspond to upper-left corners.
   int index = symmSparseMatrix.n_rows - 2 ;
@@ -844,7 +843,7 @@ sp_mat AugTree::ComputeHpred(const mat & spCoords, const vec & time, const mat &
   return updateHmatrixPred(sparseMatrixConstructFun) ;
 }
 
-arma::vec AugTree::ComputeEvar(const arma::sp_mat & HmatPred, Rcpp::Function sparseSolveFun, const int batchSize) {
+vec AugTree::ComputeEvar(const sp_mat & HmatPred, Rcpp::Function sparseSolveFun, const int batchSize) {
 
   double errorVar = std::pow(m_errorSD, 2) ;
   vec EvarValues(HmatPred.n_rows, fill::zeros) ;

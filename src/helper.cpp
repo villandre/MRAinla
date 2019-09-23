@@ -8,16 +8,20 @@
 
 #include "helper.h"
 
-using namespace arma ;
 using namespace boost ;
 using namespace std ;
 using namespace math ;
+typedef Eigen::VectorXf vec ;
+typedef Eigen::MatrixXf mat ;
+typedef Eigen::SparseMatrix<float> sp_mat ;
+typedef Eigen::VectorXi uvec ;
+typedef Eigen::MatrixXi umat ;
 
-Spatiotemprange sptimeDistance(const arma::vec & spCoor1, const double & time1, const arma::vec & spCoor2,
+Spatiotemprange sptimeDistance(const vec & spCoor1, const double & time1, const vec & spCoor2,
                                const double & time2) {
-  arma::vec diffVec = spCoor1 - spCoor2 ;
-  arma::vec scaledVec = arma::pow(diffVec, 2) ;
-  double sp = arma::sum(scaledVec) ;
+  vec diffVec = spCoor1 - spCoor2 ;
+  vec scaledVec = diffVec.pow(2) ;
+  double sp = scaledVec.sum() ;
   sp = std::sqrt(sp) ;
   double timeDiff = abs(time2 - time1) ;
   // printf("Time coordinates and time difference: %.4e  %.4e %.4e \n", time1, time2, timeDiff) ;
@@ -26,14 +30,14 @@ Spatiotemprange sptimeDistance(const arma::vec & spCoor1, const double & time1, 
 
 // Pretty slow. Should not be called too often.
 
-arma::sp_mat createBlockMatrix(std::vector<arma::mat *> listOfMatrices) {
+sp_mat createBlockMatrix(std::vector<mat *> listOfMatrices) {
   uint numRows = 0 ;
   uint numCols = 0 ;
   for (auto & i : listOfMatrices) {
     numRows += i->n_rows ;
     numCols += i->n_cols ;
   }
-  arma::sp_mat X(numRows, numCols);
+  sp_mat X(numRows, numCols);
 
   int idxRows = 0;
   int idxCols = 0 ;
@@ -48,7 +52,7 @@ arma::sp_mat createBlockMatrix(std::vector<arma::mat *> listOfMatrices) {
   return X ;
 }
 
-arma::uvec extractBlockIndices(const arma::sp_mat & symmSparseMatrix) {
+uvec extractBlockIndices(const sp_mat & symmSparseMatrix) {
   std::vector<unsigned int> blockIndices ;
   blockIndices.push_back(0) ;
 
@@ -59,9 +63,9 @@ arma::uvec extractBlockIndices(const arma::sp_mat & symmSparseMatrix) {
     // printf("Processing block starting at %i ... \n", posNextBlock) ;
     newPosNextBlock = posNextBlock + 1 ;
     for (int i = posNextBlock; i < newPosNextBlock; i++) {
-      arma::vec myCol = arma::vec(symmSparseMatrix.col(i)) ;
-      arma::uvec nonZeroElements = arma::find(myCol) ;
-      arma::uword lastNonZero = nonZeroElements.tail(1)(0) ;
+      vec myCol = vec(symmSparseMatrix.col(i)) ;
+      uvec nonZeroElements = arma::find(myCol) ;
+      int lastNonZero = nonZeroElements.tail(1)(0) ;
       if ((lastNonZero + 1) > newPosNextBlock) {
         newPosNextBlock = lastNonZero + 1;
         // printf("Moving bound to %i... \n", newPosNextBlock) ;
@@ -70,75 +74,10 @@ arma::uvec extractBlockIndices(const arma::sp_mat & symmSparseMatrix) {
     posNextBlock = newPosNextBlock ;
     blockIndices.push_back(posNextBlock) ;
   }
-  return conv_to<arma::uvec>::from(blockIndices) ;
+  return conv_to<uvec>::from(blockIndices) ;
 }
 
-// The break is below or to the right of each element. For example, putting rowBreak = 0 and colBreak = 0
-// corresponds to creating A11 1 x 1, A12 1 x n_col-1, A21 n_row - 1 x 1, A22 n_row - 1 x n_col - 1
-// mat invPDsymmMatrixWithSplit(const sp_mat & pdsymmMatrix, const int rowBreak, const int colBreak) {
-//   mat A11 = mat(pdsymmMatrix.submat(0, 0, rowBreak, colBreak)) ;
-//   mat A12 = mat(pdsymmMatrix.submat(0, colBreak + 1, rowBreak, pdsymmMatrix.n_cols - 1)) ;
-//   mat A21 = mat(pdsymmMatrix.submat(rowBreak + 1, 0, pdsymmMatrix.n_rows, colBreak)) ;
-//   mat A22 = mat(pdsymmMatrix.submat(rowBreak + 1, colBreak + 1, pdsymmMatrix.n_rows - 1, pdsymmMatrix.n_cols - 1)) ;
-//   // A11 and A22 are square and symmetrical. We check if they are block diagonal.
-//   bool blockDiagA11 = blockDiagCheck(A11) ;
-//   bool blockDiagA22 = blockDiagCheck(A22) ;
-//
-//   mat A11inv, A22inv ;
-//   if (blockDiagA11) {
-//     std::vector<mat> blocksInA11 = extractBlocks(sp_mat(A11)) ;
-//     A11inv = invertSymmBlockDiag(blocksInA11) ;
-//   } else {
-//     A11inv = inv_sympd(A11) ;
-//   }
-//   if (blockDiagA22) {
-//     std::vector<mat> blocksInA22 = extractBlocks(sp_mat(A22)) ;
-//     A22inv = invertSymmBlockDiag(blocksInA22) ;
-//   } else {
-//     A22inv = inv_sympd(A22) ;
-//   }
-//
-//   mat firstInvertedBlock = inv_sympd(A22 - trans(A12) * A11inv * A12) ;
-//   mat B11 = A11inv + A11inv * A12 * firstInvertedBlock * trans(A12) * A11inv ;
-//   mat B22 = A22inv + A22inv * trans(A12) * inv_sympd(A11 - A12 * A22inv * trans(A12)) * A12 * A22inv ;
-//   mat B12t = -A11inv * A12 * firstInvertedBlock ;
-//
-//   mat Bmatrix = join_rows(join_cols(B11, B12t), join_cols(trans(B12t), B22)) ;
-//   return Bmatrix ;
-// }
-
-// Pretty slow. Should not be called too often.
-
-// sp_mat invertSymmBlockDiag(const sp_mat & blockMatrix, const uvec & blockIndices) {
-//   uint diagElement = 0 ;
-//   uint numRows = blockIndices.at(blockIndices.size() - 1) ;
-//   sp_mat inverted(numRows, numRows) ;
-//   for (unsigned int i = 0; i < (blockIndices.size()-1); i++) {
-//     int blockSize = blockIndices.at(i+1) - blockIndices.at(i) ;
-//     inverted(diagElement, diagElement, size(blockSize, blockSize)) =
-//       inv_sympd(mat(blockMatrix(diagElement, diagElement, size(blockSize, blockSize)))) ;
-//     diagElement += blockSize ;
-//   }
-//
-//   return inverted ;
-// }
-
-// bool blockDiagCheck(const mat & matrixToCheck) {
-//   int newPosNextBlock = 1 ;
-//
-//   for (int i = 0; i < newPosNextBlock; i++) {
-//     arma::vec myCol = arma::vec(matrixToCheck.col(i)) ;
-//     arma::uvec nonZeroElements = arma::find(myCol) ;
-//     arma::uword lastNonZero = nonZeroElements.tail(1)(0) + 1 ;
-//     if (lastNonZero > newPosNextBlock) {
-//       newPosNextBlock = lastNonZero ;
-//     }
-//   }
-//   bool testResult = newPosNextBlock >= matrixToCheck.n_rows ;
-//   return testResult ;
-// }
-
-double logNormPDF(const arma::vec & x, const arma::vec & mu, const arma::vec & sd) {
+double logNormPDF(const vec & x, const vec & mu, const vec & sd) {
   double logValue = 0;
   for (unsigned int i = 0 ; i < x.size() ; i++) {
     logValue += (-log(sd.at(i)) -
@@ -179,7 +118,7 @@ double maternCov(const double & distance, const double & rho,
   return maternValue ;
 }
 
-double logDetBlockMatrix(const arma::sp_mat & blockMatrix, const arma::uvec & blockIndices) {
+double logDetBlockMatrix(const sp_mat & blockMatrix, const uvec & blockIndices) {
   // uvec blockIndices = extractBlockIndices(blockMatrix) ;
   double logDeterminant = 0 ;
   for (unsigned int i = 0 ; i < (blockIndices.size() - 1) ; i++) {

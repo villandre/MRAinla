@@ -1,4 +1,4 @@
-#include<RcppArmadillo.h>
+#include<RcppEigen.h>
 
 #ifndef HELPER_H
 #define HELPER_H
@@ -16,10 +16,10 @@ struct Spatiotemprange{
 Spatiotemprange sptimeDistance(const arma::vec & spCoor1, const double & time1, const arma::vec & spCoor2,
                                const double & time2) ;
 
-arma::sp_mat createBlockMatrix(std::vector<arma::mat *>) ;
-arma::uvec extractBlockIndices(const arma::sp_mat &) ;
+Eigen::SparseMatrix<float> createBlockMatrix(std::vector<arma::mat *>) ;
+Eigen::VectorXi extractBlockIndices(const arma::sp_mat &) ;
 double logDetBlockMatrix(const arma::sp_mat &, const arma::uvec &) ;
-arma::sp_mat invertSymmBlockDiag(const arma::sp_mat &, const arma::uvec &) ;
+Eigen::SparseMatrix<float> invertSymmBlockDiag(const arma::sp_mat &, const arma::uvec &) ;
 double logNormPDF(const arma::vec &, const arma::vec &, const arma::vec &) ;
 double maternCov(const double &, const double &, const double &, const double &, const double &) ;
 // Inlining the function solves the linking issue I encountered. As it turns out, templated functions
@@ -31,8 +31,8 @@ template <typename T> inline void deallocate_container(T& c) {
 };
 
 template <typename T>
-arma::Col<T> rep(const arma::Col<T> & x, const uint times) {
-  arma::Col<T> container ;
+Eigen::Matrix<T, Dynamic, 1> rep(const Eigen::Matrix<T, Dynamic, 1> & x, const uint times) {
+  Eigen::Matrix<T, Dynamic, 1> container ;
   for (uint i = 0 ; i < times ; i++) {
     container = join_cols(container, x) ;
   }
@@ -40,10 +40,10 @@ arma::Col<T> rep(const arma::Col<T> & x, const uint times) {
 }
 
 template <typename T>
-arma::Col<T> rep_each(const arma::Col<T> & x, const uint times) {
-  arma::Col<T> container ;
+Eigen::Matrix<T, Dynamic, 1> rep_each(Eigen::Matrix<T, Dynamic, 1> & x, const uint times) {
+  Eigen::Matrix<T, Dynamic, 1> container ;
   for (auto & i : x) {
-    arma::Col<T> newVec(times) ;
+    Eigen::Matrix<T, Dynamic, 1> newVec(times) ;
     newVec.fill(i) ;
     container = join_cols(container, newVec) ;
   }

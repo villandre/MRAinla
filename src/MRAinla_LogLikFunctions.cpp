@@ -1,19 +1,16 @@
-// [[Rcpp::depends(RcppArmadillo)]]
-// [[Rcpp::depends(BH)]]
+// [[Rcpp::depends(RcppEigen)]]
 
 #include <iostream>
 #include <string>
 #include <algorithm>
-#include <RcppArmadillo.h>
+#include <RcppEigen.h>
 // #include "gperftools/profiler.h"
 
 #include "AugTree.h"
 
-using namespace arma;
+using namespace Eigen;
 using namespace Rcpp;
 using namespace MRAinla;
-
-typedef unsigned int uint ;
 
 // [[Rcpp::export]]
 
