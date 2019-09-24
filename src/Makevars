@@ -1,3 +1,3 @@
-PKG_CXXFLAGS = -DARMA_64BIT_WORD -march=native -g
+PKG_CXXFLAGS = -DARMA_64BIT_WORD -march=native -Wno-unknown-attributes -Wno-ignored-attributes -Wno-missing-attributes -g
 PKG_LIBS = $(LAPACK_LIBS) $(BLAS_LIBS) $(FLIBS) `gsl-config --libs`
 CXX_STD = CXX11

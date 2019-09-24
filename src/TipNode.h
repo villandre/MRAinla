@@ -29,24 +29,24 @@ public:
   void DeriveOmega(const vec &) ;
 
   void DeriveU(const vec & responseValues) {
-    Eigen::PermutationMatrix perm(m_obsInNode) ;
+    Eigen::PermutationMatrix<Eigen::Dynamic, Eigen::Dynamic> perm(m_obsInNode) ;
     mat uInMat = (perm * responseValues).transpose() * m_SigmaInverse *
       (perm * responseValues) ;
-    m_u = uInMat.at(0,0) ; // uInMat is supposed to be a 1x1 matrix.
+    m_u = uInMat(0,0) ; // uInMat is supposed to be a 1x1 matrix.
   }
 
   void DeriveD() {
     double val = 0;
-    SimplicialLDLT<SparseMatrix<double>> decomp(GetSigma()) ;
-    val = decomp.logDeterminant() ;
+    Eigen::ColPivHouseholderQR<Eigen::MatrixXd> decomp(GetSigma().rows(), GetSigma().cols()) ;
+    val = decomp.compute(GetSigma()).logAbsDeterminant() ;
     m_d = val ;
   }
 
   void ComputeWmat(const maternVec & covParasSp, const maternVec & covParasTime, const double & scaling, const bool matern, const double & spaceNuggetSD, const double & timeNuggetSD) {
     baseComputeWmat(covParasSp, covParasTime, scaling, matern, spaceNuggetSD, timeNuggetSD) ;
-    m_Wlist.at(m_depth) = symmatl(m_Wlist.at(m_depth)) ; // This is added to solve numerical issues that arise when smoothness parameters take certain values and matrices turn out to be computationally non-symmetric.
+    m_Wlist.at(m_depth).triangularView<Eigen::Lower>() = m_Wlist.at(m_depth).triangularView<Eigen::Upper>() ; // Will this cause aliasing?
     Eigen::LDLT<mat> chol(GetSigma()) ;
-    m_SigmaInverse = chol.solve(MatrixXd::Identity(m_SigmaInverse.rows(), m_SigmaInverse.cols()) ;
+    m_SigmaInverse = chol.solve(Eigen::MatrixXd::Identity(m_SigmaInverse.rows(), m_SigmaInverse.cols())) ;
   }
 
   // void ComputeParasEtaDeltaTilde(const spatialcoor &, const inputdata &, const vec &) ;
@@ -68,14 +68,14 @@ public:
   }
 
   mat GetSigma() {
-    return m_Wlist.at(m_depth) + std::pow(m_uncorrSD, 2) * eye(size(m_Wlist.at(m_depth))) ;
+    return m_Wlist.at(m_depth) + std::pow(m_uncorrSD, 2) * Eigen::MatrixXd::Identity(m_Wlist.at(m_depth).rows(), m_Wlist.at(m_depth).cols()) ;
   }
   // The following Kmatrix-related functions work because of the correspondence between knots
   // and observations at the finest resolution.
   mat GetKmatrix() {return m_SigmaInverse ;}
   mat * GetKmatrixAddress() {return &m_SigmaInverse ;}
   mat * GetKmatrixInverseAddress() { return &m_Wlist.at(m_depth) ;}
-  mat GetKmatrixInverse() {return GetSigma() - std::pow(m_uncorrSD, 2) * eye(size(GetSigma()));}
+  mat GetKmatrixInverse() {return GetSigma() - std::pow(m_uncorrSD, 2) * Eigen::MatrixXd::Identity(GetSigma().rows(), GetSigma().cols());}
   vec GetOmega(const uint & order) { throw Rcpp::exception("Trying to get omega vector in tip node! \n") ; return vec(1) ;}
   void SetUncorrSD(const double & sd) {
     m_uncorrSD = sd ;
@@ -88,7 +88,7 @@ public:
   void computeUpred(const maternVec &, const maternVec &, const double &, const spatialcoor &, const bool, const double &, const double &) ;
 
   void genRandomKnots(spatialcoor & dataCoor, const uint & numKnots, const gsl_rng * RNG) {
-    Eigen::PermutationMatrix perm(m_obsInNode) ;
+    Eigen::PermutationMatrix<Eigen::Dynamic, Eigen::Dynamic> perm(m_obsInNode) ;
     m_knotsCoor = spatialcoor(perm * dataCoor.spatialCoords,
                               perm * dataCoor.timeCoords) ;
   }

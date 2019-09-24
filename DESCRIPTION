@@ -11,4 +11,4 @@ Imports:
 License: What license is it under?
 Encoding: UTF-8
 LazyData: true
-LinkingTo: Rcpp, RcppEigen, RcppGSL
+LinkingTo: Rcpp, RcppEigen, RcppGSL, BH

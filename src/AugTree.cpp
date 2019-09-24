@@ -8,8 +8,8 @@
 #include "InternalNode.h"
 
 using namespace Rcpp ;
-using namespace arma ;
 using namespace MRAinla ;
+using namespace Eigen ;
 
 struct gridPair{
   AugTree * grid ;
@@ -40,8 +40,8 @@ AugTree::AugTree(uint & M, vec & lonRange, vec & latRange, vec & timeRange, vec 
   SetPredictData(predSp, predTime, predCovariates) ;
 
   gsl_rng_set(m_randomNumGenerator, seed) ;
-  m_fixedEffParameters.resize(m_dataset.covariateValues.n_cols + 1) ; // An extra 1 is added to take into account the intercept.
-  m_fixedEffParameters.randu() ;
+  // m_fixedEffParameters.resize(m_dataset.covariateValues.cols() + 1) ; // An extra 1 is added to take into account the intercept.
+  m_fixedEffParameters = Eigen::VectorXd::Zero(m_dataset.covariateValues.cols() + 1);
 
   BuildTree(minObsForTimeSplit, splitTime, numKnotsRes0, J) ;
 
@@ -50,13 +50,11 @@ AugTree::AugTree(uint & M, vec & lonRange, vec & latRange, vec & timeRange, vec 
   for (uint i = 0 ; i < m_vertexVector.size() ; i++) {
     m_numKnots += m_vertexVector.at(i)->GetKnotsCoor().timeCoords.size() ;
   }
-  m_FullCondMean = vec(m_numKnots + m_fixedEffParameters.size(), fill::zeros) ;
-  m_FullCondSDs = vec(m_numKnots + m_fixedEffParameters.size(), fill::zeros) ;
-  m_Vstar = vec(m_numKnots + m_dataset.covariateValues.n_cols + 1, fill::zeros) ;
-  m_Vstar.subvec(0, size(m_FEmu)) = m_FEmu ;
-  m_HmatPos = umat(0, 2) ;
-  // createHmatrixPos() ;
-  m_HmatPredPos = umat(0, 2) ;
+  m_FullCondMean = Eigen::VectorXd::Zero(m_numKnots + m_fixedEffParameters.size()) ;
+  m_FullCondSDs = Eigen::VectorXd::Zero(m_numKnots + m_fixedEffParameters.size()) ;
+  m_Vstar = Eigen::VectorXd::Zero(m_numKnots + m_dataset.covariateValues.cols() + 1) ;
+  m_Vstar.segment(0, m_FEmu.size()) = m_FEmu ;
+
   std::vector<TreeNode *> tipNodes = GetTipNodes() ;
 
   for (auto & i : tipNodes) {
@@ -98,8 +96,8 @@ void AugTree::numberNodes() {
 // We make sure that splits don't result in empty regions
 void AugTree::createLevels(TreeNode * parent, const uint & numObsForTimeSplit, const bool splitTime) {
   uvec obsForMedian = parent->GetObsInNode() ;
-  Eigen::PermutationMatrix perm(obsForMedian) ;
-  uvec childMembership(obsForMedian.size(), fill::zeros) ;
+  Eigen::PermutationMatrix<Dynamic, Dynamic> perm(obsForMedian) ;
+  uvec childMembership = uvec::Zero(obsForMedian.size()) ;
   std::vector<dimensions> childDimensions ;
   childDimensions.push_back(parent->GetDimensions()) ;
 
@@ -110,66 +108,76 @@ void AugTree::createLevels(TreeNode * parent, const uint & numObsForTimeSplit, c
   uint newChildIndex = 1 ;
 
   // Handling longitude
-  uvec currentChildIndices = regspace<uvec>(0, newChildIndex - 1) ;
-  for (auto & j : currentChildIndices) {
-    uvec elementsInChild = find(childMembership == j) ;
+  uvec currentChildIndices = uvec::LinSpaced(newChildIndex, 0, newChildIndex - 1) ;
+  // for (auto & j : currentChildIndices) {
+  for (uint j = 0 ; j < currentChildIndices.size(); j++) {
+    uint currentChildIndex = currentChildIndices(j) ;
+    Eigen::Matrix<bool, Dynamic, 1> compareVec = childMembership == currentChildIndex ;
+    uvec elementsInChild = find(compareVec) ;
     vec column = m_dataset.spatialCoords.col(0) ;
     vec subColumn = perm * column ;
-    double colMedian = subColumn(elementsInChild).median() ;
-    vec updatedLongitude{childDimensions.at(j).longitude.at(0), colMedian} ;
-    vec newChildLongitude{colMedian, childDimensions.at(j).longitude.at(1)} ;
-    dimensions newDimensions = childDimensions.at(j) ;
+    vec subVector(elementsInChild.size()) ;
+    for (uint innerIndex = 0; innerIndex < elementsInChild.size(); innerIndex++) {
+      subVector(innerIndex) = subColumn(elementsInChild(innerIndex)) ;
+    }
+    double colMedian = median(subVector) ;
+    vec updatedLongitude{childDimensions.at(currentChildIndices(j)).longitude(0), colMedian} ;
+    vec newChildLongitude{colMedian, childDimensions.at(currentChildIndices(j)).longitude(1)} ;
+    dimensions newDimensions = childDimensions.at(currentChildIndices(j)) ;
     newDimensions.longitude = newChildLongitude ;
     childDimensions.push_back(newDimensions) ;
     childDimensions.at(j).longitude = updatedLongitude ;
-    uvec greaterElements = find(subColumn.elem(elementsInChild) > colMedian) ; // In deriveObsInNode, the checks are <=. It follows that observations on the right and upper boundaries of a zone are included.
-    uvec updateIndices = elementsInChild.elem(greaterElements) ;
-    childMembership.elem(updateIndices).fill(newChildIndex) ;
+    uvec greaterElements = find(elem(subColumn, elementsInChild) > colMedian) ; // In deriveObsInNode, the checks are <=. It follows that observations on the right and upper boundaries of a zone are included.
+    PermutationMatrix<Dynamic, Dynamic> perm(greaterElements) ;
+    uvec updateIndices = perm * elementsInChild ;
+    for (uint innerIndex = 0; innerIndex < updateIndices.size(); innerIndex++) {
+      childMembership(updateIndices(innerIndex)) = newChildIndex ;
+    }
     newChildIndex += 1 ;
   }
 
   // Handling latitude
-  currentChildIndices = regspace<uvec>(0, newChildIndex - 1) ;
-  for (auto & j : currentChildIndices) {
+  currentChildIndices = uvec::LinSpaced(newChildIndex, 0, newChildIndex - 1) ;
+  for (uint j = 0 ; j < currentChildIndices.size(); j++) {
     vec column = m_dataset.spatialCoords.col(1) ;
     vec subColumn = perm * column ;
-    uvec elementsInChild = find(childMembership == j) ;
-    double colMedian = median(subColumn.elem(elementsInChild)) ;
-    vec updatedLatitude{childDimensions.at(j).latitude.at(0), colMedian} ;
-    vec newChildLatitude{colMedian, childDimensions.at(j).latitude.at(1)} ;
-    dimensions newDimensions = childDimensions.at(j) ;
+    uvec elementsInChild = find(childMembership == currentChildIndices(j)) ;
+    double colMedian = median(elem(subColumn, elementsInChild)) ;
+    vec updatedLatitude{childDimensions.at(currentChildIndices(j)).latitude(0), colMedian} ;
+    vec newChildLatitude{colMedian, childDimensions.at(currentChildIndices(j)).latitude(1)} ;
+    dimensions newDimensions = childDimensions.at(currentChildIndices(j)) ;
     newDimensions.latitude = newChildLatitude ;
     childDimensions.push_back(newDimensions) ;
-    childDimensions.at(j).latitude = updatedLatitude ;
-    uvec greaterElements = find(subColumn.elem(elementsInChild) > colMedian) ;
-    uvec updateIndices = elementsInChild.elem(greaterElements) ;
-    childMembership.elem(updateIndices).fill(newChildIndex) ;
+    childDimensions.at(currentChildIndices(j)).latitude = updatedLatitude ;
+    uvec greaterElements = find(elem(subColumn, elementsInChild) > colMedian) ;
+    uvec updateIndices = elem(elementsInChild, greaterElements) ;
+    for (uint innerIndex = 0; innerIndex < updateIndices.size(); innerIndex++) {
+      childMembership(updateIndices(innerIndex)) = newChildIndex ;
+    }
     newChildIndex += 1 ;
   }
   if (splitTime) {
     // Handling time
-    currentChildIndices = regspace<uvec>(0, newChildIndex - 1) ;
-    for (auto & j : currentChildIndices) {
+    currentChildIndices = uvec::LinSpaced(newChildIndex, 0, newChildIndex - 1) ;
+    for (uint j = 0 ; j < currentChildIndices.size(); j++) {
       vec time = perm * m_dataset.timeCoords ;
-      uvec elementsInChild = find(childMembership == j) ;
-      Sparse::PermutationMatrix permElementsInChild(elementsInChild) ;
-      vec elementsForMedian = permElementsInChild * time ;
+      uvec elementsInChild = find(childMembership == currentChildIndices(j)) ;
+      vec elementsForMedian = elem(time, elementsInChild) ;
       uvec uniqueTimeValues = find_unique(elementsForMedian) ;
 
       if (uniqueTimeValues.size() > 1) {
         double colMedian = median(elementsForMedian) ;
-        vec updatedTime{childDimensions.at(j).time.at(0), colMedian} ;
-        vec newChildTime{colMedian, childDimensions.at(j).time.at(1)} ;
-        dimensions newDimensions = childDimensions.at(j) ;
+        vec updatedTime{childDimensions.at(currentChildIndices(j)).time(0), colMedian} ;
+        vec newChildTime{colMedian, childDimensions.at(currentChildIndices(j)).time(1)} ;
+        dimensions newDimensions = childDimensions.at(currentChildIndices(j)) ;
         newDimensions.time = newChildTime ;
         childDimensions.push_back(newDimensions) ;
-        childDimensions.at(j).time = updatedTime ;
-        uvec greaterElements = find(permElementsInChild * time > colMedian) ;
-        Eigen::PermutationMatrix permGreaterElements(greaterElements) ;
+        childDimensions.at(currentChildIndices(j)).time = updatedTime ;
+        uvec greaterElements = find(elem(time, elementsInChild) > colMedian) ;
+        Eigen::PermutationMatrix<Dynamic, Dynamic> permGreaterElements(greaterElements) ;
         uvec updateIndices = permGreaterElements * greaterElements ;
-
-        for (auto & i : updateIndices) {
-          childMembership(i) = newChildIndex ;
+        for (uint innerIndex = 0 ; innerIndex < updateIndices.size() ; innerIndex++) {
+          childMembership(updateIndices(innerIndex)) = newChildIndex ;
         }
         newChildIndex += 1 ;
       }
@@ -222,16 +230,13 @@ void AugTree::ComputeMRAlogLikAlt(const bool WmatsAvailable)
 
   for (auto & i : m_vertexVector) {
     int lastIndex = currentIndex + i->GetNumKnots() - 1 ;
-    vec etas = m_Vstar.subvec(currentIndex, lastIndex) ;
+    vec etas = m_Vstar.segment(currentIndex, lastIndex - currentIndex + 1) ;
 
     double logDeterminantValue = 0 ;
     double sign = 0 ;
-    log_det(logDeterminantValue, sign, i->GetKmatrix()) ;
-    if (sign < 0) {
-      throw Rcpp::exception("Error in ComputeMRAlogLikAlt! sign should be positive. \n") ;
-    }
+    logDeterminantValue = i->GetKmatrix().colPivHouseholderQr().logAbsDeterminant() ;
 
-    mat exponentTerm = -0.5 * trans(etas) * i->GetKmatrixInverse() * etas ;
+    mat exponentTerm = -0.5 * etas.transpose() * i->GetKmatrixInverse() * etas ;
     MRAlogLik += (-0.5*logDeterminantValue + exponentTerm(0,0)) ;
     currentIndex = lastIndex + 1 ;
   }
@@ -295,18 +300,9 @@ void AugTree::CleanPredictionComponents() {
   //TO_DO
 }
 
-void AugTree::CenterResponse() {
-  vec intercept = ones<vec>(m_dataset.covariateValues.n_rows) ;
-  mat incrementedCovar = m_dataset.covariateValues ;
-  incrementedCovar.insert_cols(0, intercept) ;
-  vec meanVec = vec(m_dataset.covariateValues.n_rows) ;
-  meanVec = incrementedCovar * m_fixedEffParameters ;
-  m_dataset.responseValues -= meanVec ;
-}
-
 sp_mat AugTree::CreateSigmaBetaEtaInvMat() {
   std::vector<mat *> FEinvAndKinvMatrixList = getKmatricesInversePointers() ;
-  mat FEinvMatrix = pow(m_fixedEffSD, -2) * eye<mat>(m_fixedEffParameters.size(), m_fixedEffParameters.size()) ;
+  mat FEinvMatrix = pow(m_fixedEffSD, -2) * mat::Identity(m_fixedEffParameters.size(), m_fixedEffParameters.size()) ;
   FEinvAndKinvMatrixList.insert(FEinvAndKinvMatrixList.begin(), &FEinvMatrix) ;
 
   // This is because we want the Q matrix to have a block-diagonal component in the lower-right corner,
@@ -317,11 +313,11 @@ sp_mat AugTree::CreateSigmaBetaEtaInvMat() {
 
   uint basicIndex = 0 ;
   for (uint i = 0 ; i < m_SigmaFEandEtaInvBlockIndices.size() - 1 ; i++) {
-    uint blockIndex = m_SigmaFEandEtaInvBlockIndices.at(i) ;
-    uint nextBlockIndex = m_SigmaFEandEtaInvBlockIndices.at(i+1) ;
+    uint blockIndex = m_SigmaFEandEtaInvBlockIndices(i) ;
+    uint nextBlockIndex = m_SigmaFEandEtaInvBlockIndices(i+1) ;
     uint numRows = nextBlockIndex - blockIndex ;
-    umat blockPos = join_rows(rep(regspace<uvec>(0, numRows - 1), numRows),
-                              rep_each(regspace<uvec>(0, numRows - 1), numRows)) + basicIndex ;
+    umat blockPos = join_rows(rep(uvec::LinSpaced(numRows, 0, numRows - 1), numRows),
+                              rep_each(uvec::LinSpaced(numRows, 0, numRows - 1), numRows)) + basicIndex ;
 
     m_SigmaPos = join_cols(m_SigmaPos, blockPos) ;
     basicIndex += numRows ;
@@ -333,18 +329,18 @@ sp_mat AugTree::CreateSigmaBetaEtaInvMat() {
 sp_mat AugTree::UpdateSigmaBetaEtaInvMat() {
   std::vector<mat *> FEinvAndKinvMatrixList = getKmatricesInversePointers() ;
 
-  for (auto & i : FEinvAndKinvMatrixList) { // This would not need to be done everytime an update is processed, as numElements doesn't change, but it's probably very fast, so it shouldn't matter.
-
-  }
-
   mat FEinvMatrix = pow(m_fixedEffSD, -2) * mat::Identity(m_fixedEffParameters.size(), m_fixedEffParameters.size()) ;
   FEinvAndKinvMatrixList.insert(FEinvAndKinvMatrixList.begin(), &FEinvMatrix) ;
-  uint accSize = 0 ;
+
+  uint numElements = 0 ;
+  for (auto & i : FEinvAndKinvMatrixList) { // This would not need to be done everytime an update is processed, as numElements doesn't change, but it's probably very fast, so it shouldn't matter.
+    numElements += i->size() ;
+  }
 
   vec concatenatedValues(numElements) ;
   concatenatedValues.segment(0, m_fixedEffParameters.size()) = FEinvMatrix.diagonal() ;
-  uint index = FEinvMatrix.n_rows ;
-  int numElements = m_fixedEffParameters.size() ;
+  uint index = FEinvMatrix.rows() ;
+
   for (uint i = 1; i < FEinvAndKinvMatrixList.size(); i++) {
     concatenatedValues.segment(index,  FEinvAndKinvMatrixList.at(i)->size()) = Map<vec>((*FEinvAndKinvMatrixList.at(i)).data(), (*FEinvAndKinvMatrixList.at(i)).cols() * (*FEinvAndKinvMatrixList.at(i)).rows()) ;
     index += FEinvAndKinvMatrixList.at(i)->size() ;
@@ -355,7 +351,7 @@ sp_mat AugTree::UpdateSigmaBetaEtaInvMat() {
   for (int k = 0; k < FEinvAndKinvMatrices.outerSize(); ++k) {
     for (SparseMatrix<double>::InnerIterator it(FEinvAndKinvMatrices, k); it; ++it)
     {
-      it.valueRef = concatenatedValues(loopIndex) ;
+      it.valueRef() = concatenatedValues(loopIndex) ;
       loopIndex += 1 ;
     }
   }
@@ -365,13 +361,13 @@ sp_mat AugTree::UpdateSigmaBetaEtaInvMat() {
 
 void AugTree::createHmatrixPos() {
 
-  int numObs = m_dataset.spatialCoords.n_rows ;
+  int numObs = m_dataset.spatialCoords.rows() ;
   std::vector<std::vector<double *>> memAddressesVec(m_numKnots) ;
 
   std::vector<uvec> FmatNodeOrder(m_M) ;
-  uvec FmatObsOrder(numObs, fill::zeros) ;
-  uint rowIndex = 0 ;
-  uint colIndex = 0 ;
+  uvec FmatObsOrder = uvec::Zero(numObs) ;
+  int rowIndex = 0 ;
+  int colIndex = 0 ;
 
   std::vector<TreeNode *> tipNodes = GetTipNodes() ;
   int numTips = tipNodes.size() ;
@@ -388,9 +384,9 @@ void AugTree::createHmatrixPos() {
     uvec secondAncestorIds = second->GetAncestorIds() ;
     bool firstSmallerThanSecond = false ;
     for (uint i = 1 ; i < firstAncestorIds.size() ; i++) { // The ultimate ancestor is always node 0, hence the loop starting at 1.
-      bool test = (firstAncestorIds.at(i) == secondAncestorIds.at(i)) ;
+      bool test = (firstAncestorIds(i) == secondAncestorIds(i)) ;
       if (!test) {
-        firstSmallerThanSecond = (firstAncestorIds.at(i) < secondAncestorIds.at(i)) ;
+        firstSmallerThanSecond = (firstAncestorIds(i) < secondAncestorIds(i)) ;
         break ;
       }
     }
@@ -403,23 +399,23 @@ void AugTree::createHmatrixPos() {
     bool test =  observationIndices.size() > 0 ;
 
     if (test) {
-      FmatObsOrder.subvec(rowIndex, size(observationIndices)) = observationIndices ;
+      FmatObsOrder.segment(rowIndex, observationIndices.size()) = observationIndices ;
 
       std::vector<TreeNode *> brickList = nodeToProcess->getAncestors() ;
 
       uvec brickAncestors(brickList.size()) ;
       for (uint i = 0 ; i < brickAncestors.size() ; i++) {
-        brickAncestors.at(i) = brickList.at(i)->GetNodeId() ;
+        brickAncestors(i) = brickList.at(i)->GetNodeId() ;
       }
       uint index = 0 ;
       for (uint nodeIndex = 0; nodeIndex < m_vertexVector.size() ; nodeIndex++) {
         int nodePos = GetNodePos(nodeIndex) ;
         if (index < brickAncestors.size()) {
-          if (nodeIndex == brickAncestors.at(index)) {
-            uvec rowIndices = rep(regspace<uvec>(0, nodeToProcess->GetB(index).n_rows - 1),
-                                  nodeToProcess->GetB(index).n_cols) + rowIndex ;
-            uvec colIndices = rep_each(regspace<uvec>(0, nodeToProcess->GetB(index).n_cols - 1),
-                                       nodeToProcess->GetB(index).n_rows) + colIndex ;
+          if (nodeIndex == brickAncestors(index)) {
+            uvec rowIndices = rep(uvec::LinSpaced(nodeToProcess->GetB(index).rows(), 0, nodeToProcess->GetB(index).rows() - 1),
+                                  nodeToProcess->GetB(index).cols()) + rowIndex ;
+            uvec colIndices = rep_each(uvec::LinSpaced(nodeToProcess->GetB(index).cols(), 0, nodeToProcess->GetB(index).cols() - 1),
+                                       nodeToProcess->GetB(index).rows()) + colIndex ;
 
             umat positions = join_rows(rowIndices, colIndices) ;
             m_HmatPos = join_cols(m_HmatPos, positions) ; // Slow, but this is not done many times.
@@ -436,13 +432,13 @@ void AugTree::createHmatrixPos() {
 
   m_obsOrderForFmat = FmatObsOrder ;
 
-  Eigen::PermutationMatrix perm(m_obsOrderForFmat) ;
-  mat transIncrementedCovar = (join_rows(ones<vec>(numObs), m_dataset.covariateValues)).tranpose() ;
+  Eigen::PermutationMatrix<Dynamic, Dynamic> perm(m_obsOrderForFmat) ;
+  mat transIncrementedCovar = (join_rows(vec::Ones(numObs), m_dataset.covariateValues)).tranpose() ;
   m_incrementedCovarReshuffled = (transIncrementedCovar * perm).transpose() ;
-  m_HmatPos.col(1) += m_dataset.covariateValues.n_cols + 1 ;
+  m_HmatPos.col(1) += m_dataset.covariateValues.cols() + 1 ;
 
-  umat covPos = join_rows(rep(regspace<uvec>(0, m_incrementedCovarReshuffled.n_rows - 1), m_incrementedCovarReshuffled.n_cols),
-                          rep_each(regspace<uvec>(0, m_incrementedCovarReshuffled.n_cols - 1), m_incrementedCovarReshuffled.n_rows)) ;
+  umat covPos = join_rows(rep(uvec::LinSpaced(m_incrementedCovarReshuffled.rows(), 0, m_incrementedCovarReshuffled.rows() - 1), m_incrementedCovarReshuffled.cols()),
+                          rep_each(uvec::LinSpaced(m_incrementedCovarReshuffled.cols(), 0, m_incrementedCovarReshuffled.cols() - 1), m_incrementedCovarReshuffled.rows())) ;
   m_HmatPos = join_cols(covPos, m_HmatPos) ;
 }
 
@@ -463,16 +459,11 @@ void AugTree::updateHmatrix() {
     }
   }
 
-
-  uvec dims(2) ;
-  dims.at(0) = m_dataset.responseValues.size() ;
-  dims.at(1) = GetNumKnots() + m_dataset.covariateValues.n_cols + 1 ;
-
   int loopIndex = 0 ;
   for (int k=0; k<m_Hmat.outerSize(); ++k) {
     for (sp_mat::InnerIterator it(m_Hmat, k); it; ++it)
     {
-      it.valueRef = concatenatedValues(loopIndex) ;
+      it.valueRef() = concatenatedValues(loopIndex) ;
       loopIndex += 1 ;
     }
   }
@@ -492,7 +483,7 @@ void AugTree::updateHmatrixPred() {
   for (int k = 0; k < m_HmatPred.outerSize(); ++k) {
     for (SparseMatrix<double>::InnerIterator it(m_HmatPred, k); it; ++it)
     {
-      it.valueRef = concatenatedValues(loopIndex) ;
+      it.valueRef() = concatenatedValues(loopIndex) ;
       loopIndex += 1 ;
     }
   }
@@ -500,10 +491,10 @@ void AugTree::updateHmatrixPred() {
 
 void AugTree::createHmatrixPredPos() {
 
-  uint numObs = m_predictData.spatialCoords.n_rows ;
+  uint numObs = m_predictData.spatialCoords.rows() ;
 
   std::vector<uvec> FmatNodeOrder(m_M) ;
-  uvec FmatObsOrder(numObs, fill::zeros) ;
+  uvec FmatObsOrder = uvec::Zero(numObs) ;
   uint rowIndex = 0 ;
   uint colIndex = 0 ;
 
@@ -522,21 +513,21 @@ void AugTree::createHmatrixPredPos() {
     uvec secondAncestorIds = second->GetAncestorIds() ;
     bool firstSmallerThanSecond = false ;
     for (uint i = 1 ; i < firstAncestorIds.size() ; i++) { // The ultimate ancestor is always node 0, hence the loop starting at 1.
-      bool test = (firstAncestorIds.at(i) == secondAncestorIds.at(i)) ;
+      bool test = (firstAncestorIds(i) == secondAncestorIds(i)) ;
       if (!test) {
-        firstSmallerThanSecond = (firstAncestorIds.at(i) < secondAncestorIds.at(i)) ;
+        firstSmallerThanSecond = (firstAncestorIds(i) < secondAncestorIds(i)) ;
         break ;
       }
     }
     return firstSmallerThanSecond ;
   }) ; // This is supposed to reorder the tip nodes in such a way that the F matrix has contiguous blocks.
 
-  m_obsOrderForHpredMat = uvec(m_predictData.timeCoords.size(), fill::zeros) ;
+  m_obsOrderForHpredMat = uvec::Zero(m_predictData.timeCoords.size()) ;
   uint elementIndex = 0 ;
   for (auto & i : tipNodes) {
     uint numPredObsInNode = i->GetPredIndices().size() ;
     if (numPredObsInNode > 0) {
-      m_obsOrderForHpredMat.subvec(elementIndex, size(i->GetPredIndices())) = i->GetPredIndices() ;
+      m_obsOrderForHpredMat.segment(elementIndex, i->GetPredIndices().size()) = i->GetPredIndices() ;
       elementIndex += i->GetPredIndices().size() ;
     }
   }
@@ -548,23 +539,23 @@ void AugTree::createHmatrixPredPos() {
     bool test =  observationIndices.size() > 0 ;
 
     if (test) {
-      FmatObsOrder.subvec(rowIndex, size(observationIndices)) = observationIndices ;
+      FmatObsOrder.segment(rowIndex, observationIndices.size()) = observationIndices ;
 
       std::vector<TreeNode *> brickList = nodeToProcess->getAncestors() ;
 
       uvec brickAncestors(brickList.size()) ;
       for (uint i = 0 ; i < brickAncestors.size() ; i++) {
-        brickAncestors.at(i) = brickList.at(i)->GetNodeId() ;
+        brickAncestors(i) = brickList.at(i)->GetNodeId() ;
       }
       uint index = 0 ;
 
       for (uint nodeIndex = 0; nodeIndex < m_vertexVector.size() ; nodeIndex++) {
         int nodePos = GetNodePos(nodeIndex) ;
         if (index < brickAncestors.size()) {
-          if (nodeIndex == brickAncestors.at(index)) {
-            uvec rowIndices = rep(regspace<uvec>(0, observationIndices.size() - 1),
+          if (nodeIndex == brickAncestors(index)) {
+            uvec rowIndices = rep(uvec::LinSpaced(observationIndices.size(), 0, observationIndices.size() - 1),
                                   ancestorsList.at(index)->GetNumKnots()) + rowIndex ;
-            uvec colIndices = rep_each(regspace<uvec>(0, ancestorsList.at(index)->GetNumKnots() - 1),
+            uvec colIndices = rep_each(uvec::LinSpaced(ancestorsList.at(index)->GetNumKnots(), 0, ancestorsList.at(index)->GetNumKnots() - 1),
                                        observationIndices.size()) + colIndex ;
             umat positions = join_rows(rowIndices, colIndices) ;
             m_HmatPredPos = join_cols(m_HmatPredPos, positions) ; // Slow, but this is not done many times.
@@ -578,16 +569,16 @@ void AugTree::createHmatrixPredPos() {
       rowIndex += observationIndices.size() ;
     }
   }
-  Eigen::PermutationMatrix perm(FmatObsOrder) ;
+  Eigen::PermutationMatrix<Dynamic, Dynamic> perm(FmatObsOrder) ;
 
-  mat transIncrementedCovar = (join_rows(ones<vec>(numObs), m_predictData.covariateValues)).transpose() ;
+  mat transIncrementedCovar = (join_rows(vec::Ones(numObs), m_predictData.covariateValues)).transpose() ;
   m_incrementedCovarPredictReshuffled = (transIncrementedCovar * perm).transpose() ;
 
-  m_HmatPredPos.col(1) += m_predictData.covariateValues.n_cols + 1 ;
-  umat covPos = join_rows(rep(regspace<uvec>(0, m_incrementedCovarPredictReshuffled.n_rows - 1),
-                              m_incrementedCovarPredictReshuffled.n_cols),
-                          rep_each(regspace<uvec>(0, m_incrementedCovarPredictReshuffled.n_cols - 1),
-                                   m_incrementedCovarPredictReshuffled.n_rows)) ;
+  m_HmatPredPos.col(1) += m_predictData.covariateValues.cols() + 1 ;
+  umat covPos = join_rows(rep(uvec::LinSpaced(m_incrementedCovarPredictReshuffled.rows(), 0, m_incrementedCovarPredictReshuffled.rows() - 1),
+                              m_incrementedCovarPredictReshuffled.cols()),
+                          rep_each(uvec::LinSpaced(m_incrementedCovarPredictReshuffled.cols(), 0, m_incrementedCovarPredictReshuffled.cols() - 1),
+                                   m_incrementedCovarPredictReshuffled.rows())) ;
   m_HmatPredPos = join_cols(covPos, m_HmatPredPos) ;
 }
 
@@ -642,8 +633,10 @@ void AugTree::ComputeLogFCandLogCDandDataLL() {
   } else {
     SigmaFEandEtaInv = UpdateSigmaBetaEtaInvMat() ;
   }
-  double logDetSigmaKFEinv = logDetBlockMatrix(SigmaFEandEtaInv, m_SigmaFEandEtaInvBlockIndices) ;
-  // cout << "Done... \n" ;
+  // double logDetSigmaKFEinv = logDetBlockMatrix(SigmaFEandEtaInv, m_SigmaFEandEtaInvBlockIndices) ;
+  Eigen::CholmodSimplicialLDLT<sp_mat> blockChol(SigmaFEandEtaInv) ;
+  double logDetSigmaKFEinv = blockChol.logDeterminant() ;
+  cout << "Done... \n" ;
 
   if (m_recomputeMRAlogLik) {
     // cout << "Obtaining H matrix... \n" ;
@@ -656,13 +649,12 @@ void AugTree::ComputeLogFCandLogCDandDataLL() {
   }
 
   sp_mat secondTerm = std::pow(m_errorSD, -2) * m_Hmat.transpose() * m_Hmat ;
-  vec responsesReshuffled = m_dataset.responseValues(m_obsOrderForFmat) ;
+  vec responsesReshuffled = elem(m_dataset.responseValues, m_obsOrderForFmat) ;
 
   // sp_mat hessianMat = SigmaFEandEtaInv + secondTerm ;
   mat scaledResponse = std::pow(m_errorSD, -2) * responsesReshuffled.transpose() * m_Hmat ;
   cout << "Obtaining Qchol... \n" ;
-  Eigen::SimplicialLDLT<sp_mat> FullCondCholeski ;
-  m_FullCondPrecisionChol = FullCondCholeski(SigmaFEandEtaInv + secondTerm) ;
+  m_FullCondPrecisionChol = Eigen::SimplicialCholesky<sp_mat>::compute(SigmaFEandEtaInv + secondTerm) ;
   cout << "Done! \n" ;
   // m_FullCondSDs = sqrt(m_FullCondPrecisionChol.diag()) ;
   // cout << "Done... \n" ;

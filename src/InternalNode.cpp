@@ -1,7 +1,7 @@
 #include "InternalNode.h"
 #include <gsl/gsl_randist.h>
 
-using namespace arma ;
+using namespace Eigen ;
 using namespace MRAinla ;
 
 void InternalNode::RemoveChild(TreeNode * childToRemove)
@@ -32,7 +32,7 @@ void InternalNode::genRandomKnots(spatialcoor & dataCoor, const uint & numKnots,
     gsl_ran_choose(RNG, a, numKnots, b, dataCoor.timeCoords.size(), sizeof (double));
 
     for (uint i = 0 ; i < numKnots ; i++) {
-      aConverted.at(i) = a[i] ;
+      aConverted(i) = a[i] ;
     }
 
     Eigen::PermutationMatrix perm(aConverted) ;
@@ -127,10 +127,6 @@ void InternalNode::DeriveOmega(const vec & responseValues) {
     m_omega.at(k) = containerVec ;
   }
 
-  // for (auto & i : m_children) {
-  //   i->clearOmegaTilde() ;
-  // }
-
   for (uint k = 0; k <= m_depth ; k++) {
     vec secondTerm = m_Alist.at(m_depth).at(k).transpose() * m_Ktilde * m_omega.at(m_depth) ;
     m_omegaTilde.at(k) = m_omega.at(k) -  secondTerm;
@@ -144,7 +140,7 @@ void InternalNode::DeriveU(const vec & responseValues) {
   for (auto & i : m_children) {
     secondTerm += i->GetU() ;
   }
-  m_u = firstTerm.at(0,0) + secondTerm ;
+  m_u = firstTerm(0,0) + secondTerm ;
 }
 
 void::InternalNode::DeriveD() {
@@ -174,6 +170,6 @@ void::InternalNode::DeriveD() {
 
 void InternalNode::ComputeWmat(const maternVec & covParasSp, const maternVec & covParasTime, const double & scaling, const bool matern, const double & spaceNuggetSD, const double & timeNuggetSD) {
   baseComputeWmat(covParasSp, covParasTime, scaling, matern, spaceNuggetSD, timeNuggetSD) ;
-  m_Wlist.at(m_depth) = symmatl(m_Wlist.at(m_depth)) ;
+  m_Wlist.at(m_depth).triangularView<Lower>() = m_Wlist.at(m_depth).triangularView<Upper>() ; // Will this cause aliasing?
   m_K = GetKmatrixInverse().ldlt().solve(mat::Identity(GetKmatrixInverse().rows(), GetKmatrixInverse().cols())) ; // The K matrix is some sort of covariance matrix, so it should always be symmetrical..
 }

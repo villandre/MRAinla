@@ -10,9 +10,9 @@ struct GammaHyperParas{
   double m_beta = 2;
   GammaHyperParas() {}
   GammaHyperParas(double alpha, double beta) : m_alpha(alpha), m_beta(beta) { }
-  GammaHyperParas(const vec & alphaBeta) {
-    m_alpha = alphaBeta.at(0) ;
-    m_beta = alphaBeta.at(1) ;
+  GammaHyperParas(const Eigen::VectorXd & alphaBeta) {
+    m_alpha = alphaBeta(0) ;
+    m_beta = alphaBeta(1) ;
   }
 };
 
@@ -58,11 +58,8 @@ public:
   int GetM() { return m_M ;}
   double GetLogJointPsiMarginal() { return m_logJointPsiMarginal ;}
   uvec GetObsOrderForHpredMat() { return m_obsOrderForHpredMat ;}
-  umat GetHmatPos() { return m_HmatPos ;}
-  sp_mat GetFullCondPrecisionChol() { return m_FullCondPrecisionChol ;}
 
   void SetRNG(gsl_rng * myRNG) { m_randomNumGenerator = myRNG ;}
-  void IncrementVstar(const double & increment) {m_Vstar += increment ;}
 
   // void SetCovParameters(vec & covParas) {m_covParameters = covParas ;}
   void SetFixedEffParameters(vec & fixedParas) {
@@ -97,7 +94,7 @@ public:
   void SetRecordFullConditional(const bool recordIt) { m_recordFullConditional = recordIt ;}
 
   void SetPredictData(const mat & spCoords, const vec & timeValues, const mat covariates) {
-    vec placeholder(covariates.n_rows) ;
+    vec placeholder(covariates.rows()) ;
     inputdata dataObject(placeholder, spCoords, timeValues, covariates) ;
     m_predictData = dataObject ;
   }
@@ -108,7 +105,6 @@ public:
   }
 
   void CleanPredictionComponents() ;
-  void CenterResponse() ;
 
   void createHmatrixPredPos() ;
   sp_mat CreateSigmaBetaEtaInvMat() ;
@@ -221,7 +217,7 @@ private:
   vec m_MRAvalues ;
   vec m_FullCondMean ;
   vec m_FullCondSDs ;
-  Eigen::SimplicialCholeskyLDLT m_FullCondPrecisionChol ;
+  sp_mat m_FullCondPrecisionChol ;
   sp_mat m_Hmat ;
   sp_mat m_HmatPred ;
 

@@ -1,11 +1,11 @@
 #include "TipNode.h"
 #include <gsl/gsl_randist.h>
 
-using namespace arma ;
+using namespace Eigen ;
 using namespace MRAinla ;
 
 void TipNode::DeriveOmega(const vec & responseValues) {
-  Eigen::PermutationMatrix perm(m_obsInNode) ;
+  Eigen::PermutationMatrix<Dynamic, Dynamic> perm(m_obsInNode) ;
   vec subResponses = perm * responseValues ;
   for (uint i = 0 ; i < m_depth; i++) {
     m_omegaTilde.at(i) = GetB(i).transpose() * m_SigmaInverse * subResponses ;

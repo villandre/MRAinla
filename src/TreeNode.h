@@ -22,9 +22,9 @@ namespace MRAinla
 {
 typedef unsigned int uint ;
 typedef unsigned int uint ;
-typedef Eigen::VectorXf vec ;
-typedef Eigen::MatrixXf mat ;
-typedef Eigen::SparseMatrix<float> sp_mat ;
+typedef Eigen::VectorXd vec ;
+typedef Eigen::MatrixXd mat ;
+typedef Eigen::SparseMatrix<double> sp_mat ;
 typedef Eigen::VectorXi uvec ;
 typedef Eigen::MatrixXi umat ;
 
@@ -47,56 +47,56 @@ struct maternVec{
 };
 
 struct spatialcoor {
-  mat spatialCoords = mat(1, 2) ;
-  vec timeCoords = vec(1) ;
+  Eigen::MatrixXd spatialCoords = Eigen::MatrixXd(1, 2) ;
+  Eigen::VectorXd timeCoords = Eigen::VectorXd(1) ;
 
   spatialcoor() { } ;
-  spatialcoor(mat f_sp, vec f_time) : spatialCoords(f_sp), timeCoords(f_time) { } ;
+  spatialcoor(Eigen::MatrixXd f_sp, Eigen::VectorXd f_time) : spatialCoords(f_sp), timeCoords(f_time) { } ;
 
   spatialcoor subset(uvec & indices)  const {
-    Eigen::PermutationMatrix perm(indices) ;
-    mat subSpatialCoords = perm * spatialCoords ;
-    vec subTimeCoords = perm * timeCoords ;
+    Eigen::PermutationMatrix<Eigen::Dynamic, Eigen::Dynamic> perm(indices) ;
+    Eigen::MatrixXd subSpatialCoords = perm * spatialCoords ;
+    Eigen::VectorXd subTimeCoords = perm * timeCoords ;
     return spatialcoor(subSpatialCoords, subTimeCoords) ;
   };
 };
 
 struct inputdata : public spatialcoor {
-  vec responseValues = vec(1) ;
-  mat covariateValues = mat(1, 1) ;
+  Eigen::VectorXd responseValues = Eigen::VectorXd(1) ;
+  Eigen::MatrixXd covariateValues = Eigen::MatrixXd(1, 1) ;
 
   inputdata() : spatialcoor() {};
-  inputdata(vec f_responses, mat f_sp, vec f_time, mat f_covariates)
+  inputdata(Eigen::VectorXd f_responses, Eigen::MatrixXd f_sp, Eigen::VectorXd f_time, Eigen::MatrixXd f_covariates)
     : spatialcoor(f_sp, f_time), responseValues(f_responses), covariateValues(f_covariates) {  } ;
 
-  inputdata subset(uvec & indices)  const {
-    Eigen::PermutationMatrix perm(indices) ;
-    mat subSpatialCoords = perm * spatialCoords ;
-    vec subTimeCoords = perm * timeCoords ;
-    vec subResponseValues = perm * responseValues ;
-    mat subCovariates = perm * covariateValues ;
+  inputdata subset(Eigen::VectorXi & indices)  const {
+    Eigen::PermutationMatrix<Eigen::Dynamic, Eigen::Dynamic> perm(indices) ;
+    Eigen::MatrixXd subSpatialCoords = perm * spatialCoords ;
+    Eigen::VectorXd subTimeCoords = perm * timeCoords ;
+    Eigen::VectorXd subResponseValues = perm * responseValues ;
+    Eigen::MatrixXd subCovariates = perm * covariateValues ;
     return inputdata(subResponseValues, subSpatialCoords, subTimeCoords, subCovariates) ;
   }
 
   void reshuffle(uvec indices) {
-    mat spatialCoordsTrans = spatialCoords.transpose() ;
-    Eigen::PermutationMatrix perm(indices) ;
+    Eigen::MatrixXd spatialCoordsTrans = spatialCoords.transpose() ;
+    Eigen::PermutationMatrix<Eigen::Dynamic, Eigen::Dynamic> perm(indices) ;
     spatialCoords = (spatialCoordsTrans * perm).transpose() ;
     timeCoords = perm * timeCoords ;
-    mat covariateValuesTrans = covariateValues.transpose() ;
+    Eigen::MatrixXd covariateValuesTrans = covariateValues.transpose() ;
     covariateValues = (covariateValuesTrans * perm).transpose() ;
     responseValues = perm * responseValues ;
   }
 };
 
 struct dimensions {
-  vec longitude{vec(2)} ;
-  vec latitude{vec(2)} ;
-  vec time{vec(2)} ;
+  Eigen::VectorXd longitude{Eigen::VectorXd(2)} ;
+  Eigen::VectorXd latitude{Eigen::VectorXd(2)} ;
+  Eigen::VectorXd time{Eigen::VectorXd(2)} ;
 
   dimensions() { } ;
 
-  dimensions(vec f_lon, vec f_lat, vec f_time)
+  dimensions(Eigen::VectorXd f_lon, Eigen::VectorXd f_lat, Eigen::VectorXd f_time)
     : longitude(f_lon), latitude(f_lat), time(f_time) {
     uint firstCompare = (f_lon.size() == f_lat.size()) ;
     uint secondCompare = (f_lat.size() == f_time.size()) ;
@@ -107,17 +107,17 @@ struct dimensions {
 };
 
 struct SpatiotempCoor{
-  vec sp = vec(2) ;
+  Eigen::VectorXd sp = Eigen::VectorXd(2) ;
   double time = 0 ;
-  SpatiotempCoor(vec & sp, double & time) : sp(sp), time(time) { } ;
+  SpatiotempCoor(Eigen::VectorXd & sp, double & time) : sp(sp), time(time) { } ;
   SpatiotempCoor() { } ;
 };
 
 struct GaussDistParas {
-  vec meanPara ;
-  mat covPara ;
+  Eigen::VectorXd meanPara ;
+  Eigen::MatrixXd covPara ;
   GaussDistParas() { }
-  GaussDistParas(vec & meanVec, mat & covMat) : meanPara(meanVec), covPara(covMat) { }
+  GaussDistParas(Eigen::VectorXd & meanVec, Eigen::MatrixXd & covMat) : meanPara(meanVec), covPara(covMat) { }
 };
 
 class TreeNode
@@ -174,7 +174,6 @@ public:
 
   virtual ~ TreeNode() { } ;
 
-  // void SetAtildeList(mat & matrix, uint &i, uint &j) {m_AtildeList.at(i).at(j) = matrix ;}
   void SetPredictLocations(const spatialcoor & predictLocations) ;
 
   uvec deriveObsInNode(const spatialcoor &) ;
@@ -190,7 +189,7 @@ public:
     std::vector<TreeNode *> ancestorsList = getAncestors() ;
     uvec ancestorIds(ancestorsList.size()) ;
     for (uint i = 0 ; i < ancestorsList.size() ; i++) {
-      ancestorIds.at(i) = ancestorsList.at(i)->GetNodeId() ;
+      ancestorIds(i) = ancestorsList.at(i)->GetNodeId() ;
     }
     return ancestorIds ;
   }

@@ -5,8 +5,8 @@ setupGridCpp <- function(responseValues, spCoords, predCoords, obsTime, predTime
     .Call('_MRAinla_setupGridCpp', PACKAGE = 'MRAinla', responseValues, spCoords, predCoords, obsTime, predTime, covariateMatrix, predCovariateMatrix, M, lonRange, latRange, timeRange, randomSeed, cutForTimeSplit, splitTime, numKnotsRes0, J)
 }
 
-LogJointHyperMarginalToWrap <- function(treePointer, MRAhyperparas, fixedEffSD, errorSD, MRAcovParasGammaAlphaBeta, FEmuVec, fixedEffGammaAlphaBeta, errorGammaAlphaBeta, matern, spaceNuggetSD, timeNuggetSD, recordFullConditional, gradCholeskiFun, sparseMatrixConstructFun, sparseDeterminantFun, choleskiDecompFun) {
-    .Call('_MRAinla_LogJointHyperMarginalToWrap', PACKAGE = 'MRAinla', treePointer, MRAhyperparas, fixedEffSD, errorSD, MRAcovParasGammaAlphaBeta, FEmuVec, fixedEffGammaAlphaBeta, errorGammaAlphaBeta, matern, spaceNuggetSD, timeNuggetSD, recordFullConditional, gradCholeskiFun, sparseMatrixConstructFun, sparseDeterminantFun, choleskiDecompFun)
+LogJointHyperMarginalToWrap <- function(treePointer, MRAhyperparas, fixedEffSD, errorSD, MRAcovParasGammaAlphaBeta, FEmuVec, fixedEffGammaAlphaBeta, errorGammaAlphaBeta, matern, spaceNuggetSD, timeNuggetSD, recordFullConditional) {
+    .Call('_MRAinla_LogJointHyperMarginalToWrap', PACKAGE = 'MRAinla', treePointer, MRAhyperparas, fixedEffSD, errorSD, MRAcovParasGammaAlphaBeta, FEmuVec, fixedEffGammaAlphaBeta, errorGammaAlphaBeta, matern, spaceNuggetSD, timeNuggetSD, recordFullConditional)
 }
 
 GetFullCondMean <- function(treePointer) {
@@ -17,8 +17,8 @@ GetFullCondSDs <- function(treePointer) {
     .Call('_MRAinla_GetFullCondSDs', PACKAGE = 'MRAinla', treePointer)
 }
 
-ComputeCondPredStats <- function(treePointer, spCoordsForPredict, timeForPredict, covariateMatrixForPredict, sparseMatrixConstructFun, sparseSolveFun, batchSize) {
-    .Call('_MRAinla_ComputeCondPredStats', PACKAGE = 'MRAinla', treePointer, spCoordsForPredict, timeForPredict, covariateMatrixForPredict, sparseMatrixConstructFun, sparseSolveFun, batchSize)
+ComputeCondPredStats <- function(treePointer, spCoordsForPredict, timeForPredict, covariateMatrixForPredict, batchSize) {
+    .Call('_MRAinla_ComputeCondPredStats', PACKAGE = 'MRAinla', treePointer, spCoordsForPredict, timeForPredict, covariateMatrixForPredict, batchSize)
 }
 
 GetNumTips <- function(treePointer) {

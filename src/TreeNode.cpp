@@ -3,7 +3,7 @@
 
 #include "TreeNode.h"
 
-using namespace arma ;
+using namespace Eigen ;
 using namespace MRAinla ;
 using namespace std ;
 
@@ -56,17 +56,23 @@ void TreeNode::baseComputeWmat(const maternVec & covParasSp, const maternVec & c
     mat firstMat = computeCovMat(m_knotsCoor, brickList.at(l)->GetKnotsCoor(), covParasSp, covParasTime, scaling, matern, spaceNuggetSD, timeNuggetSD) ;
     mat secondMat(firstMat.n_rows, firstMat.n_cols, fill::zeros) ;
     for (uint k = 0; k < l ; k++) {
+      if (k < m_depth) {
       secondMat += m_Wlist.at(k) *
         brickList.at(k)->GetKmatrix() *
         brickList.at(l)->GetWlist().at(k).transpose() ;
+      } else {
+        secondMat += m_Wlist.at(m_depth).selfadjointView() *
+          brickList.at(k)->GetKmatrix() *
+          brickList.at(l)->GetWlist().at(k).transpose() ;
+      }
     }
     m_Wlist.at(l) = firstMat - secondMat ;
-    if (l == m_depth) {
-      double sign1, sign2 ;
-      double value1, value2 ;
-      log_det(value1, sign1, firstMat) ;
-      log_det(value2, sign2, secondMat) ;
-    }
+    // if (l == m_depth) {
+    //   double sign1, sign2 ;
+    //   double value1, value2 ;
+    //   log_det(value1, sign1, firstMat) ;
+    //   log_det(value2, sign2, secondMat) ;
+    // }
   }
 }
 
@@ -91,15 +97,15 @@ mat TreeNode::computeCovMat(const spatialcoor & spTime1, const spatialcoor & spT
   for (uint rowIndex = 0; rowIndex < spTime1.timeCoords.size() ; rowIndex++) {
     for (uint colIndex = 0; colIndex < spTime2.timeCoords.size() ; colIndex++) {
       vec space1 = conv_to<vec>::from(spTime1.spatialCoords.row(rowIndex)) ;
-      double time1 = spTime1.timeCoords.at(rowIndex) ;
+      double time1 = spTime1.timeCoords(rowIndex) ;
       vec space2 = conv_to<vec>::from(spTime2.spatialCoords.row(colIndex)) ;
-      double time2 = spTime2.timeCoords.at(colIndex) ;
+      double time2 = spTime2.timeCoords(colIndex) ;
 
       Spatiotemprange rangeValue = sptimeDistance(space1, time1, space2, time2) ;
       if (matern) {
-        covMat.at(rowIndex, colIndex) = MaternCovFunction(rangeValue, covParasSp, covParasTime, scaling, spaceNuggetSD, timeNuggetSD) ;
+        covMat(rowIndex, colIndex) = MaternCovFunction(rangeValue, covParasSp, covParasTime, scaling, spaceNuggetSD, timeNuggetSD) ;
       } else {
-        covMat.at(rowIndex, colIndex) = SqExpCovFunction(rangeValue, covParasSp.m_rho, covParasTime.m_rho, spaceNuggetSD, timeNuggetSD) ;
+        covMat(rowIndex, colIndex) = SqExpCovFunction(rangeValue, covParasSp.m_rho, covParasTime.m_rho, spaceNuggetSD, timeNuggetSD) ;
       }
     }
   }

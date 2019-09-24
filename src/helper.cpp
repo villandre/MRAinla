@@ -11,9 +11,9 @@
 using namespace boost ;
 using namespace std ;
 using namespace math ;
-typedef Eigen::VectorXf vec ;
-typedef Eigen::MatrixXf mat ;
-typedef Eigen::SparseMatrix<float> sp_mat ;
+typedef Eigen::VectorXd vec ;
+typedef Eigen::MatrixXd mat ;
+typedef Eigen::SparseMatrix<double> sp_mat ;
 typedef Eigen::VectorXi uvec ;
 typedef Eigen::MatrixXi umat ;
 typedef Eigen::Triplet<double> Triplet;
@@ -87,8 +87,8 @@ uvec extractBlockIndices(const sp_mat & symmSparseMatrix) {
 double logNormPDF(const vec & x, const vec & mu, const vec & sd) {
   double logValue = 0;
   for (unsigned int i = 0 ; i < x.size() ; i++) {
-    logValue += (-log(sd.at(i)) -
-      0.5 * pow((x.at(i) - mu.at(i)), 2)/pow(sd.at(i), 2)) ;
+    logValue += (-log(sd(i)) -
+      0.5 * pow((x(i) - mu(i)), 2)/pow(sd(i), 2)) ;
   }
   logValue += (-0.5*x.size()*(log(2) + log(PI))) ;
   return logValue ;
@@ -131,12 +131,32 @@ double logDetBlockMatrix(const sp_mat & blockMatrix, const uvec & blockIndices) 
   for (unsigned int i = 0 ; i < (blockIndices.size() - 1) ; i++) {
     double value = 0 ;
     double sign = 0 ;
-    unsigned int matSize = blockIndices.at(i+1) - blockIndices.at(i) ;
-    log_det(value, sign, mat(blockMatrix(blockIndices.at(i), blockIndices.at(i), size(matSize, matSize)))) ;
+    unsigned int matSize = blockIndices(i+1) - blockIndices(i) ;
+    log_det(value, sign, mat(blockMatrix(blockIndices(i), blockIndices(i), size(matSize, matSize)))) ;
     if (sign < 0) {
       throw Rcpp::exception("Error logDetBlockMatrix: Log determinant sign should be positive. \n") ;
     }
     logDeterminant += value ;
   }
   return logDeterminant ;
+}
+
+Eigen::Matrix<bool, Eigen::Dynamic, 1> find(const Eigen::Ref<const Eigen::Matrix<bool, Eigen::Dynamic, 1>> & logicalVector) {
+  Eigen::VectorXi outputVec(logicalVector.size()) ;
+  uint index = 0 ;
+  for (uint i = 0 ; i < logicalVector.size(); i++) {
+    if (logicalVector(i)) {
+      outputVec(index) = i ;
+      index += 1 ;
+    }
+  }
+  return outputVec.segment(0, index) ;
+}
+
+Eigen::Matrix<bool, Eigen::Dynamic, 1> operator==(const Eigen::Ref<const Eigen::VectorXi> & EigenVec, const uint constant) {
+  Eigen::Matrix<bool, Eigen::Dynamic, 1> container(EigenVec.size()) ;
+  for (uint i = 0; i < EigenVec.size(); i++) {
+    container(i) = EigenVec(i) == constant ;
+  }
+  return container ;
 }
