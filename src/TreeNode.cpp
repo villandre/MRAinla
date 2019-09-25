@@ -8,12 +8,12 @@ using namespace MRAinla ;
 using namespace std ;
 
 uvec TreeNode::deriveObsInNode(const spatialcoor & dataset) {
-  uvec lonCheck = (dataset.spatialCoords.col(0) > min(m_dimensions.longitude)) %
-    (dataset.spatialCoords.col(0) <= max(m_dimensions.longitude)) ; // Longitude check
-  uvec latCheck = (dataset.spatialCoords.col(1) > min(m_dimensions.latitude)) %
-    (dataset.spatialCoords.col(1) <= max(m_dimensions.latitude)) ; // Latitude check
-  uvec timeCheck = (dataset.timeCoords > min(m_dimensions.time)) %
-    (dataset.timeCoords <= max(m_dimensions.time)) ; // Time check
+  Eigen::Array<bool, Dynamic, 1> lonCheck = (dataset.spatialCoords.col(0) > m_dimensions.longitude.minCoeff()) %
+    (dataset.spatialCoords.col(0) <= m_dimensions.longitude.maxCoeff()) ; // Longitude check
+  uvec latCheck = (dataset.spatialCoords.col(1) > m_dimensions.latitude.minCoeff()) %
+    (dataset.spatialCoords.col(1) <= m_dimensions.latitude.maxCoeff()) ; // Latitude check
+  uvec timeCheck = (dataset.timeCoords > m_dimensions.time.minCoeff()) %
+    (dataset.timeCoords <= m_dimensions.time.maxCoeff()) ; // Time check
   return find(lonCheck % latCheck % timeCheck) ; // find is equivalent to which in R
 }
 
@@ -54,7 +54,7 @@ void TreeNode::baseComputeWmat(const maternVec & covParasSp, const maternVec & c
 
   for (uint l = 1; l <= m_depth; l++) {
     mat firstMat = computeCovMat(m_knotsCoor, brickList.at(l)->GetKnotsCoor(), covParasSp, covParasTime, scaling, matern, spaceNuggetSD, timeNuggetSD) ;
-    mat secondMat(firstMat.n_rows, firstMat.n_cols, fill::zeros) ;
+    mat secondMat = mat::Zero(firstMat.rows(), firstMat.cols()) ;
     for (uint k = 0; k < l ; k++) {
       if (k < m_depth) {
       secondMat += m_Wlist.at(k) *

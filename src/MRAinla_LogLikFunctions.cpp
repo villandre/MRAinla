@@ -95,7 +95,7 @@ double LogJointHyperMarginalToWrap(SEXP treePointer, Rcpp::List MRAhyperparas,
 
 // [[Rcpp::export]]
 
-vec GetFullCondMean(SEXP treePointer) {
+Eigen::VectorXd GetFullCondMean(SEXP treePointer) {
   vec outputVec ;
   if (!(treePointer == NULL))
   {
@@ -111,7 +111,7 @@ vec GetFullCondMean(SEXP treePointer) {
 
 // [[Rcpp::export]]
 
-vec GetFullCondSDs(SEXP treePointer) {
+Eigen::VectorXd GetFullCondSDs(SEXP treePointer) {
   vec outputVec ;
   if (!(treePointer == NULL))
   {
@@ -132,7 +132,7 @@ Rcpp::List ComputeCondPredStats(SEXP treePointer, NumericMatrix spCoordsForPredi
   sp_mat Hmat, Hmean, HmeanSq ;
   mat HmeanMat ;
   vec Evar ;
-  cout << "Entered ComputeCondPredStats \n" ;
+  std::cout << "Entered ComputeCondPredStats \n" ;
   if (!(treePointer == NULL))
   {
     XPtr<AugTree> pointedTree(treePointer) ; // Becomes a regular pointer again.
@@ -140,18 +140,16 @@ Rcpp::List ComputeCondPredStats(SEXP treePointer, NumericMatrix spCoordsForPredi
     vec time = Rcpp::as<vec>(timeForPredict) ;
     mat covariates = Rcpp::as<mat>(covariateMatrixForPredict) ;
 
-    Hmat = conv_to<mat>::from(pointedTree->ComputeHpred(spCoords, time, covariates)) ;
-    sp_mat Hmean = Hmat * conv_to<sp_mat>::from(pointedTree->GetFullCondMean()) ;
-    HmeanMat = conv_to<mat>::from(Hmean) ;
-    cout << "Computing Evar! \n" ;
-    Evar = pointedTree->ComputeEvar(Hmat, batchSize) ;
-    cout << "Done! \n" ;
+    vec Hmean = pointedTree->GetHmatPred() * pointedTree->GetFullCondMean() ;
+    std::cout << "Computing Evar! \n" ;
+    Evar = pointedTree->ComputeEvar(batchSize) ;
+    std::cout << "Done! \n" ;
   }
   else
   {
     throw Rcpp::exception("Pointer to MRA grid is null." ) ;
   }
-  return Rcpp::List::create(Named("Hmean") = HmeanMat, Named("Evar") = Evar) ;
+  return Rcpp::List::create(Named("Hmean") = Hmean, Named("Evar") = Evar) ;
 }
 
 // [[Rcpp::export]]
@@ -164,16 +162,8 @@ int GetNumTips(SEXP treePointer) {
 
 // [[Rcpp::export]]
 
-uvec GetPredObsOrder(SEXP treePointer) {
+Eigen::VectorXi GetPredObsOrder(SEXP treePointer) {
   XPtr<AugTree> pointedTree(treePointer) ; // Becomes a regular pointer again.
   uvec value = pointedTree->GetObsOrderForHpredMat() ;
-  return value ;
-}
-
-// [[Rcpp::export]]
-
-umat GetHmatPos(SEXP treePointer) {
-  XPtr<AugTree> pointedTree(treePointer) ; // Becomes a regular pointer again.
-  uvec value = pointedTree->GetHmatPos() ;
   return value ;
 }

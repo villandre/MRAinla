@@ -53,38 +53,6 @@ sp_mat createBlockMatrix(std::vector<mat *> listOfMatrices) {
   return X ;
 }
 
-uvec extractBlockIndices(const sp_mat & symmSparseMatrix) {
-  std::vector<unsigned int> blockIndices ;
-  blockIndices.push_back(0) ;
-
-  int posNextBlock = 0 ;
-  int newPosNextBlock = 0 ;
-
-  while (posNextBlock < symmSparseMatrix.n_cols) {
-    // printf("Processing block starting at %i ... \n", posNextBlock) ;
-    newPosNextBlock = posNextBlock + 1 ;
-    for (int i = posNextBlock; i < newPosNextBlock; i++) {
-      vec myCol = vec(symmSparseMatrix.col(i)) ;
-
-      uvec nonZeroElements = arma::find(myCol) ;
-      bool nonZeroCheck = false ;
-      int lastNonZero = myCol.size()-1 ;
-      for (auto & i : myCol.reverse()) {
-        if (i > 0)
-      }
-
-      int lastNonZero = nonZeroElements.tail(1)(0) ;
-      if ((lastNonZero + 1) > newPosNextBlock) {
-        newPosNextBlock = lastNonZero + 1;
-        // printf("Moving bound to %i... \n", newPosNextBlock) ;
-      }
-    }
-    posNextBlock = newPosNextBlock ;
-    blockIndices.push_back(posNextBlock) ;
-  }
-  return conv_to<uvec>::from(blockIndices) ;
-}
-
 double logNormPDF(const vec & x, const vec & mu, const vec & sd) {
   double logValue = 0;
   for (unsigned int i = 0 ; i < x.size() ; i++) {
@@ -127,7 +95,7 @@ double maternCov(const double & distance, const double & rho,
 }
 
 double logDetBlockMatrix(const sp_mat & blockMatrix, const uvec & blockIndices) {
-  // uvec blockIndices = extractBlockIndices(blockMatrix) ;
+
   double logDeterminant = 0 ;
   for (unsigned int i = 0 ; i < (blockIndices.size() - 1) ; i++) {
     double value = 0 ;
@@ -142,7 +110,7 @@ double logDetBlockMatrix(const sp_mat & blockMatrix, const uvec & blockIndices) 
   return logDeterminant ;
 }
 
-Eigen::Matrix<bool, Eigen::Dynamic, 1> find(const Eigen::Ref<const Eigen::Matrix<bool, Eigen::Dynamic, 1>> & logicalVector) {
+Eigen::VectorXi find(const Eigen::Ref<const Eigen::Matrix<bool, Eigen::Dynamic, 1>> & logicalVector) {
   Eigen::VectorXi outputVec(logicalVector.size()) ;
   uint index = 0 ;
   for (uint i = 0 ; i < logicalVector.size(); i++) {

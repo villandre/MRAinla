@@ -121,8 +121,12 @@ void AugTree::createLevels(TreeNode * parent, const uint & numObsForTimeSplit, c
       subVector(innerIndex) = subColumn(elementsInChild(innerIndex)) ;
     }
     double colMedian = median(subVector) ;
-    vec updatedLongitude{childDimensions.at(currentChildIndices(j)).longitude(0), colMedian} ;
-    vec newChildLongitude{colMedian, childDimensions.at(currentChildIndices(j)).longitude(1)} ;
+    vec updatedLongitude(2) ;
+    updatedLongitude(0) = childDimensions.at(currentChildIndices(j)).longitude(0) ;
+    updatedLongitude(1) = colMedian ;
+    vec newChildLongitude(2) ;
+    newChildLongitude(0) = colMedian ;
+    newChildLongitude(1) = childDimensions.at(currentChildIndices(j)).longitude(1) ;
     dimensions newDimensions = childDimensions.at(currentChildIndices(j)) ;
     newDimensions.longitude = newChildLongitude ;
     childDimensions.push_back(newDimensions) ;
@@ -143,8 +147,12 @@ void AugTree::createLevels(TreeNode * parent, const uint & numObsForTimeSplit, c
     vec subColumn = perm * column ;
     uvec elementsInChild = find(childMembership == currentChildIndices(j)) ;
     double colMedian = median(elem(subColumn, elementsInChild)) ;
-    vec updatedLatitude{childDimensions.at(currentChildIndices(j)).latitude(0), colMedian} ;
-    vec newChildLatitude{colMedian, childDimensions.at(currentChildIndices(j)).latitude(1)} ;
+    vec updatedLatitude(2) ;
+    updatedLatitude(0) = childDimensions.at(currentChildIndices(j)).latitude(0);
+    updatedLatitude(1) = colMedian ;
+    vec newChildLatitude(2) ;
+    newChildLatitude(0) = colMedian ;
+    newChildLatitude(1) = childDimensions.at(currentChildIndices(j)).latitude(1) ;
     dimensions newDimensions = childDimensions.at(currentChildIndices(j)) ;
     newDimensions.latitude = newChildLatitude ;
     childDimensions.push_back(newDimensions) ;
@@ -163,12 +171,22 @@ void AugTree::createLevels(TreeNode * parent, const uint & numObsForTimeSplit, c
       vec time = perm * m_dataset.timeCoords ;
       uvec elementsInChild = find(childMembership == currentChildIndices(j)) ;
       vec elementsForMedian = elem(time, elementsInChild) ;
-      uvec uniqueTimeValues = find_unique<double>(elementsForMedian) ;
+      // vec uniqueTimeValues = get_unique<double>(elementsForMedian) ;
+      bool onlyOneTimePoint = true;
+      uint innerIndex = 1 ;
+      while(onlyOneTimePoint) {
+        onlyOneTimePoint = (elementsForMedian(innerIndex) == elementsForMedian(0)) ;
+        innerIndex += 1 ;
+      }
 
-      if (uniqueTimeValues.size() > 1) {
+      if (!onlyOneTimePoint) {
         double colMedian = median(elementsForMedian) ;
-        vec updatedTime{childDimensions.at(currentChildIndices(j)).time(0), colMedian} ;
-        vec newChildTime{colMedian, childDimensions.at(currentChildIndices(j)).time(1)} ;
+        vec updatedTime(2) ;
+        updatedTime(0)  = childDimensions.at(currentChildIndices(j)).time(0) ;
+        updatedTime(1) = colMedian ;
+        vec newChildTime(2) ;
+        newChildTime(0) = colMedian ;
+        newChildTime(1) = childDimensions.at(currentChildIndices(j)).time(1) ;
         dimensions newDimensions = childDimensions.at(currentChildIndices(j)) ;
         newDimensions.time = newChildTime ;
         childDimensions.push_back(newDimensions) ;
@@ -703,35 +721,6 @@ void AugTree::ComputeLogJointPsiMarginal() {
   // printf("Joint value: %.4e \n \n", m_logJointPsiMarginal) ;
 }
 
-// uvec AugTree::extractBlockIndicesFromLowerRight(const sp_mat & symmSparseMatrix) {
-//   std::vector<uint> blockIndices ;
-//   blockIndices.push_back(symmSparseMatrix.rows()) ; // We start by adding a bound on the right, although other points in the vector correspond to upper-left corners.
-//   int index = symmSparseMatrix.rows() - 2 ;
-//   uint lowerBoundary = symmSparseMatrix.rows() - 1 ;
-//   uvec nonZeros ;
-//   // if (any((vec(symmSparseMatrix.diagonal()) <= 0) & (vec(symmSparseMatrix.diagonal()) >= 0)) {
-//   //   throw Rcpp::exception("Full conditional has an element with 0 variance! \n") ;
-//   // }
-//   // We start the search for blocks in the lower right corner.
-//   // We only do a search in columns because the Q matrix is symmetrical. Hence a search on rows would always yield
-//   // the same result.
-//   do {
-//     nonZeros = find(vec(symmSparseMatrix(index, index, size(symmSparseMatrix.rows() - index , 1)))) ;
-//     if ((nonZeros.size() == 1)) { // We have entered a new block, this element has to be on the diagonal.
-//       blockIndices.push_back(index+1) ;
-//       lowerBoundary = index ;
-//     }
-//     index = index - 1 ;
-//   } while (((nonZeros.maxCoeff() + index + 1) <= lowerBoundary) & (index >= 0)) ;
-//   int lastIndex = index + 2;
-//   if (index < 0) {
-//     lastIndex = 0 ;
-//   }
-//   blockIndices.push_back(lastIndex) ; // The last block will not be added in the loop, hence this step.
-//   std::sort(blockIndices.begin(), blockIndices.end()) ;
-//   return uvec(blockIndices.data()) ;
-// }
-
 void AugTree::ComputeHpred(const mat & spCoords, const vec & time, const mat & covariateMatrix) {
 
   // SetPredictData(spCoords, time, covariateMatrix) ;
@@ -751,16 +740,16 @@ void AugTree::ComputeHpred(const mat & spCoords, const vec & time, const mat & c
   }
 }
 
-vec AugTree::ComputeEvar(const sp_mat & HmatPred, const int batchSize) {
+vec AugTree::ComputeEvar(const int batchSize) {
 
   double errorVar = std::pow(m_errorSD, 2) ;
-  vec EvarValues = vec::Zero(HmatPred.rows()) ;
+  vec EvarValues = vec::Zero(m_HmatPred.rows()) ;
   int obsIndex = 0 ;
 
-  while (obsIndex < HmatPred.rows()) {
+  while (obsIndex < m_HmatPred.rows()) {
 
-    int newObsIndex = std::min(obsIndex + batchSize - 1, int(HmatPred.rows()) - 1) ;
-    mat bVecTrans = HmatPred.block(obsIndex, 0, newObsIndex - obsIndex + 1, HmatPred.cols()).transpose() ;
+    int newObsIndex = std::min(obsIndex + batchSize - 1, int(m_HmatPred.rows()) - 1) ;
+    mat bVecTrans = m_HmatPred.block(obsIndex, 0, newObsIndex - obsIndex + 1, m_HmatPred.cols()).transpose() ;
     mat meanValue = m_FullCondPrecisionChol.solve(bVecTrans) ;
     EvarValues.segment(obsIndex, newObsIndex - obsIndex + 1) = meanValue.colwise().sum().transpose() + errorVar * mat::Ones(newObsIndex - obsIndex + 1, 1) ;
 

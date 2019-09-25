@@ -13,14 +13,14 @@ struct Spatiotemprange{
 
 // To prevent multiple definitions, I DECLARE the function in the header only. I then define them
 // in the cpp file.
-Spatiotemprange sptimeDistance(const Eigen::VectorXf & spCoor1, const double & time1, const Eigen::VectorXf & spCoor2,
+Spatiotemprange sptimeDistance(const Eigen::VectorXd & spCoor1, const double & time1, const Eigen::VectorXd & spCoor2,
                                const double & time2) ;
 
 Eigen::SparseMatrix<double> createBlockMatrix(std::vector<Eigen::MatrixXd *>) ;
-Eigen::VectorXi extractBlockIndices(const Eigen::SparseMatrix<double> &) ;
+
 double logDetBlockMatrix(const Eigen::SparseMatrix<double> &, const Eigen::VectorXi &) ;
 Eigen::SparseMatrix<double> invertSymmBlockDiag(const Eigen::SparseMatrix<double> &, const Eigen::VectorXi &) ;
-double logNormPDF(const Eigen::VectorXf &, const Eigen::VectorXf &, const Eigen::VectorXf &) ;
+double logNormPDF(const Eigen::VectorXd &, const Eigen::VectorXd &, const Eigen::VectorXd &) ;
 double maternCov(const double &, const double &, const double &, const double &, const double &) ;
 // Inlining the function solves the linking issue I encountered. As it turns out, templated functions
 // must be defined in the header. A simple declaration will lead to a linking error.
@@ -86,15 +86,16 @@ Eigen::Matrix<bool, Eigen::Dynamic, 1> operator>(const Eigen::MatrixBase<Derived
   return container ;
 }
 
-Eigen::Matrix<bool, Eigen::Dynamic, 1> find(const Eigen::Ref<const Eigen::Matrix<bool, Eigen::Dynamic, 1>> &) ;
-
-template<typename T>
-Eigen::Matrix<T, Eigen::Dynamic, 1> find_unique(const Eigen::Ref<const Eigen::Matrix<T, Eigen::Dynamic, 1>>& aVector) {
-  std::vector<T> typecastVec(aVector.data(), aVector.data() + aVector.size()) ;
-  auto lastElement = std::unique(typecastVec.begin(), typecastVec.end()) ;
-  typecastVec.erase(lastElement, typecastVec.end()) ;
-  return Eigen::Matrix<T, Eigen::Dynamic, 1>(typecastVec.data()) ;
+template<typename Derived>
+Eigen::Matrix<bool, Eigen::Dynamic, 1> operator<=(const Eigen::MatrixBase<Derived> & aVector, const uint aConstant) {
+  Eigen::Matrix<bool, Eigen::Dynamic, 1> container(aVector.size()) ;
+  for (uint i = 0; i < aVector.size(); i++) {
+    container(i) = aVector(i) <= aConstant ;
+  }
+  return container ;
 }
+
+Eigen::VectorXi find(const Eigen::Ref<const Eigen::Matrix<bool, Eigen::Dynamic, 1>> &) ;
 
 template<typename Derived>
 Eigen::Matrix<typename Derived::Scalar, Eigen::Dynamic, Eigen::Dynamic> join_rows(const Eigen::MatrixBase<Derived> & mat1, const Eigen::MatrixBase<Derived> & mat2) {

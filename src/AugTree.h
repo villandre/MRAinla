@@ -53,7 +53,7 @@ public:
   inputdata GetDataset() {return m_dataset;}
   int GetNumTips() {return m_numTips ;}
   int GetNumKnots() {return m_numKnots ;}
-  // vec GetCovParameters() {return m_covParameters ;}
+  sp_mat GetHmatPred() {return m_HmatPred ;}
 
   int GetM() { return m_M ;}
   double GetLogJointPsiMarginal() { return m_logJointPsiMarginal ;}
@@ -117,7 +117,7 @@ public:
   vec GetFullCondSDs() { return m_FullCondSDs ;}
 
   void ComputeHpred(const mat &, const vec &, const mat &) ;
-  vec ComputeEvar(const sp_mat &, const int) ;
+  vec ComputeEvar(const int) ;
 
   ~ AugTree() {
     deallocate_container(m_vertexVector) ;
@@ -240,9 +240,7 @@ private:
   void updateHmatrixPred() ;
   vec optimJointHyperMarg(const vec &, const double, const double, const double, const double) ;
   double logDeterminantQmat() ;
-  // uvec extractBlockIndicesFromLowerRight(const sp_mat &) ;
-  // void invFromDecomposition(const sp_mat &, const sp_mat &, const sp_mat &, sp_mat *,
-  //                                const uvec &) ;
+
   double logDeterminantFullConditional() ;
   vec ComputeFullConditionalMean(const vec &) ;
   template <typename MatrixType>

@@ -47,13 +47,13 @@ struct maternVec{
 };
 
 struct spatialcoor {
-  Eigen::MatrixXd spatialCoords = Eigen::MatrixXd(1, 2) ;
-  Eigen::VectorXd timeCoords = Eigen::VectorXd(1) ;
+  Eigen::ArrayXd spatialCoords = Eigen::MatrixXd(1, 2) ;
+  Eigen::ArrayXd timeCoords = Eigen::VectorXd(1) ;
 
   spatialcoor() { } ;
-  spatialcoor(Eigen::MatrixXd f_sp, Eigen::VectorXd f_time) : spatialCoords(f_sp), timeCoords(f_time) { } ;
+  spatialcoor(Eigen::ArrayXd f_sp, Eigen::ArrayXd f_time) : spatialCoords(f_sp), timeCoords(f_time) { } ;
 
-  spatialcoor subset(uvec & indices)  const {
+  spatialcoor subset(Eigen::ArrayXi & indices)  const {
     Eigen::PermutationMatrix<Eigen::Dynamic, Eigen::Dynamic> perm(indices) ;
     Eigen::MatrixXd subSpatialCoords = perm * spatialCoords ;
     Eigen::VectorXd subTimeCoords = perm * timeCoords ;

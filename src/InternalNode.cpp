@@ -9,7 +9,7 @@ void InternalNode::RemoveChild(TreeNode * childToRemove)
   auto ChildIterPos = std::find(m_children.begin(), m_children.end(), childToRemove) ;
   if (ChildIterPos == m_children.end())
   {
-    cerr << "Warning: Trying to remove a child that was not found! \n" ;
+    Rcpp::warning("Warning: Trying to remove a child that was not found! \n") ;
   }
   else
   {
@@ -27,37 +27,36 @@ void InternalNode::genRandomKnots(spatialcoor & dataCoor, const uint & numKnots,
       b[i] = (double) i;
     }
 
-    uvec aConverted(numKnots, fill::zeros) ;
+    uvec aConverted = uvec::Zero(numKnots) ;
 
     gsl_ran_choose(RNG, a, numKnots, b, dataCoor.timeCoords.size(), sizeof (double));
 
     for (uint i = 0 ; i < numKnots ; i++) {
       aConverted(i) = a[i] ;
     }
+    PermutationMatrix<Dynamic> perm(aConverted) ;
+    mat jitteredSpace = perm * dataCoor.spatialCoords ;
+    vec jitteredTime = elem(dataCoor.timeCoords, aConverted) ;
 
-    Eigen::PermutationMatrix perm(aConverted) ;
-    mat jitteredSpace = perm * dataCoor.spatialCoords  ;
-    vec jitteredTime = perm * timeCoords ;
-
-    for (auto & i : jitteredSpace) {
-      i  += gsl_ran_gaussian(RNG, 0.0001) ;
+    for (uint i = 0; i < jitteredSpace.size(); i++) {
+      jitteredSpace(i) += gsl_ran_gaussian(RNG, 0.0001) ;
     }
 
-    for(auto & i : jitteredTime) {
-      i += gsl_ran_gaussian(RNG, 0.0001) ;
+    for (uint i = 0; i < jitteredTime.size(); i++) {
+      jitteredTime(i) += gsl_ran_gaussian(RNG, 0.0001) ;
     }
     m_knotsCoor = spatialcoor(jitteredSpace, jitteredTime) ;
   } else {
-    mat knotsSp(numKnots, 2, fill::zeros) ;
+    mat knotsSp = mat::Zero(numKnots, 2) ;
 
-    float minLon = min(m_dimensions.longitude) ;
-    float maxLon = max(m_dimensions.longitude) ;
+    double minLon = m_dimensions.longitude.minCoeff() ;
+    double maxLon = m_dimensions.longitude.maxCoeff() ;
 
-    float minLat = min(m_dimensions.latitude) ;
-    float maxLat = max(m_dimensions.latitude) ;
+    double minLat = m_dimensions.latitude.minCoeff() ;
+    double maxLat = m_dimensions.latitude.maxCoeff() ;
 
-    float minTime = min(m_dimensions.time) ;
-    float maxTime = max(m_dimensions.time) ;
+    double minTime = m_dimensions.time.minCoeff() ;
+    double maxTime = m_dimensions.time.maxCoeff() ;
 
     vec time(numKnots) ;
 
@@ -90,8 +89,8 @@ void InternalNode::DeriveAtilde() {
 
   for (uint k = 0; k <= m_depth ; k++) {
     for (uint l = 0; l <= k ; l++) {
-      mat containerMat(m_children.at(0)->GetAtildeList(k, l).n_rows,
-                           m_children.at(0)->GetAtildeList(k, l).n_cols, fill::zeros) ;
+      mat containerMat = mat::Zero(m_children.at(0)->GetAtildeList(k, l).rows(),
+                           m_children.at(0)->GetAtildeList(k, l).cols()) ;
 
       for (auto & i : m_children) {
         containerMat += i->GetAtildeList(k,l) ;
@@ -116,10 +115,8 @@ void InternalNode::DeriveAtilde() {
 }
 
 void InternalNode::DeriveOmega(const vec & responseValues) {
-  vec containerVec ;
   for (uint k = 0; k <= m_depth ; k++) {
-    containerVec.set_size(m_children.at(0)->GetOmegaTilde(k).size()) ;
-    containerVec.fill(0) ;
+    vec containerVec = vec::Zero(m_children.at(0)->GetOmegaTilde(k).size()) ;
 
     for (auto & i: m_children) {
       containerVec += i->GetOmegaTilde(k) ;
@@ -144,24 +141,14 @@ void InternalNode::DeriveU(const vec & responseValues) {
 }
 
 void::InternalNode::DeriveD() {
-  double value = 0 ;
-  double sign = 0 ;
-  log_det(value, sign, m_KtildeInverse) ; // Function is supposed to update value and sign in place.
-  // sign is supposed to be positive, since a negative determinant would indicate negative variance!
-  if (sign < 0) {
-    throw Rcpp::exception("Precision matrix KtildeInverse cannot have negative determinant. \n") ;
-  }
+
+  double value = m_KtildeInverse.colPivHouseholderQr().logAbsDeterminant() ;
+
   m_d = value ;
-  log_det(value, sign, GetKmatrixInverse()) ;
-  if (sign < 0) {
-    throw Rcpp::exception("Precision matrix Kinverse cannot have negative determinant. \n") ;
-  }
-  m_d = m_d - value ;
+  double otherValue = GetKmatrixInverse().colPivHouseholderQr().logAbsDeterminant() ;
+  m_d = m_d - otherValue ;
   double thirdTerm = 0 ;
-  // thirdTerm = std::accumulate(m_children.begin(), m_children.end(), thirdTerm,
-  //                              [](double a, TreeNode * b) {
-  //                                return a + b->GetD();
-  //                              }) ;
+
   for (auto & i : m_children) {
     thirdTerm += i->GetD() ;
   }

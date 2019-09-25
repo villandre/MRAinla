@@ -55,7 +55,7 @@ BEGIN_RCPP
 END_RCPP
 }
 // GetFullCondMean
-vec GetFullCondMean(SEXP treePointer);
+Eigen::VectorXd GetFullCondMean(SEXP treePointer);
 RcppExport SEXP _MRAinla_GetFullCondMean(SEXP treePointerSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
@@ -66,7 +66,7 @@ BEGIN_RCPP
 END_RCPP
 }
 // GetFullCondSDs
-vec GetFullCondSDs(SEXP treePointer);
+Eigen::VectorXd GetFullCondSDs(SEXP treePointer);
 RcppExport SEXP _MRAinla_GetFullCondSDs(SEXP treePointerSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
@@ -103,24 +103,13 @@ BEGIN_RCPP
 END_RCPP
 }
 // GetPredObsOrder
-uvec GetPredObsOrder(SEXP treePointer);
+Eigen::VectorXi GetPredObsOrder(SEXP treePointer);
 RcppExport SEXP _MRAinla_GetPredObsOrder(SEXP treePointerSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
     Rcpp::traits::input_parameter< SEXP >::type treePointer(treePointerSEXP);
     rcpp_result_gen = Rcpp::wrap(GetPredObsOrder(treePointer));
-    return rcpp_result_gen;
-END_RCPP
-}
-// GetHmatPos
-umat GetHmatPos(SEXP treePointer);
-RcppExport SEXP _MRAinla_GetHmatPos(SEXP treePointerSEXP) {
-BEGIN_RCPP
-    Rcpp::RObject rcpp_result_gen;
-    Rcpp::RNGScope rcpp_rngScope_gen;
-    Rcpp::traits::input_parameter< SEXP >::type treePointer(treePointerSEXP);
-    rcpp_result_gen = Rcpp::wrap(GetHmatPos(treePointer));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -133,7 +122,6 @@ static const R_CallMethodDef CallEntries[] = {
     {"_MRAinla_ComputeCondPredStats", (DL_FUNC) &_MRAinla_ComputeCondPredStats, 5},
     {"_MRAinla_GetNumTips", (DL_FUNC) &_MRAinla_GetNumTips, 1},
     {"_MRAinla_GetPredObsOrder", (DL_FUNC) &_MRAinla_GetPredObsOrder, 1},
-    {"_MRAinla_GetHmatPos", (DL_FUNC) &_MRAinla_GetHmatPos, 1},
     {NULL, NULL, 0}
 };
 
