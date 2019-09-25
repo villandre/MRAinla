@@ -30,10 +30,10 @@ template <typename T> inline void deallocate_container(T& c) {
     delete *i;
 };
 
-template <typename T>
-Eigen::Matrix<T, Eigen::Dynamic, 1> rep(const Eigen::Matrix<T, Eigen::Dynamic, 1> & x, const uint times) {
-  Eigen::Matrix<T, Eigen::Dynamic, 1> container(x.size() * times) ;
-  index = 0 ;
+template <typename Derived>
+Eigen::Matrix<typename Derived::Scalar, Eigen::Dynamic, 1> rep(const Eigen::MatrixBase<Derived> & x, const uint times) {
+  Eigen::Matrix<typename Derived::Scalar, Eigen::Dynamic, 1> container(x.size() * times, 1) ;
+  uint index = 0 ;
   for (uint i = 0 ; i < times ; i++) {
     container.segment(index, index + x.size()) = x ;
     index += x.size() ;
@@ -42,11 +42,12 @@ Eigen::Matrix<T, Eigen::Dynamic, 1> rep(const Eigen::Matrix<T, Eigen::Dynamic, 1
 }
 
 template <typename Derived>
-Eigen::MatrixBase<Derived> rep_each(const Eigen::MatrixBase<Derived> & x, const uint times) {
-  Eigen::MatrixBase<Derived> container(x.size() * times, 1) ; // double is the most general type. Will
+Eigen::Matrix<typename Derived::Scalar, Eigen::Dynamic, 1> rep_each(const Eigen::MatrixBase<Derived> & x, const uint times) {
+  Eigen::Matrix<typename Derived::Scalar, Eigen::Dynamic, 1> container(x.size() * times, 1) ; // double is the most general type. Will
   int index = 0 ;
-  for (auto & i : x) {
-    container.segment(index, times) = x ;
+  for (uint i = 0 ; i < x.size(); i++) {
+    container.segment(index, times) = x(i, 1) * Eigen::MatrixBase<Derived>::Ones(times, 1) ;
+    index += times ;
   }
   return container ;
 }
@@ -56,7 +57,7 @@ Eigen::Matrix<bool, Eigen::Dynamic, 1> operator==(const Eigen::Ref<const Eigen::
 template<typename Derived>
 double median(const Eigen::MatrixBase<Derived> & EigenVec) {
   Eigen::MatrixBase<Derived> VecCopy = EigenVec ;
-  std::sort(VecCopy.data(), VecCopy.data() + VecCopy.size()) ; // This sorts the vector is descending order, but it doesn't matter for the median!
+  std::sort(&VecCopy(0), &VecCopy(0) + VecCopy.size()) ; // This sorts the vector is descending order, but it doesn't matter for the median!
   double output ;
   int lowerIndex = std::floor(double(VecCopy.size())/2) ;
   if ((VecCopy.size() % 2) == 1) {
@@ -68,10 +69,10 @@ double median(const Eigen::MatrixBase<Derived> & EigenVec) {
 }
 
 template<typename Derived>
-Eigen::MatrixBase<Derived> elem(const Eigen::MatrixBase<Derived> & vector, const Eigen::Ref<const Eigen::VectorXi> & indices) {
-  Eigen::MatrixBase<Derived> subVector(indices.size()) ;
+Eigen::Matrix<typename Derived::Scalar, Eigen::Dynamic, 1> elem(const Eigen::MatrixBase<Derived> & vector, const Eigen::Ref<const Eigen::VectorXi> & indices) {
+  Eigen::Matrix<typename Derived::Scalar, Eigen::Dynamic, 1> subVector(indices.size(), 1) ;
   for (uint i = 0; i < indices.size(); i++) {
-    subVector(i) = vector(indices(i)) ;
+    subVector(i, 1) = vector(indices(i)) ;
   }
   return subVector ;
 }
@@ -86,5 +87,34 @@ Eigen::Matrix<bool, Eigen::Dynamic, 1> operator>(const Eigen::MatrixBase<Derived
 }
 
 Eigen::Matrix<bool, Eigen::Dynamic, 1> find(const Eigen::Ref<const Eigen::Matrix<bool, Eigen::Dynamic, 1>> &) ;
+
+template<typename T>
+Eigen::Matrix<T, Eigen::Dynamic, 1> find_unique(const Eigen::Ref<const Eigen::Matrix<T, Eigen::Dynamic, 1>>& aVector) {
+  std::vector<T> typecastVec(aVector.data(), aVector.data() + aVector.size()) ;
+  auto lastElement = std::unique(typecastVec.begin(), typecastVec.end()) ;
+  typecastVec.erase(lastElement, typecastVec.end()) ;
+  return Eigen::Matrix<T, Eigen::Dynamic, 1>(typecastVec.data()) ;
+}
+
+template<typename Derived>
+Eigen::Matrix<typename Derived::Scalar, Eigen::Dynamic, Eigen::Dynamic> join_rows(const Eigen::MatrixBase<Derived> & mat1, const Eigen::MatrixBase<Derived> & mat2) {
+  if (mat1.rows() != mat2.rows()) {
+    throw Rcpp::exception("Error in join_rows: Numbers of rows do not match! \n") ;
+  }
+  Eigen::Matrix<typename Derived::Scalar, Eigen::Dynamic, Eigen::Dynamic> C(mat1.rows(), mat1.cols() + mat2.cols()) ;
+  C << mat1, mat2 ;
+  return C ;
+}
+
+template<typename Derived>
+Eigen::Matrix<typename Derived::Scalar, Eigen::Dynamic, Eigen::Dynamic> join_cols(const Eigen::MatrixBase<Derived> & mat1, const Eigen::MatrixBase<Derived> & mat2) {
+  if (mat1.cols() != mat2.cols()) {
+    throw Rcpp::exception("Error in join_cols: Numbers of columns do not match! \n") ;
+  }
+  Eigen::Matrix<typename Derived::Scalar, Eigen::Dynamic, Eigen::Dynamic> C(mat1.rows() + mat2.rows(), mat1.cols()) ;
+  C << mat1,
+       mat2 ; // For readability only.
+  return C ;
+}
 
 #endif /* HELPER_H */

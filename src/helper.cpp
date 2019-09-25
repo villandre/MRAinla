@@ -38,10 +38,11 @@ sp_mat createBlockMatrix(std::vector<mat *> listOfMatrices) {
   std::vector<Triplet> tripletList;
 
   int offset = 0 ;
+
   for (auto & aMatrix : listOfMatrices) {
-    for (uint j = 0; j < aMatrix->cols(); j++) {
-      for (uint i = 0; i < aMatrix->rows() ; i++) {
-        tripletList.push_back(Triplet(i,j,(*aMatrix(i + offset,j + offset)))) ;
+    for (uint i = 0; i < aMatrix->rows() ; i++) {
+      for (uint j = 0; j <= aMatrix->cols(); j++) {
+        tripletList.push_back(Triplet(i, j, (*aMatrix(i + offset,j + offset)))) ;
       }
     }
     offset += aMatrix->rows() ;
@@ -160,3 +161,5 @@ Eigen::Matrix<bool, Eigen::Dynamic, 1> operator==(const Eigen::Ref<const Eigen::
   }
   return container ;
 }
+
+

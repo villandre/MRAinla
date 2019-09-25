@@ -106,9 +106,9 @@ public:
 
   void CleanPredictionComponents() ;
 
-  void createHmatrixPredPos() ;
-  sp_mat CreateSigmaBetaEtaInvMat() ;
-  sp_mat UpdateSigmaBetaEtaInvMat() ;
+  void createHmatrixPred() ;
+  void CreateSigmaBetaEtaInvMat() ;
+  void UpdateSigmaBetaEtaInvMat() ;
   sp_mat createQ() ;
 
   void ComputeLogJointPsiMarginal() ;
@@ -116,7 +116,7 @@ public:
   vec GetFullCondMean() { return m_FullCondMean ;}
   vec GetFullCondSDs() { return m_FullCondSDs ;}
 
-  sp_mat ComputeHpred(const mat &, const vec &, const mat &) ;
+  void ComputeHpred(const mat &, const vec &, const mat &) ;
   vec ComputeEvar(const sp_mat &, const int) ;
 
   ~ AugTree() {
@@ -154,7 +154,6 @@ private:
 
   // The next few members are to improve computational efficiency
   uvec m_DmatrixBlockIndices ;
-  uvec m_SigmaFEandEtaInvBlockIndices ;
 
   int m_M{ 0 } ;
   int m_numTips{ 0 } ;
@@ -217,10 +216,11 @@ private:
   vec m_MRAvalues ;
   vec m_FullCondMean ;
   vec m_FullCondSDs ;
-  sp_mat m_FullCondPrecisionChol ;
+  Eigen::SimplicialLDLT<Eigen::SparseMatrix<double>> m_FullCondPrecisionChol ;
   sp_mat m_Hmat ;
+  sp_mat m_FEinvAndKinvMatrices ;
   sp_mat m_HmatPred ;
-
+  sp_mat m_SigmaFEandEtaInv ;
   bool m_recordFullConditional{ false } ;
   bool m_GammaParasSet{ false } ;
 
@@ -235,12 +235,12 @@ private:
     return KmatrixList ;
   }
 
-  void createHmatrixPos() ;
+  void createHmatrix() ;
   void updateHmatrix() ;
   void updateHmatrixPred() ;
   vec optimJointHyperMarg(const vec &, const double, const double, const double, const double) ;
   double logDeterminantQmat() ;
-  uvec extractBlockIndicesFromLowerRight(const sp_mat &) ;
+  // uvec extractBlockIndicesFromLowerRight(const sp_mat &) ;
   // void invFromDecomposition(const sp_mat &, const sp_mat &, const sp_mat &, sp_mat *,
   //                                const uvec &) ;
   double logDeterminantFullConditional() ;
