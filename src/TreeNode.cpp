@@ -8,13 +8,13 @@ using namespace MRAinla ;
 using namespace std ;
 
 uvec TreeNode::deriveObsInNode(const spatialcoor & dataset) {
-  Eigen::Array<bool, Dynamic, 1> lonCheck = (dataset.spatialCoords.col(0) > m_dimensions.longitude.minCoeff()) %
+  Eigen::Array<bool, Dynamic, 1> lonCheck = (dataset.spatialCoords.col(0) > m_dimensions.longitude.minCoeff()) *
     (dataset.spatialCoords.col(0) <= m_dimensions.longitude.maxCoeff()) ; // Longitude check
-  uvec latCheck = (dataset.spatialCoords.col(1) > m_dimensions.latitude.minCoeff()) %
+  Eigen::Array<bool, Dynamic, 1> latCheck = (dataset.spatialCoords.col(1) > m_dimensions.latitude.minCoeff()) *
     (dataset.spatialCoords.col(1) <= m_dimensions.latitude.maxCoeff()) ; // Latitude check
-  uvec timeCheck = (dataset.timeCoords > m_dimensions.time.minCoeff()) %
+  Eigen::Array<bool, Dynamic, 1> timeCheck = (dataset.timeCoords > m_dimensions.time.minCoeff()) *
     (dataset.timeCoords <= m_dimensions.time.maxCoeff()) ; // Time check
-  return find(lonCheck % latCheck % timeCheck) ; // find is equivalent to which in R
+  return find(lonCheck * latCheck * timeCheck).matrix() ; // find is equivalent to which in R
 }
 
 // We assume a squared exponential decay function with sigma^2 = 1
@@ -61,7 +61,7 @@ void TreeNode::baseComputeWmat(const maternVec & covParasSp, const maternVec & c
         brickList.at(k)->GetKmatrix() *
         brickList.at(l)->GetWlist().at(k).transpose() ;
       } else {
-        secondMat += m_Wlist.at(m_depth).selfadjointView() *
+        secondMat += m_Wlist.at(m_depth) *
           brickList.at(k)->GetKmatrix() *
           brickList.at(l)->GetWlist().at(k).transpose() ;
       }
@@ -93,12 +93,12 @@ std::vector<TreeNode *> TreeNode::getAncestors() {
 
 mat TreeNode::computeCovMat(const spatialcoor & spTime1, const spatialcoor & spTime2, const maternVec & covParasSp, const maternVec & covParasTime, const double & scaling, const bool matern, const double & spaceNuggetSD, const double & timeNuggetSD) {
 
-  mat covMat(spTime1.timeCoords.size(), spTime2.timeCoords.size(), fill::zeros) ;
+  mat covMat = mat::Zero(spTime1.timeCoords.size(), spTime2.timeCoords.size()) ;
   for (uint rowIndex = 0; rowIndex < spTime1.timeCoords.size() ; rowIndex++) {
     for (uint colIndex = 0; colIndex < spTime2.timeCoords.size() ; colIndex++) {
-      vec space1 = conv_to<vec>::from(spTime1.spatialCoords.row(rowIndex)) ;
+      vec space1 = spTime1.spatialCoords.row(rowIndex) ;
       double time1 = spTime1.timeCoords(rowIndex) ;
-      vec space2 = conv_to<vec>::from(spTime2.spatialCoords.row(colIndex)) ;
+      vec space2 = spTime2.spatialCoords.row(colIndex) ;
       double time2 = spTime2.timeCoords(colIndex) ;
 
       Spatiotemprange rangeValue = sptimeDistance(space1, time1, space2, time2) ;

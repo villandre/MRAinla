@@ -47,16 +47,16 @@ struct maternVec{
 };
 
 struct spatialcoor {
-  Eigen::ArrayXd spatialCoords = Eigen::MatrixXd(1, 2) ;
-  Eigen::ArrayXd timeCoords = Eigen::VectorXd(1) ;
+  Eigen::ArrayXXd spatialCoords = Eigen::ArrayXXd(1, 2) ;
+  Eigen::ArrayXd timeCoords = Eigen::ArrayXd(1) ;
 
   spatialcoor() { } ;
-  spatialcoor(Eigen::ArrayXd f_sp, Eigen::ArrayXd f_time) : spatialCoords(f_sp), timeCoords(f_time) { } ;
+  spatialcoor(Eigen::ArrayXXd f_sp, Eigen::ArrayXd f_time) : spatialCoords(f_sp), timeCoords(f_time) { } ;
 
-  spatialcoor subset(Eigen::ArrayXi & indices)  const {
-    Eigen::PermutationMatrix<Eigen::Dynamic, Eigen::Dynamic> perm(indices) ;
-    Eigen::MatrixXd subSpatialCoords = perm * spatialCoords ;
-    Eigen::VectorXd subTimeCoords = perm * timeCoords ;
+  spatialcoor subset(Eigen::VectorXi & indices)  const {
+    Eigen::PermutationMatrix<Eigen::Dynamic, Eigen::Dynamic> perm(indices.matrix()) ;
+    Eigen::ArrayXXd subSpatialCoords = perm * spatialCoords.matrix() ;
+    Eigen::ArrayXd subTimeCoords = perm * timeCoords.matrix() ;
     return spatialcoor(subSpatialCoords, subTimeCoords) ;
   };
 };
@@ -71,8 +71,8 @@ struct inputdata : public spatialcoor {
 
   inputdata subset(Eigen::VectorXi & indices)  const {
     Eigen::PermutationMatrix<Eigen::Dynamic, Eigen::Dynamic> perm(indices) ;
-    Eigen::MatrixXd subSpatialCoords = perm * spatialCoords ;
-    Eigen::VectorXd subTimeCoords = perm * timeCoords ;
+    Eigen::MatrixXd subSpatialCoords = perm * spatialCoords.matrix() ;
+    Eigen::VectorXd subTimeCoords = perm * timeCoords.matrix() ;
     Eigen::VectorXd subResponseValues = perm * responseValues ;
     Eigen::MatrixXd subCovariates = perm * covariateValues ;
     return inputdata(subResponseValues, subSpatialCoords, subTimeCoords, subCovariates) ;
@@ -82,7 +82,7 @@ struct inputdata : public spatialcoor {
     Eigen::MatrixXd spatialCoordsTrans = spatialCoords.transpose() ;
     Eigen::PermutationMatrix<Eigen::Dynamic, Eigen::Dynamic> perm(indices) ;
     spatialCoords = (spatialCoordsTrans * perm).transpose() ;
-    timeCoords = perm * timeCoords ;
+    timeCoords = perm * timeCoords.matrix() ;
     Eigen::MatrixXd covariateValuesTrans = covariateValues.transpose() ;
     covariateValues = (covariateValuesTrans * perm).transpose() ;
     responseValues = perm * responseValues ;

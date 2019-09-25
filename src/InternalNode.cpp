@@ -35,8 +35,8 @@ void InternalNode::genRandomKnots(spatialcoor & dataCoor, const uint & numKnots,
       aConverted(i) = a[i] ;
     }
     PermutationMatrix<Dynamic> perm(aConverted) ;
-    mat jitteredSpace = perm * dataCoor.spatialCoords ;
-    vec jitteredTime = elem(dataCoor.timeCoords, aConverted) ;
+    mat jitteredSpace = perm * dataCoor.spatialCoords.matrix() ;
+    vec jitteredTime = elem(dataCoor.timeCoords.matrix(), aConverted) ;
 
     for (uint i = 0; i < jitteredSpace.size(); i++) {
       jitteredSpace(i) += gsl_ran_gaussian(RNG, 0.0001) ;

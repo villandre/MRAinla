@@ -89,8 +89,8 @@ public:
 
   void genRandomKnots(spatialcoor & dataCoor, const uint & numKnots, const gsl_rng * RNG) {
     Eigen::PermutationMatrix<Eigen::Dynamic, Eigen::Dynamic> perm(m_obsInNode) ;
-    m_knotsCoor = spatialcoor(perm * dataCoor.spatialCoords,
-                              perm * dataCoor.timeCoords) ;
+    m_knotsCoor = spatialcoor(perm * dataCoor.spatialCoords.matrix(),
+                              perm * dataCoor.timeCoords.matrix()) ;
   }
 
   TipNode(const dimensions & dims, const uint & depth, TreeNode * parent,

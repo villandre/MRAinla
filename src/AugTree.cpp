@@ -168,7 +168,7 @@ void AugTree::createLevels(TreeNode * parent, const uint & numObsForTimeSplit, c
     // Handling time
     currentChildIndices = uvec::LinSpaced(newChildIndex, 0, newChildIndex - 1) ;
     for (uint j = 0 ; j < currentChildIndices.size(); j++) {
-      vec time = perm * m_dataset.timeCoords ;
+      vec time = perm * m_dataset.timeCoords.matrix() ;
       uvec elementsInChild = find(childMembership == currentChildIndices(j)) ;
       vec elementsForMedian = elem(time, elementsInChild) ;
       // vec uniqueTimeValues = get_unique<double>(elementsForMedian) ;

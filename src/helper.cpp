@@ -94,21 +94,21 @@ double maternCov(const double & distance, const double & rho,
   return maternValue ;
 }
 
-double logDetBlockMatrix(const sp_mat & blockMatrix, const uvec & blockIndices) {
-
-  double logDeterminant = 0 ;
-  for (unsigned int i = 0 ; i < (blockIndices.size() - 1) ; i++) {
-    double value = 0 ;
-    double sign = 0 ;
-    unsigned int matSize = blockIndices(i+1) - blockIndices(i) ;
-    log_det(value, sign, mat(blockMatrix(blockIndices(i), blockIndices(i), size(matSize, matSize)))) ;
-    if (sign < 0) {
-      throw Rcpp::exception("Error logDetBlockMatrix: Log determinant sign should be positive. \n") ;
-    }
-    logDeterminant += value ;
-  }
-  return logDeterminant ;
-}
+// double logDetBlockMatrix(const sp_mat & blockMatrix, const uvec & blockIndices) {
+//
+//   double logDeterminant = 0 ;
+//   for (unsigned int i = 0 ; i < (blockIndices.size() - 1) ; i++) {
+//     double value = 0 ;
+//     double sign = 0 ;
+//     unsigned int matSize = blockIndices(i+1) - blockIndices(i) ;
+//     log_det(value, sign, mat(blockMatrix(blockIndices(i), blockIndices(i), size(matSize, matSize)))) ;
+//     if (sign < 0) {
+//       throw Rcpp::exception("Error logDetBlockMatrix: Log determinant sign should be positive. \n") ;
+//     }
+//     logDeterminant += value ;
+//   }
+//   return logDeterminant ;
+// }
 
 Eigen::VectorXi find(const Eigen::Ref<const Eigen::Matrix<bool, Eigen::Dynamic, 1>> & logicalVector) {
   Eigen::VectorXi outputVec(logicalVector.size()) ;
