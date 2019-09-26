@@ -92,11 +92,10 @@ void AugTree::numberNodes() {
   }
 }
 
-// In this version, we first split the latitude, then the latitude, and finally time.
+// In this version, we first split the longitude, then the latitude, and finally time.
 // We make sure that splits don't result in empty regions
 void AugTree::createLevels(TreeNode * parent, const uint & numObsForTimeSplit, const bool splitTime) {
   uvec obsForMedian = parent->GetObsInNode() ;
-  Eigen::PermutationMatrix<Dynamic, Dynamic> perm(obsForMedian) ;
   uvec childMembership = uvec::Zero(obsForMedian.size()) ;
   std::vector<dimensions> childDimensions ;
   childDimensions.push_back(parent->GetDimensions()) ;
@@ -105,58 +104,58 @@ void AugTree::createLevels(TreeNode * parent, const uint & numObsForTimeSplit, c
     throw Rcpp::exception("Cannot split empty region or region with only one observation.\n") ;
   }
 
-  uint newChildIndex = 1 ;
-
   // Handling longitude
   uvec currentChildIndices = uvec::LinSpaced(newChildIndex, 0, newChildIndex - 1) ;
   // for (auto & j : currentChildIndices) {
-  for (uint j = 0 ; j < currentChildIndices.size(); j++) {
-    uint currentChildIndex = currentChildIndices(j) ;
-    Eigen::Matrix<bool, Dynamic, 1> compareVec = childMembership == currentChildIndex ;
-    uvec elementsInChild = find(compareVec) ;
-    vec column = m_dataset.spatialCoords.col(0) ;
-    vec subColumn = perm * column ;
-    vec subVector(elementsInChild.size()) ;
-    for (uint innerIndex = 0; innerIndex < elementsInChild.size(); innerIndex++) {
-      subVector(innerIndex) = subColumn(elementsInChild(innerIndex)) ;
-    }
-    double colMedian = median(subVector) ;
-    vec updatedLongitude(2) ;
-    updatedLongitude(0) = childDimensions.at(currentChildIndices(j)).longitude(0) ;
-    updatedLongitude(1) = colMedian ;
-    vec newChildLongitude(2) ;
-    newChildLongitude(0) = colMedian ;
-    newChildLongitude(1) = childDimensions.at(currentChildIndices(j)).longitude(1) ;
-    dimensions newDimensions = childDimensions.at(currentChildIndices(j)) ;
-    newDimensions.longitude = newChildLongitude ;
-    childDimensions.push_back(newDimensions) ;
-    childDimensions.at(j).longitude = updatedLongitude ;
-    uvec greaterElements = find(elem(subColumn, elementsInChild) > colMedian) ; // In deriveObsInNode, the checks are <=. It follows that observations on the right and upper boundaries of a zone are included.
-    PermutationMatrix<Dynamic, Dynamic> perm(greaterElements) ;
-    uvec updateIndices = perm * elementsInChild ;
-    for (uint innerIndex = 0; innerIndex < updateIndices.size(); innerIndex++) {
-      childMembership(updateIndices(innerIndex)) = newChildIndex ;
-    }
-    newChildIndex += 1 ;
+
+  uint currentChildIndex = 0 ;
+  Eigen::Matrix<bool, Dynamic, 1> compareVec = childMembership == currentChildIndex ;
+  uvec elementsInChild = find(compareVec) ;
+  vec column = m_dataset.spatialCoords.col(0) ;
+  vec subColumn = elem(column, obsForMedian) ;
+  vec elementsForMedian = elem(subColumn, elementsInChild) ;
+  double colMedian = median(elementsForMedian) ;
+  std::printf("Longitude median: %.4e \n", colMedian) ;
+  std::cout << "Done!!!! \n" ;
+  vec updatedLongitude(2) ;
+  updatedLongitude(0) = childDimensions.at(currentChildIndices(j)).longitude(0) ;
+  updatedLongitude(1) = colMedian ;
+  vec newChildLongitude(2) ;
+  newChildLongitude(0) = colMedian ;
+  newChildLongitude(1) = childDimensions.at(currentChildIndices(j)).longitude(1) ;
+  dimensions newDimensions = childDimensions.at(currentChildIndices(j)) ;
+  newDimensions.longitude = newChildLongitude ;
+  childDimensions.push_back(newDimensions) ;
+  childDimensions.at(j).longitude = updatedLongitude ;
+  uvec greaterElements = find(elem(subColumn, elementsInChild) > colMedian) ; // In deriveObsInNode, the checks are <=. It follows that observations on the right and upper boundaries of a zone are included.
+
+  uvec updateIndices = elem(elementsInChild, greaterElements) ;
+  for (uint innerIndex = 0; innerIndex < updateIndices.size(); innerIndex++) {
+    childMembership(updateIndices(innerIndex)) = newChildIndex ;
   }
 
+  uint newChildIndex = 2 ;
+
   // Handling latitude
-  currentChildIndices = uvec::LinSpaced(newChildIndex, 0, newChildIndex - 1) ;
-  for (uint j = 0 ; j < currentChildIndices.size(); j++) {
+
+  std::cout << "Latitude: \n" ;
+  std::cout << currentChildIndices ;
+  for (uint j = 0 ; j < newChildIndex; j++) {
     vec column = m_dataset.spatialCoords.col(1) ;
-    vec subColumn = perm * column ;
-    uvec elementsInChild = find(childMembership == currentChildIndices(j)) ;
+    vec subColumn = elem(column, obsForMedian) ;
+    uvec elementsInChild = find(childMembership == j) ;
     double colMedian = median(elem(subColumn, elementsInChild)) ;
+    std::printf("Latitude median: %.4e \n", colMedian) ;
     vec updatedLatitude(2) ;
-    updatedLatitude(0) = childDimensions.at(currentChildIndices(j)).latitude(0);
+    updatedLatitude(0) = childDimensions.at(j)).latitude(0);
     updatedLatitude(1) = colMedian ;
     vec newChildLatitude(2) ;
     newChildLatitude(0) = colMedian ;
-    newChildLatitude(1) = childDimensions.at(currentChildIndices(j)).latitude(1) ;
-    dimensions newDimensions = childDimensions.at(currentChildIndices(j)) ;
+    newChildLatitude(1) = childDimensions.at(j).latitude(1) ;
+    dimensions newDimensions = childDimensions.at(j) ;
     newDimensions.latitude = newChildLatitude ;
     childDimensions.push_back(newDimensions) ;
-    childDimensions.at(currentChildIndices(j)).latitude = updatedLatitude ;
+    childDimensions.at(j).latitude = updatedLatitude ;
     uvec greaterElements = find(elem(subColumn, elementsInChild) > colMedian) ;
     uvec updateIndices = elem(elementsInChild, greaterElements) ;
     for (uint innerIndex = 0; innerIndex < updateIndices.size(); innerIndex++) {
@@ -166,10 +165,9 @@ void AugTree::createLevels(TreeNode * parent, const uint & numObsForTimeSplit, c
   }
   if (splitTime) {
     // Handling time
-    currentChildIndices = uvec::LinSpaced(newChildIndex, 0, newChildIndex - 1) ;
-    for (uint j = 0 ; j < currentChildIndices.size(); j++) {
+    for (uint j = 0 ; j < newChildIndex; j++) {
       vec time = perm * m_dataset.timeCoords.matrix() ;
-      uvec elementsInChild = find(childMembership == currentChildIndices(j)) ;
+      uvec elementsInChild = find(childMembership == j) ;
       vec elementsForMedian = elem(time, elementsInChild) ;
       // vec uniqueTimeValues = get_unique<double>(elementsForMedian) ;
       bool onlyOneTimePoint = true;
@@ -177,23 +175,23 @@ void AugTree::createLevels(TreeNode * parent, const uint & numObsForTimeSplit, c
       while(onlyOneTimePoint) {
         onlyOneTimePoint = (elementsForMedian(innerIndex) == elementsForMedian(0)) ;
         innerIndex += 1 ;
+        if (innerIndex == elementsForMedian.size()) break ;
       }
 
       if (!onlyOneTimePoint) {
         double colMedian = median(elementsForMedian) ;
         vec updatedTime(2) ;
-        updatedTime(0)  = childDimensions.at(currentChildIndices(j)).time(0) ;
+        updatedTime(0)  = childDimensions.at(j).time(0) ;
         updatedTime(1) = colMedian ;
         vec newChildTime(2) ;
         newChildTime(0) = colMedian ;
-        newChildTime(1) = childDimensions.at(currentChildIndices(j)).time(1) ;
-        dimensions newDimensions = childDimensions.at(currentChildIndices(j)) ;
+        newChildTime(1) = childDimensions.at(j).time(1) ;
+        dimensions newDimensions = childDimensions.at(j) ;
         newDimensions.time = newChildTime ;
         childDimensions.push_back(newDimensions) ;
-        childDimensions.at(currentChildIndices(j)).time = updatedTime ;
+        childDimensions.at(j).time = updatedTime ;
         uvec greaterElements = find(elem(time, elementsInChild) > colMedian) ;
-        Eigen::PermutationMatrix<Dynamic, Dynamic> permGreaterElements(greaterElements) ;
-        uvec updateIndices = permGreaterElements * greaterElements ;
+        uvec updateIndices = elem(elementsInChild, greaterElements) ;
         for (uint innerIndex = 0 ; innerIndex < updateIndices.size() ; innerIndex++) {
           childMembership(updateIndices(innerIndex)) = newChildIndex ;
         }

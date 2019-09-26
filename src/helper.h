@@ -56,10 +56,15 @@ Eigen::Matrix<bool, Eigen::Dynamic, 1> operator==(const Eigen::Ref<const Eigen::
 
 template<typename Derived>
 double median(const Eigen::MatrixBase<Derived> & EigenVec) {
-  Eigen::MatrixBase<Derived> VecCopy = EigenVec ;
-  std::sort(&VecCopy(0), &VecCopy(0) + VecCopy.size()) ; // This sorts the vector is descending order, but it doesn't matter for the median!
+  std::cout << "Entering median! \n" ;
+  std::printf("Number of elements in EigenVec: %i\n", EigenVec.size()) ;
+  Eigen::Matrix<typename Derived::Scalar, Eigen::Dynamic, 1> VecCopy = EigenVec ;
+  std::printf("Number of elements in VecCopy before: %i\n", VecCopy.size()) ;
+  std::sort(VecCopy.data(), VecCopy.data() + VecCopy.size()) ; // This sorts the vector in descending order, but it doesn't matter for the median!
+  std::printf("Number of elements in VecCopy: %i\n", VecCopy.size()) ;
   double output ;
   int lowerIndex = std::floor(double(VecCopy.size())/2) ;
+  std::cout << "Index for median: " << lowerIndex << "\n" ;
   if ((VecCopy.size() % 2) == 1) {
     output = double(VecCopy(lowerIndex)) ;
   } else {
