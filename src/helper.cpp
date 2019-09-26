@@ -42,7 +42,7 @@ sp_mat createBlockMatrix(std::vector<mat *> listOfMatrices) {
   for (auto & aMatrix : listOfMatrices) {
     for (uint i = 0; i < aMatrix->rows() ; i++) {
       for (uint j = 0; j <= aMatrix->cols(); j++) {
-        tripletList.push_back(Triplet(i, j, (*aMatrix(i + offset,j + offset)))) ;
+        tripletList.push_back(Triplet(i, j, (*aMatrix)(i + offset,j + offset))) ;
       }
     }
     offset += aMatrix->rows() ;
