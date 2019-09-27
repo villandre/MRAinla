@@ -26,17 +26,19 @@ void InternalNode::genRandomKnots(spatialcoor & dataCoor, const uint & numKnots,
     {
       b[i] = (double) i;
     }
-
-    uvec aConverted = uvec::Zero(numKnots) ;
+    printf("Generating %i knots...\n", numKnots) ;
+    printf("Number of observations: %i \n", dataCoor.timeCoords.size()) ;
+    printf("Number of rows: %i \n", dataCoor.spatialCoords.rows()) ;
+    ArrayXi aConverted = ArrayXi::Zero(numKnots) ;
 
     gsl_ran_choose(RNG, a, numKnots, b, dataCoor.timeCoords.size(), sizeof (double));
 
     for (uint i = 0 ; i < numKnots ; i++) {
       aConverted(i) = a[i] ;
     }
-    PermutationMatrix<Dynamic> perm(aConverted) ;
-    mat jitteredSpace = perm * dataCoor.spatialCoords.matrix() ;
-    vec jitteredTime = elem(dataCoor.timeCoords.matrix(), aConverted) ;
+
+    mat jitteredSpace = rows(dataCoor.spatialCoords, aConverted) ;
+    vec jitteredTime = elem(dataCoor.timeCoords, aConverted) ;
 
     for (uint i = 0; i < jitteredSpace.size(); i++) {
       jitteredSpace(i) += gsl_ran_gaussian(RNG, 0.0001) ;

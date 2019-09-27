@@ -29,9 +29,9 @@ public:
   void DeriveOmega(const vec &) ;
 
   void DeriveU(const vec & responseValues) {
-    Eigen::PermutationMatrix<Eigen::Dynamic, Eigen::Dynamic> perm(m_obsInNode) ;
-    mat uInMat = (perm * responseValues).transpose() * m_SigmaInverse *
-      (perm * responseValues) ;
+    vec subResponse = elem(responseValues.array(), m_obsInNode) ;
+    mat uInMat = subResponse.transpose() * m_SigmaInverse *
+      subResponse ;
     m_u = uInMat(0,0) ; // uInMat is supposed to be a 1x1 matrix.
   }
 
@@ -84,13 +84,13 @@ public:
   std::vector<mat> GetUmatList() { return m_UmatList ;}
 
   void SetPredictLocations(const inputdata &) ;
-  uvec GetPredIndices() { return m_predsInNode ;}
+  Eigen::ArrayXi GetPredIndices() { return m_predsInNode ;}
   void computeUpred(const maternVec &, const maternVec &, const double &, const spatialcoor &, const bool, const double &, const double &) ;
 
   void genRandomKnots(spatialcoor & dataCoor, const uint & numKnots, const gsl_rng * RNG) {
-    Eigen::PermutationMatrix<Eigen::Dynamic, Eigen::Dynamic> perm(m_obsInNode) ;
-    m_knotsCoor = spatialcoor(perm * dataCoor.spatialCoords.matrix(),
-                              perm * dataCoor.timeCoords.matrix()) ;
+
+    m_knotsCoor = spatialcoor(rows(dataCoor.spatialCoords, m_obsInNode),
+                              elem(dataCoor.timeCoords, m_obsInNode)) ;
   }
 
   TipNode(const dimensions & dims, const uint & depth, TreeNode * parent,
@@ -114,7 +114,7 @@ protected:
   mat GetLM() { return m_UmatList.at(m_depth) ;}
   // void computeDeltaTildeParas(const inputdata &) ;
   // void recurseBtilde(const uint, const uint) ;
-  uvec m_predsInNode ;
+  Eigen::ArrayXi m_predsInNode ;
 
   // mat m_V ;
   std::vector<mat> m_UmatList ;

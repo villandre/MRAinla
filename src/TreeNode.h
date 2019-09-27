@@ -53,10 +53,9 @@ struct spatialcoor {
   spatialcoor() { } ;
   spatialcoor(Eigen::ArrayXXd f_sp, Eigen::ArrayXd f_time) : spatialCoords(f_sp), timeCoords(f_time) { } ;
 
-  spatialcoor subset(Eigen::VectorXi & indices)  const {
-    Eigen::PermutationMatrix<Eigen::Dynamic, Eigen::Dynamic> perm(indices.matrix()) ;
-    Eigen::ArrayXXd subSpatialCoords = perm * spatialCoords.matrix() ;
-    Eigen::ArrayXd subTimeCoords = perm * timeCoords.matrix() ;
+  spatialcoor subset(Eigen::ArrayXi & indices)  const {
+    Eigen::ArrayXXd subSpatialCoords = rows(spatialCoords, indices) ;
+    Eigen::ArrayXd subTimeCoords = elem(timeCoords, indices) ;
     return spatialcoor(subSpatialCoords, subTimeCoords) ;
   };
 };
@@ -66,37 +65,26 @@ struct inputdata : public spatialcoor {
   Eigen::MatrixXd covariateValues = Eigen::MatrixXd(1, 1) ;
 
   inputdata() : spatialcoor() {};
-  inputdata(Eigen::VectorXd f_responses, Eigen::MatrixXd f_sp, Eigen::VectorXd f_time, Eigen::MatrixXd f_covariates)
+  inputdata(Eigen::VectorXd f_responses, Eigen::ArrayXXd f_sp, Eigen::ArrayXd f_time, Eigen::MatrixXd f_covariates)
     : spatialcoor(f_sp, f_time), responseValues(f_responses), covariateValues(f_covariates) {  } ;
 
-  inputdata subset(Eigen::VectorXi & indices)  const {
-    Eigen::PermutationMatrix<Eigen::Dynamic, Eigen::Dynamic> perm(indices) ;
-    Eigen::MatrixXd subSpatialCoords = perm * spatialCoords.matrix() ;
-    Eigen::VectorXd subTimeCoords = perm * timeCoords.matrix() ;
-    Eigen::VectorXd subResponseValues = perm * responseValues ;
-    Eigen::MatrixXd subCovariates = perm * covariateValues ;
+  inputdata subset(Eigen::ArrayXi & indices)  const {
+    Eigen::ArrayXXd subSpatialCoords = rows(spatialCoords, indices) ;
+    Eigen::ArrayXd subTimeCoords = elem(timeCoords, indices) ;
+    Eigen::VectorXd subResponseValues = elem(responseValues.array(), indices) ;
+    Eigen::MatrixXd subCovariates = rows(covariateValues.array(), indices) ;
     return inputdata(subResponseValues, subSpatialCoords, subTimeCoords, subCovariates) ;
-  }
-
-  void reshuffle(uvec indices) {
-    Eigen::MatrixXd spatialCoordsTrans = spatialCoords.transpose() ;
-    Eigen::PermutationMatrix<Eigen::Dynamic, Eigen::Dynamic> perm(indices) ;
-    spatialCoords = (spatialCoordsTrans * perm).transpose() ;
-    timeCoords = perm * timeCoords.matrix() ;
-    Eigen::MatrixXd covariateValuesTrans = covariateValues.transpose() ;
-    covariateValues = (covariateValuesTrans * perm).transpose() ;
-    responseValues = perm * responseValues ;
   }
 };
 
 struct dimensions {
-  Eigen::VectorXd longitude{Eigen::VectorXd(2)} ;
-  Eigen::VectorXd latitude{Eigen::VectorXd(2)} ;
-  Eigen::VectorXd time{Eigen::VectorXd(2)} ;
+  Eigen::ArrayXd longitude{Eigen::ArrayXd(2)} ;
+  Eigen::ArrayXd latitude{Eigen::ArrayXd(2)} ;
+  Eigen::ArrayXd time{Eigen::ArrayXd(2)} ;
 
   dimensions() { } ;
 
-  dimensions(Eigen::VectorXd f_lon, Eigen::VectorXd f_lat, Eigen::VectorXd f_time)
+  dimensions(Eigen::ArrayXd f_lon, Eigen::ArrayXd f_lat, Eigen::ArrayXd f_time)
     : longitude(f_lon), latitude(f_lat), time(f_time) {
     uint firstCompare = (f_lon.size() == f_lat.size()) ;
     uint secondCompare = (f_lat.size() == f_time.size()) ;
@@ -151,12 +139,12 @@ public:
   virtual mat GetUpred(const uint & l)=0 ;
   virtual std::vector<mat> GetUmatList()=0 ;
   virtual void SetPredictLocations(const inputdata &)=0 ;
-  virtual uvec GetPredIndices()=0 ;
+  virtual Eigen::ArrayXi GetPredIndices()=0 ;
   virtual void computeUpred(const maternVec &, const maternVec &, const double &, const spatialcoor &, const bool, const double &, const double &)=0 ;
 
   virtual void genRandomKnots(spatialcoor &, const uint &, const gsl_rng *) = 0;
 
-  uvec GetObsInNode() {return m_obsInNode ;}
+  Eigen::ArrayXi GetObsInNode() {return m_obsInNode ;}
   dimensions GetDimensions() {return m_dimensions;}
   int GetDepth() {return m_depth ;}
 
@@ -176,7 +164,7 @@ public:
 
   void SetPredictLocations(const spatialcoor & predictLocations) ;
 
-  uvec deriveObsInNode(const spatialcoor &) ;
+  Eigen::ArrayXi deriveObsInNode(const spatialcoor &) ;
   void initiateBknots(const vec &) ;
   void completeBknots(const vec &, const uint) ;
   std::vector<mat> GetBknots() const { return m_bKnots ;}
@@ -210,7 +198,7 @@ public:
 protected:
 
   TreeNode * m_parent ;
-  uvec m_obsInNode ;
+  Eigen::ArrayXi m_obsInNode ;
   int m_depth ;
   dimensions m_dimensions ; // First dimension is longitude, second is latitude, last is time.
   spatialcoor m_knotsCoor ;  // First element is spatial coordinates (longitude, latitude), second is time.

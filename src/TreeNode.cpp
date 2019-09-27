@@ -7,14 +7,17 @@ using namespace Eigen ;
 using namespace MRAinla ;
 using namespace std ;
 
-uvec TreeNode::deriveObsInNode(const spatialcoor & dataset) {
-  Eigen::Array<bool, Dynamic, 1> lonCheck = (dataset.spatialCoords.col(0) > m_dimensions.longitude.minCoeff()) *
-    (dataset.spatialCoords.col(0) <= m_dimensions.longitude.maxCoeff()) ; // Longitude check
-  Eigen::Array<bool, Dynamic, 1> latCheck = (dataset.spatialCoords.col(1) > m_dimensions.latitude.minCoeff()) *
-    (dataset.spatialCoords.col(1) <= m_dimensions.latitude.maxCoeff()) ; // Latitude check
-  Eigen::Array<bool, Dynamic, 1> timeCheck = (dataset.timeCoords > m_dimensions.time.minCoeff()) *
-    (dataset.timeCoords <= m_dimensions.time.maxCoeff()) ; // Time check
-  return find(lonCheck * latCheck * timeCheck).matrix() ; // find is equivalent to which in R
+ArrayXi TreeNode::deriveObsInNode(const spatialcoor & dataset) {
+  cout << "Entered deriveObsInNode! \n" ;
+  Eigen::Array<bool, Dynamic, 1> lonCheck = (dataset.spatialCoords.col(0) > m_dimensions.longitude.matrix().minCoeff()) *
+    (dataset.spatialCoords.col(0) <= m_dimensions.longitude.matrix().maxCoeff()) ; // Longitude check
+  Eigen::Array<bool, Dynamic, 1> latCheck = (dataset.spatialCoords.col(1) > m_dimensions.latitude.matrix().minCoeff()) *
+    (dataset.spatialCoords.col(1) <= m_dimensions.latitude.matrix().maxCoeff()) ; // Latitude check
+  Eigen::Array<bool, Dynamic, 1> timeCheck = (dataset.timeCoords > m_dimensions.time.matrix().minCoeff()) *
+    (dataset.timeCoords <= m_dimensions.time.matrix().maxCoeff()) ; // Time check
+  uvec output = find(lonCheck * latCheck * timeCheck).matrix() ;
+  printf("Output size: %i \n", output.size()) ;
+  return  output; // find is equivalent to which in R
 }
 
 // We assume a squared exponential decay function with sigma^2 = 1

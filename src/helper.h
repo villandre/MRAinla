@@ -55,16 +55,13 @@ Eigen::Matrix<typename Derived::Scalar, Eigen::Dynamic, 1> rep_each(const Eigen:
 Eigen::Matrix<bool, Eigen::Dynamic, 1> operator==(const Eigen::Ref<const Eigen::VectorXi> &, const uint) ;
 
 template<typename Derived>
-double median(const Eigen::MatrixBase<Derived> & EigenVec) {
+double median(const Eigen::ArrayBase<Derived> & EigenVec) {
   std::cout << "Entering median! \n" ;
   std::printf("Number of elements in EigenVec: %i\n", EigenVec.size()) ;
   Eigen::Matrix<typename Derived::Scalar, Eigen::Dynamic, 1> VecCopy = EigenVec ;
-  std::printf("Number of elements in VecCopy before: %i\n", VecCopy.size()) ;
   std::sort(VecCopy.data(), VecCopy.data() + VecCopy.size()) ; // This sorts the vector in descending order, but it doesn't matter for the median!
-  std::printf("Number of elements in VecCopy: %i\n", VecCopy.size()) ;
   double output ;
   int lowerIndex = std::floor(double(VecCopy.size())/2) ;
-  std::cout << "Index for median: " << lowerIndex << "\n" ;
   if ((VecCopy.size() % 2) == 1) {
     output = double(VecCopy(lowerIndex)) ;
   } else {
@@ -74,7 +71,7 @@ double median(const Eigen::MatrixBase<Derived> & EigenVec) {
 }
 
 template<typename Derived>
-Eigen::Matrix<typename Derived::Scalar, Eigen::Dynamic, 1> elem(const Eigen::MatrixBase<Derived> & vector, const Eigen::Ref<const Eigen::VectorXi> & indices) {
+Eigen::Array<typename Derived::Scalar, Eigen::Dynamic, 1> elem(const Eigen::ArrayBase<Derived> & vector, const Eigen::Ref<const Eigen::ArrayXi> & indices) {
   Eigen::Matrix<typename Derived::Scalar, Eigen::Dynamic, 1> subVector(indices.size(), 1) ;
   for (uint i = 0; i < indices.size(); i++) {
     subVector(i, 1) = vector(indices(i)) ;

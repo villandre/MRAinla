@@ -122,12 +122,12 @@ Eigen::ArrayXi find(const Eigen::Ref<const Eigen::Array<bool, Eigen::Dynamic, 1>
   return outputVec.segment(0, index) ;
 }
 
-Eigen::Matrix<bool, Eigen::Dynamic, 1> operator==(const Eigen::Ref<const Eigen::VectorXi> & EigenVec, const uint constant) {
-  Eigen::Matrix<bool, Eigen::Dynamic, 1> container(EigenVec.size()) ;
-  for (uint i = 0; i < EigenVec.size(); i++) {
-    container(i) = EigenVec(i) == constant ;
-  }
-  return container ;
-}
+// Eigen::Matrix<bool, Eigen::Dynamic, 1> operator==(const Eigen::Ref<const Eigen::VectorXi> & EigenVec, const uint constant) {
+//   Eigen::Matrix<bool, Eigen::Dynamic, 1> container(EigenVec.size()) ;
+//   for (uint i = 0; i < EigenVec.size(); i++) {
+//     container(i) = EigenVec(i) == constant ;
+//   }
+//   return container ;
+// }
 
 

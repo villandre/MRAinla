@@ -5,8 +5,7 @@ using namespace Eigen ;
 using namespace MRAinla ;
 
 void TipNode::DeriveOmega(const vec & responseValues) {
-  Eigen::PermutationMatrix<Dynamic, Dynamic> perm(m_obsInNode) ;
-  vec subResponses = perm * responseValues ;
+  vec subResponses = elem(responseValues.array(), m_obsInNode) ;
   for (uint i = 0 ; i < m_depth; i++) {
     m_omegaTilde.at(i) = GetB(i).transpose() * m_SigmaInverse * subResponses ;
   }
@@ -33,6 +32,6 @@ void TipNode::computeUpred(const maternVec & covParasSp, const maternVec & covPa
 }
 
 void TipNode::SetPredictLocations(const inputdata & predictData) {
-  uvec indices = deriveObsInNode(predictData) ;
+  ArrayXi indices = deriveObsInNode(predictData) ;
   m_predsInNode = indices ;
 }
