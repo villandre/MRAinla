@@ -26,9 +26,7 @@ void InternalNode::genRandomKnots(spatialcoor & dataCoor, const uint & numKnots,
     {
       b[i] = (double) i;
     }
-    printf("Generating %i knots...\n", numKnots) ;
-    printf("Number of observations: %i \n", dataCoor.timeCoords.size()) ;
-    printf("Number of rows: %i \n", dataCoor.spatialCoords.rows()) ;
+
     ArrayXi aConverted = ArrayXi::Zero(numKnots) ;
 
     gsl_ran_choose(RNG, a, numKnots, b, dataCoor.timeCoords.size(), sizeof (double));
@@ -37,8 +35,8 @@ void InternalNode::genRandomKnots(spatialcoor & dataCoor, const uint & numKnots,
       aConverted(i) = a[i] ;
     }
 
-    mat jitteredSpace = rows(dataCoor.spatialCoords, aConverted) ;
-    vec jitteredTime = elem(dataCoor.timeCoords, aConverted) ;
+    ArrayXXd jitteredSpace = rows(dataCoor.spatialCoords, aConverted) ;
+    ArrayXd jitteredTime = elem(dataCoor.timeCoords, aConverted) ;
 
     for (uint i = 0; i < jitteredSpace.size(); i++) {
       jitteredSpace(i) += gsl_ran_gaussian(RNG, 0.0001) ;
@@ -49,7 +47,7 @@ void InternalNode::genRandomKnots(spatialcoor & dataCoor, const uint & numKnots,
     }
     m_knotsCoor = spatialcoor(jitteredSpace, jitteredTime) ;
   } else {
-    mat knotsSp = mat::Zero(numKnots, 2) ;
+    ArrayXXd knotsSp = ArrayXXd::Zero(numKnots, 2) ;
 
     double minLon = m_dimensions.longitude.minCoeff() ;
     double maxLon = m_dimensions.longitude.maxCoeff() ;
@@ -60,7 +58,7 @@ void InternalNode::genRandomKnots(spatialcoor & dataCoor, const uint & numKnots,
     double minTime = m_dimensions.time.minCoeff() ;
     double maxTime = m_dimensions.time.maxCoeff() ;
 
-    vec time(numKnots) ;
+    ArrayXd time(numKnots) ;
 
     double cubeRadiusInPoints = ceil(double(cbrt(numKnots))) ;
 

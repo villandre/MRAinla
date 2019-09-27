@@ -57,7 +57,7 @@ public:
 
   int GetM() { return m_M ;}
   double GetLogJointPsiMarginal() { return m_logJointPsiMarginal ;}
-  uvec GetObsOrderForHpredMat() { return m_obsOrderForHpredMat ;}
+  Eigen::ArrayXi GetObsOrderForHpredMat() { return m_obsOrderForHpredMat ;}
 
   void SetRNG(gsl_rng * myRNG) { m_randomNumGenerator = myRNG ;}
 
@@ -206,7 +206,7 @@ private:
   void distributePredictionData() ;
   void computeBtildeInTips() ;
   inputdata m_predictData ;
-  uvec m_obsOrderForHpredMat ;
+  Eigen::ArrayXi m_obsOrderForHpredMat ;
 
 
   // INLA functions

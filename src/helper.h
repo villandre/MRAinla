@@ -31,33 +31,31 @@ template <typename T> inline void deallocate_container(T& c) {
 };
 
 template <typename Derived>
-Eigen::Matrix<typename Derived::Scalar, Eigen::Dynamic, 1> rep(const Eigen::MatrixBase<Derived> & x, const uint times) {
-  Eigen::Matrix<typename Derived::Scalar, Eigen::Dynamic, 1> container(x.size() * times, 1) ;
+Eigen::Array<typename Derived::Scalar, Eigen::Dynamic, 1> rep(const Eigen::ArrayBase<Derived> & x, const uint times) {
+  Eigen::Array<typename Derived::Scalar, Eigen::Dynamic, 1> container(x.size() * times, 1) ;
   uint index = 0 ;
   for (uint i = 0 ; i < times ; i++) {
-    container.segment(index, index + x.size()) = x ;
+    container.segment(index, x.size()) = x ;
     index += x.size() ;
   }
   return container ;
 }
 
 template <typename Derived>
-Eigen::Matrix<typename Derived::Scalar, Eigen::Dynamic, 1> rep_each(const Eigen::MatrixBase<Derived> & x, const uint times) {
-  Eigen::Matrix<typename Derived::Scalar, Eigen::Dynamic, 1> container(x.size() * times, 1) ; // double is the most general type. Will
+Eigen::Array<typename Derived::Scalar, Eigen::Dynamic, 1> rep_each(const Eigen::ArrayBase<Derived> & x, const uint times) {
+  Eigen::Array<typename Derived::Scalar, Eigen::Dynamic, 1> container(x.size() * times, 1) ; // double is the most general type. Will
   int index = 0 ;
   for (uint i = 0 ; i < x.size(); i++) {
-    container.segment(index, times) = x(i, 1) * Eigen::MatrixBase<Derived>::Ones(times, 1) ;
+    container.segment(index, times) = x(i, 1) * Eigen::ArrayBase<Derived>::Ones(times, 1) ;
     index += times ;
   }
   return container ;
 }
 
-Eigen::Matrix<bool, Eigen::Dynamic, 1> operator==(const Eigen::Ref<const Eigen::VectorXi> &, const uint) ;
+// Eigen::Matrix<bool, Eigen::Dynamic, 1> operator==(const Eigen::Ref<const Eigen::VectorXi> &, const uint) ;
 
 template<typename Derived>
 double median(const Eigen::ArrayBase<Derived> & EigenVec) {
-  std::cout << "Entering median! \n" ;
-  std::printf("Number of elements in EigenVec: %i\n", EigenVec.size()) ;
   Eigen::Matrix<typename Derived::Scalar, Eigen::Dynamic, 1> VecCopy = EigenVec ;
   std::sort(VecCopy.data(), VecCopy.data() + VecCopy.size()) ; // This sorts the vector in descending order, but it doesn't matter for the median!
   double output ;
@@ -100,21 +98,21 @@ Eigen::Matrix<bool, Eigen::Dynamic, 1> operator<=(const Eigen::MatrixBase<Derive
 Eigen::ArrayXi find(const Eigen::Ref<const Eigen::Array<bool, Eigen::Dynamic, 1>> &) ;
 
 template<typename Derived>
-Eigen::Matrix<typename Derived::Scalar, Eigen::Dynamic, Eigen::Dynamic> join_rows(const Eigen::MatrixBase<Derived> & mat1, const Eigen::MatrixBase<Derived> & mat2) {
+Eigen::Array<typename Derived::Scalar, Eigen::Dynamic, Eigen::Dynamic> join_rows(const Eigen::ArrayBase<Derived> & mat1, const Eigen::ArrayBase<Derived> & mat2) {
   if (mat1.rows() != mat2.rows()) {
-    throw Rcpp::exception("Error in join_rows: Numbers of rows do not match! \n") ;
+    throw Rcpp::exception("Error in join_rows: Numbers of cols do not match! \n") ;
   }
-  Eigen::Matrix<typename Derived::Scalar, Eigen::Dynamic, Eigen::Dynamic> C(mat1.rows(), mat1.cols() + mat2.cols()) ;
+  Eigen::Array<typename Derived::Scalar, Eigen::Dynamic, Eigen::Dynamic> C(mat1.rows(), mat1.cols() + mat2.cols()) ;
   C << mat1, mat2 ;
   return C ;
 }
 
 template<typename Derived>
-Eigen::Matrix<typename Derived::Scalar, Eigen::Dynamic, Eigen::Dynamic> join_cols(const Eigen::MatrixBase<Derived> & mat1, const Eigen::MatrixBase<Derived> & mat2) {
+Eigen::Array<typename Derived::Scalar, Eigen::Dynamic, Eigen::Dynamic> join_cols(const Eigen::ArrayBase<Derived> & mat1, const Eigen::ArrayBase<Derived> & mat2) {
   if (mat1.cols() != mat2.cols()) {
-    throw Rcpp::exception("Error in join_cols: Numbers of columns do not match! \n") ;
+    throw Rcpp::exception("Error in join_cols: Numbers of cols do not match! \n") ;
   }
-  Eigen::Matrix<typename Derived::Scalar, Eigen::Dynamic, Eigen::Dynamic> C(mat1.rows() + mat2.rows(), mat1.cols()) ;
+  Eigen::Array<typename Derived::Scalar, Eigen::Dynamic, Eigen::Dynamic> C(mat1.rows() + mat2.rows(), mat1.cols()) ;
   C << mat1,
        mat2 ; // For readability only.
   return C ;

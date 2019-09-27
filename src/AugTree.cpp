@@ -10,6 +10,7 @@
 using namespace Rcpp ;
 using namespace MRAinla ;
 using namespace Eigen ;
+using namespace std ;
 
 struct gridPair{
   AugTree * grid ;
@@ -96,8 +97,6 @@ void AugTree::numberNodes() {
 // We make sure that splits don't result in empty regions
 void AugTree::createLevels(TreeNode * parent, const uint & numObsForTimeSplit, const bool splitTime) {
   ArrayXi obsForMedian = parent->GetObsInNode() ;
-  std::cout << "Current depth:" << parent->GetDepth() + 1 << "\n" ;
-  std::printf("Number of data to split: %i \n", parent->GetObsInNode().size()) ;
   ArrayXi childMembership = ArrayXi::Zero(obsForMedian.size()) ;
   std::vector<dimensions> childDimensions ;
   childDimensions.push_back(parent->GetDimensions()) ;
@@ -113,8 +112,6 @@ void AugTree::createLevels(TreeNode * parent, const uint & numObsForTimeSplit, c
   ArrayXd subColumn = elem(column, obsForMedian) ;
   ArrayXd elementsForMedian = elem(subColumn, elementsInChild) ;
   double colMedian = median(elementsForMedian) ;
-  std::printf("Longitude median: %.4e \n", colMedian) ;
-  std::cout << "Done!!!! \n" ;
   ArrayXd updatedLongitude(2) ;
   updatedLongitude(0) = childDimensions.at(0).longitude(0) ;
   updatedLongitude(1) = colMedian ;
@@ -136,14 +133,11 @@ void AugTree::createLevels(TreeNode * parent, const uint & numObsForTimeSplit, c
 
   // Handling latitude
 
-  std::cout << "Latitude: \n" ;
-  // std::cout << childMembership;
   for (int j = 0 ; j < 2; j++) {
     ArrayXd column = m_dataset.spatialCoords.col(1) ;
     ArrayXd subColumn = elem(column, obsForMedian) ;
     ArrayXi elementsInChild = find(childMembership == j) ;
     double colMedian = median(elem(subColumn, elementsInChild)) ;
-    std::printf("Latitude median: %.4e \n", colMedian) ;
     ArrayXd updatedLatitude(2) ;
     updatedLatitude(0) = childDimensions.at(j).latitude(0);
     updatedLatitude(1) = colMedian ;
@@ -359,10 +353,10 @@ void AugTree::createHmatrix() {
 
   int numObs = m_dataset.spatialCoords.rows() ;
   std::vector<std::vector<double *>> memAddressesVec(m_numKnots) ;
-  umat HmatPos ;
+  ArrayXXi HmatPos ;
 
   std::vector<uvec> FmatNodeOrder(m_M) ;
-  uvec FmatObsOrder = uvec::Zero(numObs) ;
+  ArrayXi FmatObsOrder = uvec::Zero(numObs) ;
   int rowIndex = 0 ;
   int colIndex = 0 ;
 
@@ -377,8 +371,8 @@ void AugTree::createHmatrix() {
   }
 
   std::sort(tipNodes.begin(), tipNodes.end(), [] (TreeNode * first, TreeNode * second) {
-    uvec firstAncestorIds = first->GetAncestorIds() ;
-    uvec secondAncestorIds = second->GetAncestorIds() ;
+    ArrayXi firstAncestorIds = first->GetAncestorIds() ;
+    ArrayXi secondAncestorIds = second->GetAncestorIds() ;
     bool firstSmallerThanSecond = false ;
     for (uint i = 1 ; i < firstAncestorIds.size() ; i++) { // The ultimate ancestor is always node 0, hence the loop starting at 1.
       bool test = (firstAncestorIds(i) == secondAncestorIds(i)) ;
@@ -391,7 +385,7 @@ void AugTree::createHmatrix() {
   }) ; // This is supposed to reorder the tip nodes in such a way that the F matrix has contiguous blocks.
 
   for (auto & nodeToProcess : tipNodes) {
-    uvec observationIndices = nodeToProcess->GetObsInNode() ;
+    ArrayXi observationIndices = nodeToProcess->GetObsInNode() ;
 
     bool test =  observationIndices.size() > 0 ;
 
@@ -400,7 +394,7 @@ void AugTree::createHmatrix() {
 
       std::vector<TreeNode *> brickList = nodeToProcess->getAncestors() ;
 
-      uvec brickAncestors(brickList.size()) ;
+      ArrayXi brickAncestors(brickList.size()) ;
       for (uint i = 0 ; i < brickAncestors.size() ; i++) {
         brickAncestors(i) = brickList.at(i)->GetNodeId() ;
       }
@@ -409,12 +403,12 @@ void AugTree::createHmatrix() {
         int nodePos = GetNodePos(nodeIndex) ;
         if (index < brickAncestors.size()) {
           if (nodeIndex == brickAncestors(index)) {
-            uvec rowIndices = rep(uvec::LinSpaced(nodeToProcess->GetB(index).rows(), 0, nodeToProcess->GetB(index).rows() - 1),
-                                  nodeToProcess->GetB(index).cols()) + rowIndex * uvec::Ones(nodeToProcess->GetB(index).rows() * nodeToProcess->GetB(index).cols(), 1) ;
-            uvec colIndices = rep_each(uvec::LinSpaced(nodeToProcess->GetB(index).cols(), 0, nodeToProcess->GetB(index).cols() - 1),
-                                       nodeToProcess->GetB(index).rows()) + colIndex * uvec::Ones(nodeToProcess->GetB(index).rows() * nodeToProcess->GetB(index).cols(), 1) ;
+            ArrayXi rowIndices = rep(uvec::LinSpaced(nodeToProcess->GetB(index).rows(), 0, nodeToProcess->GetB(index).rows() - 1).array(),
+                                  nodeToProcess->GetB(index).cols()) + rowIndex  ;
+            ArrayXi colIndices = rep_each(uvec::LinSpaced(nodeToProcess->GetB(index).cols(), 0, nodeToProcess->GetB(index).cols() - 1).array(),
+                                       nodeToProcess->GetB(index).rows()) + colIndex ;
 
-            umat positions = join_rows(rowIndices, colIndices) ;
+            ArrayXXi positions = join_rows(rowIndices, colIndices) ;
             HmatPos = join_cols(HmatPos, positions) ; // Slow, but this is not done many times.
 
             index += 1 ;
@@ -430,12 +424,12 @@ void AugTree::createHmatrix() {
   m_obsOrderForFmat = FmatObsOrder ;
 
   mat intercept = mat::Ones(numObs, 1) ;
-  mat transIncrementedCovar = (join_rows(intercept, m_dataset.covariateValues)).transpose() ;
+  mat transIncrementedCovar = (join_rows(intercept.array(), m_dataset.covariateValues.array())).transpose() ;
   m_incrementedCovarReshuffled = cols(transIncrementedCovar.array(), m_obsOrderForFmat).transpose() ;
-  HmatPos.col(1) += (m_dataset.covariateValues.cols() + 1) * umat::Ones(HmatPos.rows() , 1) ;
+  HmatPos.col(1) += m_dataset.covariateValues.cols() + 1 ;
 
-  umat covPos = join_rows(rep(uvec::LinSpaced(m_incrementedCovarReshuffled.rows(), 0, m_incrementedCovarReshuffled.rows() - 1), m_incrementedCovarReshuffled.cols()),
-                          rep_each(uvec::LinSpaced(m_incrementedCovarReshuffled.cols(), 0, m_incrementedCovarReshuffled.cols() - 1), m_incrementedCovarReshuffled.rows())) ;
+  ArrayXXi covPos = join_rows(rep(uvec::LinSpaced(m_incrementedCovarReshuffled.rows(), 0, m_incrementedCovarReshuffled.rows() - 1).array(), m_incrementedCovarReshuffled.cols()),
+                          rep_each(uvec::LinSpaced(m_incrementedCovarReshuffled.cols(), 0, m_incrementedCovarReshuffled.cols() - 1).array(), m_incrementedCovarReshuffled.rows())) ;
   HmatPos = join_cols(covPos, HmatPos) ; // Could this cause aliasing?
   // Now, we create the first Hmat.
   //TO_DO
@@ -470,12 +464,24 @@ void AugTree::updateHmatrix() {
 
 void AugTree::updateHmatrixPred() {
   // Will this correctly preserve the order? It's supposed to...
-  vec concatenatedValues(Map<vec>(m_incrementedCovarPredictReshuffled.data(), m_incrementedCovarPredictReshuffled.cols() * m_incrementedCovarPredictReshuffled.rows()))  ;
+  ArrayXd concatenatedValues(Map<ArrayXd>(m_incrementedCovarPredictReshuffled.data(), m_incrementedCovarPredictReshuffled.cols() * m_incrementedCovarPredictReshuffled.rows()))  ;
+  int totalSize = concatenatedValues.size() ;
+  int secondIndex = totalSize ;
   for (auto & tipNode : GetTipNodes()) {
     if (tipNode->GetPredIndices().size() > 0) {
       for (auto & Umat : tipNode->GetUmatList()) {
-        vec B(Map<vec>(Umat.data(), Umat.cols() * Umat.rows()));
-        concatenatedValues = join_cols(concatenatedValues, B) ;
+        totalSize += Umat.size();
+      }
+    }
+  }
+  concatenatedValues.conservativeResize(totalSize, 1) ;
+
+  for (auto & tipNode : GetTipNodes()) {
+    if (tipNode->GetPredIndices().size() > 0) {
+      for (auto & Umat : tipNode->GetUmatList()) {
+        ArrayXd B(Map<ArrayXd>(Umat.data(), Umat.cols() * Umat.rows()));
+        concatenatedValues.segment(secondIndex, B.size()) = B ;
+        secondIndex += B.size() ;
       }
     }
   }
@@ -493,26 +499,26 @@ void AugTree::updateHmatrixPred() {
 void AugTree::createHmatrixPred() {
 
   uint numObs = m_predictData.spatialCoords.rows() ;
-  umat HmatPredPos ;
+  ArrayXXi HmatPredPos(0, 2) ;
 
-  std::vector<uvec> FmatNodeOrder(m_M) ;
-  uvec FmatObsOrder = uvec::Zero(numObs) ;
+  std::vector<ArrayXi> FmatNodeOrder(m_M) ;
+  ArrayXi FmatObsOrder = ArrayXi::Zero(numObs) ;
   uint rowIndex = 0 ;
   uint colIndex = 0 ;
 
   std::vector<TreeNode *> tipNodes = GetTipNodes() ;
   int numTips = tipNodes.size() ;
 
-  std::vector<uvec> ancestorIdsVec(numTips) ;
+  std::vector<ArrayXi> ancestorIdsVec(numTips) ;
 
   for (uint i = 0 ; i < tipNodes.size(); i++) {
-    uvec idVec = tipNodes.at(i)->GetAncestorIds() ; // Last element is tip node.
+    ArrayXi idVec = tipNodes.at(i)->GetAncestorIds() ; // Last element is tip node.
     ancestorIdsVec.at(i) = idVec ;
   }
 
   std::sort(tipNodes.begin(), tipNodes.end(), [] (TreeNode * first, TreeNode * second) {
-    uvec firstAncestorIds = first->GetAncestorIds() ;
-    uvec secondAncestorIds = second->GetAncestorIds() ;
+    ArrayXi firstAncestorIds = first->GetAncestorIds() ;
+    ArrayXi secondAncestorIds = second->GetAncestorIds() ;
     bool firstSmallerThanSecond = false ;
     for (uint i = 1 ; i < firstAncestorIds.size() ; i++) { // The ultimate ancestor is always node 0, hence the loop starting at 1.
       bool test = (firstAncestorIds(i) == secondAncestorIds(i)) ;
@@ -524,7 +530,7 @@ void AugTree::createHmatrixPred() {
     return firstSmallerThanSecond ;
   }) ; // This is supposed to reorder the tip nodes in such a way that the F matrix has contiguous blocks.
 
-  m_obsOrderForHpredMat = uvec::Zero(m_predictData.timeCoords.size()) ;
+  m_obsOrderForHpredMat = ArrayXi::Zero(m_predictData.timeCoords.size()) ;
   uint elementIndex = 0 ;
   for (auto & i : tipNodes) {
     uint numPredObsInNode = i->GetPredIndices().size() ;
@@ -545,7 +551,7 @@ void AugTree::createHmatrixPred() {
 
       std::vector<TreeNode *> brickList = nodeToProcess->getAncestors() ;
 
-      uvec brickAncestors(brickList.size()) ;
+      ArrayXi brickAncestors(brickList.size()) ;
       for (uint i = 0 ; i < brickAncestors.size() ; i++) {
         brickAncestors(i) = brickList.at(i)->GetNodeId() ;
       }
@@ -555,11 +561,11 @@ void AugTree::createHmatrixPred() {
         int nodePos = GetNodePos(nodeIndex) ;
         if (index < brickAncestors.size()) {
           if (nodeIndex == brickAncestors(index)) {
-            uvec rowIndices = rep(uvec::LinSpaced(observationIndices.size(), 0, observationIndices.size() - 1),
-                                  ancestorsList.at(index)->GetNumKnots()) + rowIndex * uvec::Ones(observationIndices.size() * ancestorsList.at(index)->GetNumKnots(), 1) ;
-            uvec colIndices = rep_each(uvec::LinSpaced(ancestorsList.at(index)->GetNumKnots(), 0, ancestorsList.at(index)->GetNumKnots() - 1),
-                                       observationIndices.size()) + colIndex * uvec::Ones(observationIndices.size() * ancestorsList.at(index)->GetNumKnots(), 1) ;
-            umat positions = join_rows(rowIndices, colIndices) ;
+            ArrayXi rowIndices = rep(uvec::LinSpaced(observationIndices.size(), 0, observationIndices.size() - 1).array(),
+                                  ancestorsList.at(index)->GetNumKnots()) + rowIndex  ;
+            ArrayXi colIndices = rep_each(uvec::LinSpaced(ancestorsList.at(index)->GetNumKnots(), 0, ancestorsList.at(index)->GetNumKnots() - 1).array(),
+                                       observationIndices.size()) + colIndex  ;
+            ArrayXXi positions = join_rows(rowIndices, colIndices) ;
             HmatPredPos = join_cols(HmatPredPos, positions) ; // Slow, but this is not done many times.
 
             index += 1 ;
@@ -573,13 +579,13 @@ void AugTree::createHmatrixPred() {
   }
 
   mat intercept = mat::Ones(numObs, 1) ;
-  mat transIncrementedCovar = (join_rows(intercept, m_predictData.covariateValues)).transpose() ;
+  mat transIncrementedCovar = (join_rows(intercept.array(), m_predictData.covariateValues.array())).transpose() ;
   m_incrementedCovarPredictReshuffled = cols(transIncrementedCovar.array(), FmatObsOrder).transpose() ;
 
-  HmatPredPos.col(1) += (m_predictData.covariateValues.cols() + 1) * umat::Ones(HmatPredPos.rows(), 1) ;
-  umat covPos = join_rows(rep(uvec::LinSpaced(m_incrementedCovarPredictReshuffled.rows(), 0, m_incrementedCovarPredictReshuffled.rows() - 1),
+  HmatPredPos.col(1) += m_predictData.covariateValues.cols() + 1 ;
+  ArrayXXi covPos = join_rows(rep(uvec::LinSpaced(m_incrementedCovarPredictReshuffled.rows(), 0, m_incrementedCovarPredictReshuffled.rows() - 1).array(),
                               m_incrementedCovarPredictReshuffled.cols()),
-                          rep_each(uvec::LinSpaced(m_incrementedCovarPredictReshuffled.cols(), 0, m_incrementedCovarPredictReshuffled.cols() - 1),
+                          rep_each(uvec::LinSpaced(m_incrementedCovarPredictReshuffled.cols(), 0, m_incrementedCovarPredictReshuffled.cols() - 1).array(),
                                    m_incrementedCovarPredictReshuffled.rows())) ;
   HmatPredPos = join_cols(covPos, HmatPredPos) ; // Could this cause aliasing?
   // Create HmatPred...
