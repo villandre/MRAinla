@@ -96,7 +96,7 @@ void AugTree::numberNodes() {
 // We make sure that splits don't result in empty regions
 void AugTree::createLevels(TreeNode * parent, const uint & numObsForTimeSplit, const bool splitTime) {
   uvec obsForMedian = parent->GetObsInNode() ;
-  uvec childMembership = uvec::Zero(obsForMedian.size()) ;
+  ArrayXi childMembership = ArrayXi::Zero(obsForMedian.size()) ;
   std::vector<dimensions> childDimensions ;
   childDimensions.push_back(parent->GetDimensions()) ;
 
@@ -105,12 +105,10 @@ void AugTree::createLevels(TreeNode * parent, const uint & numObsForTimeSplit, c
   }
 
   // Handling longitude
-  uvec currentChildIndices = uvec::LinSpaced(newChildIndex, 0, newChildIndex - 1) ;
-  // for (auto & j : currentChildIndices) {
 
   uint currentChildIndex = 0 ;
   Eigen::Matrix<bool, Dynamic, 1> compareVec = childMembership == currentChildIndex ;
-  uvec elementsInChild = find(compareVec) ;
+  uvec elementsInChild = uvec::LinSpaced(obsForMedian.size(), 0, obsForMedian.size()-1) ;
   vec column = m_dataset.spatialCoords.col(0) ;
   vec subColumn = elem(column, obsForMedian) ;
   vec elementsForMedian = elem(subColumn, elementsInChild) ;
@@ -118,20 +116,22 @@ void AugTree::createLevels(TreeNode * parent, const uint & numObsForTimeSplit, c
   std::printf("Longitude median: %.4e \n", colMedian) ;
   std::cout << "Done!!!! \n" ;
   vec updatedLongitude(2) ;
-  updatedLongitude(0) = childDimensions.at(currentChildIndices(j)).longitude(0) ;
+  updatedLongitude(0) = childDimensions.at(0).longitude(0) ;
   updatedLongitude(1) = colMedian ;
+  childDimensions.at(0).longitude = updatedLongitude ;
+
   vec newChildLongitude(2) ;
   newChildLongitude(0) = colMedian ;
-  newChildLongitude(1) = childDimensions.at(currentChildIndices(j)).longitude(1) ;
-  dimensions newDimensions = childDimensions.at(currentChildIndices(j)) ;
+  newChildLongitude(1) = childDimensions.at(0).longitude(1) ;
+  dimensions newDimensions = childDimensions.at(0) ;
   newDimensions.longitude = newChildLongitude ;
   childDimensions.push_back(newDimensions) ;
-  childDimensions.at(j).longitude = updatedLongitude ;
-  uvec greaterElements = find(elem(subColumn, elementsInChild) > colMedian) ; // In deriveObsInNode, the checks are <=. It follows that observations on the right and upper boundaries of a zone are included.
+  uvec greaterElements = find(elem(subColumn, elementsInChild).array() > colMedian) ; // In deriveObsInNode, the checks are <=. It follows that observations on the right and upper boundaries of a zone are included.
+  std::cout << "Greater elements: \n" << greaterElements ;
 
   uvec updateIndices = elem(elementsInChild, greaterElements) ;
   for (uint innerIndex = 0; innerIndex < updateIndices.size(); innerIndex++) {
-    childMembership(updateIndices(innerIndex)) = newChildIndex ;
+    childMembership(updateIndices(innerIndex)) = 1 ;
   }
 
   uint newChildIndex = 2 ;
@@ -139,15 +139,15 @@ void AugTree::createLevels(TreeNode * parent, const uint & numObsForTimeSplit, c
   // Handling latitude
 
   std::cout << "Latitude: \n" ;
-  std::cout << currentChildIndices ;
-  for (uint j = 0 ; j < newChildIndex; j++) {
+  // std::cout << childMembership;
+  for (uint j = 0 ; j < 2; j++) {
     vec column = m_dataset.spatialCoords.col(1) ;
     vec subColumn = elem(column, obsForMedian) ;
     uvec elementsInChild = find(childMembership == j) ;
     double colMedian = median(elem(subColumn, elementsInChild)) ;
     std::printf("Latitude median: %.4e \n", colMedian) ;
     vec updatedLatitude(2) ;
-    updatedLatitude(0) = childDimensions.at(j)).latitude(0);
+    updatedLatitude(0) = childDimensions.at(j).latitude(0);
     updatedLatitude(1) = colMedian ;
     vec newChildLatitude(2) ;
     newChildLatitude(0) = colMedian ;
@@ -156,7 +156,7 @@ void AugTree::createLevels(TreeNode * parent, const uint & numObsForTimeSplit, c
     newDimensions.latitude = newChildLatitude ;
     childDimensions.push_back(newDimensions) ;
     childDimensions.at(j).latitude = updatedLatitude ;
-    uvec greaterElements = find(elem(subColumn, elementsInChild) > colMedian) ;
+    uvec greaterElements = find(elem(subColumn, elementsInChild).array() > colMedian) ;
     uvec updateIndices = elem(elementsInChild, greaterElements) ;
     for (uint innerIndex = 0; innerIndex < updateIndices.size(); innerIndex++) {
       childMembership(updateIndices(innerIndex)) = newChildIndex ;
@@ -166,10 +166,9 @@ void AugTree::createLevels(TreeNode * parent, const uint & numObsForTimeSplit, c
   if (splitTime) {
     // Handling time
     for (uint j = 0 ; j < newChildIndex; j++) {
-      vec time = perm * m_dataset.timeCoords.matrix() ;
+      vec time = elem(m_dataset.timeCoords.matrix(), obsForMedian) ;
       uvec elementsInChild = find(childMembership == j) ;
       vec elementsForMedian = elem(time, elementsInChild) ;
-      // vec uniqueTimeValues = get_unique<double>(elementsForMedian) ;
       bool onlyOneTimePoint = true;
       uint innerIndex = 1 ;
       while(onlyOneTimePoint) {
@@ -190,7 +189,7 @@ void AugTree::createLevels(TreeNode * parent, const uint & numObsForTimeSplit, c
         newDimensions.time = newChildTime ;
         childDimensions.push_back(newDimensions) ;
         childDimensions.at(j).time = updatedTime ;
-        uvec greaterElements = find(elem(time, elementsInChild) > colMedian) ;
+        uvec greaterElements = find(elem(time, elementsInChild).array() > colMedian) ;
         uvec updateIndices = elem(elementsInChild, greaterElements) ;
         for (uint innerIndex = 0 ; innerIndex < updateIndices.size() ; innerIndex++) {
           childMembership(updateIndices(innerIndex)) = newChildIndex ;

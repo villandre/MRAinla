@@ -82,14 +82,14 @@ Eigen::Matrix<typename Derived::Scalar, Eigen::Dynamic, 1> elem(const Eigen::Mat
   return subVector ;
 }
 
-template<typename Derived>
-Eigen::Matrix<bool, Eigen::Dynamic, 1> operator>(const Eigen::MatrixBase<Derived> & aVector, const uint aConstant) {
-  Eigen::Matrix<bool, Eigen::Dynamic, 1> container(aVector.size()) ;
-  for (uint i = 0; i < aVector.size(); i++) {
-    container(i) = aVector(i) > aConstant ;
-  }
-  return container ;
-}
+// template<typename Derived>
+// Eigen::Matrix<bool, Eigen::Dynamic, 1> operator>(const Eigen::MatrixBase<Derived> & aVector, const uint aConstant) {
+//   Eigen::Matrix<bool, Eigen::Dynamic, 1> container(aVector.size()) ;
+//   for (uint i = 0; i < aVector.size(); i++) {
+//     container(i) = aVector(i) > aConstant ;
+//   }
+//   return container ;
+// }
 
 template<typename Derived>
 Eigen::Matrix<bool, Eigen::Dynamic, 1> operator<=(const Eigen::MatrixBase<Derived> & aVector, const uint aConstant) {
@@ -100,7 +100,7 @@ Eigen::Matrix<bool, Eigen::Dynamic, 1> operator<=(const Eigen::MatrixBase<Derive
   return container ;
 }
 
-Eigen::VectorXi find(const Eigen::Ref<const Eigen::Matrix<bool, Eigen::Dynamic, 1>> &) ;
+Eigen::ArrayXi find(const Eigen::Ref<const Eigen::Array<bool, Eigen::Dynamic, 1>> &) ;
 
 template<typename Derived>
 Eigen::Matrix<typename Derived::Scalar, Eigen::Dynamic, Eigen::Dynamic> join_rows(const Eigen::MatrixBase<Derived> & mat1, const Eigen::MatrixBase<Derived> & mat2) {

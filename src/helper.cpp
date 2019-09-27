@@ -110,8 +110,8 @@ double maternCov(const double & distance, const double & rho,
 //   return logDeterminant ;
 // }
 
-Eigen::VectorXi find(const Eigen::Ref<const Eigen::Matrix<bool, Eigen::Dynamic, 1>> & logicalVector) {
-  Eigen::VectorXi outputVec(logicalVector.size()) ;
+Eigen::ArrayXi find(const Eigen::Ref<const Eigen::Array<bool, Eigen::Dynamic, 1>>& logicalVector) {
+  Eigen::ArrayXi outputVec(logicalVector.size()) ;
   uint index = 0 ;
   for (uint i = 0 ; i < logicalVector.size(); i++) {
     if (logicalVector(i)) {
