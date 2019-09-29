@@ -351,6 +351,7 @@ void AugTree::UpdateSigmaBetaEtaInvMat() {
 
 void AugTree::createHmatrix() {
 
+  cout << "Creating the data mapping matrix... \n" ;
   int numObs = m_dataset.spatialCoords.rows() ;
   std::vector<std::vector<double *>> memAddressesVec(m_numKnots) ;
   ArrayXXi HmatPos ;
@@ -424,27 +425,61 @@ void AugTree::createHmatrix() {
   m_obsOrderForFmat = FmatObsOrder ;
 
   mat intercept = mat::Ones(numObs, 1) ;
-  mat transIncrementedCovar = (join_rows(intercept.array(), m_dataset.covariateValues.array())).transpose() ;
-  m_incrementedCovarReshuffled = cols(transIncrementedCovar.array(), m_obsOrderForFmat).transpose() ;
+  mat incrementedCovar = join_rows(intercept.array(), m_dataset.covariateValues.array()) ;
+  MatrixXd incrementedCovarReshuffled = rows(incrementedCovar.array(), m_obsOrderForFmat) ;
   HmatPos.col(1) += m_dataset.covariateValues.cols() + 1 ;
 
-  ArrayXXi covPos = join_rows(rep(uvec::LinSpaced(m_incrementedCovarReshuffled.rows(), 0, m_incrementedCovarReshuffled.rows() - 1).array(), m_incrementedCovarReshuffled.cols()),
-                          rep_each(uvec::LinSpaced(m_incrementedCovarReshuffled.cols(), 0, m_incrementedCovarReshuffled.cols() - 1).array(), m_incrementedCovarReshuffled.rows())) ;
+  ArrayXXi covPos = join_rows(rep(uvec::LinSpaced(incrementedCovarReshuffled.rows(), 0, incrementedCovarReshuffled.rows() - 1).array(), incrementedCovarReshuffled.cols()),
+                          rep_each(uvec::LinSpaced(incrementedCovarReshuffled.cols(), 0, incrementedCovarReshuffled.cols() - 1).array(), incrementedCovarReshuffled.rows())) ;
   HmatPos = join_cols(covPos, HmatPos) ; // Could this cause aliasing?
-  // Now, we create the first Hmat.
-  //TO_DO
+
+  ArrayXd concatenatedValues(Map<ArrayXd>(incrementedCovarReshuffled.data(), incrementedCovarReshuffled.cols() * incrementedCovarReshuffled.rows()))  ;
+  int totalSize = concatenatedValues.size() ;
+  int secondIndex = totalSize ;
+  for (auto & tipNode : GetTipNodes()) {
+    if (tipNode->GetObsInNode().size() > 0) {
+      for (auto & Bmat : tipNode->GetWlist()) {
+        totalSize += Bmat.size();
+      }
+    }
+  }
+  concatenatedValues.conservativeResize(totalSize, 1) ;
+
+  for (auto & tipNode : GetTipNodes()) {
+    if (tipNode->GetObsInNode().size() > 0) {
+      for (auto & Bmat : tipNode->GetWlist()) {
+        ArrayXd B(Map<ArrayXd>(Bmat.data(), Bmat.cols() * Bmat.rows()));
+        concatenatedValues.segment(secondIndex, B.size()) = B ;
+        secondIndex += B.size() ;
+      }
+    }
+  }
+  m_Hmat.resize(incrementedCovarReshuffled.rows(), m_numKnots) ;
+  std::vector<Triplet> tripletList;
+
+  int offset = 0 ;
+
+  for (uint i = 0; i < concatenatedValues.size(); i++) {
+    tripletList.push_back(Triplet(HmatPos(i, 0), HmatPos(i, 1), concatenatedValues(i))) ;
+  }
+  m_Hmat.setFromTriplets(tripletList.begin(), tripletList.end()) ;
+  std::cout << "Done! \n" ;
 }
 
 void AugTree::updateHmatrix() {
-  int numElementsInH = m_incrementedCovarReshuffled.size() ;
+  int numElementsInH = m_dataset.covariateValues.size() + m_dataset.covariateValues.rows() ; // The second term is there to account for the intercept.
   for (auto & tipNode : GetTipNodes()) {
     for (auto & Bmat : tipNode->GetWlist()) {
       numElementsInH += Bmat.size() ;
     }
   }
   vec concatenatedValues(numElementsInH) ;
-  concatenatedValues.segment(0, m_incrementedCovarReshuffled.size()) = m_incrementedCovarReshuffled ;
-  int index = m_incrementedCovarReshuffled.size() ;
+  mat intercept = MatrixXd::Ones(m_dataset.covariateValues.rows(), 1) ;
+  // join_rows is made in such a way that both elements must have the exact same type, hence the strategy here.
+  ArrayXXd incrementedCovar = join_rows(intercept.array(), m_dataset.covariateValues.array()) ;
+  ArrayXXd incrementedCovarReshuffled = rows(incrementedCovar.array(), m_obsOrderForFmat) ;
+  concatenatedValues.segment(0, incrementedCovarReshuffled.size()) = incrementedCovarReshuffled ;
+  int index = incrementedCovarReshuffled.size() ;
   for (auto & tipNode : GetTipNodes()) {
     for (auto & Bmat : tipNode->GetWlist()) {
       concatenatedValues.segment(index, Bmat.size()) = Map<vec>(Bmat.data(), Bmat.size()) ;
@@ -463,8 +498,11 @@ void AugTree::updateHmatrix() {
 }
 
 void AugTree::updateHmatrixPred() {
+  mat intercept = ArrayXd::Ones(m_predictData.covariateValues.rows(), 1) ;
+  ArrayXXd incrementedCovarPredict = join_rows(intercept.array(), m_predictData.covariateValues.array()) ;
+  ArrayXXd incrementedCovarPredictReshuffled = rows(incrementedCovarPredict, m_obsOrderForHpredMat) ;
   // Will this correctly preserve the order? It's supposed to...
-  ArrayXd concatenatedValues(Map<ArrayXd>(m_incrementedCovarPredictReshuffled.data(), m_incrementedCovarPredictReshuffled.cols() * m_incrementedCovarPredictReshuffled.rows()))  ;
+  ArrayXd concatenatedValues(Map<ArrayXd>(incrementedCovarPredictReshuffled.data(), incrementedCovarPredictReshuffled.cols() * incrementedCovarPredictReshuffled.rows()))  ;
   int totalSize = concatenatedValues.size() ;
   int secondIndex = totalSize ;
   for (auto & tipNode : GetTipNodes()) {
@@ -497,7 +535,7 @@ void AugTree::updateHmatrixPred() {
 }
 
 void AugTree::createHmatrixPred() {
-
+  std::cout << "Creating the prediction mapping matrix H... \n" ;
   uint numObs = m_predictData.spatialCoords.rows() ;
   ArrayXXi HmatPredPos(0, 2) ;
 
@@ -580,16 +618,46 @@ void AugTree::createHmatrixPred() {
 
   mat intercept = mat::Ones(numObs, 1) ;
   mat transIncrementedCovar = (join_rows(intercept.array(), m_predictData.covariateValues.array())).transpose() ;
-  m_incrementedCovarPredictReshuffled = cols(transIncrementedCovar.array(), FmatObsOrder).transpose() ;
+  mat incrementedCovarPredictReshuffled = cols(transIncrementedCovar.array(), FmatObsOrder).transpose() ;
 
   HmatPredPos.col(1) += m_predictData.covariateValues.cols() + 1 ;
-  ArrayXXi covPos = join_rows(rep(uvec::LinSpaced(m_incrementedCovarPredictReshuffled.rows(), 0, m_incrementedCovarPredictReshuffled.rows() - 1).array(),
-                              m_incrementedCovarPredictReshuffled.cols()),
-                          rep_each(uvec::LinSpaced(m_incrementedCovarPredictReshuffled.cols(), 0, m_incrementedCovarPredictReshuffled.cols() - 1).array(),
-                                   m_incrementedCovarPredictReshuffled.rows())) ;
+  ArrayXXi covPos = join_rows(rep(uvec::LinSpaced(m_predictData.covariateValues.rows(), 0, m_predictData.covariateValues.rows() - 1).array(),
+                                  m_predictData.covariateValues.cols() + 1),
+                          rep_each(uvec::LinSpaced(m_predictData.covariateValues.cols() + 1, 0, m_predictData.covariateValues.cols()).array(),
+                                   m_predictData.covariateValues.rows())) ;
   HmatPredPos = join_cols(covPos, HmatPredPos) ; // Could this cause aliasing?
-  // Create HmatPred...
-  //TO_DO
+
+  ArrayXd concatenatedValues(Map<ArrayXd>(incrementedCovarPredictReshuffled.data(), incrementedCovarPredictReshuffled.cols() * incrementedCovarPredictReshuffled.rows()))  ;
+  int totalSize = concatenatedValues.size() ;
+  int secondIndex = totalSize ;
+  for (auto & tipNode : GetTipNodes()) {
+    if (tipNode->GetPredIndices().size() > 0) {
+      for (auto & Umat : tipNode->GetUmatList()) {
+        totalSize += Umat.size();
+      }
+    }
+  }
+  concatenatedValues.conservativeResize(totalSize, 1) ;
+
+  for (auto & tipNode : GetTipNodes()) {
+    if (tipNode->GetPredIndices().size() > 0) {
+      for (auto & Umat : tipNode->GetUmatList()) {
+        ArrayXd B(Map<ArrayXd>(Umat.data(), Umat.cols() * Umat.rows()));
+        concatenatedValues.segment(secondIndex, B.size()) = B ;
+        secondIndex += B.size() ;
+      }
+    }
+  }
+  std::vector<Triplet> tripletList;
+
+  int offset = 0 ;
+  m_HmatPred.resize(m_predictData.timeCoords.size(), m_numKnots) ;
+
+  for (uint i = 0; i < concatenatedValues.size(); i++) {
+    tripletList.push_back(Triplet(HmatPredPos(i, 0), HmatPredPos(i, 1), concatenatedValues(i))) ;
+  }
+  m_HmatPred.setFromTriplets(tripletList.begin(), tripletList.end()) ;
+  std::cout << "Done! \n" ;
 }
 
 std::vector<TreeNode *> AugTree::Descendants(std::vector<TreeNode *> nodeList) {

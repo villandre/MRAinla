@@ -129,12 +129,7 @@ Eigen::Array<typename Derived::Scalar, Eigen::Dynamic, Eigen::Dynamic> cols(cons
 
 template<typename Derived>
 Eigen::Array<typename Derived::Scalar, Eigen::Dynamic, Eigen::Dynamic> rows(const Eigen::ArrayBase<Derived> & matrixToSubset, const Eigen::Ref<const Eigen::ArrayXi> & indexVector) {
-  Eigen::Array<typename Derived::Scalar, Eigen::Dynamic, Eigen::Dynamic> resultTrans =
-    Eigen::Array<typename Derived::Scalar, Eigen::Dynamic, Eigen::Dynamic>::Zero(matrixToSubset.cols(), indexVector.size()) ;
-  Eigen::Array<typename Derived::Scalar, Eigen::Dynamic, Eigen::Dynamic> transposed = matrixToSubset.transpose() ;
-  for (uint i = 0; i < indexVector.size(); i++) {
-    resultTrans.col(i) = transposed.col(indexVector(i)) ;
-  }
+  Eigen::Array<typename Derived::Scalar, Eigen::Dynamic, Eigen::Dynamic> resultTrans = cols(matrixToSubset.transpose(), indexVector) ;
   return resultTrans.transpose() ;
 }
 

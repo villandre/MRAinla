@@ -27,6 +27,7 @@ typedef Eigen::MatrixXd mat ;
 typedef Eigen::SparseMatrix<double> sp_mat ;
 typedef Eigen::VectorXi uvec ;
 typedef Eigen::MatrixXi umat ;
+typedef Eigen::Triplet<double> Triplet;
 
 struct maternVec{
   double m_rho ;

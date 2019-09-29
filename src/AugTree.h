@@ -149,8 +149,8 @@ private:
   bool m_matern ;
   double m_spaceNuggetSD ;
   double m_timeNuggetSD ;
-  mat m_incrementedCovarReshuffled ;
-  mat m_incrementedCovarPredictReshuffled ;
+  // mat m_incrementedCovarReshuffled ;
+  // mat m_incrementedCovarPredictReshuffled ;
 
   // The next few members are to improve computational efficiency
   uvec m_DmatrixBlockIndices ;
