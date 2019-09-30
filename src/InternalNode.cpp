@@ -103,7 +103,7 @@ void InternalNode::DeriveAtilde() {
   // }
   m_KtildeInverse = GetKmatrixInverse() + m_Alist.at(m_depth).at(m_depth) ;
 
-  m_Ktilde = m_KtildeInverse.colPivHouseholderQr().solve(mat::Identity(m_KtildeInverse.rows(), m_KtildeInverse.rows())) ;
+  m_Ktilde = m_KtildeInverse.ldlt().solve(mat::Identity(m_KtildeInverse.rows(), m_KtildeInverse.rows())) ;
 
   for (uint k = 0; k <= m_depth ; k++) {
     for (uint l = 0; l <= k ; l++) {
@@ -157,6 +157,13 @@ void::InternalNode::DeriveD() {
 
 void InternalNode::ComputeWmat(const maternVec & covParasSp, const maternVec & covParasTime, const double & scaling, const bool matern, const double & spaceNuggetSD, const double & timeNuggetSD) {
   baseComputeWmat(covParasSp, covParasTime, scaling, matern, spaceNuggetSD, timeNuggetSD) ;
+  std::cout << "Ensuring symmetry in Sigma... \n" ;
+  fflush(stdout);
   m_Wlist.at(m_depth).triangularView<Lower>() = m_Wlist.at(m_depth).triangularView<Upper>() ; // Will this cause aliasing?
+  std::cout << "Done! \n" ;
+  std::cout << "Getting K... \n" ;
+  fflush(stdout);
   m_K = GetKmatrixInverse().ldlt().solve(mat::Identity(GetKmatrixInverse().rows(), GetKmatrixInverse().cols())) ; // The K matrix is some sort of covariance matrix, so it should always be symmetrical..
+  std::cout << "Done!!!! \n" ;
+  fflush(stdout);
 }

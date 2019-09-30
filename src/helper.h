@@ -46,7 +46,7 @@ Eigen::Array<typename Derived::Scalar, Eigen::Dynamic, 1> rep_each(const Eigen::
   Eigen::Array<typename Derived::Scalar, Eigen::Dynamic, 1> container(x.size() * times, 1) ; // double is the most general type. Will
   int index = 0 ;
   for (uint i = 0 ; i < x.size(); i++) {
-    container.segment(index, times) = x(i, 1) * Eigen::ArrayBase<Derived>::Ones(times, 1) ;
+    container.segment(index, times) = x(i, 0) * Eigen::ArrayBase<Derived>::Ones(times, 1) ;
     index += times ;
   }
   return container ;

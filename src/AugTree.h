@@ -40,9 +40,8 @@ public:
   AugTree(uint &, vec &, vec &, vec &, vec &, mat &, vec &, mat &, mat &, vec &, uint &, unsigned long int &, mat &, const bool, const unsigned int, const unsigned int) ;
 
   std::vector<TreeNode *> GetVertexVector() {return m_vertexVector ;} ;
-  umat m_DinFCmatPos ;
 
-  void ComputeMRAlogLikAlt(const bool WmatsAvailable = false) ;
+  // void ComputeMRAlogLikAlt(const bool WmatsAvailable = false) ;
   std::vector<GaussDistParas> ComputeConditionalPrediction(const inputdata &) ;
 
   void ComputeLogFCandLogCDandDataLL() ;
@@ -145,10 +144,10 @@ private:
   double m_logCondDist{ 0 } ;
   double m_logFullCond{ 0 } ;
   double m_logJointPsiMarginal{ 0 } ;
-  int m_numKnots ;
-  bool m_matern ;
-  double m_spaceNuggetSD ;
-  double m_timeNuggetSD ;
+  int m_numKnots{ 0 } ;
+  bool m_matern{ true } ;
+  double m_spaceNuggetSD{ 1e-6 };
+  double m_timeNuggetSD{ 1e-6 } ;
   // mat m_incrementedCovarReshuffled ;
   // mat m_incrementedCovarPredictReshuffled ;
 
@@ -157,8 +156,8 @@ private:
 
   int m_M{ 0 } ;
   int m_numTips{ 0 } ;
-  double m_errorSD ;
-  double m_fixedEffSD ;
+  double m_errorSD{ 0 } ;
+  double m_fixedEffSD{ 0 } ;
   vec m_spatialComponents ;
   maternGammaPriorParasWithoutScale m_maternParasGammaAlphaBetaSpace ;
   maternGammaPriorParasWithoutScale m_maternParasGammaAlphaBetaTime ;
@@ -168,7 +167,7 @@ private:
 
   maternVec m_MRAcovParasSpace ;
   maternVec m_MRAcovParasTime ;
-  double m_spacetimeScaling ;
+  double m_spacetimeScaling{ 1e-5 } ;
   vec m_fixedEffParameters ;
   vec m_FEmu ;
 

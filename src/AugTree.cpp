@@ -35,6 +35,7 @@ struct MVN{
 AugTree::AugTree(uint & M, vec & lonRange, vec & latRange, vec & timeRange, vec & observations, mat & obsSp, vec & obsTime, mat & predCovariates, mat & predSp, vec & predTime, uint & minObsForTimeSplit, unsigned long int & seed, mat & covariates, const bool splitTime, const unsigned int numKnotsRes0, const unsigned int J)
   : m_M(M)
 {
+  m_GammaParasSet = false ;
   m_dataset = inputdata(observations, obsSp, obsTime, covariates) ;
   m_mapDimensions = dimensions(lonRange, latRange, timeRange) ;
   m_randomNumGenerator = gsl_rng_alloc(gsl_rng_taus) ;
@@ -227,43 +228,49 @@ void AugTree::generateKnots(TreeNode * node, const unsigned int numKnotsRes0, co
   }
 }
 
-void AugTree::ComputeMRAlogLikAlt(const bool WmatsAvailable)
-{
-  if (!WmatsAvailable) {
-    computeWmats() ;
-  }
-  double MRAlogLik = 0 ;
-  int currentIndex = m_fixedEffParameters.size() ;
-
-  for (auto & i : m_vertexVector) {
-    int lastIndex = currentIndex + i->GetNumKnots() - 1 ;
-    vec etas = m_Vstar.segment(currentIndex, lastIndex - currentIndex + 1) ;
-
-    double logDeterminantValue = 0 ;
-    double sign = 0 ;
-    logDeterminantValue = i->GetKmatrix().colPivHouseholderQr().logAbsDeterminant() ;
-
-    mat exponentTerm = -0.5 * etas.transpose() * i->GetKmatrixInverse() * etas ;
-    MRAlogLik += (-0.5*logDeterminantValue + exponentTerm(0,0)) ;
-    currentIndex = lastIndex + 1 ;
-  }
-
-  m_MRAlogLik = MRAlogLik ;
-}
+// void AugTree::ComputeMRAlogLikAlt(const bool WmatsAvailable)
+// {
+//   if (!WmatsAvailable) {
+//     computeWmats() ;
+//   }
+//   double MRAlogLik = 0 ;
+//   int currentIndex = m_fixedEffParameters.size() ;
+//
+//   for (auto & i : m_vertexVector) {
+//     int lastIndex = currentIndex + i->GetNumKnots() - 1 ;
+//     vec etas = m_Vstar.segment(currentIndex, lastIndex - currentIndex + 1) ;
+//
+//     double logDeterminantValue = 0 ;
+//     double sign = 0 ;
+//     logDeterminantValue = i->GetKmatrix().colPivHouseholderQr().logAbsDeterminant() ;
+//
+//     mat exponentTerm = -0.5 * etas.transpose() * i->GetKmatrixInverse() * etas ;
+//     MRAlogLik += (-0.5*logDeterminantValue + exponentTerm(0,0)) ;
+//     currentIndex = lastIndex + 1 ;
+//   }
+//
+//   m_MRAlogLik = MRAlogLik ;
+// }
 
 void AugTree::computeWmats() {
-
+  cout << "Inside computeWmats... Processing root node... \n" ;
+  fflush(stdout); // Will now print everything in the stdout buffer
   m_vertexVector.at(0)->ComputeWmat(m_MRAcovParasSpace, m_MRAcovParasTime, m_spacetimeScaling, m_matern, m_spaceNuggetSD, m_timeNuggetSD) ;
-
+  cout << "Done! \n" ;
+  fflush(stdout);
   for (uint level = 1; level <= m_M; level++) {
     std::vector<TreeNode *> levelNodes = GetLevelNodes(level) ;
 
     // Trying openmp. We need to have a standard looping structure.
     // #pragma omp parallel for
+    cout << "Processing other nodes... \n" ;
+    fflush(stdout);
     for (std::vector<TreeNode *>::iterator it = levelNodes.begin(); it < levelNodes.end(); it++)
     {
       (*it)->ComputeWmat(m_MRAcovParasSpace, m_MRAcovParasTime, m_spacetimeScaling, m_matern, m_spaceNuggetSD, m_timeNuggetSD) ;
     }
+    cout << "Done! \n" ;
+    fflush(stdout);
   }
 }
 
@@ -353,8 +360,7 @@ void AugTree::createHmatrix() {
 
   cout << "Creating the data mapping matrix... \n" ;
   int numObs = m_dataset.spatialCoords.rows() ;
-  std::vector<std::vector<double *>> memAddressesVec(m_numKnots) ;
-  ArrayXXi HmatPos ;
+  ArrayXXi HmatPos(0, 2) ;
 
   std::vector<uvec> FmatNodeOrder(m_M) ;
   ArrayXi FmatObsOrder = uvec::Zero(numObs) ;
@@ -431,7 +437,7 @@ void AugTree::createHmatrix() {
 
   ArrayXXi covPos = join_rows(rep(uvec::LinSpaced(incrementedCovarReshuffled.rows(), 0, incrementedCovarReshuffled.rows() - 1).array(), incrementedCovarReshuffled.cols()),
                           rep_each(uvec::LinSpaced(incrementedCovarReshuffled.cols(), 0, incrementedCovarReshuffled.cols() - 1).array(), incrementedCovarReshuffled.rows())) ;
-  HmatPos = join_cols(covPos, HmatPos) ; // Could this cause aliasing?
+  HmatPos = join_cols(covPos, HmatPos).eval() ; // Could this cause aliasing?
 
   ArrayXd concatenatedValues(Map<ArrayXd>(incrementedCovarReshuffled.data(), incrementedCovarReshuffled.cols() * incrementedCovarReshuffled.rows()))  ;
   int totalSize = concatenatedValues.size() ;
@@ -454,7 +460,7 @@ void AugTree::createHmatrix() {
       }
     }
   }
-  m_Hmat.resize(incrementedCovarReshuffled.rows(), m_numKnots) ;
+  m_Hmat.resize(incrementedCovarReshuffled.rows(), m_numKnots + incrementedCovar.cols()) ;
   std::vector<Triplet> tripletList;
 
   int offset = 0 ;
@@ -462,6 +468,7 @@ void AugTree::createHmatrix() {
   for (uint i = 0; i < concatenatedValues.size(); i++) {
     tripletList.push_back(Triplet(HmatPos(i, 0), HmatPos(i, 1), concatenatedValues(i))) ;
   }
+
   m_Hmat.setFromTriplets(tripletList.begin(), tripletList.end()) ;
   std::cout << "Done! \n" ;
 }
@@ -625,7 +632,7 @@ void AugTree::createHmatrixPred() {
                                   m_predictData.covariateValues.cols() + 1),
                           rep_each(uvec::LinSpaced(m_predictData.covariateValues.cols() + 1, 0, m_predictData.covariateValues.cols()).array(),
                                    m_predictData.covariateValues.rows())) ;
-  HmatPredPos = join_cols(covPos, HmatPredPos) ; // Could this cause aliasing?
+  HmatPredPos = join_cols(covPos, HmatPredPos).eval() ; // Could this cause aliasing?
 
   ArrayXd concatenatedValues(Map<ArrayXd>(incrementedCovarPredictReshuffled.data(), incrementedCovarPredictReshuffled.cols() * incrementedCovarPredictReshuffled.rows()))  ;
   int totalSize = concatenatedValues.size() ;
@@ -651,7 +658,7 @@ void AugTree::createHmatrixPred() {
   std::vector<Triplet> tripletList;
 
   int offset = 0 ;
-  m_HmatPred.resize(m_predictData.timeCoords.size(), m_numKnots) ;
+  m_HmatPred.resize(m_predictData.timeCoords.size(), m_numKnots + incrementedCovarPredictReshuffled.cols()) ;
 
   for (uint i = 0; i < concatenatedValues.size(); i++) {
     tripletList.push_back(Triplet(HmatPredPos(i, 0), HmatPredPos(i, 1), concatenatedValues(i))) ;
@@ -702,19 +709,30 @@ void AugTree::ComputeLogPriors() {
 }
 
 void AugTree::ComputeLogFCandLogCDandDataLL() {
-
+  cout << "Entered ComputeLogFCand... \n" ;
+  fflush(stdout);
   int n = m_dataset.responseValues.size() ;
-  // cout << "Creating matrix of Ks... \n" ;
 
   if (m_SigmaFEandEtaInv.rows() == 0) {
+    cout << "Creating SigmaBetaEtaInv... \n" ;
     CreateSigmaBetaEtaInvMat() ;
+    cout << "Done! \n" ;
+    // throw Rcpp::exception("Stop to check block matrix... \n") ;
   } else {
+    cout << "Updating SigmaBetaInv... \n" ;
     UpdateSigmaBetaEtaInvMat() ;
+    cout << "Done! \n" ;
   }
 
-  Eigen::CholmodSimplicialLDLT<sp_mat> blockChol(m_SigmaFEandEtaInv) ;
-  double logDetSigmaKFEinv = blockChol.logDeterminant() ;
+  cout << "Computing Cholesky decomp. of SigmaFEandEtaInv... \n" ;
+  Eigen::SimplicialLDLT<Eigen::SparseMatrix<double>> blockChol(m_SigmaFEandEtaInv) ;
+  std::cout << "Diagonal from the block decomp.: \n" ;
+  std::cout << blockChol.vectorD() ;
+  cout << "Done!" ;
+  double logDetSigmaKFEinv = blockChol.vectorD().array().log().sum() ;
+  printf("LogDetSigmaKFEinv: %.4e \n", logDetSigmaKFEinv) ;
   std::cout << "Done... \n" ;
+  fflush(stdout) ;
 
   if (m_recomputeMRAlogLik) {
     // cout << "Obtaining H matrix... \n" ;
@@ -726,11 +744,13 @@ void AugTree::ComputeLogFCandLogCDandDataLL() {
     std::cout << "Done... \n" ;
   }
 
-  sp_mat secondTerm = std::pow(m_errorSD, -2) * m_Hmat.transpose() * m_Hmat ;
+  sp_mat secondTerm ;
+  secondTerm = std::pow(m_errorSD, -2) * m_Hmat.transpose() * m_Hmat ;
   vec responsesReshuffled = elem(m_dataset.responseValues.array(), m_obsOrderForFmat) ;
 
   // sp_mat hessianMat = SigmaFEandEtaInv + secondTerm ;
-  mat scaledResponse = std::pow(m_errorSD, -2) * responsesReshuffled.transpose() * m_Hmat ;
+  mat scaledResponse ;
+  scaledResponse.noalias() = std::pow(m_errorSD, -2) * responsesReshuffled.transpose() * m_Hmat ;
   std::cout << "Obtaining Qchol... \n" ;
   m_FullCondPrecisionChol.compute(m_SigmaFEandEtaInv + secondTerm) ;
   std::cout << "Done! \n" ;
@@ -748,44 +768,49 @@ void AugTree::ComputeLogFCandLogCDandDataLL() {
 
   // double logDetQmat = m_FullCondPrecisionChol.logDeterminant() ; // If Cholmod is used.
 
-  double logDetQmat = 0 ;
-  for (uint i = 0; i = m_FullCondPrecisionChol.vectorD().size(); i++) {
-    logDetQmat += log(m_FullCondPrecisionChol.vectorD()(i)) ;
-  }
-
+  double logDetQmat = m_FullCondPrecisionChol.vectorD().array().log().sum() ; // In LDLT, the L matrix has a diagonal with 1s, meaning that its determinant is 1. It follows that the determinant of the original matrix is simply the product of the elements in the D matrix.
+  printf("LogDetQmat: %.4e \n", logDetQmat) ;
+  fflush(stdout) ;
   m_logFullCond = 0.5 * logDetQmat ; // Since we arbitrarily evaluate always at the full-conditional mean, the exponential part of the distribution reduces to 0.
 
   // Computing p(v* | Psi)
-  mat logLikTerm = -0.5 * m_Vstar.transpose() * m_SigmaFEandEtaInv.selfadjointView<Lower>() * m_Vstar ;
+  mat logLikTerm ;
+  logLikTerm.noalias() = -0.5 * m_Vstar.transpose() * m_SigmaFEandEtaInv.selfadjointView<Lower>() * m_Vstar ;
 
   m_logCondDist = logLikTerm(0,0) + 0.5 * logDetSigmaKFEinv ;
 
   // Computing p(y | v*, Psi)
   double errorLogDet = -2 * n * log(m_errorSD) ;
-  vec recenteredY = responsesReshuffled - m_Hmat * m_Vstar ;
-  vec globalLogLikExp = -0.5 * std::pow(m_errorSD, -2) * recenteredY.transpose() * recenteredY ;
+  vec recenteredY ;
+  recenteredY.noalias() = responsesReshuffled - m_Hmat * m_Vstar ;
+  vec globalLogLikExp ;
+  globalLogLikExp.noalias() = -0.5 * std::pow(m_errorSD, -2) * recenteredY.transpose() * recenteredY ;
   m_globalLogLik = 0.5 * errorLogDet + globalLogLikExp(0) ;
+  cout << "Leaving ComputeLogFC... \n" ;
+  fflush(stdout);
 }
 
 void AugTree::ComputeLogJointPsiMarginal() {
 
   ComputeLogPriors() ;
-  // cout << "Computing Wmats... \n" ;
+
   if (m_recomputeMRAlogLik) {
-    // m_MRAcovParasSpace.print("Space parameters:") ;
-    // m_MRAcovParasTime.print("Time parameters:") ;
-    // printf("Scale parameter: %.4e \n", m_spacetimeScaling) ;
-    // fflush(stdout); // Will now print everything in the stdout buffer
-    computeWmats() ; // This will produce the K matrices required. NOTE: ADD CHECK THAT ENSURES THAT THE MRA LIK. IS ONLY RE-COMPUTED WHEN THE MRA COV. PARAMETERS CHANGE.
-    // cout << "Done... \n" ;
+    cout << "Computing Wmats... \n" ;
+    m_MRAcovParasSpace.print("Space parameters:") ;
+    m_MRAcovParasTime.print("Time parameters:") ;
+    printf("Scale parameter: %.4e \n", m_spacetimeScaling) ;
+    fflush(stdout); // Will now print everything in the stdout buffer
+    cout << "About to enter computeWmats() \n" ;
+    computeWmats() ; // This will produce the K matrices required.
+    cout << "Done... \n" ;
   }
 
   ComputeLogFCandLogCDandDataLL() ;
 
-  // printf("Observations log-lik: %.4e \n Log-prior: %.4e \n Log-Cond. dist.: %.4e \n Log-full cond.: %.4e \n \n \n",
-  // m_globalLogLik, m_logPrior, m_logCondDist, m_logFullCond) ;
+  printf("Observations log-lik: %.4e \n Log-prior: %.4e \n Log-Cond. dist.: %.4e \n Log-full cond.: %.4e \n \n \n",
+   m_globalLogLik, m_logPrior, m_logCondDist, m_logFullCond) ;
   m_logJointPsiMarginal = m_globalLogLik + m_logPrior + m_logCondDist - m_logFullCond ;
-  // printf("Joint value: %.4e \n \n", m_logJointPsiMarginal) ;
+  printf("Joint value: %.4e \n \n", m_logJointPsiMarginal) ;
 }
 
 void AugTree::ComputeHpred(const mat & spCoords, const vec & time, const mat & covariateMatrix) {

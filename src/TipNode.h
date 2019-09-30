@@ -37,16 +37,14 @@ public:
 
   void DeriveD() {
     double val = 0;
-    Eigen::ColPivHouseholderQR<Eigen::MatrixXd> decomp(GetSigma().rows(), GetSigma().cols()) ;
-    val = decomp.compute(GetSigma()).logAbsDeterminant() ;
+    val = GetSigma().colPivHouseholderQr().logAbsDeterminant() ;
     m_d = val ;
   }
 
   void ComputeWmat(const maternVec & covParasSp, const maternVec & covParasTime, const double & scaling, const bool matern, const double & spaceNuggetSD, const double & timeNuggetSD) {
     baseComputeWmat(covParasSp, covParasTime, scaling, matern, spaceNuggetSD, timeNuggetSD) ;
     m_Wlist.at(m_depth).triangularView<Eigen::Lower>() = m_Wlist.at(m_depth).triangularView<Eigen::Upper>() ; // Will this cause aliasing?
-    Eigen::LDLT<mat> chol(GetSigma()) ;
-    m_SigmaInverse = chol.solve(Eigen::MatrixXd::Identity(m_SigmaInverse.rows(), m_SigmaInverse.cols())) ;
+    m_SigmaInverse = GetSigma().selfadjointView<Eigen::Lower>().ldlt().solve(Eigen::MatrixXd::Identity(GetSigma().rows(), GetSigma().cols())) ;
   }
 
   // void ComputeParasEtaDeltaTilde(const spatialcoor &, const inputdata &, const vec &) ;
@@ -106,7 +104,7 @@ protected:
   };
 
   mat m_SigmaInverse ;
-  double m_uncorrSD ;
+  double m_uncorrSD{ -1 } ;
 
   // Prediction components (should probably be freed once computations are done)
 

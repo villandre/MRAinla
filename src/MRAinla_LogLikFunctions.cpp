@@ -52,8 +52,8 @@ double LogJointHyperMarginalToWrap(SEXP treePointer, Rcpp::List MRAhyperparas,
   mat posteriorMatrix ;
   double outputValue = 0 ;
 
-  if (!(treePointer == NULL))
-  {
+  // if (!(treePointer == NULL))
+  // {
     XPtr<AugTree> pointedTree(treePointer) ; // Becomes a regular pointer again.
 
     // The alpha's and beta's for the gamma distribution of the hyperparameters do not change.
@@ -72,7 +72,7 @@ double LogJointHyperMarginalToWrap(SEXP treePointer, Rcpp::List MRAhyperparas,
       pointedTree->SetSpaceAndTimeNuggetSD(spaceNuggetSD, timeNuggetSD) ;
       std::vector<TreeNode *> tipNodes = pointedTree->GetLevelNodes(pointedTree->GetM()) ;
       for (auto & i : tipNodes) {
-        i->SetUncorrSD(0.05) ;
+        i->SetUncorrSD(0.001) ; // Is this a nugget effect?
       }
     }
     pointedTree->SetErrorSD(errorSD) ;
@@ -85,11 +85,11 @@ double LogJointHyperMarginalToWrap(SEXP treePointer, Rcpp::List MRAhyperparas,
 
     outputValue = pointedTree->GetLogJointPsiMarginal() ;
     // printf("Marginal joint Psi: %.4e \n \n \n", pointedTree->GetLogJointPsiMarginal()) ;
-  }
-  else
-  {
-    throw Rcpp::exception("Pointer to MRA grid is null." ) ;
-  }
+  // }
+  // else
+  // {
+  //   throw Rcpp::exception("Pointer to MRA grid is null." ) ;
+  // }
   return outputValue ;
 }
 
