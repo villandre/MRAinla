@@ -703,48 +703,35 @@ void AugTree::ComputeLogPriors() {
 }
 
 void AugTree::ComputeLogFCandLogCDandDataLL() {
-  cout << "Entered ComputeLogFCand... \n" ;
   fflush(stdout);
   int n = m_dataset.responseValues.size() ;
 
   if (m_SigmaFEandEtaInv.rows() == 0) {
-    cout << "Creating SigmaBetaEtaInv... \n" ;
     CreateSigmaBetaEtaInvMat() ;
-    cout << "Done! \n" ;
-    // throw Rcpp::exception("Stop to check block matrix... \n") ;
   } else {
-    cout << "Updating SigmaBetaInv... \n" ;
     UpdateSigmaBetaEtaInvMat() ;
-    cout << "Done! \n" ;
   }
 
   Eigen::SimplicialLDLT<Eigen::SparseMatrix<double>> blockChol(m_SigmaFEandEtaInv) ;
 
   double logDetSigmaKFEinv = blockChol.vectorD().array().log().sum() ;
-  printf("LogDetSigmaKFEinv: %.4e \n", logDetSigmaKFEinv) ;
-  std::cout << "Done... \n" ;
-  fflush(stdout) ;
 
   if (m_recomputeMRAlogLik) {
-    // cout << "Obtaining H matrix... \n" ;
     if (m_Hmat.size() == 0) {
       createHmatrix() ;
     } else {
       updateHmatrix() ;
     }
-    std::cout << "Done... \n" ;
   }
 
   sp_mat secondTerm ;
   secondTerm = std::pow(m_errorSD, -2) * m_Hmat.transpose() * m_Hmat ;
   vec responsesReshuffled = elem(m_dataset.responseValues.array(), m_obsOrderForFmat) ;
 
-  // sp_mat hessianMat = SigmaFEandEtaInv + secondTerm ;
   mat scaledResponse ;
   scaledResponse.noalias() = std::pow(m_errorSD, -2) * responsesReshuffled.transpose() * m_Hmat ;
-  std::cout << "Obtaining Qchol... \n" ;
   m_FullCondPrecisionChol.compute(m_SigmaFEandEtaInv + secondTerm) ;
-  std::cout << "Done! \n" ;
+
   // m_FullCondSDs = sqrt(m_FullCondPrecisionChol.diag()) ;
   // cout << "Done... \n" ;
 
