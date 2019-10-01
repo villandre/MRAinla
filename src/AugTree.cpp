@@ -730,12 +730,18 @@ void AugTree::ComputeLogFCandLogCDandDataLL() {
 
   mat scaledResponse ;
   scaledResponse.noalias() = std::pow(m_errorSD, -2) * responsesReshuffled.transpose() * m_Hmat ;
+
   m_FullCondPrecisionChol.compute(m_SigmaFEandEtaInv + secondTerm) ;
 
   // m_FullCondSDs = sqrt(m_FullCondPrecisionChol.diag()) ;
   // cout << "Done... \n" ;
 
-  vec updatedMean = m_FullCondPrecisionChol.solve(scaledResponse) ;
+  vec updatedMean = m_FullCondPrecisionChol.solve(scaledResponse.transpose()) ;
+  if(m_FullCondPrecisionChol.info()!=Success) {
+    // solving failed
+    std::cout<< "Solving failed!!!! \n" ;
+    throw Rcpp::exception("Leave now... \n") ;
+  }
 
   m_Vstar = updatedMean ; // Assuming there will be an implicit conversion to vec type.
 
@@ -744,11 +750,8 @@ void AugTree::ComputeLogFCandLogCDandDataLL() {
   vec fixedEffMeans = m_Vstar.head(m_fixedEffParameters.size()) ;
   SetFixedEffParameters(fixedEffMeans) ;
 
-  // double logDetQmat = m_FullCondPrecisionChol.logDeterminant() ; // If Cholmod is used.
-
   double logDetQmat = m_FullCondPrecisionChol.vectorD().array().log().sum() ; // In LDLT, the L matrix has a diagonal with 1s, meaning that its determinant is 1. It follows that the determinant of the original matrix is simply the product of the elements in the D matrix.
-  printf("LogDetQmat: %.4e \n", logDetQmat) ;
-  fflush(stdout) ;
+
   m_logFullCond = 0.5 * logDetQmat ; // Since we arbitrarily evaluate always at the full-conditional mean, the exponential part of the distribution reduces to 0.
 
   // Computing p(v* | Psi)
@@ -761,14 +764,12 @@ void AugTree::ComputeLogFCandLogCDandDataLL() {
   double errorLogDet = -2 * n * log(m_errorSD) ;
   vec recenteredY ;
   recenteredY.noalias() = responsesReshuffled - m_Hmat * m_Vstar ;
-  std::cout << "Responses" << responsesReshuffled.segment(0,10) << "\n\n" ;
+
   std::cout << "v vector: " << m_Vstar.segment(0,10) << "\n\n" ;
-  std::cout << "Hmatrix: " << m_Hmat.block(0, 0, 10, 10) << "\n\n" ;
+
   vec globalLogLikExp ;
   globalLogLikExp.noalias() = -0.5 * std::pow(m_errorSD, -2) * recenteredY.transpose() * recenteredY ;
   m_globalLogLik = 0.5 * errorLogDet + globalLogLikExp(0) ;
-  cout << "Leaving ComputeLogFC... \n" ;
-  fflush(stdout);
 }
 
 void AugTree::ComputeLogJointPsiMarginal() {
