@@ -57,18 +57,15 @@ void InternalNode::genRandomKnots(spatialcoor & dataCoor, const uint & numKnots,
 
     double minTime = m_dimensions.time.minCoeff() ;
     double maxTime = m_dimensions.time.maxCoeff() ;
-    printf("Min and max time in node: %.4e %.4e \n", minTime, maxTime) ;
 
     ArrayXd time = ArrayXd::Zero(numKnots) ;
 
     double cubeRadiusInPoints = ceil(double(cbrt(numKnots))) ;
-    std::printf("Cube radius in points: %.4e \n", cubeRadiusInPoints) ;
 
     double offsetPerc = 0.01 ;
     double lonDist = (maxLon - minLon) * (1-offsetPerc * 2)/(cubeRadiusInPoints - 1) ;
     double latDist = (maxLat - minLat) * (1-offsetPerc * 2)/(cubeRadiusInPoints - 1) ;
     double timeDist = (maxTime - minTime) * (1-offsetPerc * 2)/(cubeRadiusInPoints - 1) ;
-    std::printf("Lon, lat, time dist: %.4e %.4e %.4e \n", lonDist, latDist, timeDist) ;
 
     uint rowIndex = 0 ;
     for (uint lonIndex = 0 ; lonIndex < cubeRadiusInPoints ; lonIndex++) {
@@ -85,8 +82,6 @@ void InternalNode::genRandomKnots(spatialcoor & dataCoor, const uint & numKnots,
       if (rowIndex >= numKnots) break ;
     }
     m_knotsCoor = spatialcoor(knotsSp, time) ;
-    std::cout << "Inside genRandomKnots... \n" ;
-    std::cout << "Time values: " << time.segment(0, 9) << "\n\n" ;
   }
 }
 

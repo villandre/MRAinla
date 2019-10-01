@@ -92,9 +92,9 @@ mat TreeNode::computeCovMat(const spatialcoor & spTime1, const spatialcoor & spT
   mat covMat = mat::Zero(spTime1.timeCoords.size(), spTime2.timeCoords.size()) ;
   for (uint rowIndex = 0; rowIndex < spTime1.timeCoords.size() ; rowIndex++) {
     for (uint colIndex = 0; colIndex < spTime2.timeCoords.size() ; colIndex++) {
-      vec space1 = spTime1.spatialCoords.row(rowIndex) ;
+      ArrayXd space1 = spTime1.spatialCoords.row(rowIndex) ;
       double time1 = spTime1.timeCoords(rowIndex) ;
-      vec space2 = spTime2.spatialCoords.row(colIndex) ;
+      ArrayXd space2 = spTime2.spatialCoords.row(colIndex) ;
       double time2 = spTime2.timeCoords(colIndex) ;
 
       Spatiotemprange rangeValue = sptimeDistance(space1, time1, space2, time2) ;

@@ -18,10 +18,10 @@ typedef Eigen::VectorXi uvec ;
 typedef Eigen::MatrixXi umat ;
 typedef Eigen::Triplet<double> Triplet;
 
-Spatiotemprange sptimeDistance(const vec & spCoor1, const double & time1, const vec & spCoor2,
+Spatiotemprange sptimeDistance(const Eigen::ArrayXd & spCoor1, const double & time1, const Eigen::ArrayXd & spCoor2,
                                const double & time2) {
-  vec diffVec = spCoor1 - spCoor2 ;
-  vec scaledVec = diffVec.pow(2) ;
+  Eigen::ArrayXd diffVec = spCoor1 - spCoor2 ;
+  Eigen::ArrayXd scaledVec = diffVec.pow(2) ;
   double sp = scaledVec.sum() ;
   sp = std::sqrt(sp) ;
   double timeDiff = abs(time2 - time1) ;

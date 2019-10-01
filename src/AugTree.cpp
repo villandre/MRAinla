@@ -253,29 +253,18 @@ void AugTree::generateKnots(TreeNode * node, const unsigned int numKnotsRes0, co
 // }
 
 void AugTree::computeWmats() {
-  cout << "Inside computeWmats... Processing root node... \n" ;
-  fflush(stdout); // Will now print everything in the stdout buffer
-  m_MRAcovParasSpace.print("Spatial parameters:") ;
-  m_MRAcovParasTime.print("Time parameters:") ;
-  std::cout << "Scaling: \n" << m_spacetimeScaling << "\n" ;
-  std::cout << "Matern? " << m_matern << "\n" ;
-  printf("Nugget effects: %.4e %.4e \n", m_spaceNuggetSD, m_timeNuggetSD) ;
   m_vertexVector.at(0)->ComputeWmat(m_MRAcovParasSpace, m_MRAcovParasTime, m_spacetimeScaling, m_matern, m_spaceNuggetSD, m_timeNuggetSD) ;
-  cout << "Done! \n" ;
-  fflush(stdout);
+
   for (uint level = 1; level <= m_M; level++) {
     std::vector<TreeNode *> levelNodes = GetLevelNodes(level) ;
 
     // Trying openmp. We need to have a standard looping structure.
     // #pragma omp parallel for
-    cout << "Processing other nodes... \n" ;
-    fflush(stdout);
+
     for (std::vector<TreeNode *>::iterator it = levelNodes.begin(); it < levelNodes.end(); it++)
     {
       (*it)->ComputeWmat(m_MRAcovParasSpace, m_MRAcovParasTime, m_spacetimeScaling, m_matern, m_spaceNuggetSD, m_timeNuggetSD) ;
     }
-    cout << "Done! \n" ;
-    fflush(stdout);
   }
 }
 
@@ -717,8 +706,7 @@ void AugTree::ComputeLogFCandLogCDandDataLL() {
   cout << "Entered ComputeLogFCand... \n" ;
   fflush(stdout);
   int n = m_dataset.responseValues.size() ;
-  std::cout << m_vertexVector.at(0)->GetWlist().at(0) ;
-  throw Rcpp::exception("Stop for verification...\n") ;
+
   if (m_SigmaFEandEtaInv.rows() == 0) {
     cout << "Creating SigmaBetaEtaInv... \n" ;
     CreateSigmaBetaEtaInvMat() ;
@@ -730,11 +718,8 @@ void AugTree::ComputeLogFCandLogCDandDataLL() {
     cout << "Done! \n" ;
   }
 
-  cout << "Computing Cholesky decomp. of SigmaFEandEtaInv... \n" ;
   Eigen::SimplicialLDLT<Eigen::SparseMatrix<double>> blockChol(m_SigmaFEandEtaInv) ;
-  std::cout << "Product of the diagonal from the block decomp.: \n" ;
 
-  cout << "Done!" ;
   double logDetSigmaKFEinv = blockChol.vectorD().array().log().sum() ;
   printf("LogDetSigmaKFEinv: %.4e \n", logDetSigmaKFEinv) ;
   std::cout << "Done... \n" ;
@@ -801,14 +786,7 @@ void AugTree::ComputeLogJointPsiMarginal() {
   ComputeLogPriors() ;
 
   if (m_recomputeMRAlogLik) {
-    cout << "Computing Wmats... \n" ;
-    m_MRAcovParasSpace.print("Space parameters:") ;
-    m_MRAcovParasTime.print("Time parameters:") ;
-    printf("Scale parameter: %.4e \n", m_spacetimeScaling) ;
-    fflush(stdout); // Will now print everything in the stdout buffer
-    cout << "About to enter computeWmats() \n" ;
     computeWmats() ; // This will produce the K matrices required.
-    cout << "Done... \n" ;
   }
 
   ComputeLogFCandLogCDandDataLL() ;
