@@ -765,8 +765,6 @@ void AugTree::ComputeLogFCandLogCDandDataLL() {
   vec recenteredY ;
   recenteredY.noalias() = responsesReshuffled - m_Hmat * m_Vstar ;
 
-  std::cout << "v vector: " << m_Vstar.segment(0,10) << "\n\n" ;
-
   vec globalLogLikExp ;
   globalLogLikExp.noalias() = -0.5 * std::pow(m_errorSD, -2) * recenteredY.transpose() * recenteredY ;
   m_globalLogLik = 0.5 * errorLogDet + globalLogLikExp(0) ;
