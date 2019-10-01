@@ -743,16 +743,11 @@ void AugTree::ComputeLogFCandLogCDandDataLL(Rcpp::Function gradCholeskiFun, Rcpp
 
   sp_mat hessianMat = SigmaFEandEtaInv + secondTerm ;
   mat scaledResponse = std::pow(m_errorSD, -2) * trans(responsesReshuffled) * m_Hmat ;
-  SigmaFEandEtaInv(0,0,size(7,7)).print("Block matrix:") ;
-  secondTerm(0,0,size(7,7)).print("Second term:") ;
-  scaledResponse(0,0,size(1,7)).print("Scaled response:") ;
 
   Rcpp::NumericVector updatedMean = gradCholeskiFun(hessianMat, scaledResponse) ;
 
   m_Vstar = updatedMean ; // Assuming there will be an implicit conversion to vec type.
   m_FullCondMean = m_Vstar ;
-  m_Vstar.subvec(0,6).print("V vector:") ;
-  throw Rcpp::exception("Stop to compare... \n") ;
 
   vec fixedEffMeans = m_Vstar.head(m_fixedEffParameters.size()) ;
   SetFixedEffParameters(fixedEffMeans) ;
