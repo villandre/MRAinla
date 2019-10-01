@@ -70,7 +70,7 @@ void InternalNode::genRandomKnots(spatialcoor & dataCoor, const uint & numKnots,
     uint rowIndex = 0 ;
     for (uint lonIndex = 0 ; lonIndex < cubeRadiusInPoints ; lonIndex++) {
       for (uint latIndex = 0 ; latIndex < cubeRadiusInPoints ; latIndex++) {
-        for (uint timeIndex = 0 ; latIndex < cubeRadiusInPoints ; timeIndex++) {
+        for (uint timeIndex = 0 ; timeIndex < cubeRadiusInPoints ; timeIndex++) {
           knotsSp(rowIndex, 0) = minLon + (1 + offsetPerc) * (maxLon - minLon) + double(lonIndex) * lonDist + gsl_ran_gaussian(RNG, 0.0001) ;
           knotsSp(rowIndex, 1) = minLat + (1 + offsetPerc) * (maxLat - minLat) + double(latIndex) * latDist + gsl_ran_gaussian(RNG, 0.0001) ;
           time(rowIndex) = minTime + (1 + offsetPerc) * (maxTime - minTime) + double(timeIndex) * timeDist  + gsl_ran_gaussian(RNG, 0.0001) ;

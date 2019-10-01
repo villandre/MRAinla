@@ -786,10 +786,10 @@ void AugTree::ComputeLogJointPsiMarginal(Rcpp::Function gradCholeskiFun, Rcpp::F
 
   ComputeLogFCandLogCDandDataLL(gradCholeskiFun, sparseMatConstructFun, sparseDeterminantFun) ;
 
-  // printf("Observations log-lik: %.4e \n Log-prior: %.4e \n Log-Cond. dist.: %.4e \n Log-full cond.: %.4e \n \n \n",
-  // m_globalLogLik, m_logPrior, m_logCondDist, m_logFullCond) ;
+  printf("Observations log-lik: %.4e \n Log-prior: %.4e \n Log-Cond. dist.: %.4e \n Log-full cond.: %.4e \n \n \n",
+  m_globalLogLik, m_logPrior, m_logCondDist, m_logFullCond) ;
   m_logJointPsiMarginal = m_globalLogLik + m_logPrior + m_logCondDist - m_logFullCond ;
-  // printf("Joint value: %.4e \n \n", m_logJointPsiMarginal) ;
+  printf("Joint value: %.4e \n \n", m_logJointPsiMarginal) ;
 }
 
 // This inversion is based on recursive partitioning of the Q matrix. It is based on the observation that it is
