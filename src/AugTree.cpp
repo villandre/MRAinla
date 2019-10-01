@@ -762,6 +762,9 @@ void AugTree::ComputeLogFCandLogCDandDataLL(Rcpp::Function gradCholeskiFun, Rcpp
   mat logLikTerm = -0.5 * trans(m_Vstar) * SigmaFEandEtaInv * m_Vstar ;
 
   m_logCondDist = logLikTerm(0,0) + 0.5 * logDetSigmaKFEinv ;
+  responsesReshuffled.subvec(0,9).print("Responses:") ;
+  m_Vstar.subvec(0,9).print("v vector:") ;
+  m_Hmat(0, 0, size(10, 10)).print("Hmat:") ;
 
   // Computing p(y | v*, Psi)
   double errorLogDet = -2 * n * log(m_errorSD) ;
