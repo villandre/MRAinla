@@ -37,7 +37,7 @@ namespace MRAinla {
 class AugTree
 {
 public:
-  AugTree(uint &, vec &, vec &, vec &, vec &, mat &, vec &, mat &, mat &, vec &, uint &, unsigned long int &, mat &, const bool, const unsigned int, const unsigned int) ;
+  AugTree(uint &, Eigen::Array2d &, Eigen::Array2d &, Eigen::Array2d &, vec &, Eigen::ArrayXXd &, Eigen::ArrayXd &, Eigen::ArrayXXd &, Eigen::ArrayXXd &, Eigen::ArrayXd &, uint &, unsigned long int &, Eigen::ArrayXXd &, const bool, const unsigned int, const unsigned int) ;
 
   std::vector<TreeNode *> GetVertexVector() {return m_vertexVector ;} ;
 

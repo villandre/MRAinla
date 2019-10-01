@@ -57,23 +57,26 @@ void InternalNode::genRandomKnots(spatialcoor & dataCoor, const uint & numKnots,
 
     double minTime = m_dimensions.time.minCoeff() ;
     double maxTime = m_dimensions.time.maxCoeff() ;
+    printf("Min and max time in node: %.4e %.4e \n", minTime, maxTime) ;
 
-    ArrayXd time(numKnots) ;
+    ArrayXd time = ArrayXd::Zero(numKnots) ;
 
     double cubeRadiusInPoints = ceil(double(cbrt(numKnots))) ;
+    std::printf("Cube radius in points: %.4e \n", cubeRadiusInPoints) ;
 
     double offsetPerc = 0.01 ;
     double lonDist = (maxLon - minLon) * (1-offsetPerc * 2)/(cubeRadiusInPoints - 1) ;
     double latDist = (maxLat - minLat) * (1-offsetPerc * 2)/(cubeRadiusInPoints - 1) ;
     double timeDist = (maxTime - minTime) * (1-offsetPerc * 2)/(cubeRadiusInPoints - 1) ;
+    std::printf("Lon, lat, time dist: %.4e %.4e %.4e \n", lonDist, latDist, timeDist) ;
 
     uint rowIndex = 0 ;
     for (uint lonIndex = 0 ; lonIndex < cubeRadiusInPoints ; lonIndex++) {
       for (uint latIndex = 0 ; latIndex < cubeRadiusInPoints ; latIndex++) {
-        for (uint timeIndex = 0 ; latIndex < cubeRadiusInPoints ; timeIndex++) {
-          knotsSp(rowIndex, 0) = minLon + (1 + offsetPerc) * (maxLon - minLon) + double(lonIndex) * lonDist + gsl_ran_gaussian(RNG, 0.0001) ;
-          knotsSp(rowIndex, 1) = minLat + (1 + offsetPerc) * (maxLat - minLat) + double(latIndex) * latDist + gsl_ran_gaussian(RNG, 0.0001) ;
-          time(rowIndex) = minTime + (1 + offsetPerc) * (maxTime - minTime) + double(timeIndex) * timeDist  + gsl_ran_gaussian(RNG, 0.0001) ;
+        for (uint timeIndex = 0 ; timeIndex < cubeRadiusInPoints ; timeIndex++) {
+          knotsSp(rowIndex, 0) = minLon + offsetPerc * (maxLon - minLon) + double(lonIndex) * lonDist + gsl_ran_gaussian(RNG, 0.0001) ;
+          knotsSp(rowIndex, 1) = minLat + offsetPerc * (maxLat - minLat) + double(latIndex) * latDist + gsl_ran_gaussian(RNG, 0.0001) ;
+          time(rowIndex) = minTime + offsetPerc * (maxTime - minTime) + double(timeIndex) * timeDist  + gsl_ran_gaussian(RNG, 0.0001) ;
           rowIndex += 1 ;
           if (rowIndex >= numKnots) break ;
         }
@@ -82,6 +85,8 @@ void InternalNode::genRandomKnots(spatialcoor & dataCoor, const uint & numKnots,
       if (rowIndex >= numKnots) break ;
     }
     m_knotsCoor = spatialcoor(knotsSp, time) ;
+    std::cout << "Inside genRandomKnots... \n" ;
+    std::cout << "Time values: " << time.segment(0, 9) << "\n\n" ;
   }
 }
 
@@ -157,13 +162,8 @@ void::InternalNode::DeriveD() {
 
 void InternalNode::ComputeWmat(const maternVec & covParasSp, const maternVec & covParasTime, const double & scaling, const bool matern, const double & spaceNuggetSD, const double & timeNuggetSD) {
   baseComputeWmat(covParasSp, covParasTime, scaling, matern, spaceNuggetSD, timeNuggetSD) ;
-  std::cout << "Ensuring symmetry in Sigma... \n" ;
-  fflush(stdout);
+
   m_Wlist.at(m_depth).triangularView<Lower>() = m_Wlist.at(m_depth).triangularView<Upper>() ; // Will this cause aliasing?
-  std::cout << "Done! \n" ;
-  std::cout << "Getting K... \n" ;
-  fflush(stdout);
+
   m_K = GetKmatrixInverse().ldlt().solve(mat::Identity(GetKmatrixInverse().rows(), GetKmatrixInverse().cols())) ; // The K matrix is some sort of covariance matrix, so it should always be symmetrical..
-  std::cout << "Done!!!! \n" ;
-  fflush(stdout);
 }

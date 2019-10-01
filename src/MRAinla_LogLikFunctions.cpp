@@ -21,19 +21,22 @@ List setupGridCpp(NumericVector responseValues, NumericMatrix spCoords, NumericM
                   uint randomSeed, uint cutForTimeSplit, bool splitTime,
                   int numKnotsRes0, int J)
 {
-  vec lonR = as<vec>(lonRange) ;
-  vec latR = as<vec>(latRange) ;
-  vec timeR = as<vec>(timeRange) ;
+  ArrayXd lonRinit = as<ArrayXd>(lonRange) ;
+  ArrayXd latRinit = as<ArrayXd>(latRange) ;
+  ArrayXd timeRinit = as<ArrayXd>(timeRange) ;
+  Array2d lonR = lonRinit.segment(0,2) ;
+  Array2d latR = latRinit.segment(0,2) ;
+  Array2d timeR = timeRinit.segment(0,2) ;
   vec response = as<vec>(responseValues) ;
-  mat sp = as<mat>(spCoords) ;
-  mat predSp = as<mat>(predCoords) ;
-  vec predTimeVec = as<vec>(predTime) ;
-  mat predCovariates = as<mat>(predCovariateMatrix) ;
-  vec time = as<vec>(obsTime) ;
+  ArrayXXd sp = as<ArrayXXd>(spCoords) ;
+  ArrayXXd predSp = as<ArrayXXd>(predCoords) ;
+  ArrayXd predTimeVec = as<ArrayXd>(predTime) ;
+  ArrayXXd predCovariates = as<ArrayXXd>(predCovariateMatrix) ;
+  ArrayXd time = as<ArrayXd>(obsTime) ;
 
   unsigned long int seedForRNG = randomSeed ;
 
-  mat covariateMat = as<mat>(covariateMatrix) ;
+  ArrayXXd covariateMat = as<ArrayXXd>(covariateMatrix) ;
 
   AugTree * MRAgrid = new AugTree(M, lonR, latR, timeR, response, sp, time, predCovariates, predSp, predTimeVec, cutForTimeSplit, seedForRNG, covariateMat, splitTime, numKnotsRes0, J) ;
 

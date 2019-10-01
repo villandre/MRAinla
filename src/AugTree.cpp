@@ -32,7 +32,7 @@ struct MVN{
   }
 };
 
-AugTree::AugTree(uint & M, vec & lonRange, vec & latRange, vec & timeRange, vec & observations, mat & obsSp, vec & obsTime, mat & predCovariates, mat & predSp, vec & predTime, uint & minObsForTimeSplit, unsigned long int & seed, mat & covariates, const bool splitTime, const unsigned int numKnotsRes0, const unsigned int J)
+AugTree::AugTree(uint & M, Array2d & lonRange, Array2d & latRange, Array2d & timeRange, vec & observations, ArrayXXd & obsSp, ArrayXd & obsTime, ArrayXXd & predCovariates, ArrayXXd & predSp, ArrayXd & predTime, uint & minObsForTimeSplit, unsigned long int & seed, ArrayXXd & covariates, const bool splitTime, const unsigned int numKnotsRes0, const unsigned int J)
   : m_M(M)
 {
   m_GammaParasSet = false ;
@@ -255,6 +255,11 @@ void AugTree::generateKnots(TreeNode * node, const unsigned int numKnotsRes0, co
 void AugTree::computeWmats() {
   cout << "Inside computeWmats... Processing root node... \n" ;
   fflush(stdout); // Will now print everything in the stdout buffer
+  m_MRAcovParasSpace.print("Spatial parameters:") ;
+  m_MRAcovParasTime.print("Time parameters:") ;
+  std::cout << "Scaling: \n" << m_spacetimeScaling << "\n" ;
+  std::cout << "Matern? " << m_matern << "\n" ;
+  printf("Nugget effects: %.4e %.4e \n", m_spaceNuggetSD, m_timeNuggetSD) ;
   m_vertexVector.at(0)->ComputeWmat(m_MRAcovParasSpace, m_MRAcovParasTime, m_spacetimeScaling, m_matern, m_spaceNuggetSD, m_timeNuggetSD) ;
   cout << "Done! \n" ;
   fflush(stdout);
@@ -712,7 +717,8 @@ void AugTree::ComputeLogFCandLogCDandDataLL() {
   cout << "Entered ComputeLogFCand... \n" ;
   fflush(stdout);
   int n = m_dataset.responseValues.size() ;
-
+  std::cout << m_vertexVector.at(0)->GetWlist().at(0) ;
+  throw Rcpp::exception("Stop for verification...\n") ;
   if (m_SigmaFEandEtaInv.rows() == 0) {
     cout << "Creating SigmaBetaEtaInv... \n" ;
     CreateSigmaBetaEtaInvMat() ;
@@ -727,7 +733,7 @@ void AugTree::ComputeLogFCandLogCDandDataLL() {
   cout << "Computing Cholesky decomp. of SigmaFEandEtaInv... \n" ;
   Eigen::SimplicialLDLT<Eigen::SparseMatrix<double>> blockChol(m_SigmaFEandEtaInv) ;
   std::cout << "Product of the diagonal from the block decomp.: \n" ;
-  std::cout << blockChol.vectorD().prod() ;
+
   cout << "Done!" ;
   double logDetSigmaKFEinv = blockChol.vectorD().array().log().sum() ;
   printf("LogDetSigmaKFEinv: %.4e \n", logDetSigmaKFEinv) ;

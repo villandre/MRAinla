@@ -49,8 +49,7 @@ double TreeNode::MaternCovFunction(const Spatiotemprange & distance, const mater
 }
 
 void TreeNode::baseComputeWmat(const maternVec & covParasSp, const maternVec & covParasTime, const double & scaling, const bool matern, const double & spaceNuggetSD, const double & timeNuggetSD) {
-  cout << "Entered baseComputeWmat! \n" ;
-  fflush(stdout);
+
   std::vector<TreeNode *> brickList = getAncestors() ;
 
   m_Wlist.at(0) = computeCovMat(m_knotsCoor, brickList.at(0)->GetKnotsCoor(), covParasSp, covParasTime, scaling, matern, spaceNuggetSD, timeNuggetSD) ;
@@ -70,15 +69,7 @@ void TreeNode::baseComputeWmat(const maternVec & covParasSp, const maternVec & c
       }
     }
     m_Wlist.at(l) = firstMat - secondMat ;
-    // if (l == m_depth) {
-    //   double sign1, sign2 ;
-    //   double value1, value2 ;
-    //   log_det(value1, sign1, firstMat) ;
-    //   log_det(value2, sign2, secondMat) ;
-    // }
   }
-  cout << "baseComputeWmat: Done!!! \n" ;
-  fflush(stdout);
 }
 
 std::vector<TreeNode *> TreeNode::getAncestors() {

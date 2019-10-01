@@ -90,14 +90,14 @@ struct inputdata : public spatialcoor {
 };
 
 struct dimensions {
-  Eigen::ArrayXd longitude ;
-  Eigen::ArrayXd latitude ;
-  Eigen::ArrayXd time ;
+  Eigen::Array2d longitude ;
+  Eigen::Array2d latitude ;
+  Eigen::Array2d time ;
 
   dimensions() {
-    longitude = Eigen::ArrayXd::Zero(2) ;
-    latitude = Eigen::ArrayXd::Zero(2) ;
-    time = Eigen::ArrayXd::Zero(2) ;
+    longitude = Eigen::Array2d::Zero(2) ;
+    latitude = Eigen::Array2d::Zero(2) ;
+    time = Eigen::Array2d::Zero(2) ;
   } ;
 
   dimensions(Eigen::ArrayXd f_lon, Eigen::ArrayXd f_lat, Eigen::ArrayXd f_time)
