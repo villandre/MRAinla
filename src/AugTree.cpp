@@ -726,8 +726,8 @@ void AugTree::ComputeLogFCandLogCDandDataLL() {
 
   cout << "Computing Cholesky decomp. of SigmaFEandEtaInv... \n" ;
   Eigen::SimplicialLDLT<Eigen::SparseMatrix<double>> blockChol(m_SigmaFEandEtaInv) ;
-  std::cout << "Diagonal from the block decomp.: \n" ;
-  std::cout << blockChol.vectorD() ;
+  std::cout << "Product of the diagonal from the block decomp.: \n" ;
+  std::cout << blockChol.vectorD().prod() ;
   cout << "Done!" ;
   double logDetSigmaKFEinv = blockChol.vectorD().array().log().sum() ;
   printf("LogDetSigmaKFEinv: %.4e \n", logDetSigmaKFEinv) ;
