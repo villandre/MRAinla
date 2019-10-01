@@ -761,6 +761,9 @@ void AugTree::ComputeLogFCandLogCDandDataLL() {
   double errorLogDet = -2 * n * log(m_errorSD) ;
   vec recenteredY ;
   recenteredY.noalias() = responsesReshuffled - m_Hmat * m_Vstar ;
+  std::cout << "Responses" << responsesReshuffled.segment(0,10) << "\n\n" ;
+  std::cout << "v vector: " << m_Vstar.segment(0,10) << "\n\n" ;
+  std::cout << "Hmatrix: " << m_Hmat.block(0, 0, 10, 10) << "\n\n" ;
   vec globalLogLikExp ;
   globalLogLikExp.noalias() = -0.5 * std::pow(m_errorSD, -2) * recenteredY.transpose() * recenteredY ;
   m_globalLogLik = 0.5 * errorLogDet + globalLogLikExp(0) ;
