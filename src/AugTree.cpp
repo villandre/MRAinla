@@ -732,7 +732,10 @@ void AugTree::ComputeLogFCandLogCDandDataLL() {
   scaledResponse.noalias() = std::pow(m_errorSD, -2) * responsesReshuffled.transpose() * m_Hmat ;
 
   m_FullCondPrecisionChol.compute(m_SigmaFEandEtaInv + secondTerm) ;
-
+  std::cout << "Block matrix: \n\n" << m_SigmaFEandEtaInv.block(0,0,7,7) << "\n\n" ;
+  std::cout << "Second term: \n\n" << secondTerm.block(0,0,7,7) << "\n\n" ;
+  std::cout << "Scaled response: \n\n" << scaledResponse.block(0,0,1,7) << "\n\n" ;
+  throw Rcpp::exception("Comparing values... \n") ;
   // m_FullCondSDs = sqrt(m_FullCondPrecisionChol.diag()) ;
   // cout << "Done... \n" ;
 
