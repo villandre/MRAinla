@@ -24,10 +24,22 @@ typedef unsigned int uint ;
 typedef unsigned int uint ;
 typedef Eigen::VectorXd vec ;
 typedef Eigen::MatrixXd mat ;
-typedef Eigen::SparseMatrix<double> sp_mat ;
+typedef Eigen::SparseMatrix<double, Eigen::RowMajor> sp_mat ;
 typedef Eigen::VectorXi uvec ;
 typedef Eigen::MatrixXi umat ;
 typedef Eigen::Triplet<double> Triplet;
+
+struct pointerOffset{
+  Eigen::MatrixXd * matrixLocation ;
+  uint offset ;
+
+  pointerOffset() {
+    offset = 0 ;
+    matrixLocation = NULL ;
+  }
+  pointerOffset(Eigen::MatrixXd * matrixLocation, const uint offset):
+    matrixLocation(matrixLocation), offset(offset) {} ;
+};
 
 struct maternVec{
   double m_rho ;

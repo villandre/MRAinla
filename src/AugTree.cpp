@@ -342,7 +342,7 @@ void AugTree::UpdateSigmaBetaEtaInvMat() {
   int loopIndex = 0 ;
 
   for (int k = 0; k < m_FEinvAndKinvMatrices.outerSize(); ++k) {
-    for (SparseMatrix<double>::InnerIterator it(m_FEinvAndKinvMatrices, k); it; ++it)
+    for (sp_mat::InnerIterator it(m_FEinvAndKinvMatrices, k); it; ++it)
     {
       it.valueRef() = concatenatedValues(loopIndex) ;
       loopIndex += 1 ;
@@ -429,6 +429,29 @@ void AugTree::createHmatrix() {
   MatrixXd incrementedCovarReshuffled = rows(incrementedCovar.array(), m_obsOrderForFmat) ;
   HmatPos.col(1) += m_dataset.covariateValues.cols() + 1 ;
 
+  // The idea behind this is to associate a memory location in the W matrices and a cell
+  // in the H matrix. The memory location we get from calling .data() on a given W
+  // matrix changes when the W values are updated, even when W is allocated on the
+  // heap, i.e. with 'new', but the memory location of the vector element is constant
+  // once the vector is fully populated. To get access to the value, all we need to do
+  // is invoke *(pointer->data() + offset).
+  // The odd nesting of the loops is due to the fact that m_Hmat is row-major.
+  // I made m_Hmat row-major to make the updating process, as all values on any
+  // given row are associated with the same tip.
+  // Don't mind the four nested loops: all it does is traverse all the elements once.
+  for (auto & tipNode : tipNodes) {
+    uint numObs = tipNode->GetObsInNode().size() ;
+    for (uint rowIndex = 0; rowIndex < numObs ; rowIndex++) {
+      for (uint depth = 0 ; depth < m_M ; depth++) {
+        uint numKnotsAtDepth = tipNode->GetWlist().at(depth).cols() ;
+        for (uint colIndex = 0; colIndex < numKnotsAtDepth; colIndex++) {
+          pointerOffset elementToAdd = pointerOffset(&(tipNode->GetWlist().at(depth)), colIndex * numObs + rowIndex) ;
+          m_pointerOffsetForHmat.push_back(elementToAdd) ;
+        }
+      }
+    }
+  }
+
   ArrayXXi covPos = join_rows(rep(uvec::LinSpaced(incrementedCovarReshuffled.rows(), 0, incrementedCovarReshuffled.rows() - 1).array(), incrementedCovarReshuffled.cols()),
                           rep_each(uvec::LinSpaced(incrementedCovarReshuffled.cols(), 0, incrementedCovarReshuffled.cols() - 1).array(), incrementedCovarReshuffled.rows())) ;
   HmatPos = join_cols(covPos, HmatPos).eval() ; // Could this cause aliasing?
@@ -468,32 +491,14 @@ void AugTree::createHmatrix() {
 }
 
 void AugTree::updateHmatrix() {
-  int numElementsInH = m_dataset.covariateValues.size() + m_dataset.covariateValues.rows() ; // The second term is there to account for the intercept.
-  for (auto & tipNode : GetTipNodes()) {
-    for (auto & Bmat : tipNode->GetWlist()) {
-      numElementsInH += Bmat.size() ;
-    }
-  }
-  vec concatenatedValues(numElementsInH) ;
-  mat intercept = MatrixXd::Ones(m_dataset.covariateValues.rows(), 1) ;
-  // join_rows is made in such a way that both elements must have the exact same type, hence the strategy here.
-  ArrayXXd incrementedCovar = join_rows(intercept.array(), m_dataset.covariateValues.array()) ;
-  ArrayXXd incrementedCovarReshuffled = rows(incrementedCovar.array(), m_obsOrderForFmat) ;
-  concatenatedValues.segment(0, incrementedCovarReshuffled.size()) = incrementedCovarReshuffled ;
-  int index = incrementedCovarReshuffled.size() ;
-  for (auto & tipNode : GetTipNodes()) {
-    for (auto & Bmat : tipNode->GetWlist()) {
-      concatenatedValues.segment(index, Bmat.size()) = Map<vec>(Bmat.data(), Bmat.size()) ;
-      index += Bmat.size() ;
-    }
-  }
-
   int loopIndex = 0 ;
   for (int k=0; k<m_Hmat.outerSize(); ++k) {
     for (sp_mat::InnerIterator it(m_Hmat, k); it; ++it)
     {
-      it.valueRef() = concatenatedValues(loopIndex) ;
-      loopIndex += 1 ;
+      if (it.col() >= m_fixedEffParameters.size()) { // Covariates never change, only the elements in the F matrix change.
+        it.valueRef() = *(m_pointerOffsetForHmat.at(loopIndex).matrixLocation->data() + m_pointerOffsetForHmat.at(loopIndex).offset) ;
+        loopIndex += 1 ;
+      }
     }
   }
 }
@@ -527,7 +532,7 @@ void AugTree::updateHmatrixPred() {
 
   int loopIndex = 0 ;
   for (int k = 0; k < m_HmatPred.outerSize(); ++k) {
-    for (SparseMatrix<double>::InnerIterator it(m_HmatPred, k); it; ++it)
+    for (sp_mat::InnerIterator it(m_HmatPred, k); it; ++it)
     {
       it.valueRef() = concatenatedValues(loopIndex) ;
       loopIndex += 1 ;
@@ -732,10 +737,7 @@ void AugTree::ComputeLogFCandLogCDandDataLL() {
   scaledResponse.noalias() = std::pow(m_errorSD, -2) * responsesReshuffled.transpose() * m_Hmat ;
 
   m_FullCondPrecisionChol.compute(m_SigmaFEandEtaInv + secondTerm) ;
-  std::cout << "Block matrix: \n\n" << m_SigmaFEandEtaInv.block(0,0,7,7) << "\n\n" ;
-  std::cout << "Second term: \n\n" << secondTerm.block(0,0,7,7) << "\n\n" ;
-  std::cout << "Scaled response: \n\n" << scaledResponse.block(0,0,1,7) << "\n\n" ;
-  throw Rcpp::exception("Comparing values... \n") ;
+
   // m_FullCondSDs = sqrt(m_FullCondPrecisionChol.diag()) ;
   // cout << "Done... \n" ;
 

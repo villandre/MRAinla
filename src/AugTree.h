@@ -216,7 +216,10 @@ private:
   vec m_FullCondMean ;
   vec m_FullCondSDs ;
   Eigen::SimplicialLDLT<Eigen::SparseMatrix<double>> m_FullCondPrecisionChol ;
+
   sp_mat m_Hmat ;
+  std::vector<pointerOffset> m_pointerOffsetForHmat ;
+
   sp_mat m_FEinvAndKinvMatrices ;
   sp_mat m_HmatPred ;
   sp_mat m_SigmaFEandEtaInv ;
