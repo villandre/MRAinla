@@ -442,7 +442,7 @@ void AugTree::createHmatrix() {
   for (auto & tipNode : tipNodes) {
     uint numObs = tipNode->GetObsInNode().size() ;
     for (uint rowIndex = 0; rowIndex < numObs ; rowIndex++) {
-      for (uint depth = 0 ; depth < m_M ; depth++) {
+      for (uint depth = 0 ; depth <= m_M ; depth++) {
         uint numKnotsAtDepth = tipNode->GetWlist().at(depth).cols() ;
         for (uint colIndex = 0; colIndex < numKnotsAtDepth; colIndex++) {
           pointerOffset elementToAdd = pointerOffset(&(tipNode->GetWlist().at(depth)), colIndex * numObs + rowIndex) ;
