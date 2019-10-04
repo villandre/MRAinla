@@ -179,3 +179,11 @@ arma::uvec GetPredObsOrder(SEXP treePointer) {
   arma::uvec value = pointedTree->GetObsOrderForHpredMat() ;
   return value ;
 }
+
+// [[Rcpp::export]]
+
+arma::sp_mat GetHmat(SEXP treePointer) {
+  XPtr<AugTree> pointedTree(treePointer) ; // Becomes a regular pointer again.
+  arma::sp_mat value = pointedTree->GetHmat() ;
+  return value ;
+}

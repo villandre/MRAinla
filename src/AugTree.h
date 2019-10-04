@@ -57,7 +57,7 @@ public:
   inputdata GetDataset() {return m_dataset;}
   int GetNumTips() {return m_numTips ;}
   int GetNumKnots() {return m_numKnots ;}
-  // arma::vec GetCovParameters() {return m_covParameters ;}
+  arma::sp_mat GetHmat() {return m_Hmat ;}
 
   int GetM() { return m_M ;}
   double GetLogJointPsiMarginal() { return m_logJointPsiMarginal ;}

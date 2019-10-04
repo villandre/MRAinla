@@ -176,6 +176,9 @@ obtainGridValues <- function(gridPointers, xStartValues, control, fixedEffSDstar
   opt <- nloptr::lbfgs(x0 = log(xStartValues), lower = rep(-10, length(xStartValues)), upper = upperBound, fn = funForOptim, gr = gradForOptim, control = list(xtol_rel = 1e-3, maxeval = control$numIterOptim), envirToSaveValues = storageEnvir)
   # opt <- nloptr::cobyla(x0 = log(xStartValues), lower = rep(-10, length(xStartValues)), upper = upperBound, fn = funForOptim, control = list(xtol_rel = 5e-4, maxeval = control$numIterOptim), envirToSaveValues = storageEnvir)
   opt$value <- -opt$value # Correcting for the inversion used to maximise instead of minimise
+  if (!is.null(control$envirForTest)) {
+    assign(x = "Hmat", value = GetHmat(gridPointers[[1]]), envir = control$envirForTest)
+  }
   cat("Optimiser solution: ", exp(opt$par))
   stop("Stop after optimisation...")
   sampleWeights <- exp(storageEnvir$value - max(storageEnvir$value))
