@@ -29,3 +29,7 @@ GetPredObsOrder <- function(treePointer) {
     .Call('_MRAinla_GetPredObsOrder', PACKAGE = 'MRAinla', treePointer)
 }
 
+GetHmat <- function(treePointer) {
+    .Call('_MRAinla_GetHmat', PACKAGE = 'MRAinla', treePointer)
+}
+
