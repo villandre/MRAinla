@@ -456,24 +456,14 @@ void AugTree::createHmatrix() {
                           rep_each(uvec::LinSpaced(incrementedCovarReshuffled.cols(), 0, incrementedCovarReshuffled.cols() - 1).array(), incrementedCovarReshuffled.rows())) ;
   HmatPos = join_cols(covPos, HmatPos).eval() ; // Could this cause aliasing?
 
-  ArrayXd concatenatedValues(Map<ArrayXd>(incrementedCovarReshuffled.data(), incrementedCovarReshuffled.cols() * incrementedCovarReshuffled.rows()))  ;
-  int totalSize = concatenatedValues.size() ;
-  int secondIndex = totalSize ;
+  ArrayXd concatenatedValues = ArrayXd::Zero(HmatPos.rows()) ;
+  concatenatedValues.segment(0, incrementedCovarReshuffled.size()) = incrementedCovarReshuffled ;
+  uint secondIndex = incrementedCovar.size() ;
   for (auto & tipNode : GetTipNodes()) {
     if (tipNode->GetObsInNode().size() > 0) {
       for (auto & Bmat : tipNode->GetWlist()) {
-        totalSize += Bmat.size();
-      }
-    }
-  }
-  concatenatedValues.conservativeResize(totalSize, 1) ;
-
-  for (auto & tipNode : GetTipNodes()) {
-    if (tipNode->GetObsInNode().size() > 0) {
-      for (auto & Bmat : tipNode->GetWlist()) {
-        ArrayXd B(Map<ArrayXd>(Bmat.data(), Bmat.cols() * Bmat.rows()));
-        concatenatedValues.segment(secondIndex, B.size()) = B ;
-        secondIndex += B.size() ;
+        concatenatedValues.segment(secondIndex, Bmat.size()) = Bmat ;
+        secondIndex += Bmat.size() ;
       }
     }
   }
