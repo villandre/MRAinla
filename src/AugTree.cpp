@@ -64,9 +64,6 @@ AugTree::AugTree(uint & M, Array2d & lonRange, Array2d & latRange, Array2d & tim
   }
 
   createHmatrixPred() ;
-
-    printf("Obs. in node %i: \n", m_vertexVector.at(1)->GetNodeId()) ;
-    std::cout << m_vertexVector.at(1)->GetObsInNode() << "\n\n" ;
 }
 
 void AugTree::BuildTree(const uint & minObsForTimeSplit, const bool splitTime, const unsigned int numKnots0, const unsigned int J)
@@ -140,6 +137,7 @@ void AugTree::createLevels(TreeNode * parent, const uint & numObsForTimeSplit, c
     ArrayXd subColumn = elem(column, obsForMedian) ;
     ArrayXi elementsInChild = find(childMembership == j) ;
     double colMedian = median(elem(subColumn, elementsInChild)) ;
+    printf("Obtained median: %.4e \n", colMedian) ;
     ArrayXd updatedLatitude(2) ;
     updatedLatitude(0) = childDimensions.at(j).latitude(0);
     updatedLatitude(1) = colMedian ;

@@ -56,7 +56,7 @@ Eigen::Array<typename Derived::Scalar, Eigen::Dynamic, 1> rep_each(const Eigen::
 
 template<typename Derived>
 double median(const Eigen::ArrayBase<Derived> & EigenVec) {
-  Eigen::Matrix<typename Derived::Scalar, Eigen::Dynamic, 1> VecCopy = EigenVec ;
+  Eigen::Matrix<typename Derived::Scalar, Eigen::Dynamic, 1> VecCopy = EigenVec.matrix() ;
   std::sort(VecCopy.data(), VecCopy.data() + VecCopy.size()) ; // This sorts the vector in descending order, but it doesn't matter for the median!
   double output ;
   int lowerIndex = std::floor(double(VecCopy.size())/2) ;
