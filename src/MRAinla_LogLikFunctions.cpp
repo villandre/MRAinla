@@ -170,3 +170,11 @@ Eigen::VectorXi GetPredObsOrder(SEXP treePointer) {
   uvec value = pointedTree->GetObsOrderForHpredMat() ;
   return value ;
 }
+
+// [[Rcpp::export]]
+
+Eigen::SparseMatrix<double> GetHmat(SEXP treePointer) {
+  XPtr<AugTree> pointedTree(treePointer) ; // Becomes a regular pointer again.
+  Eigen::SparseMatrix<double> value = pointedTree->GetHmat() ;
+  return value ;
+}
