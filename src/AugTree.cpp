@@ -741,10 +741,10 @@ void AugTree::ComputeLogFCandLogCDandDataLL(Rcpp::Function gradCholeskiFun, Rcpp
 
   // cout << "Computing FC mean... \n" ;
 
-  sp_mat hessianMat = SigmaFEandEtaInv + secondTerm ;
+  // sp_mat hessianMat = SigmaFEandEtaInv + secondTerm ;
   mat scaledResponse = std::pow(m_errorSD, -2) * trans(responsesReshuffled) * m_Hmat ;
 
-  Rcpp::NumericVector updatedMean = gradCholeskiFun(hessianMat, scaledResponse) ;
+  Rcpp::NumericVector updatedMean = gradCholeskiFun(m_FullCondPrecision, scaledResponse) ;
 
   m_Vstar = updatedMean ; // Assuming there will be an implicit conversion to vec type.
   m_FullCondMean = m_Vstar ;

@@ -76,7 +76,7 @@ double LogJointHyperMarginalToWrap(SEXP treePointer, Rcpp::List MRAhyperparas,
       pointedTree->SetSpaceAndTimeNuggetSD(spaceNuggetSD, timeNuggetSD) ;
       std::vector<TreeNode *> tipNodes = pointedTree->GetLevelNodes(pointedTree->GetM()) ;
       for (auto & i : tipNodes) {
-        i->SetUncorrSD(0.05) ;
+        i->SetUncorrSD(0.001) ;
       }
     }
     pointedTree->SetErrorSD(errorSD) ;
