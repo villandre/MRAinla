@@ -106,6 +106,12 @@ struct dimensions {
   Eigen::Array2d latitude ;
   Eigen::Array2d time ;
 
+  void print() {
+    std::cout << "Longitude range: \n" << longitude << "\n\n" ;
+    std::cout << "Latitude range: \n" << latitude << "\n\n" ;
+    std::cout << "Time range: \n" << time << "\n\n" ;
+  }
+
   dimensions() {
     longitude = Eigen::Array2d::Zero(2) ;
     latitude = Eigen::Array2d::Zero(2) ;

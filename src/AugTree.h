@@ -149,11 +149,6 @@ private:
   bool m_matern{ true } ;
   double m_spaceNuggetSD{ 1e-6 };
   double m_timeNuggetSD{ 1e-6 } ;
-  // mat m_incrementedCovarReshuffled ;
-  // mat m_incrementedCovarPredictReshuffled ;
-
-  // The next few members are to improve computational efficiency
-  uvec m_DmatrixBlockIndices ;
 
   int m_M{ 0 } ;
   int m_numTips{ 0 } ;
@@ -199,7 +194,7 @@ private:
   void computeD() ;
 
   std::vector<TreeNode *> GetLevel(const uint) ;
-  uvec m_obsOrderForFmat ;
+  Eigen::ArrayXi m_obsOrderForFmat ;
 
   // Prediction functions
 

@@ -64,6 +64,9 @@ AugTree::AugTree(uint & M, Array2d & lonRange, Array2d & latRange, Array2d & tim
   }
 
   createHmatrixPred() ;
+
+    printf("Obs. in node %i: \n", m_vertexVector.at(1)->GetNodeId()) ;
+    std::cout << m_vertexVector.at(1)->GetObsInNode() << "\n\n" ;
 }
 
 void AugTree::BuildTree(const uint & minObsForTimeSplit, const bool splitTime, const unsigned int numKnots0, const unsigned int J)
@@ -110,8 +113,7 @@ void AugTree::createLevels(TreeNode * parent, const uint & numObsForTimeSplit, c
 
   ArrayXi elementsInChild = ArrayXi::LinSpaced(obsForMedian.size(), 0, obsForMedian.size()-1) ;
   ArrayXd column = m_dataset.spatialCoords.col(0) ;
-  ArrayXd subColumn = elem(column, obsForMedian) ;
-  ArrayXd elementsForMedian = elem(subColumn, elementsInChild) ;
+  ArrayXd elementsForMedian = elem(column, obsForMedian) ;
   double colMedian = median(elementsForMedian) ;
   ArrayXd updatedLongitude(2) ;
   updatedLongitude(0) = childDimensions.at(0).longitude(0) ;
@@ -123,8 +125,7 @@ void AugTree::createLevels(TreeNode * parent, const uint & numObsForTimeSplit, c
   newDimensions.longitude = newChildLongitude ;
   childDimensions.push_back(newDimensions) ;
   childDimensions.at(0).longitude = updatedLongitude ;
-  ArrayXi greaterElements = find(elem(subColumn, elementsInChild).array() > colMedian) ; // In deriveObsInNode, the checks are <=. It follows that observations on the right and upper boundaries of a zone are included.
-
+  ArrayXi greaterElements = find(elementsForMedian > colMedian) ; // In deriveObsInNode, the checks are <=. It follows that observations on the right and upper boundaries of a zone are included.
   ArrayXi updateIndices = elem(elementsInChild, greaterElements) ;
   for (uint innerIndex = 0; innerIndex < updateIndices.size(); innerIndex++) {
     childMembership(updateIndices(innerIndex)) = 1 ;
@@ -356,18 +357,17 @@ void AugTree::createHmatrix() {
   int numObs = m_dataset.spatialCoords.rows() ;
   ArrayXXi HmatPos(0, 2) ;
 
-  std::vector<uvec> FmatNodeOrder(m_M) ;
-  ArrayXi FmatObsOrder = uvec::Zero(numObs) ;
+  ArrayXi FmatObsOrder = ArrayXi::Zero(numObs) ;
   int rowIndex = 0 ;
   int colIndex = 0 ;
 
   std::vector<TreeNode *> tipNodes = GetTipNodes() ;
   int numTips = tipNodes.size() ;
 
-  std::vector<uvec> ancestorIdsVec(numTips) ;
+  std::vector<ArrayXi> ancestorIdsVec(numTips) ;
 
   for (uint i = 0 ; i < tipNodes.size(); i++) {
-    uvec idVec = tipNodes.at(i)->GetAncestorIds() ; // Last element is tip node.
+    ArrayXi idVec = tipNodes.at(i)->GetAncestorIds() ; // Last element is tip node.
     ancestorIdsVec.at(i) = idVec ;
   }
 
@@ -424,6 +424,8 @@ void AugTree::createHmatrix() {
 
   HmatPos.col(1) += m_dataset.covariateValues.cols() + 1 ;
   m_obsOrderForFmat = FmatObsOrder ;
+
+  std::cout << "obsOrderForFmat:" << m_obsOrderForFmat.block(0, 0, 20, 1) << "\n\n" ;
 
   mat intercept = mat::Ones(numObs, 1) ;
   mat incrementedCovar = join_rows(intercept.array(), m_dataset.covariateValues.array()) ;
@@ -535,7 +537,6 @@ void AugTree::createHmatrixPred() {
   uint numObs = m_predictData.spatialCoords.rows() ;
   ArrayXXi HmatPredPos(0, 2) ;
 
-  std::vector<ArrayXi> FmatNodeOrder(m_M) ;
   ArrayXi FmatObsOrder = ArrayXi::Zero(numObs) ;
   uint rowIndex = 0 ;
   uint colIndex = 0 ;
