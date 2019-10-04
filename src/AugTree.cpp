@@ -137,7 +137,6 @@ void AugTree::createLevels(TreeNode * parent, const uint & numObsForTimeSplit, c
     ArrayXd subColumn = elem(column, obsForMedian) ;
     ArrayXi elementsInChild = find(childMembership == j) ;
     double colMedian = median(elem(subColumn, elementsInChild)) ;
-    printf("Obtained median: %.4e \n", colMedian) ;
     ArrayXd updatedLatitude(2) ;
     updatedLatitude(0) = childDimensions.at(j).latitude(0);
     updatedLatitude(1) = colMedian ;
@@ -422,8 +421,6 @@ void AugTree::createHmatrix() {
 
   HmatPos.col(1) += m_dataset.covariateValues.cols() + 1 ;
   m_obsOrderForFmat = FmatObsOrder ;
-
-  std::cout << "obsOrderForFmat:" << m_obsOrderForFmat.block(0, 0, 20, 1) << "\n\n" ;
 
   mat intercept = mat::Ones(numObs, 1) ;
   mat incrementedCovar = join_rows(intercept.array(), m_dataset.covariateValues.array()) ;
