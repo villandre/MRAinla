@@ -422,12 +422,12 @@ void AugTree::createHmatrix() {
     }
   }
 
+  HmatPos.col(1) += m_dataset.covariateValues.cols() + 1 ;
   m_obsOrderForFmat = FmatObsOrder ;
 
   mat intercept = mat::Ones(numObs, 1) ;
   mat incrementedCovar = join_rows(intercept.array(), m_dataset.covariateValues.array()) ;
   MatrixXd incrementedCovarReshuffled = rows(incrementedCovar.array(), m_obsOrderForFmat) ;
-  HmatPos.col(1) += m_dataset.covariateValues.cols() + 1 ;
 
   // The idea behind this is to associate a memory location in the W matrices and a cell
   // in the H matrix. The memory location we get from calling .data() on a given W
