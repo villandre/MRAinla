@@ -471,14 +471,6 @@ void AugTree::createHmatrixPos() {
   uint colIndex = 0 ;
 
   std::vector<TreeNode *> tipNodes = GetTipNodes() ;
-  int numTips = tipNodes.size() ;
-
-  std::vector<uvec> ancestorIdsVec(numTips) ;
-
-  for (uint i = 0 ; i < tipNodes.size(); i++) {
-    uvec idVec = tipNodes.at(i)->GetAncestorIds() ; // Last element is tip node.
-    ancestorIdsVec.at(i) = idVec ;
-  }
 
   std::sort(tipNodes.begin(), tipNodes.end(), [] (TreeNode * first, TreeNode * second) {
     uvec firstAncestorIds = first->GetAncestorIds() ;
@@ -584,14 +576,6 @@ void AugTree::createHmatrixPredPos() {
   uint colIndex = 0 ;
 
   std::vector<TreeNode *> tipNodes = GetTipNodes() ;
-  int numTips = tipNodes.size() ;
-
-  std::vector<uvec> ancestorIdsVec(numTips) ;
-
-  for (uint i = 0 ; i < tipNodes.size(); i++) {
-    uvec idVec = tipNodes.at(i)->GetAncestorIds() ; // Last element is tip node.
-    ancestorIdsVec.at(i) = idVec ;
-  }
 
   std::sort(tipNodes.begin(), tipNodes.end(), [] (TreeNode * first, TreeNode * second) {
     uvec firstAncestorIds = first->GetAncestorIds() ;
