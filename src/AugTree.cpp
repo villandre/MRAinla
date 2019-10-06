@@ -226,30 +226,6 @@ void AugTree::generateKnots(TreeNode * node, const unsigned int numKnotsRes0, co
   }
 }
 
-// void AugTree::ComputeMRAlogLikAlt(const bool WmatsAvailable)
-// {
-//   if (!WmatsAvailable) {
-//     computeWmats() ;
-//   }
-//   double MRAlogLik = 0 ;
-//   int currentIndex = m_fixedEffParameters.size() ;
-//
-//   for (auto & i : m_vertexVector) {
-//     int lastIndex = currentIndex + i->GetNumKnots() - 1 ;
-//     vec etas = m_Vstar.segment(currentIndex, lastIndex - currentIndex + 1) ;
-//
-//     double logDeterminantValue = 0 ;
-//     double sign = 0 ;
-//     logDeterminantValue = i->GetKmatrix().colPivHouseholderQr().logAbsDeterminant() ;
-//
-//     mat exponentTerm = -0.5 * etas.transpose() * i->GetKmatrixInverse() * etas ;
-//     MRAlogLik += (-0.5*logDeterminantValue + exponentTerm(0,0)) ;
-//     currentIndex = lastIndex + 1 ;
-//   }
-//
-//   m_MRAlogLik = MRAlogLik ;
-// }
-
 void AugTree::computeWmats() {
   m_vertexVector.at(0)->ComputeWmat(m_MRAcovParasSpace, m_MRAcovParasTime, m_spacetimeScaling, m_matern, m_spaceNuggetSD, m_timeNuggetSD) ;
 
