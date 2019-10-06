@@ -550,7 +550,6 @@ void AugTree::updateHmatrix(Rcpp::Function sparseMatrixConstructFun) {
       concatenatedValues = join_cols(concatenatedValues, vectorise(Bmat)) ;
     }
   }
-  uvec testVector = find(m_HmatPos.col(1) == 5) ;
 
   uvec dims(2) ;
   dims.at(0) = m_dataset.responseValues.size() ;
