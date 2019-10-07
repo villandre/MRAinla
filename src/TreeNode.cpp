@@ -59,9 +59,10 @@ void TreeNode::baseComputeWmat(const maternVec & covParasSp, const maternVec & c
     mat secondMat = mat::Zero(firstMat.rows(), firstMat.cols()) ;
     for (uint k = 0; k < l ; k++) {
       // if (k < m_depth) {
-      secondMat.noalias() += m_Wlist.at(k) *
+      mat increment = (m_Wlist.at(k) *
         brickList.at(k)->GetKmatrix().selfadjointView<Upper>() *
-        brickList.at(l)->GetWlist().at(k).transpose() ;
+        brickList.at(l)->GetWlist().at(k).transpose()) ;
+      secondMat += increment ;
       // } else {
       //   secondMat.noalias() += m_Wlist.at(m_depth) *
       //     brickList.at(k)->GetKmatrix().selfadjointView<Upper>() *
@@ -70,12 +71,9 @@ void TreeNode::baseComputeWmat(const maternVec & covParasSp, const maternVec & c
     }
     if ((m_nodeId == 5) && (l == 1)) {
       printf("Checking components of W: %.6e %.6e \n", firstMat.sum(), secondMat.sum()) ;
-      std::cout << "Knots coordinates in node: \n" <<
-      m_knotsCoor.spatialCoords.block(0,0,10,2) << "\n" <<
-        m_knotsCoor.timeCoords.segment(0,10) << "\n\n";
-      std::cout << "Knots coordinates in ancestral node: \n" <<
-      brickList.at(l)->GetKnotsCoor().spatialCoords.block(0,0,10,2) << "\n" <<
-        brickList.at(l)->GetKnotsCoor().timeCoords.segment(0,10) << "\n\n";
+      std::cout << "Tip W_0: \n" << m_Wlist.at(0).block(0,0, 2,2) << "\n\n" ;
+      std::cout << "Root K: \n" << brickList.at(0)->GetKmatrix().block(0,0, 2,2) << "\n\n" ;
+      std::cout << "Last W: \n" << brickList.at(l)->GetWlist().at(0).block(0,0,2,2).transpose() << "\n\n" ;
     }
     m_Wlist.at(l) = firstMat - secondMat ;
   }
