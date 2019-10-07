@@ -142,10 +142,10 @@ void InternalNode::DeriveU(const vec & responseValues) {
 
 void::InternalNode::DeriveD() {
 
-  double value = m_KtildeInverse.colPivHouseholderQr().logAbsDeterminant() ;
+  double value = m_KtildeInverse.ldlt().vectorD().array().log().sum() ;
 
   m_d = value ;
-  double otherValue = GetKmatrixInverse().colPivHouseholderQr().logAbsDeterminant() ;
+  double otherValue = GetKmatrixInverse().ldlt().vectorD().array().log().sum() ;
   m_d = m_d - otherValue ;
   double thirdTerm = 0 ;
 

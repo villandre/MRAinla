@@ -37,14 +37,14 @@ public:
 
   void DeriveD() {
     double val = 0;
-    val = GetSigma().colPivHouseholderQr().logAbsDeterminant() ;
+    val = GetSigma().selfadjointView<Eigen::Lower>().ldlt().vectorD().array().log().sum() ;
     m_d = val ;
   }
 
   void ComputeWmat(const maternVec & covParasSp, const maternVec & covParasTime, const double & scaling, const bool matern, const double & spaceNuggetSD, const double & timeNuggetSD) {
     baseComputeWmat(covParasSp, covParasTime, scaling, matern, spaceNuggetSD, timeNuggetSD) ;
     // m_Wlist.at(m_depth).triangularView<Eigen::Upper>() = m_Wlist.at(m_depth).triangularView<Eigen::Lower>().eval() ; // Will this cause aliasing?
-    m_SigmaInverse = GetSigma().selfadjointView<Eigen::Upper>().ldlt().solve(Eigen::MatrixXd::Identity(GetSigma().rows(), GetSigma().cols())) ;
+    m_SigmaInverse = GetSigma().selfadjointView<Eigen::Lower>().ldlt().solve(Eigen::MatrixXd::Identity(GetSigma().rows(), GetSigma().cols())) ;
   }
 
   // void ComputeParasEtaDeltaTilde(const spatialcoor &, const inputdata &, const vec &) ;
@@ -66,7 +66,7 @@ public:
   }
 
   mat GetSigma() {
-    Eigen::MatrixXd Sigma = m_Wlist.at(m_depth).selfadjointView<Eigen::Upper>() ;
+    Eigen::MatrixXd Sigma = m_Wlist.at(m_depth).selfadjointView<Eigen::Lower>() ;
     return Sigma + std::pow(m_uncorrSD, 2) * Eigen::MatrixXd::Identity(m_Wlist.at(m_depth).rows(), m_Wlist.at(m_depth).cols()) ;
   }
   // The following Kmatrix-related functions work because of the correspondence between knots
