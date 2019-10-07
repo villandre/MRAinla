@@ -62,9 +62,9 @@ void TreeNode::baseComputeWmat(const maternVec & covParasSp, const maternVec & c
     }
     if ((m_nodeId == 5) && (l == 1)) {
       printf("Checking components of W: %.6e %.6e \n", accu(firstMat), accu(secondMat)) ;
-      m_Wlist.at(0)(0,0,size(2,2)).print("Tip W_0:") ;
-      brickList.at(0)->GetKmatrix()(0,0,size(2,2)).print("Root K:") ;
-      trans((brickList.at(l)->GetWlist().at(0))(0,0,size(2,2))).print("Last W:") ;
+      brickList.at(1)->GetWlist().at(0)(0,0,size(2,2)).t().print("Last W: \n") ;
+      brickList.at(1)->GetKnotsCoor().spatialCoords(0,0,size(4,2)).print("Knots in internal node: \n\n") ;
+      brickList.at(1)->GetKnotsCoor().timeCoords.subvec(0,4).print("") ;
     }
     m_Wlist.at(l) = firstMat - secondMat ;
     if (l == m_depth) {
