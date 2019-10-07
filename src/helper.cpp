@@ -22,6 +22,7 @@ Spatiotemprange sptimeDistance(const Eigen::ArrayXd & spCoor1, const double & ti
                                const double & time2) {
   Eigen::ArrayXd diffVec = spCoor1 - spCoor2 ;
   Eigen::ArrayXd scaledVec = diffVec.pow(2) ;
+
   double sp = scaledVec.sum() ;
   sp = std::sqrt(sp) ;
   double timeDiff = abs(time2 - time1) ;
