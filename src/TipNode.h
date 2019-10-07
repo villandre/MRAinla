@@ -43,7 +43,7 @@ public:
 
   void ComputeWmat(const maternVec & covParasSp, const maternVec & covParasTime, const double & scaling, const bool matern, const double & spaceNuggetSD, const double & timeNuggetSD) {
     baseComputeWmat(covParasSp, covParasTime, scaling, matern, spaceNuggetSD, timeNuggetSD) ;
-    m_Wlist.at(m_depth).triangularView<Eigen::Lower>() = m_Wlist.at(m_depth).triangularView<Eigen::Upper>() ; // Will this cause aliasing?
+    // m_Wlist.at(m_depth).triangularView<Eigen::Upper>() = m_Wlist.at(m_depth).triangularView<Eigen::Lower>().eval() ; // Will this cause aliasing?
     m_SigmaInverse = GetSigma().selfadjointView<Eigen::Lower>().ldlt().solve(Eigen::MatrixXd::Identity(GetSigma().rows(), GetSigma().cols())) ;
   }
 
@@ -66,7 +66,8 @@ public:
   }
 
   mat GetSigma() {
-    return m_Wlist.at(m_depth) + std::pow(m_uncorrSD, 2) * Eigen::MatrixXd::Identity(m_Wlist.at(m_depth).rows(), m_Wlist.at(m_depth).cols()) ;
+    Eigen::MatrixXd Sigma = m_Wlist.at(m_depth).selfadjointView<Eigen::Lower>() ;
+    return Sigma + std::pow(m_uncorrSD, 2) * Eigen::MatrixXd::Identity(m_Wlist.at(m_depth).rows(), m_Wlist.at(m_depth).cols()) ;
   }
   // The following Kmatrix-related functions work because of the correspondence between knots
   // and observations at the finest resolution.
