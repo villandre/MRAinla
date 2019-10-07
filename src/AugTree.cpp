@@ -744,7 +744,9 @@ void AugTree::ComputeLogJointPsiMarginal() {
   if (m_recomputeMRAlogLik) {
     m_MRAcovParasSpace.print("Space parameters:") ;
     m_MRAcovParasTime.print("Time parameters:") ;
+    printf("Scaling parameter: %.6e \n", m_spacetimeScaling) ;
     computeWmats() ; // This will produce the K matrices required.
+    printf("Test: Are the matrices identical? %.6e %.6e\n\n", GetTipNodes().at(0)->GetWlist().at(0).sum(), GetTipNodes().at(0)->GetWlist().at(1).sum()) ;
   }
 
   ComputeLogFCandLogCDandDataLL() ;

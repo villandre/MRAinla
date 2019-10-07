@@ -58,15 +58,15 @@ void TreeNode::baseComputeWmat(const maternVec & covParasSp, const maternVec & c
     mat firstMat = computeCovMat(m_knotsCoor, brickList.at(l)->GetKnotsCoor(), covParasSp, covParasTime, scaling, matern, spaceNuggetSD, timeNuggetSD) ;
     mat secondMat = mat::Zero(firstMat.rows(), firstMat.cols()) ;
     for (uint k = 0; k < l ; k++) {
-      if (k < m_depth) {
+      // if (k < m_depth) {
       secondMat.noalias() += m_Wlist.at(k) *
         brickList.at(k)->GetKmatrix().selfadjointView<Upper>() *
         brickList.at(l)->GetWlist().at(k).transpose() ;
-      } else {
-        secondMat.noalias() += m_Wlist.at(m_depth) *
-          brickList.at(k)->GetKmatrix().selfadjointView<Upper>() *
-          brickList.at(l)->GetWlist().at(k).transpose() ;
-      }
+      // } else {
+      //   secondMat.noalias() += m_Wlist.at(m_depth) *
+      //     brickList.at(k)->GetKmatrix().selfadjointView<Upper>() *
+      //     brickList.at(l)->GetWlist().at(m_depth).transpose() ;
+      // }
     }
     m_Wlist.at(l) = firstMat - secondMat ;
   }
