@@ -60,6 +60,9 @@ void TreeNode::baseComputeWmat(const maternVec & covParasSp, const maternVec & c
         brickList.at(k)->GetKmatrix() *
         trans(brickList.at(l)->GetWlist().at(k)) ;
     }
+    if ((m_nodeId == 5) && (l == 1)) {
+      printf("Checking components of W: %.6e %.6e \n", accu(firstMat), accu(secondMat)) ;
+    }
     m_Wlist.at(l) = firstMat - secondMat ;
     if (l == m_depth) {
       double sign1, sign2 ;

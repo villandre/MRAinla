@@ -779,6 +779,7 @@ void AugTree::ComputeLogJointPsiMarginal(Rcpp::Function gradCholeskiFun, Rcpp::F
     printf("Scale parameter: %.4e \n", m_spacetimeScaling) ;
     fflush(stdout); // Will now print everything in the stdout buffer
     computeWmats() ; // This will produce the K matrices required. NOTE: ADD CHECK THAT ENSURES THAT THE MRA LIK. IS ONLY RE-COMPUTED WHEN THE MRA COV. PARAMETERS CHANGE.
+    printf("Test: Are the matrices identical? %.6e %.6e\n\n", accu(GetTipNodes().at(0)->GetWlist().at(0)), accu(GetTipNodes().at(0)->GetWlist().at(1))) ;
     // cout << "Done... \n" ;
   }
 
