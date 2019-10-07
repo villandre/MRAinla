@@ -914,7 +914,6 @@ void AugTree::SetMRAcovParas(const Rcpp::List & MRAcovParas) {
   double rhoTime = Rcpp::as<double>(TimeParas["rho"]) ;
   double smoothnessTime = Rcpp::as<double>(TimeParas["smoothness"]) ;
 
-
   maternVec MRAcovParasSpace(rhoSpace, smoothnessSpace, 1) ;
   maternVec MRAcovParasTime(rhoTime, smoothnessTime, 1) ;
 
