@@ -70,8 +70,8 @@ void TreeNode::baseComputeWmat(const maternVec & covParasSp, const maternVec & c
       // }
     }
     if ((m_nodeId == 5) && (l == 1)) {
-      printf("Checking components of W: %.6e %.6e \n", firstMat.sum(), secondMat.sum()) ;
-      std::cout << "Last W: \n" << brickList.at(1)->GetWlist().at(0).block(0,0,10,10).transpose() << "\n\n" ;
+      // printf("Checking components of W: %.6e %.6e \n", firstMat.sum(), secondMat.sum()) ;
+      // std::cout << "Last W: \n" << brickList.at(1)->GetWlist().at(0).block(0,0,10,10).transpose() << "\n\n" ;
     }
     m_Wlist.at(l) = firstMat - secondMat ;
   }
