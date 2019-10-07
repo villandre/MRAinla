@@ -98,6 +98,11 @@ struct dimensions {
       throw Rcpp::exception("Incompatible data specifications. \n") ;
     }
   } ;
+  void print() {
+    longitude.print("Longitude range:") ;
+    latitude.print("Latitude range:") ;
+    time.print("Time range:") ;
+  }
 };
 
 struct SpatiotempCoor{
