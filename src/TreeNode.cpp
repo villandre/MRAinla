@@ -63,7 +63,7 @@ void TreeNode::baseComputeWmat(const maternVec & covParasSp, const maternVec & c
         brickList.at(k)->GetKmatrix() *
         brickList.at(l)->GetWlist().at(k).transpose() ;
       } else {
-        secondMat.noalias() += m_Wlist.at(m_depth).selfadjointView<Lower>() *
+        secondMat.noalias() += m_Wlist.at(m_depth).selfadjointView<Upper>() *
           brickList.at(k)->GetKmatrix() *
           brickList.at(l)->GetWlist().at(k).transpose() ;
       }
