@@ -24,7 +24,7 @@ void TipNode::computeUpred(const maternVec & covParasSp, const maternVec & covPa
       mat firstTerm = computeCovMat(subLocations, brickList.at(l)->GetKnotsCoor(), covParasSp, covParasTime, scaling, matern, spaceNuggetSD, timeNuggetSD) ;
       mat secondTerm = mat::Zero(firstTerm.rows(), firstTerm.cols()) ;
       for (uint k = 0 ; k <= l-1; k++) {
-         secondTerm += m_UmatList.at(k) * brickList.at(k)->GetKmatrix() * brickList.at(l)->GetWlist().at(k).transpose() ;
+         secondTerm += m_UmatList.at(k) * brickList.at(k)->GetKmatrix().selfadjointView<Upper>() * brickList.at(l)->GetWlist().at(k).transpose() ;
       }
       m_UmatList.at(l) = firstTerm - secondTerm ;
     }

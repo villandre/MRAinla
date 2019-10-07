@@ -145,7 +145,7 @@ void::InternalNode::DeriveD() {
   double value = m_KtildeInverse.ldlt().vectorD().array().log().sum() ;
 
   m_d = value ;
-  double otherValue = GetKmatrixInverse().ldlt().vectorD().array().log().sum() ;
+  double otherValue = GetKmatrixInverse().selfadjointView<Upper>().ldlt().vectorD().array().log().sum() ;
   m_d = m_d - otherValue ;
   double thirdTerm = 0 ;
 
@@ -160,5 +160,5 @@ void InternalNode::ComputeWmat(const maternVec & covParasSp, const maternVec & c
 
   // m_Wlist.at(m_depth).triangularView<Upper>() = m_Wlist.at(m_depth).triangularView<Lower>() ; // Will this cause aliasing?
 
-  m_K = GetKmatrixInverse().ldlt().solve(mat::Identity(GetKmatrixInverse().rows(), GetKmatrixInverse().cols())) ; // The K matrix is some sort of covariance matrix, so it should always be symmetrical..
+  m_K = GetKmatrixInverse().selfadjointView<Upper>().ldlt().solve(mat::Identity(GetKmatrixInverse().rows(), GetKmatrixInverse().cols())) ; // The K matrix is some sort of covariance matrix, so it should always be symmetrical..
 }

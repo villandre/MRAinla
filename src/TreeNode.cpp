@@ -60,11 +60,11 @@ void TreeNode::baseComputeWmat(const maternVec & covParasSp, const maternVec & c
     for (uint k = 0; k < l ; k++) {
       if (k < m_depth) {
       secondMat.noalias() += m_Wlist.at(k) *
-        brickList.at(k)->GetKmatrix() *
+        brickList.at(k)->GetKmatrix().selfadjointView<Upper>() *
         brickList.at(l)->GetWlist().at(k).transpose() ;
       } else {
-        secondMat.noalias() += m_Wlist.at(m_depth).selfadjointView<Lower>() *
-          brickList.at(k)->GetKmatrix() *
+        secondMat.noalias() += m_Wlist.at(m_depth) *
+          brickList.at(k)->GetKmatrix().selfadjointView<Upper>() *
           brickList.at(l)->GetWlist().at(k).transpose() ;
       }
     }
