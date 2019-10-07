@@ -68,6 +68,9 @@ void TreeNode::baseComputeWmat(const maternVec & covParasSp, const maternVec & c
       //     brickList.at(l)->GetWlist().at(m_depth).transpose() ;
       // }
     }
+    if ((m_nodeId == 5) && (l == 1)) {
+      printf("Checking components of W: %.6e %.6e \n", firstMat.sum(), secondMat.sum()) ;
+    }
     m_Wlist.at(l) = firstMat - secondMat ;
   }
 }
