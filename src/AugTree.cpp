@@ -739,11 +739,11 @@ void AugTree::ComputeLogFCandLogCDandDataLL() {
 
 void AugTree::ComputeLogJointPsiMarginal() {
 
-  m_MRAcovParasSpace.print("Space parameters:") ;
-  m_MRAcovParasTime.print("Time parameters:") ;
   ComputeLogPriors() ;
 
   if (m_recomputeMRAlogLik) {
+    m_MRAcovParasSpace.print("Space parameters:") ;
+    m_MRAcovParasTime.print("Time parameters:") ;
     computeWmats() ; // This will produce the K matrices required.
   }
 
