@@ -758,10 +758,10 @@ void AugTree::ComputeLogJointPsiMarginal(Rcpp::Function gradCholeskiFun, Rcpp::F
   ComputeLogPriors() ;
   // cout << "Computing Wmats... \n" ;
   if (m_recomputeMRAlogLik) {
-    // m_MRAcovParasSpace.print("Space parameters:") ;
-    // m_MRAcovParasTime.print("Time parameters:") ;
-    // printf("Scale parameter: %.4e \n", m_spacetimeScaling) ;
-    // fflush(stdout); // Will now print everything in the stdout buffer
+    m_MRAcovParasSpace.print("Space parameters:") ;
+    m_MRAcovParasTime.print("Time parameters:") ;
+    printf("Scale parameter: %.4e \n", m_spacetimeScaling) ;
+    fflush(stdout); // Will now print everything in the stdout buffer
     computeWmats() ; // This will produce the K matrices required. NOTE: ADD CHECK THAT ENSURES THAT THE MRA LIK. IS ONLY RE-COMPUTED WHEN THE MRA COV. PARAMETERS CHANGE.
     // cout << "Done... \n" ;
   }
@@ -918,7 +918,8 @@ void AugTree::SetMRAcovParas(const Rcpp::List & MRAcovParas) {
   maternVec MRAcovParasSpace(rhoSpace, smoothnessSpace, 1) ;
   maternVec MRAcovParasTime(rhoTime, smoothnessTime, 1) ;
 
-  bool test = (m_spacetimeScaling == scalePara) && (m_MRAcovParasSpace == MRAcovParasSpace) && (m_MRAcovParasTime == MRAcovParasTime) ;
+  bool test = (fabs(m_spacetimeScaling - scalePara) < epsilon) && (m_MRAcovParasSpace == MRAcovParasSpace) && (m_MRAcovParasTime == MRAcovParasTime) ;
+  // I overloaded == to have it use the epsilon threshold as well.
 
   if (test) {
     m_recomputeMRAlogLik = false ;

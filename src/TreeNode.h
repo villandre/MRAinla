@@ -23,13 +23,16 @@ namespace MRAinla
 {
 typedef unsigned int uint ;
 
+const double epsilon = 1e-50 ;
+
 struct maternVec{
   double m_rho ;
   double m_smoothness ;
   double m_scale ;
 
   friend bool operator==(const maternVec & first, const maternVec & second) {
-    return (first.m_rho == second.m_rho) && (first.m_scale == second.m_scale) && (first.m_smoothness == second.m_smoothness) ;
+    return (fabs(first.m_rho - second.m_rho) < epsilon) && (fabs(first.m_scale - second.m_scale) < epsilon) && (fabs(first.m_smoothness - second.m_smoothness) < epsilon) ;
+    return (fabs(first.m_rho - second.m_rho) < epsilon) && (fabs(first.m_scale - second.m_scale) < epsilon) && (fabs(first.m_smoothness - second.m_smoothness) < epsilon) ;
   }
 
   void print(std::string header) {
