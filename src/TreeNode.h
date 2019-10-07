@@ -32,7 +32,6 @@ struct maternVec{
 
   friend bool operator==(const maternVec & first, const maternVec & second) {
     return (fabs(first.m_rho - second.m_rho) < epsilon) && (fabs(first.m_scale - second.m_scale) < epsilon) && (fabs(first.m_smoothness - second.m_smoothness) < epsilon) ;
-    return (fabs(first.m_rho - second.m_rho) < epsilon) && (fabs(first.m_scale - second.m_scale) < epsilon) && (fabs(first.m_smoothness - second.m_smoothness) < epsilon) ;
   }
 
   void print(std::string header) {
