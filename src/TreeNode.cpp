@@ -70,6 +70,12 @@ void TreeNode::baseComputeWmat(const maternVec & covParasSp, const maternVec & c
     }
     if ((m_nodeId == 5) && (l == 1)) {
       printf("Checking components of W: %.6e %.6e \n", firstMat.sum(), secondMat.sum()) ;
+      std::cout << "Knots coordinates in node: \n" <<
+      m_knotsCoor.spatialCoords.block(0,0,10,2) << "\n" <<
+        m_knotsCoor.timeCoords.segment(0,10) << "\n\n";
+      std::cout << "Knots coordinates in ancestral node: \n" <<
+      brickList.at(l)->GetKnotsCoor().spatialCoords.block(0,0,10,2) << "\n" <<
+        brickList.at(l)->GetKnotsCoor().timeCoords.segment(0,10) << "\n\n";
     }
     m_Wlist.at(l) = firstMat - secondMat ;
   }
