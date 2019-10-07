@@ -535,9 +535,25 @@ void AugTree::createHmatrixPos() {
 }
 
 void AugTree::updateHmatrix(Rcpp::Function sparseMatrixConstructFun) {
+  std::vector<TreeNode *> tipNodes = GetTipNodes() ;
+
+  std::sort(tipNodes.begin(), tipNodes.end(), [] (TreeNode * first, TreeNode * second) {
+    uvec firstAncestorIds = first->GetAncestorIds() ;
+    uvec secondAncestorIds = second->GetAncestorIds() ;
+    bool firstSmallerThanSecond = false ;
+    for (uint i = 1 ; i < firstAncestorIds.size() ; i++) { // The ultimate ancestor is always node 0, hence the loop starting at 1.
+      bool test = (firstAncestorIds.at(i) == secondAncestorIds.at(i)) ;
+      if (!test) {
+        firstSmallerThanSecond = (firstAncestorIds.at(i) < secondAncestorIds.at(i)) ;
+        break ;
+      }
+    }
+    return firstSmallerThanSecond ;
+  }) ; // This is supposed to reorder the tip nodes in such a way that the F matrix has contiguous blocks.
+
   vec concatenatedValues = vectorise(m_incrementedCovarReshuffled) ;
 
-  for (auto & tipNode : GetTipNodes()) {
+  for (auto & tipNode : tipNodes) {
     for (auto & Bmat : tipNode->GetWlist()) {
       concatenatedValues = join_cols(concatenatedValues, vectorise(Bmat)) ;
     }
