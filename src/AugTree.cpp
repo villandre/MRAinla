@@ -785,14 +785,13 @@ void AugTree::ComputeLogJointPsiMarginal(Rcpp::Function gradCholeskiFun, Rcpp::F
     cout << "\n W_j1^0 \n\n" ;
     printf("Dimensions: %i %i \n\n", ancestorsList.at(1)->GetWlist().at(0).n_rows, ancestorsList.at(1)->GetWlist().at(1).n_cols) ;
     std::cout << ancestorsList.at(1)->GetWlist().at(0)(0,0,size(3,3)) << "\n\n" ;
-    fflush(stdout) ;
-    cout << "\n K_0" << "\n\n" ;
-    printf("Dimensions: %i %i \n\n", ancestorsList.at(0)->GetKmatrix().n_rows, ancestorsList.at(0)->GetKmatrix().n_cols) ;
-    std::cout << ancestorsList.at(0)->GetKmatrix()(0,0,size(3,3)) << "\n\n" ;
-    fflush(stdout) ;
-    cout << "\n W_{j1, ..., jM}^0 \n\n " ;
-    printf("Dimensions: %i %i \n\n", arbitraryTipNode->GetWlist().at(0).n_rows, arbitraryTipNode->GetWlist().at(0).n_cols) ;
-    std::cout << arbitraryTipNode->GetWlist().at(0)(0,0,size(3,3)) << "\n\n" ;
+    printf("Ancestors node ID: %i \n", ancestorsList.at(1)->GetNodeId()) ;
+    std::cout << "These are the knots at resolution 0: \n" ;
+    std::cout << ancestorsList.at(0)->GetKnotsCoor().spatialCoords(0,0,size(10,2)) << "\n\n";
+    std::cout << ancestorsList.at(1)->GetKnotsCoor().timeCoords.subvec(0,9) << "\n\n";
+    std::cout << "These are the knots at resolution 1: \n" ;
+    std::cout << ancestorsList.at(0)->GetKnotsCoor().spatialCoords(0,0,size(20,2)) << "\n\n";
+    std::cout << ancestorsList.at(1)->GetKnotsCoor().timeCoords.subvec(0,19) << "\n\n";
   }
 
   ComputeLogFCandLogCDandDataLL(gradCholeskiFun, sparseMatConstructFun, sparseDeterminantFun) ;
