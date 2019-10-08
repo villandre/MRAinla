@@ -216,7 +216,6 @@ private:
   sp_mat m_Hmat ;
   std::vector<pointerOffset> m_pointerOffsetForHmat ;
 
-  sp_mat m_FEinvAndKinvMatrices ;
   sp_mat m_HmatPred ;
   sp_mat m_SigmaFEandEtaInv ;
   bool m_recordFullConditional{ false } ;

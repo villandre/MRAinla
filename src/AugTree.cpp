@@ -284,18 +284,20 @@ void AugTree::CleanPredictionComponents() {
 
 void AugTree::CreateSigmaBetaEtaInvMat() {
   std::vector<mat *> FEinvAndKinvMatrixList = getKmatricesInversePointers() ;
-  mat FEinvMatrix = pow(m_fixedEffSD, -2) * mat::Identity(m_fixedEffParameters.size(), m_fixedEffParameters.size()) ;
-  FEinvAndKinvMatrixList.insert(FEinvAndKinvMatrixList.begin(), &FEinvMatrix) ;
-
-  // This is because we want the Q matrix to have a block-diagonal component in the lower-right corner,
-  // which prompted us to make H* = [X,F] rather than H* = [F, X], like in Eidsvik.
+  // We have to use that loop instead of creating an identity matrix, else, it will be assumed in the updating function
+  // that the zeros in the identity matrix are not ALWAYS 0 in the sparse matrix, and the iterating across
+  // non-zero elements will cover those zeros too!
+  mat FEinvMatrix(1,1) ;
+  FEinvMatrix(0,0) = m_fixedEffSD ;
+  for (uint i = 0; i < m_fixedEffParameters.size(); i++) {
+    FEinvAndKinvMatrixList.insert(FEinvAndKinvMatrixList.begin(), &FEinvMatrix) ;
+  }
 
   m_SigmaFEandEtaInv = createBlockMatrix(FEinvAndKinvMatrixList) ;
 }
 
 void AugTree::UpdateSigmaBetaEtaInvMat() {
   std::vector<mat *> FEinvAndKinvMatrixList = getKmatricesInversePointers() ;
-
   mat FEinvMatrix = pow(m_fixedEffSD, -2) * mat::Identity(m_fixedEffParameters.size(), m_fixedEffParameters.size()) ;
   FEinvAndKinvMatrixList.insert(FEinvAndKinvMatrixList.begin(), &FEinvMatrix) ;
 
@@ -309,14 +311,16 @@ void AugTree::UpdateSigmaBetaEtaInvMat() {
   uint index = FEinvMatrix.rows() ;
 
   for (uint i = 1; i < FEinvAndKinvMatrixList.size(); i++) {
-    concatenatedValues.segment(index,  FEinvAndKinvMatrixList.at(i)->size()) = Map<vec>((*FEinvAndKinvMatrixList.at(i)).data(), (*FEinvAndKinvMatrixList.at(i)).cols() * (*FEinvAndKinvMatrixList.at(i)).rows()) ;
+    concatenatedValues.segment(index,  FEinvAndKinvMatrixList.at(i)->size()) = *FEinvAndKinvMatrixList.at(i) ;
     index += FEinvAndKinvMatrixList.at(i)->size() ;
   }
 
   int loopIndex = 0 ;
 
-  for (int k = 0; k < m_FEinvAndKinvMatrices.outerSize(); ++k) {
-    for (sp_mat::InnerIterator it(m_FEinvAndKinvMatrices, k); it; ++it)
+ // The matrix m_SigmaFEandEtaInv is row-major, but it is symmetric, so it should not matter whether
+ // it is filled row or columnwise.
+  for (int k = 0; k < m_SigmaFEandEtaInv.outerSize(); ++k) {
+    for (sp_mat::InnerIterator it(m_SigmaFEandEtaInv, k); it; ++it)
     {
       it.valueRef() = concatenatedValues(loopIndex) ;
       loopIndex += 1 ;
@@ -723,7 +727,7 @@ void AugTree::ComputeLogFCandLogCDandDataLL() {
 
   // Computing p(v* | Psi)
   mat logLikTerm ;
-  logLikTerm.noalias() = -0.5 * m_Vstar.transpose() * m_SigmaFEandEtaInv.selfadjointView<Upper>() * m_Vstar ;
+  logLikTerm.noalias() = -0.5 * m_Vstar.transpose() * m_SigmaFEandEtaInv * m_Vstar ;
 
   m_logCondDist = logLikTerm(0,0) + 0.5 * logDetSigmaKFEinv ;
 
@@ -745,12 +749,13 @@ void AugTree::ComputeLogJointPsiMarginal() {
     m_MRAcovParasSpace.print("Space parameters:") ;
     m_MRAcovParasTime.print("Time parameters:") ;
     printf("Scaling parameter: %.6e \n", m_spacetimeScaling) ;
+    printf("Error para.: %.6e \n", m_errorSD) ;
     computeWmats() ;
     TreeNode * arbitraryTipNode = GetTipNodes().at(0) ;
     std::vector<TreeNode *> ancestorsList = arbitraryTipNode->getAncestors() ;
-    cout << "W_j1^0 \n\n" ;
-    printf("Dimensions: %i %i \n\n", ancestorsList.at(1)->GetWlist().at(0).rows(), ancestorsList.at(1)->GetWlist().at(1).cols()) ;
-    std::cout << ancestorsList.at(1)->GetWlist().at(0).block(0,0,3,3) << "\n\n" ;
+    // cout << "W_j1^0 \n\n" ;
+    // printf("Dimensions: %i %i \n\n", ancestorsList.at(1)->GetWlist().at(0).rows(), ancestorsList.at(1)->GetWlist().at(1).cols()) ;
+    // std::cout << ancestorsList.at(1)->GetWlist().at(0).block(0,0,3,3) << "\n\n" ;
     // printf("Ancestors node ID: %i \n", ancestorsList.at(1)->GetNodeId()) ;
     // std::cout << "These are the knots at resolution 0: \n" ;
     // std::cout << ancestorsList.at(0)->GetKnotsCoor().spatialCoords.block(0,0,10,2) << "\n\n";
