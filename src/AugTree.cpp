@@ -750,13 +750,13 @@ void AugTree::ComputeLogJointPsiMarginal() {
     std::vector<TreeNode *> ancestorsList = arbitraryTipNode->getAncestors() ;
     cout << "W_j1^0 \n\n" ;
     printf("Dimensions: %i %i \n\n", ancestorsList.at(1)->GetWlist().at(0).rows(), ancestorsList.at(1)->GetWlist().at(1).cols()) ;
-    std::cout << ancestorsList.at(1)->GetWlist().at(0).block(0,0,5,5) << "\n\n" ;
+    std::cout << ancestorsList.at(1)->GetWlist().at(0).block(0,0,3,3) << "\n\n" ;
     cout << "K_0" << "\n\n" ;
     printf("Dimensions: %i %i \n\n", ancestorsList.at(0)->GetKmatrix().rows(), ancestorsList.at(0)->GetKmatrix().cols()) ;
-    cout << ancestorsList.at(0)->GetKmatrix().block(0,0,5,5) << "\n\n";
+    cout << ancestorsList.at(0)->GetKmatrix().block(0,0,3,3) << "\n\n";
     cout << "W_{j1, ..., jM}^0 \n\n " ;
     printf("Dimensions: %i %i \n\n", arbitraryTipNode->GetWlist().at(0).rows(), arbitraryTipNode->GetWlist().at(0).cols()) ;
-    cout << arbitraryTipNode->GetWlist().at(0).block(0,0,5,5) << "\n\n" ;
+    cout << arbitraryTipNode->GetWlist().at(0).block(0,0,3,3) << "\n\n" ;
   }
 
   ComputeLogFCandLogCDandDataLL() ;
