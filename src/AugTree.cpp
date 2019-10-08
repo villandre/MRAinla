@@ -745,8 +745,18 @@ void AugTree::ComputeLogJointPsiMarginal() {
     m_MRAcovParasSpace.print("Space parameters:") ;
     m_MRAcovParasTime.print("Time parameters:") ;
     printf("Scaling parameter: %.6e \n", m_spacetimeScaling) ;
-    computeWmats() ; // This will produce the K matrices required.
-    printf("Test: Are the matrices identical? %.6e %.6e\n\n", GetTipNodes().at(0)->GetWlist().at(0).sum(), GetTipNodes().at(0)->GetWlist().at(1).sum()) ;
+    computeWmats() ;
+    TreeNode * arbitraryTipNode = GetTipNodes().at(0) ;
+    std::vector<TreeNode *> ancestorsList = arbitraryTipNode->getAncestors() ;
+    cout << "W_j1^0 \n\n" ;
+    printf("Dimensions: %i %i \n\n", ancestorsList.at(1)->GetWlist().at(0).rows(), ancestorsList.at(1)->GetWlist().at(1).cols()) ;
+    std::cout << ancestorsList.at(1)->GetWlist().at(0).block(0,0,5,5) << "\n\n" ;
+    cout << "K_0" << "\n\n" ;
+    printf("Dimensions: %i %i \n\n", ancestorsList.at(0)->GetKmatrix().rows(), ancestorsList.at(0)->GetKmatrix().cols()) ;
+    cout << ancestorsList.at(0)->GetKmatrix().block(0,0,5,5) << "\n\n";
+    cout << "W_{j1, ..., jM}^0 \n\n " ;
+    printf("Dimensions: %i %i \n\n", arbitraryTipNode->GetWlist().at(0).rows(), arbitraryTipNode->GetWlist().at(0).cols()) ;
+    cout << arbitraryTipNode->GetWlist().at(0).block(0,0,5,5) << "\n\n" ;
   }
 
   ComputeLogFCandLogCDandDataLL() ;
