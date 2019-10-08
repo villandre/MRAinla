@@ -49,14 +49,14 @@ void InternalNode::genRandomKnots(spatialcoor & dataCoor, const uint & numKnots,
   } else {
     mat knotsSp(numKnots, 2, fill::zeros) ;
 
-    float minLon = min(m_dimensions.longitude) ;
-    float maxLon = max(m_dimensions.longitude) ;
+    double minLon = min(m_dimensions.longitude) ;
+    double maxLon = max(m_dimensions.longitude) ;
 
-    float minLat = min(m_dimensions.latitude) ;
-    float maxLat = max(m_dimensions.latitude) ;
+    double minLat = min(m_dimensions.latitude) ;
+    double maxLat = max(m_dimensions.latitude) ;
 
-    float minTime = min(m_dimensions.time) ;
-    float maxTime = max(m_dimensions.time) ;
+    double minTime = min(m_dimensions.time) ;
+    double maxTime = max(m_dimensions.time) ;
 
     vec time(numKnots) ;
 
