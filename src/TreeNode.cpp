@@ -60,12 +60,7 @@ void TreeNode::baseComputeWmat(const maternVec & covParasSp, const maternVec & c
         brickList.at(k)->GetKmatrix() *
         trans(brickList.at(l)->GetWlist().at(k)) ;
     }
-    if ((m_nodeId == 5) && (l == 1)) {
-      printf("Checking components of W: %.6e %.6e \n", accu(firstMat), accu(secondMat)) ;
-      brickList.at(1)->GetWlist().at(0)(0,0,size(2,2)).t().print("Last W: \n") ;
-      brickList.at(1)->GetKnotsCoor().spatialCoords(0,0,size(4,2)).print("Knots in internal node: \n\n") ;
-      brickList.at(1)->GetKnotsCoor().timeCoords.subvec(0,4).print("") ;
-    }
+
     m_Wlist.at(l) = firstMat - secondMat ;
     if (l == m_depth) {
       double sign1, sign2 ;

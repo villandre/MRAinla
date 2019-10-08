@@ -779,8 +779,20 @@ void AugTree::ComputeLogJointPsiMarginal(Rcpp::Function gradCholeskiFun, Rcpp::F
     printf("Scale parameter: %.4e \n", m_spacetimeScaling) ;
     fflush(stdout); // Will now print everything in the stdout buffer
     computeWmats() ; // This will produce the K matrices required. NOTE: ADD CHECK THAT ENSURES THAT THE MRA LIK. IS ONLY RE-COMPUTED WHEN THE MRA COV. PARAMETERS CHANGE.
-    printf("Test: Are the matrices identical? %.6e %.6e\n\n", accu(GetTipNodes().at(0)->GetWlist().at(0)), accu(GetTipNodes().at(0)->GetWlist().at(1))) ;
-    // cout << "Done... \n" ;
+    TreeNode * arbitraryTipNode = GetTipNodes().at(0) ;
+    std::vector<TreeNode *> ancestorsList = arbitraryTipNode->getAncestors() ;
+    fflush(stdout) ;
+    cout << "\n W_j1^0 \n\n" ;
+    printf("Dimensions: %i %i \n\n", ancestorsList.at(1)->GetWlist().at(0).n_rows, ancestorsList.at(1)->GetWlist().at(1).n_cols) ;
+    std::cout << ancestorsList.at(1)->GetWlist().at(0)(0,0,size(3,3)) << "\n\n" ;
+    fflush(stdout) ;
+    cout << "\n K_0" << "\n\n" ;
+    printf("Dimensions: %i %i \n\n", ancestorsList.at(0)->GetKmatrix().n_rows, ancestorsList.at(0)->GetKmatrix().n_cols) ;
+    std::cout << ancestorsList.at(0)->GetKmatrix()(0,0,size(3,3)) << "\n\n" ;
+    fflush(stdout) ;
+    cout << "\n W_{j1, ..., jM}^0 \n\n " ;
+    printf("Dimensions: %i %i \n\n", arbitraryTipNode->GetWlist().at(0).n_rows, arbitraryTipNode->GetWlist().at(0).n_cols) ;
+    std::cout << arbitraryTipNode->GetWlist().at(0)(0,0,size(3,3)) << "\n\n" ;
   }
 
   ComputeLogFCandLogCDandDataLL(gradCholeskiFun, sparseMatConstructFun, sparseDeterminantFun) ;
