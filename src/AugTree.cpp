@@ -307,28 +307,21 @@ void AugTree::UpdateSigmaBetaEtaInvMat() {
     FEinvAndKinvMatrixList.insert(FEinvAndKinvMatrixList.begin(), &FEinvMatrix) ;
   }
 
-  uint numElements = 0 ;
-  for (auto & i : FEinvAndKinvMatrixList) { // This would not need to be done everytime an update is processed, as numElements doesn't change, but it's probably very fast, so it shouldn't matter.
-    numElements += i->size() ;
-  }
+  sp_mat::InnerIterator it(m_SigmaFEandEtaInv, 0) ;
+  int k = 0 ;
 
-  vec concatenatedValues = vec::Zero(numElements) ;
-  uint index = 0 ;
-
-  for (uint i = 0; i < FEinvAndKinvMatrixList.size(); i++) {
-    concatenatedValues.segment(index, FEinvAndKinvMatrixList.at(i)->size()) = *FEinvAndKinvMatrixList.at(i) ;
-    index += FEinvAndKinvMatrixList.at(i)->size() ;
-  }
-
-  int loopIndex = 0 ;
-
- // The matrix m_SigmaFEandEtaInv is row-major, but it is symmetric, so it should not matter whether
- // it is filled row or columnwise.
-  for (int k = 0; k < m_SigmaFEandEtaInv.outerSize(); ++k) {
-    for (sp_mat::InnerIterator it(m_SigmaFEandEtaInv, k); it; ++it)
-    {
-      it.valueRef() = concatenatedValues(loopIndex) ;
-      loopIndex += 1 ;
+  for (auto & matrixPointer : FEinvAndKinvMatrixList) {
+    int colIndex = 0 ;
+    for (uint elementIndex = 0 ; elementIndex < matrixPointer->size(); elementIndex++) {
+      it.valueRef() = (*matrixPointer)(elementIndex) ;
+      colIndex += 1 ;
+      if (colIndex == matrixPointer->cols()) {
+        it = sp_mat::InnerIterator(m_SigmaFEandEtaInv, k + 1) ;
+        k += 1 ;
+        colIndex = 0 ;
+      } else {
+        it = ++it ;
+      }
     }
   }
 }
