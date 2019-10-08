@@ -288,7 +288,7 @@ void AugTree::CreateSigmaBetaEtaInvMat() {
   // that the zeros in the identity matrix are not ALWAYS 0 in the sparse matrix, and the iterating across
   // non-zero elements will cover those zeros too!
   mat FEinvMatrix(1,1) ;
-  FEinvMatrix(0,0) = m_fixedEffSD ;
+  FEinvMatrix(0,0) = pow(m_fixedEffSD, -2) ;
   for (uint i = 0; i < m_fixedEffParameters.size(); i++) {
     FEinvAndKinvMatrixList.insert(FEinvAndKinvMatrixList.begin(), &FEinvMatrix) ;
   }
@@ -298,20 +298,25 @@ void AugTree::CreateSigmaBetaEtaInvMat() {
 
 void AugTree::UpdateSigmaBetaEtaInvMat() {
   std::vector<mat *> FEinvAndKinvMatrixList = getKmatricesInversePointers() ;
-  mat FEinvMatrix = pow(m_fixedEffSD, -2) * mat::Identity(m_fixedEffParameters.size(), m_fixedEffParameters.size()) ;
-  FEinvAndKinvMatrixList.insert(FEinvAndKinvMatrixList.begin(), &FEinvMatrix) ;
+  // We have to use that loop instead of creating an identity matrix, else, it will be assumed in the updating function
+  // that the zeros in the identity matrix are not ALWAYS 0 in the sparse matrix, and the iterating across
+  // non-zero elements will cover those zeros too!
+  mat FEinvMatrix(1,1) ;
+  FEinvMatrix(0,0) = pow(m_fixedEffSD, -2) ;
+  for (uint i = 0; i < m_fixedEffParameters.size(); i++) {
+    FEinvAndKinvMatrixList.insert(FEinvAndKinvMatrixList.begin(), &FEinvMatrix) ;
+  }
 
   uint numElements = 0 ;
   for (auto & i : FEinvAndKinvMatrixList) { // This would not need to be done everytime an update is processed, as numElements doesn't change, but it's probably very fast, so it shouldn't matter.
     numElements += i->size() ;
   }
 
-  vec concatenatedValues(numElements) ;
-  concatenatedValues.segment(0, m_fixedEffParameters.size()) = FEinvMatrix.diagonal() ;
-  uint index = FEinvMatrix.rows() ;
+  vec concatenatedValues = vec::Zero(numElements) ;
+  uint index = 0 ;
 
-  for (uint i = 1; i < FEinvAndKinvMatrixList.size(); i++) {
-    concatenatedValues.segment(index,  FEinvAndKinvMatrixList.at(i)->size()) = *FEinvAndKinvMatrixList.at(i) ;
+  for (uint i = 0; i < FEinvAndKinvMatrixList.size(); i++) {
+    concatenatedValues.segment(index, FEinvAndKinvMatrixList.at(i)->size()) = *FEinvAndKinvMatrixList.at(i) ;
     index += FEinvAndKinvMatrixList.at(i)->size() ;
   }
 
