@@ -727,7 +727,7 @@ void AugTree::ComputeLogFCandLogCDandDataLL() {
 
   // Computing p(v* | Psi)
   mat logLikTerm ;
-  logLikTerm.noalias() = -0.5 * m_Vstar.transpose() * m_SigmaFEandEtaInv * m_Vstar ;
+  logLikTerm.noalias() = -0.5 * m_Vstar.transpose() * m_SigmaFEandEtaInv.selfadjointView<Upper>() * m_Vstar ;
 
   m_logCondDist = logLikTerm(0,0) + 0.5 * logDetSigmaKFEinv ;
 
