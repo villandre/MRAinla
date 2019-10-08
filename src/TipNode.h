@@ -95,6 +95,7 @@ public:
   TipNode(const dimensions & dims, const uint & depth, TreeNode * parent,
           const inputdata & dataset) {
     baseInitialise(dims, depth, parent, dataset) ;
+    m_UmatList.resize(m_depth + 1) ;
     m_obsInNode = deriveObsInNode(dataset) ;
   }
 

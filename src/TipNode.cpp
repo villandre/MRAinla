@@ -15,7 +15,7 @@ void TipNode::computeUpred(const maternVec & covParasSp, const maternVec & covPa
                            const bool matern, const double & spaceNuggetSD, const double & timeNuggetSD) {
   if (m_predsInNode.size() > 0) {
     std::vector<TreeNode *> brickList = getAncestors() ;
-    m_UmatList.resize(m_depth + 1) ;
+    // m_UmatList.resize(m_depth + 1) ;
 
     spatialcoor subLocations = predictLocations.subset(m_predsInNode) ; // Will I need to invoke the destructor to avoid a memory leak?
     m_UmatList.at(0) = computeCovMat(subLocations, brickList.at(0)->GetKnotsCoor(), covParasSp, covParasTime, scaling, matern, spaceNuggetSD, timeNuggetSD) ;

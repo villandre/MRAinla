@@ -42,7 +42,7 @@ AugTree::AugTree(uint & M, Array2d & lonRange, Array2d & latRange, Array2d & tim
   SetPredictData(predSp, predTime, predCovariates) ;
 
   gsl_rng_set(m_randomNumGenerator, seed) ;
-  // m_fixedEffParameters.resize(m_dataset.covariateValues.cols() + 1) ; // An extra 1 is added to take into account the intercept.
+
   m_fixedEffParameters = Eigen::VectorXd::Zero(m_dataset.covariateValues.cols() + 1);
 
   BuildTree(minObsForTimeSplit, splitTime, numKnotsRes0, J) ;
@@ -469,38 +469,14 @@ void AugTree::updateHmatrix() {
 }
 
 void AugTree::updateHmatrixPred() {
-  mat intercept = ArrayXd::Ones(m_predictData.covariateValues.rows(), 1) ;
-  ArrayXXd incrementedCovarPredict = join_rows(intercept.array(), m_predictData.covariateValues.array()) ;
-  ArrayXXd incrementedCovarPredictReshuffled = rows(incrementedCovarPredict, m_obsOrderForHpredMat) ;
-  // Will this correctly preserve the order? It's supposed to...
-  ArrayXd concatenatedValues(Map<ArrayXd>(incrementedCovarPredictReshuffled.data(), incrementedCovarPredictReshuffled.cols() * incrementedCovarPredictReshuffled.rows()))  ;
-  int totalSize = concatenatedValues.size() ;
-  int secondIndex = totalSize ;
-  for (auto & tipNode : GetTipNodes()) {
-    if (tipNode->GetPredIndices().size() > 0) {
-      for (auto & Umat : tipNode->GetUmatList()) {
-        totalSize += Umat.size();
-      }
-    }
-  }
-  concatenatedValues.conservativeResize(totalSize, 1) ;
-
-  for (auto & tipNode : GetTipNodes()) {
-    if (tipNode->GetPredIndices().size() > 0) {
-      for (auto & Umat : tipNode->GetUmatList()) {
-        ArrayXd B(Map<ArrayXd>(Umat.data(), Umat.cols() * Umat.rows()));
-        concatenatedValues.segment(secondIndex, B.size()) = B ;
-        secondIndex += B.size() ;
-      }
-    }
-  }
-
   int loopIndex = 0 ;
   for (int k = 0; k < m_HmatPred.outerSize(); ++k) {
     for (sp_mat::InnerIterator it(m_HmatPred, k); it; ++it)
     {
-      it.valueRef() = concatenatedValues(loopIndex) ;
-      loopIndex += 1 ;
+      if (it.col() >= m_fixedEffParameters.size()) { // Covariates never change, only the elements in the F matrix change.
+        it.valueRef() = *(m_pointerOffsetForHmatPred.at(loopIndex).matrixLocation->data() + m_pointerOffsetForHmatPred.at(loopIndex).offset) ;
+        loopIndex += 1 ;
+      }
     }
   }
 }
@@ -596,6 +572,20 @@ void AugTree::createHmatrixPred() {
                           rep_each(uvec::LinSpaced(m_predictData.covariateValues.cols() + 1, 0, m_predictData.covariateValues.cols()).array(),
                                    m_predictData.covariateValues.rows())) ;
   HmatPredPos = join_cols(covPos, HmatPredPos).eval() ; // Could this cause aliasing?
+
+  for (auto & tipNode : tipNodes) {
+    std::vector<TreeNode *> ancestorsList = tipNode->getAncestors() ;
+    uint numObs = tipNode->GetPredIndices().size() ;
+    for (uint rowIndex = 0; rowIndex < numObs ; rowIndex++) {
+      for (uint depth = 0 ; depth <= m_M ; depth++) {
+        uint numKnotsAtDepth = ancestorsList.at(depth)->GetNumKnots() ;
+        for (uint colIndex = 0; colIndex < numKnotsAtDepth; colIndex++) {
+          pointerOffset elementToAdd = pointerOffset(&(tipNode->GetUmatList().at(depth)), colIndex * numObs + rowIndex) ;
+          m_pointerOffsetForHmatPred.push_back(elementToAdd) ;
+        }
+      }
+    }
+  }
 
   ArrayXd concatenatedValues(Map<ArrayXd>(incrementedCovarPredictReshuffled.data(), incrementedCovarPredictReshuffled.cols() * incrementedCovarPredictReshuffled.rows()))  ;
   int totalSize = concatenatedValues.size() ;
@@ -744,31 +734,15 @@ void AugTree::ComputeLogJointPsiMarginal() {
   ComputeLogPriors() ;
 
   if (m_recomputeMRAlogLik) {
-    m_MRAcovParasSpace.print("Space parameters:") ;
-    m_MRAcovParasTime.print("Time parameters:") ;
-    printf("Scaling parameter: %.6e \n", m_spacetimeScaling) ;
-    printf("Error para.: %.6e \n", m_errorSD) ;
     computeWmats() ;
-    TreeNode * arbitraryTipNode = GetTipNodes().at(0) ;
-    std::vector<TreeNode *> ancestorsList = arbitraryTipNode->getAncestors() ;
-    // cout << "W_j1^0 \n\n" ;
-    // printf("Dimensions: %i %i \n\n", ancestorsList.at(1)->GetWlist().at(0).rows(), ancestorsList.at(1)->GetWlist().at(1).cols()) ;
-    // std::cout << ancestorsList.at(1)->GetWlist().at(0).block(0,0,3,3) << "\n\n" ;
-    // printf("Ancestors node ID: %i \n", ancestorsList.at(1)->GetNodeId()) ;
-    // std::cout << "These are the knots at resolution 0: \n" ;
-    // std::cout << ancestorsList.at(0)->GetKnotsCoor().spatialCoords.block(0,0,10,2) << "\n\n";
-    // std::cout << ancestorsList.at(1)->GetKnotsCoor().timeCoords.segment(0,10) << "\n\n";
-    // std::cout << "These are the knots at resolution 1: \n" ;
-    // std::cout << ancestorsList.at(0)->GetKnotsCoor().spatialCoords.block(0,0,20,2) << "\n\n";
-    // std::cout << ancestorsList.at(1)->GetKnotsCoor().timeCoords.segment(0,20) << "\n\n";
   }
 
   ComputeLogFCandLogCDandDataLL() ;
 
-  printf("Observations log-lik: %.4e \n Log-prior: %.4e \n Log-Cond. dist.: %.4e \n Log-full cond.: %.4e \n \n \n",
-   m_globalLogLik, m_logPrior, m_logCondDist, m_logFullCond) ;
-  m_logJointPsiMarginal = m_globalLogLik + m_logPrior + m_logCondDist - m_logFullCond ;
-  printf("Joint value: %.4e \n \n", m_logJointPsiMarginal) ;
+  // printf("Observations log-lik: %.4e \n Log-prior: %.4e \n Log-Cond. dist.: %.4e \n Log-full cond.: %.4e \n \n \n",
+  //  m_globalLogLik, m_logPrior, m_logCondDist, m_logFullCond) ;
+  // m_logJointPsiMarginal = m_globalLogLik + m_logPrior + m_logCondDist - m_logFullCond ;
+  // printf("Joint value: %.4e \n \n", m_logJointPsiMarginal) ;
 }
 
 void AugTree::ComputeHpred(const mat & spCoords, const vec & time, const mat & covariateMatrix) {

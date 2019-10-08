@@ -215,6 +215,7 @@ private:
 
   sp_mat m_Hmat ;
   std::vector<pointerOffset> m_pointerOffsetForHmat ;
+  std::vector<pointerOffset> m_pointerOffsetForHmatPred ;
 
   sp_mat m_HmatPred ;
   sp_mat m_SigmaFEandEtaInv ;
