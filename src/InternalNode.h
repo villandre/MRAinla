@@ -24,21 +24,21 @@ public:
   void DeriveD() ;
   void ComputeWmat(const maternVec &, const maternVec &, const double &, const bool, const double &, const double &) ;
   void ComputeParasEtaDeltaTilde(const spatialcoor &, const inputdata &, const vec &) ;
-  std::vector<std::vector<mat>> GetAlist() const {return m_Alist ;};
-  mat GetKtilde() const {return m_Ktilde ;}
+  std::vector<std::vector<mat>> & GetAlist() {return m_Alist ;};
+  mat & GetKtilde() {return m_Ktilde ;}
 
-  mat GetB(const uint & l) { throw Rcpp::exception("Trying to get B matrix in internal node.\n") ;}
+  mat & GetB(const uint & l) { throw Rcpp::exception("Trying to get B matrix in internal node.\n") ;}
   mat GetSigma() { throw Rcpp::exception("Trying to get Sigma matrix in internal node.\n") ;}
-  mat GetKmatrix() {return m_K ;}
+  mat & GetKmatrix() {return m_K ;}
   mat * GetKmatrixAddress() {return &m_K ;}
   mat * GetKmatrixInverseAddress() { return &(m_Wlist.back()) ;}
   mat GetKmatrixInverse() {return m_Wlist.back() ;}
-  vec GetOmega(const uint & order) { return m_omega.at(order) ;}
+  vec & GetOmega(const uint & order) { return m_omega.at(order) ;}
   void SetUncorrSD(const double &) {throw Rcpp::exception("Trying to add uncorrelated error for internal nodes! \n") ;}
-  mat GetUpred(const uint & l) { throw Rcpp::exception("Upred matrices only computed for tip nodes! \n") ;}
+  mat & GetUpred(const uint & l) { throw Rcpp::exception("Upred matrices only computed for tip nodes! \n") ;}
   std::vector<mat> & GetUmatList() { throw Rcpp::exception("UmatList only available in tip nodes! \n") ;}
   void SetPredictLocations(const inputdata & data) { throw Rcpp::exception("Trying to attach predict locations to internal nodes! Predict locations should only be defined in the tips! \n") ;}
-  Eigen::ArrayXi GetPredIndices() { throw Rcpp::exception("Prediction locations not defined in internal nodes! \n");}
+  Eigen::ArrayXi & GetPredIndices() { throw Rcpp::exception("Prediction locations not defined in internal nodes! \n");}
   void computeUpred(const maternVec &, const maternVec &, const double &, const spatialcoor &, const bool, const double &, const double &) {
     throw Rcpp::exception("Upred matrices need not be computed in internal nodes! \n") ;
   }

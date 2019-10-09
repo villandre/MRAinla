@@ -48,14 +48,14 @@ public:
   }
 
   // void ComputeParasEtaDeltaTilde(const spatialcoor &, const inputdata &, const vec &) ;
-  std::vector<std::vector<mat>> GetAlist() const {throw Rcpp::exception("Trying to get an A matrix in a tip node! \n") ;}
-  mat GetKtilde() const {throw Rcpp::exception("Trying to get Ktilde in a tip node! \n") ;}
+  std::vector<std::vector<mat>> & GetAlist() {throw Rcpp::exception("Trying to get an A matrix in a tip node! \n") ;}
+  mat & GetKtilde() {throw Rcpp::exception("Trying to get Ktilde in a tip node! \n") ;}
   // void deriveBtilde(const spatialcoor & ) ;
   // void computeBpred(const spatialcoor &, const vec &) ;
   // GaussDistParas CombineEtaDelta(const inputdata &, const vec &) ;
   // GaussDistParas GetEtaDelta() const { return m_deltaTilde ;}
 
-  mat GetB(const uint & l) {
+  mat & GetB(const uint & l) {
     if (l > m_depth) {
       printf("Error message... \n") ;
       printf("Error occured in node %i. \n", m_nodeId) ;
@@ -71,19 +71,19 @@ public:
   }
   // The following Kmatrix-related functions work because of the correspondence between knots
   // and observations at the finest resolution.
-  mat GetKmatrix() {return m_SigmaInverse ;}
+  mat & GetKmatrix() {return m_SigmaInverse ;}
   mat * GetKmatrixAddress() {return &m_SigmaInverse ;}
   mat * GetKmatrixInverseAddress() { return &m_Wlist.at(m_depth) ;}
   mat GetKmatrixInverse() {return GetSigma() - std::pow(m_uncorrSD, 2) * Eigen::MatrixXd::Identity(GetSigma().rows(), GetSigma().cols());}
-  vec GetOmega(const uint & order) { throw Rcpp::exception("Trying to get omega vector in tip node! \n") ; return vec(1) ;}
+  vec & GetOmega(const uint & order) { throw Rcpp::exception("Trying to get omega vector in tip node! \n") ;}
   void SetUncorrSD(const double & sd) {
     m_uncorrSD = sd ;
   }
-  mat GetUpred(const uint & l) { return m_UmatList.at(l) ;}
+  mat & GetUpred(const uint & l) { return m_UmatList.at(l) ;}
   std::vector<mat> & GetUmatList() { return m_UmatList ;}
 
   void SetPredictLocations(const inputdata &) ;
-  Eigen::ArrayXi GetPredIndices() { return m_predsInNode ;}
+  Eigen::ArrayXi & GetPredIndices() { return m_predsInNode ;}
   void computeUpred(const maternVec &, const maternVec &, const double &, const spatialcoor &, const bool, const double &, const double &) ;
 
   void genRandomKnots(spatialcoor & dataCoor, const uint & numKnots, const gsl_rng * RNG) {
@@ -105,26 +105,12 @@ public:
 
 protected:
 
-  std::vector<mat> GetBlist() {
-    return m_Wlist ;
-  };
-
   mat m_SigmaInverse ;
   double m_uncorrSD{ -1 } ;
 
   // Prediction components (should probably be freed once computations are done)
 
-  // void computeVpred(const vec &, const spatialcoor &) ;
-  mat GetLM() { return m_UmatList.at(m_depth) ;}
-  // void computeDeltaTildeParas(const inputdata &) ;
-  // void recurseBtilde(const uint, const uint) ;
   Eigen::ArrayXi m_predsInNode ;
-
-  // mat m_V ;
   std::vector<mat> m_UmatList ;
-  // mat m_covMatrixPredict ;
-  // GaussDistParas m_deltaTilde ;
-  // std::vector<std::vector<mat>> m_Btilde ;
-  // std::vector<mat> m_bPred ;
 };
 }
