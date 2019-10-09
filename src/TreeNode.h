@@ -166,7 +166,7 @@ public:
   virtual vec GetOmega(const uint &)=0 ;
   virtual void SetUncorrSD(const double &)=0 ;
   virtual mat GetUpred(const uint & l)=0 ;
-  virtual std::vector<mat> GetUmatList()=0 ;
+  virtual std::vector<mat> & GetUmatList()=0 ;
   virtual void SetPredictLocations(const inputdata &)=0 ;
   virtual Eigen::ArrayXi GetPredIndices()=0 ;
   virtual void computeUpred(const maternVec &, const maternVec &, const double &, const spatialcoor &, const bool, const double &, const double &)=0 ;

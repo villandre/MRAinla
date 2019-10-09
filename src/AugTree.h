@@ -112,11 +112,10 @@ public:
   sp_mat createQ() ;
 
   void ComputeLogJointPsiMarginal() ;
-  // double ComputeJointPsiMarginalPropConstant(const vec &, const double, const double, const double, const double) ;
   vec GetFullCondMean() { return m_FullCondMean ;}
   vec GetFullCondSDs() { return m_FullCondSDs ;}
 
-  void ComputeHpred(const mat &, const vec &, const mat &) ;
+  void ComputeHpred() ;
   vec ComputeEvar(const int) ;
 
   ~ AugTree() {

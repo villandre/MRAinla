@@ -62,8 +62,7 @@ AugTree::AugTree(uint & M, Array2d & lonRange, Array2d & latRange, Array2d & tim
   for (auto & i : tipNodes) {
     i->SetPredictLocations(m_predictData) ;
   }
-
-  createHmatrixPred() ;
+  // createHmatrixPred() ;
 }
 
 void AugTree::BuildTree(const uint & minObsForTimeSplit, const bool splitTime, const unsigned int numKnots0, const unsigned int J)
@@ -470,6 +469,7 @@ void AugTree::updateHmatrix() {
 
 void AugTree::updateHmatrixPred() {
   int loopIndex = 0 ;
+
   for (int k = 0; k < m_HmatPred.outerSize(); ++k) {
     for (sp_mat::InnerIterator it(m_HmatPred, k); it; ++it)
     {
@@ -573,51 +573,44 @@ void AugTree::createHmatrixPred() {
                                    m_predictData.covariateValues.rows())) ;
   HmatPredPos = join_cols(covPos, HmatPredPos).eval() ; // Could this cause aliasing?
 
-  for (auto & tipNode : tipNodes) {
-    std::vector<TreeNode *> ancestorsList = tipNode->getAncestors() ;
-    uint numObs = tipNode->GetPredIndices().size() ;
-    for (uint rowIndex = 0; rowIndex < numObs ; rowIndex++) {
-      for (uint depth = 0 ; depth <= m_M ; depth++) {
-        uint numKnotsAtDepth = ancestorsList.at(depth)->GetNumKnots() ;
-        for (uint colIndex = 0; colIndex < numKnotsAtDepth; colIndex++) {
-          pointerOffset elementToAdd = pointerOffset(&(tipNode->GetUmatList().at(depth)), colIndex * numObs + rowIndex) ;
-          m_pointerOffsetForHmatPred.push_back(elementToAdd) ;
-        }
-      }
-    }
-  }
-
-  ArrayXd concatenatedValues(Map<ArrayXd>(incrementedCovarPredictReshuffled.data(), incrementedCovarPredictReshuffled.cols() * incrementedCovarPredictReshuffled.rows()))  ;
-  int totalSize = concatenatedValues.size() ;
-  int secondIndex = totalSize ;
+  ArrayXd concatenatedValues = ArrayXd::Zero(HmatPredPos.rows()) ;
+  concatenatedValues.segment(0, incrementedCovarPredictReshuffled.size()) = incrementedCovarPredictReshuffled ;
+  uint secondIndex = incrementedCovarPredictReshuffled.size() ;
   for (auto & tipNode : GetTipNodes()) {
     if (tipNode->GetPredIndices().size() > 0) {
       for (auto & Umat : tipNode->GetUmatList()) {
-        totalSize += Umat.size();
+        concatenatedValues.segment(secondIndex, Umat.size()) = Umat ;
+        secondIndex += Umat.size() ;
       }
     }
   }
-  concatenatedValues.conservativeResize(totalSize, 1) ;
-
-  for (auto & tipNode : GetTipNodes()) {
-    if (tipNode->GetPredIndices().size() > 0) {
-      for (auto & Umat : tipNode->GetUmatList()) {
-        ArrayXd B(Map<ArrayXd>(Umat.data(), Umat.cols() * Umat.rows()));
-        concatenatedValues.segment(secondIndex, B.size()) = B ;
-        secondIndex += B.size() ;
-      }
-    }
-  }
+  m_HmatPred.resize(incrementedCovarPredictReshuffled.rows(), m_numKnots + incrementedCovarPredictReshuffled.cols()) ;
   std::vector<Triplet> tripletList;
 
   int offset = 0 ;
-  m_HmatPred.resize(m_predictData.timeCoords.size(), m_numKnots + incrementedCovarPredictReshuffled.cols()) ;
 
   for (uint i = 0; i < concatenatedValues.size(); i++) {
     tripletList.push_back(Triplet(HmatPredPos(i, 0), HmatPredPos(i, 1), concatenatedValues(i))) ;
   }
+
   m_HmatPred.setFromTriplets(tripletList.begin(), tripletList.end()) ;
   std::cout << "Done! \n" ;
+
+  for (auto & tipNode : tipNodes) {
+    if (tipNode->GetPredIndices().size() > 0) {
+      std::vector<TreeNode *> ancestorsList = tipNode->getAncestors() ;
+      uint numObs = tipNode->GetPredIndices().size() ;
+      for (uint rowIndex = 0; rowIndex < numObs ; rowIndex++) {
+        for (uint depth = 0 ; depth <= m_M ; depth++) {
+          uint numKnotsAtDepth = ancestorsList.at(depth)->GetNumKnots() ;
+          for (uint colIndex = 0; colIndex < numKnotsAtDepth; colIndex++) {
+            pointerOffset elementToAdd = pointerOffset(&(tipNode->GetUmatList().at(depth)), colIndex * numObs + rowIndex) ;
+            m_pointerOffsetForHmatPred.push_back(elementToAdd) ;
+          }
+        }
+      }
+    }
+  }
 }
 
 std::vector<TreeNode *> AugTree::Descendants(std::vector<TreeNode *> nodeList) {
@@ -745,18 +738,15 @@ void AugTree::ComputeLogJointPsiMarginal() {
   // printf("Joint value: %.4e \n \n", m_logJointPsiMarginal) ;
 }
 
-void AugTree::ComputeHpred(const mat & spCoords, const vec & time, const mat & covariateMatrix) {
-
-  // SetPredictData(spCoords, time, covariateMatrix) ;
+void AugTree::ComputeHpred() {
   std::vector<TreeNode *> tipNodes = GetTipNodes() ;
-
   for (auto & i : tipNodes) {
-    // i->SetPredictLocations(m_predictData) ;
     ArrayXi predictionsInLeaf = i->GetPredIndices() ;
     if (predictionsInLeaf.size() > 0) {
       i->computeUpred(m_MRAcovParasSpace, m_MRAcovParasTime, m_spacetimeScaling, m_predictData, m_matern, m_spaceNuggetSD, m_timeNuggetSD) ;
     }
   }
+
   if (m_HmatPred.rows() == 0) {
     createHmatrixPred() ;
   } else {

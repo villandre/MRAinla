@@ -80,7 +80,7 @@ public:
     m_uncorrSD = sd ;
   }
   mat GetUpred(const uint & l) { return m_UmatList.at(l) ;}
-  std::vector<mat> GetUmatList() { return m_UmatList ;}
+  std::vector<mat> & GetUmatList() { return m_UmatList ;}
 
   void SetPredictLocations(const inputdata &) ;
   Eigen::ArrayXi GetPredIndices() { return m_predsInNode ;}
@@ -96,6 +96,10 @@ public:
           const inputdata & dataset) {
     baseInitialise(dims, depth, parent, dataset) ;
     m_UmatList.resize(m_depth + 1) ;
+    std::cout << "Assigned memory locations... \n" ;
+    for (auto & i : m_UmatList) {
+      std::cout << &i << "\n\n" ;
+    }
     m_obsInNode = deriveObsInNode(dataset) ;
   }
 
