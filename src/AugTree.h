@@ -240,6 +240,7 @@ private:
 
   double logDeterminantFullConditional() ;
   vec ComputeFullConditionalMean(const vec &) ;
+  void ComputeFullCondSDs() ;
   template <typename MatrixType>
   inline typename MatrixType::Scalar logdet(const MatrixType& M, bool use_cholesky = false) ;
 

@@ -683,7 +683,8 @@ void AugTree::ComputeLogFCandLogCDandDataLL() {
 
   m_FullCondPrecisionChol.compute(m_SigmaFEandEtaInv + secondTerm) ;
 
-  // m_FullCondSDs = sqrt(m_FullCondPrecisionChol.diag()) ;
+  ComputeFullCondSDs() ;
+
   // cout << "Done... \n" ;
 
   vec updatedMean = m_FullCondPrecisionChol.solve(scaledResponse.transpose()) ;
@@ -809,4 +810,10 @@ void AugTree::SetMRAcovParasGammaAlphaBeta(const Rcpp::List & MRAcovParasList) {
                                             GammaHyperParas(Rcpp::as<vec>(spaceParas["smoothness"]))) ;
   m_maternParasGammaAlphaBetaTime = maternGammaPriorParasWithoutScale(GammaHyperParas(Rcpp::as<vec>(timeParas["rho"])),
                                             GammaHyperParas(Rcpp::as<vec>(timeParas["smoothness"]))) ;
+}
+
+void AugTree::ComputeFullCondSDs() {
+  mat identityForSolve = mat::Identity(m_FullCondPrecisionChol.vectorD().size(), m_FullCondPrecisionChol.vectorD().size()) ;
+  mat bar = m_FullCondPrecisionChol.matrixL().solve(identityForSolve).array().pow(2).matrix() * m_FullCondPrecisionChol.vectorD().array().pow(-1).matrix() ;
+  m_FullCondSDs = bar.array().pow(0.5).matrix() ;
 }
