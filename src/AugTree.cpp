@@ -327,7 +327,6 @@ void AugTree::UpdateSigmaBetaEtaInvMat() {
 
 void AugTree::createHmatrix() {
 
-  cout << "Creating the data mapping matrix... \n" ;
   int numObs = m_dataset.spatialCoords.rows() ;
   ArrayXXi HmatPos(0, 2) ;
 
@@ -451,7 +450,6 @@ void AugTree::createHmatrix() {
   }
 
   m_Hmat.setFromTriplets(tripletList.begin(), tripletList.end()) ;
-  std::cout << "Done! \n" ;
 }
 
 void AugTree::updateHmatrix() {
@@ -734,7 +732,7 @@ void AugTree::ComputeLogJointPsiMarginal() {
 
   // printf("Observations log-lik: %.4e \n Log-prior: %.4e \n Log-Cond. dist.: %.4e \n Log-full cond.: %.4e \n \n \n",
   //  m_globalLogLik, m_logPrior, m_logCondDist, m_logFullCond) ;
-  // m_logJointPsiMarginal = m_globalLogLik + m_logPrior + m_logCondDist - m_logFullCond ;
+  m_logJointPsiMarginal = m_globalLogLik + m_logPrior + m_logCondDist - m_logFullCond ;
   // printf("Joint value: %.4e \n \n", m_logJointPsiMarginal) ;
 }
 
@@ -764,8 +762,11 @@ vec AugTree::ComputeEvar(const int batchSize) {
 
     int newObsIndex = std::min(obsIndex + batchSize - 1, int(m_HmatPred.rows()) - 1) ;
     mat bVecTrans = m_HmatPred.block(obsIndex, 0, newObsIndex - obsIndex + 1, m_HmatPred.cols()).transpose() ;
-    mat meanValue = m_FullCondPrecisionChol.solve(bVecTrans) ;
-    EvarValues.segment(obsIndex, newObsIndex - obsIndex + 1) = meanValue.colwise().sum().transpose() + errorVar * mat::Ones(newObsIndex - obsIndex + 1, 1) ;
+    mat meanValue = bVecTrans.array() * m_FullCondPrecisionChol.solve(bVecTrans).array() ;
+
+    // Why is the uncorrelated error being added to the total?
+    // EvarValues.segment(obsIndex, newObsIndex - obsIndex + 1) = meanValue.colwise().sum().transpose() + errorVar * mat::Ones(newObsIndex - obsIndex + 1, 1) ;
+    EvarValues.segment(obsIndex, newObsIndex - obsIndex + 1) = meanValue.colwise().sum().transpose() ;
 
     obsIndex += batchSize ;
   }

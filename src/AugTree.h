@@ -52,8 +52,8 @@ public:
   inputdata GetDataset() {return m_dataset;}
   int GetNumTips() {return m_numTips ;}
   int GetNumKnots() {return m_numKnots ;}
-  sp_mat GetHmatPred() {return m_HmatPred ;}
-  sp_mat GetHmat() {return m_Hmat ;}
+  sp_mat & GetHmatPred() {return m_HmatPred ;}
+  sp_mat & GetHmat() {return m_Hmat ;}
 
   int GetM() { return m_M ;}
   double GetLogJointPsiMarginal() { return m_logJointPsiMarginal ;}

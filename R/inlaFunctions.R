@@ -179,8 +179,8 @@ obtainGridValues <- function(gridPointers, xStartValues, control, fixedEffSDstar
   if (!is.null(control$envirForTest)) {
     assign(x = "Hmat", value = GetHmat(gridPointers[[1]]), envir = control$envirForTest)
   }
-  cat("Optimised values:", exp(opt$par)) ;
-  stop("Stop after optimisation... \n")
+  # cat("Optimised values:", exp(opt$par)) ;
+  # stop("Stop after optimisation... \n")
   # cl <- parallel::makeForkCluster(nnodes = 4) ;
   # opt <- optimParallel::optimParallel(par = log(xStartValues), lower = rep(-10, length(xStartValues)), upper = upperBound, fn = funForOptim, gr = gradForOptim, control = list(xtol_rel = 1e-3, maxeval = control$numIterOptim), envirToSaveValues = storageEnvir)
   # opt <- nloptr::cobyla(x0 = log(xStartValues), lower = rep(-10, length(xStartValues)), upper = upperBound, fn = funForOptim, control = list(xtol_rel = 5e-4, maxeval = control$numIterOptim), envirToSaveValues = storageEnvir)
