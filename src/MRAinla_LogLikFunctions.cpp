@@ -133,16 +133,13 @@ Eigen::VectorXd GetFullCondSDs(SEXP treePointer) {
 Rcpp::List ComputeCondPredStats(SEXP treePointer, NumericMatrix spCoordsForPredict, NumericVector timeForPredict,
                                  NumericMatrix covariateMatrixForPredict, int batchSize) {
   vec Evar, Hmean ;
-  std::cout << "Entered ComputeCondPredStats \n" ;
   if (!(treePointer == NULL))
   {
     XPtr<AugTree> pointedTree(treePointer) ; // Becomes a regular pointer again.
 
     pointedTree->ComputeHpred() ;
     Hmean = pointedTree->GetHmatPred() * pointedTree->GetFullCondMean() ;
-    std::cout << "Computing Evar! \n" ;
     Evar = pointedTree->ComputeEvar(batchSize) ;
-    std::cout << "Done! \n" ;
   }
   else
   {

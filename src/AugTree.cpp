@@ -480,7 +480,6 @@ void AugTree::updateHmatrixPred() {
 }
 
 void AugTree::createHmatrixPred() {
-  std::cout << "Creating the prediction mapping matrix H... \n" ;
   uint numObs = m_predictData.spatialCoords.rows() ;
   ArrayXXi HmatPredPos(0, 2) ;
 
@@ -592,7 +591,6 @@ void AugTree::createHmatrixPred() {
   }
 
   m_HmatPred.setFromTriplets(tripletList.begin(), tripletList.end()) ;
-  std::cout << "Done! \n" ;
 
   for (auto & tipNode : tipNodes) {
     if (tipNode->GetPredIndices().size() > 0) {
@@ -814,6 +812,13 @@ void AugTree::SetMRAcovParasGammaAlphaBeta(const Rcpp::List & MRAcovParasList) {
 
 void AugTree::ComputeFullCondSDs() {
   mat identityForSolve = mat::Identity(m_FullCondPrecisionChol.vectorD().size(), m_FullCondPrecisionChol.vectorD().size()) ;
-  mat bar = m_FullCondPrecisionChol.matrixL().solve(identityForSolve).array().pow(2).matrix() * m_FullCondPrecisionChol.vectorD().array().pow(-1).matrix() ;
-  m_FullCondSDs = bar.array().pow(0.5).matrix() ;
+  sp_mat bar = m_FullCondPrecisionChol.matrixL().solve(identityForSolve).sparseView() ;
+  vec invertedDiag = m_FullCondPrecisionChol.vectorD().array().pow(-1).matrix() ;
+  for (int k = 0; k < bar.outerSize(); ++k) {
+    for (sp_mat::InnerIterator it(bar, k); it; ++it) {
+      it.valueRef() = pow(it.value(), 2) ;
+
+    }
+  }
+  m_FullCondSDs = (bar * invertedDiag).array().pow(0.5).matrix() ;
 }

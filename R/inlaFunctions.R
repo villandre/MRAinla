@@ -95,7 +95,6 @@ MRA_INLA <- function(spacetimeData, errorSDstart, fixedEffSDstart, MRAhyperparas
   gridPointers <- lapply(1:control$numThreads, function(x) {
     setupGridCpp(responseValues = spacetimeData@data[, 1], spCoords = dataCoordinates, predCoords = predCoordinates, obsTime = timeValues, predTime = predTime, covariateMatrix = covariateMatrix, predCovariateMatrix = predCovariates, M = control$M, lonRange = control$lonRange, latRange = control$latRange, timeRange = timeRangeReshaped, randomSeed = control$randomSeed, cutForTimeSplit = control$cutForTimeSplit, splitTime = control$splitTime, numKnotsRes0 = control$numKnotsRes0, J = control$J)$gridPointer
   })
-  # stop("Stop here... \n") ;
 
   # First we compute values relating to the hyperprior marginal distribution...
   xStartValues <- c(spRho = MRAhyperparasStart$space[["rho"]], timeRho = MRAhyperparasStart$time[["rho"]], scale = MRAhyperparasStart[["scale"]])
@@ -123,17 +122,17 @@ MRA_INLA <- function(spacetimeData, errorSDstart, fixedEffSDstart, MRAhyperparas
   logPropConstantIS <- maxLogWeights + log(sum(exp(logWeights - maxLogWeights)))
   logStandardisedWeights <- logWeights - logPropConstantIS
   # Now, we obtain the marginal distribution of all mean parameters.
-  cat("Computing moments for marginal posterior distributions...\n")
+  print("Computing moments for marginal posterior distributions...\n")
 
   hyperMarginalMoments <- ComputeHyperMarginalMoments(computedValues$output, logStandardisedWeights)
   meanMarginalMoments <- ComputeMeanMarginalMoments(computedValues$output, logStandardisedWeights)
   outputList <- list(hyperMarginalMoments = hyperMarginalMoments$paraMoments, meanMarginalMoments = meanMarginalMoments, psiAndMargDistMatrix = hyperMarginalMoments$psiAndMargDistMatrix)
-  cat("Computing prediction moments... \n")
+  print("Computing prediction moments... \n")
   if (!is.null(predictionData)) {
     outputList$predictionMoments <- ComputeKrigingMoments(computedValues$output, gridPointers[[1]], logStandardisedWeights)
     outputList$predObsOrder <- GetPredObsOrder(gridPointers[[1]]) # I picked the first one, since the grids are all copies of each other, created to ensure that there is no problem with multiple reads/writes in parallel.
   }
-  cat("Returning results... \n")
+  print("Returning results... \n")
   outputList
 }
 
@@ -266,7 +265,7 @@ funForGridEst <- function(index, paraGrid, treePointer, predictionData, MRAcovPa
   }
   # Running LogJointHyperMarginal stores in the tree pointed by gridPointer the full conditional mean and SDs when recordFullConditional = TRUE. We can get them with the simple functions I call now.
   aList$FullCondMean <- GetFullCondMean(treePointer)
-  aList$FullCondSDs <- GetFullCondSDs(treePointer) #This returns a bunch of zeros
+  aList$FullCondSDs <- GetFullCondSDs(treePointer)
   aList
 }
 
