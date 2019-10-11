@@ -681,7 +681,7 @@ void AugTree::ComputeLogFCandLogCDandDataLL() {
 
   m_FullCondPrecisionChol.compute(m_SigmaFEandEtaInv + secondTerm) ;
 
-  ComputeFullCondSDs() ;
+  ComputeFullCondSDsFE() ;
 
   // cout << "Done... \n" ;
 
@@ -810,15 +810,14 @@ void AugTree::SetMRAcovParasGammaAlphaBeta(const Rcpp::List & MRAcovParasList) {
                                             GammaHyperParas(Rcpp::as<vec>(timeParas["smoothness"]))) ;
 }
 
-void AugTree::ComputeFullCondSDs() {
-  mat identityForSolve = mat::Identity(m_FullCondPrecisionChol.vectorD().size(), m_FullCondPrecisionChol.vectorD().size()) ;
-  sp_mat bar = m_FullCondPrecisionChol.matrixL().solve(identityForSolve).sparseView() ;
-  vec invertedDiag = m_FullCondPrecisionChol.vectorD().array().pow(-1).matrix() ;
-  for (int k = 0; k < bar.outerSize(); ++k) {
-    for (sp_mat::InnerIterator it(bar, k); it; ++it) {
-      it.valueRef() = pow(it.value(), 2) ;
+void AugTree::ComputeFullCondSDsFE() {
+  mat identityForSolve = mat::Identity(m_FullCondPrecisionChol.vectorD().size(), m_fixedEffParameters.size()) ;
+  m_FullCondPrecisionChol.matrixL().solveInPlace(identityForSolve) ;
 
-    }
-  }
-  m_FullCondSDs = (bar * invertedDiag).array().pow(0.5).matrix() ;
+  vec invertedDiag = m_FullCondPrecisionChol.vectorD().array().pow(-1).matrix() ;
+
+  m_FullCondSDs = vec::Zero(m_FullCondPrecisionChol.vectorD().size()) ;
+  identityForSolve.noalias() = identityForSolve.array().pow(2).matrix() ;
+  vec varValues = identityForSolve * invertedDiag ;
+  m_FullCondSDs.segment(0, m_fixedEffParameters.size()) = varValues.array().pow(0.5) ;
 }
