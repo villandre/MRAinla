@@ -142,7 +142,10 @@ obtainGridValues <- function(gridPointers, xStartValues, control, fixedEffSDstar
   storageEnvir <- new.env()
   assign(x = "x", value = NULL, envir = storageEnvir)
   assign(x = "value", value = NULL, envir = storageEnvir)
+  iterCounter <- 0
   funForOptim <- function(x, envirToSaveValues) {
+    iterCounter <<- iterCounter + 1
+    cat("Performing iteration ", iterCounter, ".\n")
     names(x) <- names(xStartValues)
     xTrans <- exp(x)
     fixedEffArg <- fixedEffSDstart
@@ -217,9 +220,10 @@ obtainGridValues <- function(gridPointers, xStartValues, control, fixedEffSDstar
     if (length(gridPointers) == 1) {
       output <- lapply(1:nrow(paraGrid), funForGridEst, paraGrid = paraGrid, treePointer = gridPointers[[1]], MRAcovParasGammaAlphaBeta = MRAcovParasGammaAlphaBeta, fixedEffGammaAlphaBeta = fixedEffGammaAlphaBeta, errorGammaAlphaBeta = errorGammaAlphaBeta, fixedEffSDstart = fixedEffSDstart, errorSDstart = errorSDstart, MRAhyperparasStart = MRAhyperparasStart, FEmuVec = FEmuVec, predictionData = predictionData, timeBaseline = timeBaseline, computePrediction = computePrediction, control = control)
     } else {
-      output <- foreach::foreach(var1 = seq_along(listForParallel), .combine = c) %dopar% {
+      output <- foreach::foreach(var1 = seq_along(listForParallel), .inorder = FALSE) %dopar% {
         lapply(1:nrow(listForParallel[[var1]]$paraGrid), funForGridEst, paraGrid = listForParallel[[var1]]$paraGrid, treePointer = gridPointers[[var1]], MRAcovParasGammaAlphaBeta = MRAcovParasGammaAlphaBeta, fixedEffGammaAlphaBeta = fixedEffGammaAlphaBeta, errorGammaAlphaBeta = errorGammaAlphaBeta, fixedEffSDstart = fixedEffSDstart, errorSDstart = errorSDstart, MRAhyperparasStart = MRAhyperparasStart, FEmuVec = FEmuVec, predictionData = predictionData, timeBaseline = timeBaseline, computePrediction = computePrediction, control = control)
       }
+      output <- do.call("c", output)
     }
     list(output = output, optimPoints = list(x = storageEnvir$x, value = storageEnvir$value))
   }
