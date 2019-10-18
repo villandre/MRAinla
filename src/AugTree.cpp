@@ -1,5 +1,5 @@
 #include <math.h>
-// #include <omp.h>
+#include <omp.h>
 #include <gsl/gsl_sf_gamma.h>
 #include <gsl/gsl_multimin.h>
 
@@ -466,6 +466,7 @@ void AugTree::updateHmatrix() {
 }
 
 void AugTree::updateHmatrixPred() {
+  cout << "Updating H matrix for predictions... \n" ;
   int loopIndex = 0 ;
 
   for (int k = 0; k < m_HmatPred.outerSize(); ++k) {
@@ -477,9 +478,11 @@ void AugTree::updateHmatrixPred() {
       }
     }
   }
+  cout << "Done updating H matrix for predictions... \n" ;
 }
 
 void AugTree::createHmatrixPred() {
+  cout << "Creating H matrix for predictions... \n" ;
   uint numObs = m_predictData.spatialCoords.rows() ;
   ArrayXXi HmatPredPos(0, 2) ;
 
@@ -607,6 +610,7 @@ void AugTree::createHmatrixPred() {
       }
     }
   }
+  cout << "Done creating H matrix for predictions! \n" ;
 }
 
 std::vector<TreeNode *> AugTree::Descendants(std::vector<TreeNode *> nodeList) {
@@ -752,23 +756,37 @@ void AugTree::ComputeHpred() {
 }
 
 vec AugTree::ComputeEvar(const int batchSize) {
-
+  cout << "Entered ComputeEvar... \n" ;
+  fflush(stdout) ;
   double errorVar = std::pow(m_errorSD, 2) ;
   vec EvarValues = vec::Zero(m_HmatPred.rows()) ;
   int obsIndex = 0 ;
 
-  while (obsIndex < m_HmatPred.rows()) {
-
-    int newObsIndex = std::min(obsIndex + batchSize - 1, int(m_HmatPred.rows()) - 1) ;
-    mat bVecTrans = m_HmatPred.block(obsIndex, 0, newObsIndex - obsIndex + 1, m_HmatPred.cols()).transpose() ;
-    mat meanValue = bVecTrans.array() * m_FullCondPrecisionChol.solve(bVecTrans).array() ;
-
-    // Why is the uncorrelated error being added to the total?
-    // EvarValues.segment(obsIndex, newObsIndex - obsIndex + 1) = meanValue.colwise().sum().transpose() + errorVar * mat::Ones(newObsIndex - obsIndex + 1, 1) ;
-    EvarValues.segment(obsIndex, newObsIndex - obsIndex + 1) = meanValue.colwise().sum().transpose() ;
-
-    obsIndex += batchSize ;
+  // while (obsIndex < m_HmatPred.rows()) {
+  //
+  //   int newObsIndex = std::min(obsIndex + batchSize - 1, int(m_HmatPred.rows()) - 1) ;
+  //   // Eigen::SparseMatrix<double> HpredRowsTrans = m_HmatPred.block(obsIndex, 0, newObsIndex - obsIndex + 1, m_HmatPred.cols()).transpose() ;
+  //   mat meanValue = (m_HmatPred.block(obsIndex, 0, newObsIndex - obsIndex + 1, m_HmatPred.cols())
+  //                      * m_FullCondPrecisionChol.solve(m_HmatPred.block(obsIndex, 0, newObsIndex - obsIndex + 1, m_HmatPred.cols()).transpose())) ;
+  //
+  //   // Why is the uncorrelated error being added to the total?
+  //   // EvarValues.segment(obsIndex, newObsIndex - obsIndex + 1) = meanValue.colwise().sum().transpose() + errorVar * mat::Ones(newObsIndex - obsIndex + 1, 1) ;
+  //   EvarValues.segment(obsIndex, newObsIndex - obsIndex + 1) = meanValue.rowwise().sum() ;
+  //   // EvarValues.segment(obsIndex, newObsIndex - obsIndex + 1) = meanValue.colwise().sum().transpose() ;
+  //
+  //   obsIndex += batchSize ;
+  // }
+  #pragma omp parallel for
+  for (int i = 0; i < m_HmatPred.rows(); i++) {
+    printf("Processing prediction %i \n", i) ;
+    fflush(stdout) ;
+    vec HmatPredRow = m_HmatPred.row(i) ;
+    vec solution = HmatPredRow * m_FullCondPrecisionChol.solve(HmatPredRow) ;
+    EvarValues(i) = solution(0) ;
   }
+
+  cout << "Done ComputeEvar... \n" ;
+  fflush(stdout) ;
   return EvarValues ;
 }
 
