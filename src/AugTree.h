@@ -116,7 +116,7 @@ public:
   vec GetFullCondSDs() { return m_FullCondSDs ;}
 
   void ComputeHpred() ;
-  vec ComputeEvar(const int) ;
+  vec ComputeEvar() ;
 
   ~ AugTree() {
     deallocate_container(m_vertexVector) ;

@@ -62,7 +62,9 @@ plotOutput <- function(inlaMRAoutput, trainingData, testData, realTestValues = N
     landRasterTest <- NULL
     if (any(testDataIndices)) {
       landRasterNoSpFillMat <- matrix(rep(NA, control$rasterNrow * control$rasterNcol), control$rasterNrow, control$rasterNcol)
-      rasterList$landRasterTestNoSp <- raster::raster(x = replace(landRasterNoSpFillMat, 1:sum(testDataIndices), realTestValues[testDataIndices]))
+      if (!is.null(realTestValues)) {
+        rasterList$landRasterTestNoSp <- raster::raster(x = replace(landRasterNoSpFillMat, 1:sum(testDataIndices), realTestValues[testDataIndices]))
+      }
       rasterList$landRasterFittedNoSp <- raster::raster(x = replace(landRasterNoSpFillMat, 1:sum(testDataIndices), inlaMRAoutput$predictionMoments$predictMeans[testDataIndices]))
       rasterList$landRasterJointSD <- raster::rasterize(x = testData@sp@coords[testDataIndices, ], y = landRaster, field = inlaMRAoutput$predictionMoments$predictSDs[testDataIndices])
       rasterList$landRasterFitted <- raster::rasterize(x = testData@sp@coords[testDataIndices, ], y = landRaster, field = inlaMRAoutput$predictionMoments$predictMeans[testDataIndices])
@@ -80,7 +82,11 @@ plotOutput <- function(inlaMRAoutput, trainingData, testData, realTestValues = N
     } else {
       rasterList$landRasterJoint <- NULL
     }
-    list(training = rasterList$landRasterTraining, joint = rasterList$landRasterJoint, fitted = rasterList$landRasterFitted, SD = rasterList$landRasterJointSD, testNoSp = rasterList$landRasterTestNoSp, fittedNoSp = rasterList$landRasterFittedNoSp)
+    output <- list(training = rasterList$landRasterTraining, joint = rasterList$landRasterJoint, fitted = rasterList$landRasterFitted, SD = rasterList$landRasterJointSD, fittedNoSp = rasterList$landRasterFittedNoSp)
+    if (!is.null(realTestValues)) {
+      output$testNoSp <- rasterList$landRasterTestNoSp
+    }
+    output
   }
   dailyRasters <- lapply(uniqueTimeValues, rasterizeTrainingAndJoint)
 

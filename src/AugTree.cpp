@@ -454,6 +454,7 @@ void AugTree::createHmatrix() {
 
 void AugTree::updateHmatrix() {
   int loopIndex = 0 ;
+  // #pragma omp parallel for
   for (int k=0; k<m_Hmat.outerSize(); ++k) {
     for (sp_mat::InnerIterator it(m_Hmat, k); it; ++it)
     {
@@ -468,7 +469,7 @@ void AugTree::updateHmatrix() {
 void AugTree::updateHmatrixPred() {
   cout << "Updating H matrix for predictions... \n" ;
   int loopIndex = 0 ;
-
+  // #pragma omp parallel for
   for (int k = 0; k < m_HmatPred.outerSize(); ++k) {
     for (sp_mat::InnerIterator it(m_HmatPred, k); it; ++it)
     {
@@ -683,7 +684,12 @@ void AugTree::ComputeLogFCandLogCDandDataLL() {
   mat scaledResponse ;
   scaledResponse.noalias() = std::pow(m_errorSD, -2) * responsesReshuffled.transpose() * m_Hmat ;
 
-  m_FullCondPrecisionChol.compute(m_SigmaFEandEtaInv + secondTerm) ;
+  if (m_logFullCond == 0) { // This is the first iteration...
+    cout << "First iteration: analysing pattern... \n" ;
+    fflush(stdout) ;
+    m_FullCondPrecisionChol.analyzePattern(m_SigmaFEandEtaInv + secondTerm) ;
+  }
+  m_FullCondPrecisionChol.factorize(m_SigmaFEandEtaInv + secondTerm) ; // The sparsity pattern in matToInvert is always the same, notwithstand the hyperparameter values.
 
   ComputeFullCondSDsFE() ;
 
@@ -755,34 +761,23 @@ void AugTree::ComputeHpred() {
   }
 }
 
-vec AugTree::ComputeEvar(const int batchSize) {
+vec AugTree::ComputeEvar() {
   cout << "Entered ComputeEvar... \n" ;
   fflush(stdout) ;
   double errorVar = std::pow(m_errorSD, 2) ;
   vec EvarValues = vec::Zero(m_HmatPred.rows()) ;
   int obsIndex = 0 ;
 
-  // while (obsIndex < m_HmatPred.rows()) {
-  //
-  //   int newObsIndex = std::min(obsIndex + batchSize - 1, int(m_HmatPred.rows()) - 1) ;
-  //   // Eigen::SparseMatrix<double> HpredRowsTrans = m_HmatPred.block(obsIndex, 0, newObsIndex - obsIndex + 1, m_HmatPred.cols()).transpose() ;
-  //   mat meanValue = (m_HmatPred.block(obsIndex, 0, newObsIndex - obsIndex + 1, m_HmatPred.cols())
-  //                      * m_FullCondPrecisionChol.solve(m_HmatPred.block(obsIndex, 0, newObsIndex - obsIndex + 1, m_HmatPred.cols()).transpose())) ;
-  //
-  //   // Why is the uncorrelated error being added to the total?
-  //   // EvarValues.segment(obsIndex, newObsIndex - obsIndex + 1) = meanValue.colwise().sum().transpose() + errorVar * mat::Ones(newObsIndex - obsIndex + 1, 1) ;
-  //   EvarValues.segment(obsIndex, newObsIndex - obsIndex + 1) = meanValue.rowwise().sum() ;
-  //   // EvarValues.segment(obsIndex, newObsIndex - obsIndex + 1) = meanValue.colwise().sum().transpose() ;
-  //
-  //   obsIndex += batchSize ;
-  // }
+  vec invertedDsqrt = m_FullCondPrecisionChol.vectorD().array().pow(-0.5) ;
+
   #pragma omp parallel for
-  for (int i = 0; i < m_HmatPred.rows(); i++) {
-    printf("Processing prediction %i \n", i) ;
-    fflush(stdout) ;
+  for (uint i = 0; i < m_HmatPred.rows(); i++) {
+    vec unitVec(m_HmatPred.cols()) ;
+    unitVec(i) = 1 ;
     vec HmatPredRow = m_HmatPred.row(i) ;
-    vec solution = HmatPredRow * m_FullCondPrecisionChol.solve(HmatPredRow) ;
-    EvarValues(i) = solution(0) ;
+    vec DLinvV =  m_FullCondPrecisionChol.matrixU().solve(HmatPredRow) ;
+    DLinvV = invertedDsqrt.array() * DLinvV.array() ;
+    EvarValues(i) = DLinvV.squaredNorm() ;
   }
 
   cout << "Done ComputeEvar... \n" ;

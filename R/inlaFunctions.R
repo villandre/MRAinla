@@ -221,7 +221,6 @@ obtainGridValues <- function(gridPointers, xStartValues, control, fixedEffSDstar
     if (length(gridPointers) == 1) {
       # output <- lapply(1:nrow(paraGrid), funForGridEst, paraGrid = paraGrid, treePointer = gridPointers[[1]], MRAcovParasGammaAlphaBeta = MRAcovParasGammaAlphaBeta, fixedEffGammaAlphaBeta = fixedEffGammaAlphaBeta, errorGammaAlphaBeta = errorGammaAlphaBeta, fixedEffSDstart = fixedEffSDstart, errorSDstart = errorSDstart, MRAhyperparasStart = MRAhyperparasStart, FEmuVec = FEmuVec, predictionData = predictionData, timeBaseline = timeBaseline, computePrediction = TRUE, control = control)
       for (i in 1:length(output)) {
-        cat("Processing point ", i, ".\n")
         output[[i]] <- funForGridEst(index = i, paraGrid = paraGrid, treePointer = gridPointers[[1]], MRAcovParasGammaAlphaBeta = MRAcovParasGammaAlphaBeta, fixedEffGammaAlphaBeta = fixedEffGammaAlphaBeta, errorGammaAlphaBeta = errorGammaAlphaBeta, fixedEffSDstart = fixedEffSDstart, errorSDstart = errorSDstart, MRAhyperparasStart = MRAhyperparasStart, FEmuVec = FEmuVec, predictionData = predictionData, timeBaseline = timeBaseline, computePrediction = TRUE, control = control)
       }
     } else {
@@ -246,9 +245,6 @@ obtainGridValues <- function(gridPointers, xStartValues, control, fixedEffSDstar
 }
 
 funForGridEst <- function(index, paraGrid, treePointer, predictionData, MRAcovParasGammaAlphaBeta, fixedEffGammaAlphaBeta, errorGammaAlphaBeta, fixedEffSDstart, errorSDstart, MRAhyperparasStart, FEmuVec, timeBaseline, computePrediction, control) {
-  if (is.null(control$batchSizePredict)) {
-    control$batchSizePredict <- 500
-  }
   x <- unlist(paraGrid[index, ])
   fixedEffArg <- fixedEffSDstart
   if (control$varyFixedEffSD) {
@@ -274,7 +270,7 @@ funForGridEst <- function(index, paraGrid, treePointer, predictionData, MRAcovPa
   if (!is.null(predictionData) & computePrediction) {
     timeValues <- as.integer(time(predictionData@time))/(3600*24) - timeBaseline # The division is to obtain values in days.
     print("Computing statistics for predictions... \n")
-    aList$CondPredStats <- ComputeCondPredStats(treePointer, predictionData@sp@coords, timeValues, as.matrix(predictionData@data), batchSize = control$batchSizePredict)
+    aList$CondPredStats <- ComputeCondPredStats(treePointer, predictionData@sp@coords, timeValues, as.matrix(predictionData@data))
     print("Done computing statistics for predictions! \n")
   }
   # Running LogJointHyperMarginal stores in the tree pointed by gridPointer the full conditional mean and SDs when recordFullConditional = TRUE. We can get them with the simple functions I call now.
