@@ -122,17 +122,17 @@ MRA_INLA <- function(spacetimeData, errorSDstart, fixedEffSDstart, MRAhyperparas
   logPropConstantIS <- maxLogWeights + log(sum(exp(logWeights - maxLogWeights)))
   logStandardisedWeights <- logWeights - logPropConstantIS
   # Now, we obtain the marginal distribution of all mean parameters.
-  print("Computing moments for marginal posterior distributions...\n")
+  cat("Computing moments for marginal posterior distributions...\n")
 
   hyperMarginalMoments <- ComputeHyperMarginalMoments(computedValues$output, logStandardisedWeights)
   meanMarginalMoments <- ComputeMeanMarginalMoments(computedValues$output, logStandardisedWeights)
   outputList <- list(hyperMarginalMoments = hyperMarginalMoments$paraMoments, meanMarginalMoments = meanMarginalMoments, psiAndMargDistMatrix = hyperMarginalMoments$psiAndMargDistMatrix)
-  print("Computing prediction moments... \n")
+  cat("Computing prediction moments... \n")
   if (!is.null(predictionData)) {
     outputList$predictionMoments <- ComputeKrigingMoments(computedValues$output, gridPointers[[1]], logStandardisedWeights)
     outputList$predObsOrder <- GetPredObsOrder(gridPointers[[1]]) # I picked the first one, since the grids are all copies of each other, created to ensure that there is no problem with multiple reads/writes in parallel.
   }
-  print("Returning results... \n")
+  cat("Returning results... \n")
   outputList
 }
 
@@ -145,7 +145,7 @@ obtainGridValues <- function(gridPointers, xStartValues, control, fixedEffSDstar
   iterCounter <- 0
   funForOptim <- function(x, envirToSaveValues) {
     iterCounter <<- iterCounter + 1
-    cat("Performing iteration ", iterCounter, ".\n")
+    cat("Performing evaluation ", iterCounter, ".\n")
     names(x) <- names(xStartValues)
     xTrans <- exp(x)
     fixedEffArg <- fixedEffSDstart
@@ -176,7 +176,7 @@ obtainGridValues <- function(gridPointers, xStartValues, control, fixedEffSDstar
   names(upperBound) <- names(xStartValues)
   upperBound <- replace(upperBound, grep(names(upperBound), pattern = "mooth"), log(50)) # This is to avoid an overflow in the computation of the Matern covariance, which for some reason does not tolerate very high smoothness values.
   upperBound <- replace(upperBound, grep(names(upperBound), pattern = "scale"), log(3000)) # This limits the scaling factor to exp(15) in the optimisation. This is to prevent computational issues in the sparse matrix inversion scheme.
-  print("Optimising... \n")
+  cat("Optimising... \n")
   opt <- nloptr::lbfgs(x0 = log(xStartValues), lower = rep(-10, length(xStartValues)), upper = upperBound, fn = funForOptim, gr = gradForOptim, control = list(xtol_rel = 1e-3, maxeval = control$numIterOptim), envirToSaveValues = storageEnvir)
   if (!is.null(control$envirForTest)) {
     assign(x = "Hmat", value = GetHmat(gridPointers[[1]]), envir = control$envirForTest)
@@ -221,6 +221,7 @@ obtainGridValues <- function(gridPointers, xStartValues, control, fixedEffSDstar
     if (length(gridPointers) == 1) {
       # output <- lapply(1:nrow(paraGrid), funForGridEst, paraGrid = paraGrid, treePointer = gridPointers[[1]], MRAcovParasGammaAlphaBeta = MRAcovParasGammaAlphaBeta, fixedEffGammaAlphaBeta = fixedEffGammaAlphaBeta, errorGammaAlphaBeta = errorGammaAlphaBeta, fixedEffSDstart = fixedEffSDstart, errorSDstart = errorSDstart, MRAhyperparasStart = MRAhyperparasStart, FEmuVec = FEmuVec, predictionData = predictionData, timeBaseline = timeBaseline, computePrediction = TRUE, control = control)
       for (i in 1:length(output)) {
+        cat("Processing grid value ", i, "... \n")
         output[[i]] <- funForGridEst(index = i, paraGrid = paraGrid, treePointer = gridPointers[[1]], MRAcovParasGammaAlphaBeta = MRAcovParasGammaAlphaBeta, fixedEffGammaAlphaBeta = fixedEffGammaAlphaBeta, errorGammaAlphaBeta = errorGammaAlphaBeta, fixedEffSDstart = fixedEffSDstart, errorSDstart = errorSDstart, MRAhyperparasStart = MRAhyperparasStart, FEmuVec = FEmuVec, predictionData = predictionData, timeBaseline = timeBaseline, computePrediction = TRUE, control = control)
       }
     } else {
@@ -232,9 +233,9 @@ obtainGridValues <- function(gridPointers, xStartValues, control, fixedEffSDstar
     # list(output = output, optimPoints = list(x = storageEnvir$x, value = storageEnvir$value))
     list(output = output)
   }
-  print("Computing values on the grid...")
+  cat("Computing values on the grid... \n")
   valuesOnGrid <- gridFct()
-  print("Grid complete... \n")
+  cat("Grid complete... \n")
   if (length(gridPointers) > 1) {
     doParallel::stopImplicitCluster()
   }
