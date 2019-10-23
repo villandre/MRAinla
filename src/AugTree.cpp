@@ -772,8 +772,6 @@ vec AugTree::ComputeEvar() {
 
   #pragma omp parallel for
   for (uint i = 0; i < m_HmatPred.rows(); i++) {
-    vec unitVec(m_HmatPred.cols()) ;
-    unitVec(i) = 1 ;
     vec HmatPredRow = m_HmatPred.row(i) ;
     vec DLinvV =  m_FullCondPrecisionChol.matrixU().solve(HmatPredRow) ;
     DLinvV = invertedDsqrt.array() * DLinvV.array() ;
