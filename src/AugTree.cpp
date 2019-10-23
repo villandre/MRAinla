@@ -772,34 +772,21 @@ void AugTree::ComputeLogJointPsiMarginal(Rcpp::Function gradCholeskiFun, Rcpp::F
                                          Rcpp::Function sparseDeterminantFun) {
 
   ComputeLogPriors() ;
-  // cout << "Computing Wmats... \n" ;
+
   if (m_recomputeMRAlogLik) {
-    m_MRAcovParasSpace.print("Space parameters:") ;
-    m_MRAcovParasTime.print("Time parameters:") ;
+    // m_MRAcovParasSpace.print("Space parameters:") ;
+    // m_MRAcovParasTime.print("Time parameters:") ;
     printf("Scale parameter: %.4e \n", m_spacetimeScaling) ;
     fflush(stdout); // Will now print everything in the stdout buffer
     computeWmats() ; // This will produce the K matrices required. NOTE: ADD CHECK THAT ENSURES THAT THE MRA LIK. IS ONLY RE-COMPUTED WHEN THE MRA COV. PARAMETERS CHANGE.
-    TreeNode * arbitraryTipNode = GetTipNodes().at(0) ;
-    std::vector<TreeNode *> ancestorsList = arbitraryTipNode->getAncestors() ;
-    fflush(stdout) ;
-    cout << "\n W_j1^0 \n\n" ;
-    printf("Dimensions: %i %i \n\n", ancestorsList.at(1)->GetWlist().at(0).n_rows, ancestorsList.at(1)->GetWlist().at(1).n_cols) ;
-    std::cout << ancestorsList.at(1)->GetWlist().at(0)(0,0,size(3,3)) << "\n\n" ;
-    printf("Ancestors node ID: %i \n", ancestorsList.at(1)->GetNodeId()) ;
-    // std::cout << "These are the knots at resolution 0: \n" ;
-    // std::cout << ancestorsList.at(0)->GetKnotsCoor().spatialCoords(0,0,size(10,2)) << "\n\n";
-    // std::cout << ancestorsList.at(1)->GetKnotsCoor().timeCoords.subvec(0,9) << "\n\n";
-    // std::cout << "These are the knots at resolution 1: \n" ;
-    // std::cout << ancestorsList.at(0)->GetKnotsCoor().spatialCoords(0,0,size(20,2)) << "\n\n";
-    // std::cout << ancestorsList.at(1)->GetKnotsCoor().timeCoords.subvec(0,19) << "\n\n";
   }
 
   ComputeLogFCandLogCDandDataLL(gradCholeskiFun, sparseMatConstructFun, sparseDeterminantFun) ;
 
-  printf("Observations log-lik: %.4e \n Log-prior: %.4e \n Log-Cond. dist.: %.4e \n Log-full cond.: %.4e \n \n \n",
-  m_globalLogLik, m_logPrior, m_logCondDist, m_logFullCond) ;
+  // printf("Observations log-lik: %.4e \n Log-prior: %.4e \n Log-Cond. dist.: %.4e \n Log-full cond.: %.4e \n \n \n",
+  // m_globalLogLik, m_logPrior, m_logCondDist, m_logFullCond) ;
   m_logJointPsiMarginal = m_globalLogLik + m_logPrior + m_logCondDist - m_logFullCond ;
-  printf("Joint value: %.4e \n \n", m_logJointPsiMarginal) ;
+  // printf("Joint value: %.4e \n \n", m_logJointPsiMarginal) ;
 }
 
 // This inversion is based on recursive partitioning of the Q matrix. It is based on the observation that it is

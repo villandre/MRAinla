@@ -179,8 +179,6 @@ obtainGridValues <- function(gridPointers, xStartValues, control, fixedEffSDstar
   if (!is.null(control$envirForTest)) {
     assign(x = "Hmat", value = GetHmat(gridPointers[[1]]), envir = control$envirForTest)
   }
-  cat("Optimiser solution: ", exp(opt$par))
-  stop("Stop after optimisation...")
   sampleWeights <- exp(storageEnvir$value - max(storageEnvir$value))
   sampleWeights <- sampleWeights/sum(sampleWeights)
   varCovar <- cov.wt(x = t(storageEnvir$x), wt = sampleWeights)$cov
