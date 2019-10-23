@@ -467,7 +467,6 @@ void AugTree::updateHmatrix() {
 }
 
 void AugTree::updateHmatrixPred() {
-  cout << "Updating H matrix for predictions... \n" ;
   int loopIndex = 0 ;
   // #pragma omp parallel for
   for (int k = 0; k < m_HmatPred.outerSize(); ++k) {
@@ -479,11 +478,9 @@ void AugTree::updateHmatrixPred() {
       }
     }
   }
-  cout << "Done updating H matrix for predictions... \n" ;
 }
 
 void AugTree::createHmatrixPred() {
-  cout << "Creating H matrix for predictions... \n" ;
   uint numObs = m_predictData.spatialCoords.rows() ;
   ArrayXXi HmatPredPos(0, 2) ;
 
@@ -611,7 +608,6 @@ void AugTree::createHmatrixPred() {
       }
     }
   }
-  cout << "Done creating H matrix for predictions! \n" ;
 }
 
 std::vector<TreeNode *> AugTree::Descendants(std::vector<TreeNode *> nodeList) {
@@ -656,7 +652,7 @@ void AugTree::ComputeLogPriors() {
 }
 
 void AugTree::ComputeLogFCandLogCDandDataLL() {
-  fflush(stdout);
+
   int n = m_dataset.responseValues.size() ;
 
   if (m_SigmaFEandEtaInv.rows() == 0) {
@@ -685,8 +681,6 @@ void AugTree::ComputeLogFCandLogCDandDataLL() {
   scaledResponse.noalias() = std::pow(m_errorSD, -2) * responsesReshuffled.transpose() * m_Hmat ;
 
   if (m_logFullCond == 0) { // This is the first iteration...
-    cout << "First iteration: analysing pattern... \n" ;
-    fflush(stdout) ;
     m_FullCondPrecisionChol.analyzePattern(m_SigmaFEandEtaInv + secondTerm) ;
   }
   m_FullCondPrecisionChol.factorize(m_SigmaFEandEtaInv + secondTerm) ; // The sparsity pattern in matToInvert is always the same, notwithstand the hyperparameter values.
@@ -762,24 +756,18 @@ void AugTree::ComputeHpred() {
 }
 
 vec AugTree::ComputeEvar() {
-  cout << "Entered ComputeEvar... \n" ;
-  fflush(stdout) ;
   double errorVar = std::pow(m_errorSD, 2) ;
   vec EvarValues = vec::Zero(m_HmatPred.rows()) ;
   int obsIndex = 0 ;
 
-  vec invertedDsqrt = m_FullCondPrecisionChol.vectorD().array().pow(-0.5) ;
+  vec invertedDsqrt = 1/m_FullCondPrecisionChol.vectorD().array().pow(0.5) ;
 
   #pragma omp parallel for
   for (uint i = 0; i < m_HmatPred.rows(); i++) {
     vec HmatPredRow = m_HmatPred.row(i) ;
-    vec DLinvV =  m_FullCondPrecisionChol.matrixU().solve(HmatPredRow) ;
-    DLinvV = invertedDsqrt.array() * DLinvV.array() ;
-    EvarValues(i) = DLinvV.squaredNorm() ;
+    vec solution = HmatPredRow.transpose() * m_FullCondPrecisionChol.solve(HmatPredRow) ;
+    EvarValues(i) = solution(0) ;
   }
-
-  cout << "Done ComputeEvar... \n" ;
-  fflush(stdout) ;
   return EvarValues ;
 }
 
