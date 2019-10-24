@@ -1,6 +1,3 @@
-// [[Rcpp::depends(RcppGSL)]]
-// [[Rcpp::depends(RcppEigen)]]
-
 #include <algorithm>
 #include <vector>
 #include <cstdio>

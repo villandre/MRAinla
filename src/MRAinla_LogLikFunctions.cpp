@@ -1,5 +1,3 @@
-// [[Rcpp::depends(RcppEigen)]]
-
 #include <iostream>
 #include <string>
 #include <algorithm>

@@ -454,7 +454,7 @@ void AugTree::createHmatrix() {
 
 void AugTree::updateHmatrix() {
   int loopIndex = 0 ;
-  // #pragma omp parallel for
+
   for (int k=0; k<m_Hmat.outerSize(); ++k) {
     for (sp_mat::InnerIterator it(m_Hmat, k); it; ++it)
     {
@@ -468,7 +468,7 @@ void AugTree::updateHmatrix() {
 
 void AugTree::updateHmatrixPred() {
   int loopIndex = 0 ;
-  // #pragma omp parallel for
+
   for (int k = 0; k < m_HmatPred.outerSize(); ++k) {
     for (sp_mat::InnerIterator it(m_HmatPred, k); it; ++it)
     {
