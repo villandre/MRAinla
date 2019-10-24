@@ -85,7 +85,7 @@ double LogJointHyperMarginalToWrap(SEXP treePointer, Rcpp::List MRAhyperparas,
     pointedTree->ComputeLogJointPsiMarginal() ;
 
     outputValue = pointedTree->GetLogJointPsiMarginal() ;
-    // printf("Marginal joint Psi: %.4e \n \n \n", pointedTree->GetLogJointPsiMarginal()) ;
+    // Rprintf("Marginal joint Psi: %.4e \n \n \n", pointedTree->GetLogJointPsiMarginal()) ;
   // }
   // else
   // {

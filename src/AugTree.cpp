@@ -687,12 +687,10 @@ void AugTree::ComputeLogFCandLogCDandDataLL() {
 
   ComputeFullCondSDsFE() ;
 
-  // cout << "Done... \n" ;
-
   vec updatedMean = m_FullCondPrecisionChol.solve(scaledResponse.transpose()) ;
   if(m_FullCondPrecisionChol.info()!=Success) {
     // solving failed
-    std::cout<< "Solving failed!!!! \n" ;
+    Rcpp::Rcout << "Solving failed!!!! \n" ;
     throw Rcpp::exception("Leave now... \n") ;
   }
 
@@ -733,10 +731,10 @@ void AugTree::ComputeLogJointPsiMarginal() {
 
   ComputeLogFCandLogCDandDataLL() ;
 
-  // printf("Observations log-lik: %.4e \n Log-prior: %.4e \n Log-Cond. dist.: %.4e \n Log-full cond.: %.4e \n \n \n",
+  // Rcpp::Rprintf("Observations log-lik: %.4e \n Log-prior: %.4e \n Log-Cond. dist.: %.4e \n Log-full cond.: %.4e \n \n \n",
   //  m_globalLogLik, m_logPrior, m_logCondDist, m_logFullCond) ;
   m_logJointPsiMarginal = m_globalLogLik + m_logPrior + m_logCondDist - m_logFullCond ;
-  // printf("Joint value: %.4e \n \n", m_logJointPsiMarginal) ;
+  // Rcpp::Rprintf("Joint value: %.4e \n \n", m_logJointPsiMarginal) ;
 }
 
 void AugTree::ComputeHpred() {

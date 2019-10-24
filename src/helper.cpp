@@ -24,7 +24,7 @@ Spatiotemprange sptimeDistance(const Eigen::ArrayXd & spCoor1, const double & ti
   double sp = scaledVec.sum() ;
   sp = std::sqrt(sp) ;
   double timeDiff = abs(time2 - time1) ;
-  // printf("Time coordinates and time difference: %.4e  %.4e %.4e \n", time1, time2, timeDiff) ;
+
   return Spatiotemprange(sp, timeDiff) ;
 };
 

@@ -50,8 +50,8 @@ struct maternVec{
   }
 
   void print(std::string header) {
-    std::cout << header << "\n" ;
-    printf("Matern parameters: rho = %.4e smoothness = %.4e scale = %.4e \n", m_rho, m_smoothness, m_scale) ;
+    Rcpp::Rcout << header << "\n" ;
+    Rprintf("Matern parameters: rho = %.4e smoothness = %.4e scale = %.4e \n", m_rho, m_smoothness, m_scale) ;
   }
 
   maternVec() {
@@ -106,9 +106,9 @@ struct dimensions {
   Eigen::Array2d time ;
 
   void print() {
-    std::cout << "Longitude range: \n" << longitude << "\n\n" ;
-    std::cout << "Latitude range: \n" << latitude << "\n\n" ;
-    std::cout << "Time range: \n" << time << "\n\n" ;
+    Rcpp::Rcout << "Longitude range: \n" << longitude << "\n\n" ;
+    Rcpp::Rcout << "Latitude range: \n" << latitude << "\n\n" ;
+    Rcpp::Rcout << "Time range: \n" << time << "\n\n" ;
   }
 
   dimensions() {

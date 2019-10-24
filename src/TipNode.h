@@ -57,9 +57,9 @@ public:
 
   mat & GetB(const uint & l) {
     if (l > m_depth) {
-      printf("Error message... \n") ;
-      printf("Error occured in node %i. \n", m_nodeId) ;
-      printf("Trying to get index %i while tree has %i layers. \n", l, m_depth) ;
+      Rprintf("Error message... \n") ;
+      Rprintf("Error occured in node %i. \n", m_nodeId) ;
+      Rprintf("Trying to get index %i while tree has %i layers. \n", l, m_depth) ;
       throw Rcpp::exception("Trying to get B^l(j_1, ..., j_M) with l > M! \n") ;
     }
     return m_Wlist.at(l) ; // This works for l = M because knot positions in tips correspond to observation positions. It wouldn't be valid otherwise.
