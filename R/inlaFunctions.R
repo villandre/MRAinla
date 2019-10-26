@@ -169,23 +169,20 @@ obtainGridValues <- function(gridPointers, xStartValues, control, fixedEffSDstar
   upperBound <- replace(upperBound, grep(names(upperBound), pattern = "mooth"), log(50)) # This is to avoid an overflow in the computation of the Matern covariance, which for some reason does not tolerate very high smoothness values.
   upperBound <- replace(upperBound, grep(names(upperBound), pattern = "scale"), log(3000)) # This limits the scaling factor to exp(15) in the optimisation. This is to prevent computational issues in the sparse matrix inversion scheme.
   cat("Optimising... \n")
-  if (is.null(control$optOutputFile)) {
+  if (!tryCatch(file.exists(control$fileToSaveOptOutput), error = function(e) FALSE)) { # The tryCatch is necessary to ensure that an error does not occur if control$fileToSaveOptOutput is NULL. If it is undefined, we want the optimisation to take place.
     opt <- nloptr::lbfgs(x0 = log(xStartValues), lower = rep(-10, length(xStartValues)), upper = upperBound, fn = funForOptim, gr = gradForOptim, control = list(xtol_rel = 1e-3, maxeval = control$numIterOptim), envirToSaveValues = storageEnvir)
+    if (!is.null(control$fileToSaveOptOutput)) {
+      save(opt, file = control$fileToSaveOptOutput)
+    }
+    # cat("Optimised values:", exp(opt$par)) ;
   } else {
-    load(control$optOutputFile)
-  }
-  if (!is.null(control$fileToSaveOptOutput)) {
-    save(opt, file = control$fileToSaveOptOutput)
+    load(control$fileToSaveOptOutput)
   }
 
   if (!is.null(control$envirForTest)) {
     assign(x = "Hmat", value = GetHmat(gridPointers[[1]]), envir = control$envirForTest)
   }
-  # cat("Optimised values:", exp(opt$par)) ;
-  # stop("Stop after optimisation... \n")
-  # cl <- parallel::makeForkCluster(nnodes = 4) ;
-  # opt <- optimParallel::optimParallel(par = log(xStartValues), lower = rep(-10, length(xStartValues)), upper = upperBound, fn = funForOptim, gr = gradForOptim, control = list(xtol_rel = 1e-3, maxeval = control$numIterOptim), envirToSaveValues = storageEnvir)
-  # opt <- nloptr::cobyla(x0 = log(xStartValues), lower = rep(-10, length(xStartValues)), upper = upperBound, fn = funForOptim, control = list(xtol_rel = 5e-4, maxeval = control$numIterOptim), envirToSaveValues = storageEnvir)
+
   opt$value <- -opt$value # Correcting for the inversion used to maximise instead of minimise
   sampleWeights <- exp(storageEnvir$value - max(storageEnvir$value))
   sampleWeights <- sampleWeights/sum(sampleWeights)
@@ -223,8 +220,9 @@ obtainGridValues <- function(gridPointers, xStartValues, control, fixedEffSDstar
       for (i in 1:length(output)) {
         cat("Processing grid value ", i, "... \n")
         output[[i]] <- funForGridEst(index = i, paraGrid = paraGrid, treePointer = gridPointers[[1]], MRAcovParasGammaAlphaBeta = MRAcovParasGammaAlphaBeta, fixedEffGammaAlphaBeta = fixedEffGammaAlphaBeta, errorGammaAlphaBeta = errorGammaAlphaBeta, fixedEffSDstart = fixedEffSDstart, errorSDstart = errorSDstart, MRAhyperparasStart = MRAhyperparasStart, FEmuVec = FEmuVec, predictionData = predictionData, timeBaseline = timeBaseline, computePrediction = TRUE, control = control)
-        if (!is.null(control$ISpointsFile)) {
-          save(output[1:i], file = control$ISpointsFile, compress = TRUE)
+        if (!is.null(control$fileToSaveISpoints)) {
+          objectToSave <- output[1:i]
+          save(objectToSave, file = control$fileToSaveISpoints, compress = TRUE)
         }
       }
     } else {
@@ -237,8 +235,14 @@ obtainGridValues <- function(gridPointers, xStartValues, control, fixedEffSDstar
     list(output = output)
   }
   cat("Computing values on the grid... \n")
-  valuesOnGrid <- gridFct()
-  cat("Grid complete... \n")
+  if (!tryCatch(file.exists(control$fileToSaveISpoints), error = function(e) FALSE)) { # I used the same scheme around the optimisation.
+    valuesOnGrid <- gridFct()
+    cat("Grid complete... \n")
+  }
+  else {
+    valuesOnGrid <- mget(load(control$fileToSaveISpoints))
+    names(valuesOnGrid[[1]]) <- "output"
+  }
   if (length(gridPointers) > 1) {
     doParallel::stopImplicitCluster()
   }
