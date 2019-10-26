@@ -103,7 +103,7 @@ plotOutput <- function(inlaMRAoutput, trainingData, testData, realTestValues = N
     graphicsEngine(filename, width = control$width, height = control$height)
   }
   if (plotWhat == "SD") {
-    stackedRasters <- raster::stack(stackedRastersList$fitted, stackedRastersList$SD)
+    stackedRasters <- raster::stack(stackedRastersList$SD)
   } else if (plotWhat == "fittedVsRealNoSp") {
     stackedRasters <- raster::stack(stackedRastersList$testNoSp, stackedRastersList$fittedNoSp)
   } else if (plotWhat == "training") {

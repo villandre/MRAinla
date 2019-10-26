@@ -731,10 +731,10 @@ void AugTree::ComputeLogJointPsiMarginal() {
 
   ComputeLogFCandLogCDandDataLL() ;
 
-  // Rcpp::Rprintf("Observations log-lik: %.4e \n Log-prior: %.4e \n Log-Cond. dist.: %.4e \n Log-full cond.: %.4e \n \n \n",
+  // Rprintf("Observations log-lik: %.4e \n Log-prior: %.4e \n Log-Cond. dist.: %.4e \n Log-full cond.: %.4e \n \n \n",
   //  m_globalLogLik, m_logPrior, m_logCondDist, m_logFullCond) ;
   m_logJointPsiMarginal = m_globalLogLik + m_logPrior + m_logCondDist - m_logFullCond ;
-  // Rcpp::Rprintf("Joint value: %.4e \n \n", m_logJointPsiMarginal) ;
+  // Rprintf("Joint value: %.4e \n \n", m_logJointPsiMarginal) ;
 }
 
 void AugTree::ComputeHpred() {

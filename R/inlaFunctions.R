@@ -44,15 +44,7 @@ MRA_INLA <- function(spacetimeData, errorSDstart, fixedEffSDstart, MRAhyperparas
       colnames(predictionData@sp@coords)[[position[[1]]]] <- "y"
     }
   }
-  if (is.null(control$lonRange)) {
-    control$lonRange <- range(spacetimeData@sp@coords[ , "x"]) + c(-0.02, 0.02)
-  }
-  if (is.null(control$latRange)) {
-    control$latRange <- range(spacetimeData@sp@coords[ , "y"]) + c(-0.02, 0.02)
-  }
-  if (is.null(control$timeRange)) {
-    control$timeRange <- range(time(spacetimeData)) + c(-3600, 3600)
-  }
+
   coordRanges <- mapply(dimName = c("lonRange", "latRange", "timeRange"), code = c("x", "y", "time"), function(dimName, code) {
     predCoordinates <- c()
     if (code != "time") {
@@ -72,9 +64,9 @@ MRA_INLA <- function(spacetimeData, errorSDstart, fixedEffSDstart, MRAhyperparas
     combinedRange + c(-bufferSize, bufferSize)
   }, SIMPLIFY = FALSE)
   defaultControl <- c(defaultControl, coordRanges)
-  # 1e10 is used as a substitute for infinity, which is not understood by the C++ code.
-  if (MRAhyperparasStart$space[["smoothness"]] > 1e10) MRAhyperparasStart$space$smoothness <- 1e10
-  if (MRAhyperparasStart$time[["smoothness"]] > 1e10) MRAhyperparasStart$time$smoothness <- 1e10
+  # 1e5 is used as a substitute for infinity, which is not understood by the C++ code.
+  if (MRAhyperparasStart$space[["smoothness"]] > 1e5) MRAhyperparasStart$space$smoothness <- 1e5
+  if (MRAhyperparasStart$time[["smoothness"]] > 1e5) MRAhyperparasStart$time$smoothness <- 1e5
 
   for (i in names(control)) {
     defaultControl[[i]] <- control[[i]]
@@ -177,7 +169,15 @@ obtainGridValues <- function(gridPointers, xStartValues, control, fixedEffSDstar
   upperBound <- replace(upperBound, grep(names(upperBound), pattern = "mooth"), log(50)) # This is to avoid an overflow in the computation of the Matern covariance, which for some reason does not tolerate very high smoothness values.
   upperBound <- replace(upperBound, grep(names(upperBound), pattern = "scale"), log(3000)) # This limits the scaling factor to exp(15) in the optimisation. This is to prevent computational issues in the sparse matrix inversion scheme.
   cat("Optimising... \n")
-  opt <- nloptr::lbfgs(x0 = log(xStartValues), lower = rep(-10, length(xStartValues)), upper = upperBound, fn = funForOptim, gr = gradForOptim, control = list(xtol_rel = 1e-3, maxeval = control$numIterOptim), envirToSaveValues = storageEnvir)
+  if (is.null(control$optOutputFile)) {
+    opt <- nloptr::lbfgs(x0 = log(xStartValues), lower = rep(-10, length(xStartValues)), upper = upperBound, fn = funForOptim, gr = gradForOptim, control = list(xtol_rel = 1e-3, maxeval = control$numIterOptim), envirToSaveValues = storageEnvir)
+  } else {
+    load(control$optOutputFile)
+  }
+  if (!is.null(control$fileToSaveOptOutput)) {
+    save(opt, file = control$fileToSaveOptOutput)
+  }
+
   if (!is.null(control$envirForTest)) {
     assign(x = "Hmat", value = GetHmat(gridPointers[[1]]), envir = control$envirForTest)
   }
@@ -223,6 +223,9 @@ obtainGridValues <- function(gridPointers, xStartValues, control, fixedEffSDstar
       for (i in 1:length(output)) {
         cat("Processing grid value ", i, "... \n")
         output[[i]] <- funForGridEst(index = i, paraGrid = paraGrid, treePointer = gridPointers[[1]], MRAcovParasGammaAlphaBeta = MRAcovParasGammaAlphaBeta, fixedEffGammaAlphaBeta = fixedEffGammaAlphaBeta, errorGammaAlphaBeta = errorGammaAlphaBeta, fixedEffSDstart = fixedEffSDstart, errorSDstart = errorSDstart, MRAhyperparasStart = MRAhyperparasStart, FEmuVec = FEmuVec, predictionData = predictionData, timeBaseline = timeBaseline, computePrediction = TRUE, control = control)
+        if (!is.null(control$ISpointsFile)) {
+          save(output[1:i], file = control$ISpointsFile, compress = TRUE)
+        }
       }
     } else {
       output <- foreach::foreach(var1 = seq_along(listForParallel), .inorder = FALSE) %dopar% {
