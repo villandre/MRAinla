@@ -217,12 +217,22 @@ obtainGridValues <- function(gridPointers, xStartValues, control, fixedEffSDstar
     output <- vector("list", length = nrow(paraGrid))
     if (length(gridPointers) == 1) {
       # output <- lapply(1:nrow(paraGrid), funForGridEst, paraGrid = paraGrid, treePointer = gridPointers[[1]], MRAcovParasGammaAlphaBeta = MRAcovParasGammaAlphaBeta, fixedEffGammaAlphaBeta = fixedEffGammaAlphaBeta, errorGammaAlphaBeta = errorGammaAlphaBeta, fixedEffSDstart = fixedEffSDstart, errorSDstart = errorSDstart, MRAhyperparasStart = MRAhyperparasStart, FEmuVec = FEmuVec, predictionData = predictionData, timeBaseline = timeBaseline, computePrediction = TRUE, control = control)
-      for (i in 1:length(output)) {
-        cat("Processing grid value ", i, "... \n")
-        output[[i]] <- funForGridEst(index = i, paraGrid = paraGrid, treePointer = gridPointers[[1]], MRAcovParasGammaAlphaBeta = MRAcovParasGammaAlphaBeta, fixedEffGammaAlphaBeta = fixedEffGammaAlphaBeta, errorGammaAlphaBeta = errorGammaAlphaBeta, fixedEffSDstart = fixedEffSDstart, errorSDstart = errorSDstart, MRAhyperparasStart = MRAhyperparasStart, FEmuVec = FEmuVec, predictionData = predictionData, timeBaseline = timeBaseline, computePrediction = TRUE, control = control)
-        if (!is.null(control$fileToSaveISpoints)) {
-          objectToSave <- output[1:i]
-          save(objectToSave, file = control$fileToSaveISpoints, compress = TRUE)
+      startAtIter <- 1
+      if (tryCatch(file.exists(control$fileToSaveISpoints), error = function(e) FALSE)) {
+        cat("Loading previously processed IS points... \n")
+        loadResult <- mget(load(control$fileToSaveISpoints))
+        output[1:length(loadResult[[1]])] <- loadResult[[1]]
+        startAtIter <- length(loadResult[[1]]) + 1
+        rm(loadResult)
+      }
+      if (startAtIter <= length(output)) {
+        for (i in startAtIter:length(output)) {
+          cat("Processing grid value ", i, "... \n")
+          output[[i]] <- funForGridEst(index = i, paraGrid = paraGrid, treePointer = gridPointers[[1]], MRAcovParasGammaAlphaBeta = MRAcovParasGammaAlphaBeta, fixedEffGammaAlphaBeta = fixedEffGammaAlphaBeta, errorGammaAlphaBeta = errorGammaAlphaBeta, fixedEffSDstart = fixedEffSDstart, errorSDstart = errorSDstart, MRAhyperparasStart = MRAhyperparasStart, FEmuVec = FEmuVec, predictionData = predictionData, timeBaseline = timeBaseline, computePrediction = TRUE, control = control)
+          if (!is.null(control$fileToSaveISpoints)) {
+            objectToSave <- output[1:i]
+            save(objectToSave, file = control$fileToSaveISpoints, compress = TRUE)
+          }
         }
       }
     } else {
@@ -235,14 +245,9 @@ obtainGridValues <- function(gridPointers, xStartValues, control, fixedEffSDstar
     list(output = output)
   }
   cat("Computing values on the grid... \n")
-  if (!tryCatch(file.exists(control$fileToSaveISpoints), error = function(e) FALSE)) { # I used the same scheme around the optimisation.
-    valuesOnGrid <- gridFct()
-    cat("Grid complete... \n")
-  }
-  else {
-    valuesOnGrid <- mget(load(control$fileToSaveISpoints))
-    names(valuesOnGrid[[1]]) <- "output"
-  }
+  valuesOnGrid <- gridFct()
+  cat("Grid complete... \n")
+
   if (length(gridPointers) > 1) {
     doParallel::stopImplicitCluster()
   }
