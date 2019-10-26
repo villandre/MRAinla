@@ -222,8 +222,10 @@ obtainGridValues <- function(gridPointers, xStartValues, control, fixedEffSDstar
         cat("Loading previously processed IS points... \n")
         loadResult <- mget(load(control$fileToSaveISpoints))
         output[1:length(loadResult[[1]])] <- loadResult[[1]]
+        if (identical(control$IScompleted, TRUE)) { # If we indicate that the IS is completed, the function will simply stop sampling points and use saved points only.
+          output <- output[1:length(loadResult[[1]])]
+        }
         startAtIter <- length(loadResult[[1]]) + 1
-        rm(loadResult)
       }
       if (startAtIter <= length(output)) {
         for (i in startAtIter:length(output)) {
