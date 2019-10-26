@@ -173,10 +173,14 @@ obtainGridValues <- function(gridPointers, xStartValues, control, fixedEffSDstar
     opt <- nloptr::lbfgs(x0 = log(xStartValues), lower = rep(-10, length(xStartValues)), upper = upperBound, fn = funForOptim, gr = gradForOptim, control = list(xtol_rel = 1e-3, maxeval = control$numIterOptim), envirToSaveValues = storageEnvir)
     if (!is.null(control$fileToSaveOptOutput)) {
       save(opt, file = control$fileToSaveOptOutput)
+      filenameForEnvir <- paste(substr(control$fileToSaveOptOutput, start = 1, stop = gregexpr(pattern = ".Rdata", text = control$fileToSaveOptOutput)[[1]] - 1), "_Envir.Rdata", sep = "")
+      save(storageEnvir, file = filenameForEnvir, compress = TRUE)
     }
     # cat("Optimised values:", exp(opt$par)) ;
   } else {
     load(control$fileToSaveOptOutput)
+
+    load()
   }
 
   if (!is.null(control$envirForTest)) {
