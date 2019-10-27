@@ -31,7 +31,7 @@
 #' @export
 
 MRA_INLA <- function(spacetimeData, errorSDstart, fixedEffSDstart, MRAhyperparasStart, FEmuVec, predictionData = NULL, fixedEffGammaAlphaBeta, errorGammaAlphaBeta,  MRAcovParasGammaAlphaBeta, maximiseOnly = FALSE, control) {
-  defaultControl <- list(M = 1, randomSeed = 24,  cutForTimeSplit = 400, stepSize = 1, lowerThreshold = 3, maternCovariance = TRUE, nuggetSD = 0.00001, varyFixedEffSD = FALSE, varyMaternSmoothness = FALSE, varyErrorSD = TRUE, splitTime = FALSE, numKnotsRes0 = 20L, J = 4L, numValuesForGrid = 200, numThreads = 1, numIterOptim = 200L)
+  defaultControl <- list(M = 1, randomSeed = 24,  cutForTimeSplit = 400, stepSize = 1, lowerThreshold = 3, maternCovariance = TRUE, nuggetSD = 0.00001, varyFixedEffSD = FALSE, varyMaternSmoothness = FALSE, varyErrorSD = TRUE, splitTime = FALSE, numKnotsRes0 = 20L, J = 4L, numValuesForIS = 200, numThreads = 1, numIterOptim = 200L)
   if (length(position <- grep(colnames(spacetimeData@sp@coords), pattern = "lon")) >= 1) {
     colnames(spacetimeData@sp@coords)[[position[[1]]]] <- "x"
     if (!is.null(predictionData)) {
@@ -73,6 +73,13 @@ MRA_INLA <- function(spacetimeData, errorSDstart, fixedEffSDstart, MRAhyperparas
   }
 
   control <- defaultControl
+
+  if (!is.null(control$folderToSaveISpoints)) {
+    numPoints <- length(list.files(path = control$folderToSaveISpoints, pattern = "ISoutput"))
+    if (numPoints >= control$numValuesForIS) {
+      control$IScompleted <- TRUE
+    }
+  }
   dataCoordinates <- spacetimeData@sp@coords
   predCoordinates <- predictionData@sp@coords
   predCovariates <- as.matrix(predictionData@data)
@@ -121,8 +128,11 @@ MRA_INLA <- function(spacetimeData, errorSDstart, fixedEffSDstart, MRAhyperparas
   outputList <- list(hyperMarginalMoments = hyperMarginalMoments$paraMoments, meanMarginalMoments = meanMarginalMoments, psiAndMargDistMatrix = hyperMarginalMoments$psiAndMargDistMatrix)
   cat("Computing prediction moments... \n")
   if (!is.null(predictionData)) {
-    outputList$predictionMoments <- ComputeKrigingMoments(computedValues$output, gridPointers[[1]], logStandardisedWeights)
+    outputList$predictionMoments <- ComputeKrigingMoments(computedValues$output, gridPointers[[1]], logStandardisedWeights, control = control)
     outputList$predObsOrder <- GetPredObsOrder(gridPointers[[1]]) # I picked the first one, since the grids are all copies of each other, created to ensure that there is no problem with multiple reads/writes in parallel.
+    if (identical(control$IScompleted, TRUE)) { # m_predObsOrder needs to be obtained from the hard drive, as CreateHmatrixPred was not run.
+      outputList$predObsOrder <- get(load(paste(control$folderToSaveISpoints, "/predObsOrder.Rdata", sep = "")))
+    }
   }
   cat("Returning results... \n")
   outputList
@@ -179,8 +189,10 @@ obtainGridValues <- function(gridPointers, xStartValues, control, fixedEffSDstar
     # cat("Optimised values:", exp(opt$par)) ;
   } else {
     load(control$fileToSaveOptOutput)
-
-    load()
+    lastSlashPos <- tail(gregexpr(pattern = "/", text = control$fileToSaveOptOutput)[[1]], n = 1)
+    directoryName <- substr(control$fileToSaveOptOutput, start = 1, stop = lastSlashPos)
+    envirFilename <- list.files(path = directoryName, pattern = "_Envir.Rdata", full.names = TRUE)
+    load(envirFilename) # Restores storageEnvir
   }
 
   if (!is.null(control$envirForTest)) {
@@ -211,7 +223,7 @@ obtainGridValues <- function(gridPointers, xStartValues, control, fixedEffSDstar
       }
       container
     }
-    paraGrid <- t(replicate(n = control$numValuesForGrid, expr = smallMVR()))
+    paraGrid <- t(replicate(n = control$numValuesForIS, expr = smallMVR()))
     colnames(paraGrid) <- names(xStartValues)
     groupAssignments <- rep(1:length(gridPointers), length.out = nrow(paraGrid))
     listForParallel <- lapply(1:min(length(gridPointers), nrow(paraGrid)), function(clIndex) {
@@ -222,22 +234,31 @@ obtainGridValues <- function(gridPointers, xStartValues, control, fixedEffSDstar
     if (length(gridPointers) == 1) {
       # output <- lapply(1:nrow(paraGrid), funForGridEst, paraGrid = paraGrid, treePointer = gridPointers[[1]], MRAcovParasGammaAlphaBeta = MRAcovParasGammaAlphaBeta, fixedEffGammaAlphaBeta = fixedEffGammaAlphaBeta, errorGammaAlphaBeta = errorGammaAlphaBeta, fixedEffSDstart = fixedEffSDstart, errorSDstart = errorSDstart, MRAhyperparasStart = MRAhyperparasStart, FEmuVec = FEmuVec, predictionData = predictionData, timeBaseline = timeBaseline, computePrediction = TRUE, control = control)
       startAtIter <- 1
-      if (tryCatch(file.exists(control$fileToSaveISpoints), error = function(e) FALSE)) {
+      if (tryCatch(dir.exists(control$folderToSaveISpoints), error = function(e) FALSE)) {
         cat("Loading previously processed IS points... \n")
-        loadResult <- mget(load(control$fileToSaveISpoints))
-        output[1:length(loadResult[[1]])] <- loadResult[[1]]
+        loadResult <- lapply(list.files(control$folderToSaveISpoints, full.names = TRUE, pattern = "ISoutput"), function(x) get(load(x)))
+        output[1:length(loadResult)] <- loadResult
         if (identical(control$IScompleted, TRUE)) { # If we indicate that the IS is completed, the function will simply stop sampling points and use saved points only.
           output <- output[1:length(loadResult[[1]])]
         }
-        startAtIter <- length(loadResult[[1]]) + 1
+        startAtIter <- length(loadResult) + 1
       }
       if (startAtIter <= length(output)) {
         for (i in startAtIter:length(output)) {
           cat("Processing grid value ", i, "... \n")
           output[[i]] <- funForGridEst(index = i, paraGrid = paraGrid, treePointer = gridPointers[[1]], MRAcovParasGammaAlphaBeta = MRAcovParasGammaAlphaBeta, fixedEffGammaAlphaBeta = fixedEffGammaAlphaBeta, errorGammaAlphaBeta = errorGammaAlphaBeta, fixedEffSDstart = fixedEffSDstart, errorSDstart = errorSDstart, MRAhyperparasStart = MRAhyperparasStart, FEmuVec = FEmuVec, predictionData = predictionData, timeBaseline = timeBaseline, computePrediction = TRUE, control = control)
-          if (!is.null(control$fileToSaveISpoints)) {
-            objectToSave <- output[1:i]
-            save(objectToSave, file = control$fileToSaveISpoints, compress = TRUE)
+          if (!is.null(control$folderToSaveISpoints)) {
+            if (!dir.exists(control$folderToSaveISpoints)) {
+              dir.create(path = control$folderToSaveISpoints)
+            }
+            if (i == 1) { # On the first iteration, the vector to restore the order of predictions must be saved to allow for the predicted values to be re-ordered after a resume in which CreateHmatrixPred is not called. This situation occurs when we specify control$IScompleted=TRUE.
+              predOrder <- GetPredObsOrder(gridPointers[[1]])
+              filenameForPredOrder <- paste(control$folderToSaveISpoint, "/predObsOrder.Rdata", sep = "")
+              save(predOrder, file = filenameForPredOrder, compress = TRUE)
+            }
+            objectToSave <- output[[i]]
+            filename <- paste(control$folderToSaveISpoints, "/", "ISoutput", i, ".Rdata", sep = "")
+            save(objectToSave, file = filename, compress = TRUE)
           }
         }
       }
@@ -331,7 +352,7 @@ ComputeMeanMarginalMoments <- function(hyperparaList, logISmodProbWeights) {
   data.frame(Mean = marginalMeans, StdDev = marginalSDs)
 }
 
-ComputeKrigingMoments <- function(hyperparaList, treePointer, logISmodProbWeights) {
+ComputeKrigingMoments <- function(hyperparaList, treePointer, logISmodProbWeights, control) {
 
   termsForMean <- lapply(seq_along(hyperparaList), function(index) {
     drop(hyperparaList[[index]]$CondPredStats$Hmean * exp(logISmodProbWeights[[index]]))
@@ -347,6 +368,9 @@ ComputeKrigingMoments <- function(hyperparaList, treePointer, logISmodProbWeight
   })
   Evar <- Reduce("+", termsForEvar)
   predObsOrder <- GetPredObsOrder(treePointer = treePointer)
+  if (identical(control$IScompleted, TRUE)) {
+    predObsOrder <- get(load(paste(control$folderToSaveISpoints, "/predObsOrder.Rdata", sep = "")))
+  }
   list(predictMeans = krigingMeans[order(predObsOrder)], predictSDs = sqrt(varE + Evar)[order(predObsOrder)])
 }
 
