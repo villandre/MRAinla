@@ -239,7 +239,7 @@ obtainGridValues <- function(gridPointers, xStartValues, control, fixedEffSDstar
         loadResult <- lapply(list.files(control$folderToSaveISpoints, full.names = TRUE, pattern = "ISoutput"), function(x) get(load(x)))
         output[1:length(loadResult)] <- loadResult
         if (identical(control$IScompleted, TRUE)) { # If we indicate that the IS is completed, the function will simply stop sampling points and use saved points only.
-          output <- output[1:length(loadResult[[1]])]
+          output <- output[1:length(loadResult)]
         }
         startAtIter <- length(loadResult) + 1
       }
