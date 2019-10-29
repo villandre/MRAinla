@@ -386,7 +386,6 @@ void AugTree::createHmatrix() {
             for (uint i = 0; i < rowIndices.size(); i++) {
               tripletList.push_back(Triplet(rowIndices(i), colIndices(i) + m_dataset.covariateValues.cols() + 1, nodeToProcess->GetB(index)(rowIndices(i) - rowIndex, colIndices(i) - colIndex))) ;
             }
-
             index += 1 ;
           }
         }
@@ -467,7 +466,6 @@ void AugTree::updateHmatrixPred() {
 
 void AugTree::createHmatrixPred() {
   uint numObs = m_predictData.spatialCoords.rows() ;
-  ArrayXXi HmatPredPos(0, 2) ;
 
   ArrayXi FmatObsOrder = ArrayXi::Zero(numObs) ;
   uint rowIndex = 0 ;
@@ -482,6 +480,8 @@ void AugTree::createHmatrixPred() {
     ArrayXi idVec = tipNodes.at(i)->GetAncestorIds() ; // Last element is tip node.
     ancestorIdsVec.at(i) = idVec ;
   }
+
+  std::vector<Triplet> tripletList;
 
   std::sort(tipNodes.begin(), tipNodes.end(), [] (TreeNode * first, TreeNode * second) {
     ArrayXi firstAncestorIds = first->GetAncestorIds() ;
@@ -528,13 +528,14 @@ void AugTree::createHmatrixPred() {
         int nodePos = GetNodePos(nodeIndex) ;
         if (index < brickAncestors.size()) {
           if (nodeIndex == brickAncestors(index)) {
-            ArrayXi rowIndices = rep(uvec::LinSpaced(observationIndices.size(), 0, observationIndices.size() - 1).array(),
-                                  ancestorsList.at(index)->GetNumKnots()) + rowIndex  ;
-            ArrayXi colIndices = rep_each(uvec::LinSpaced(ancestorsList.at(index)->GetNumKnots(), 0, ancestorsList.at(index)->GetNumKnots() - 1).array(),
-                                       observationIndices.size()) + colIndex  ;
-            ArrayXXi positions = join_rows(rowIndices, colIndices) ;
-            HmatPredPos = join_cols(HmatPredPos, positions) ; // Slow, but this is not done many times.
+            ArrayXi rowIndices = rep(uvec::LinSpaced(nodeToProcess->GetB(index).rows(), 0, nodeToProcess->GetB(index).rows() - 1).array(),
+                                     nodeToProcess->GetB(index).cols()) + rowIndex  ;
+            ArrayXi colIndices = rep_each(uvec::LinSpaced(nodeToProcess->GetB(index).cols(), 0, nodeToProcess->GetB(index).cols() - 1).array(),
+                                          nodeToProcess->GetB(index).rows()) + colIndex ;
 
+            for (uint i = 0; i < rowIndices.size(); i++) {
+              tripletList.push_back(Triplet(rowIndices(i), colIndices(i) + m_dataset.covariateValues.cols() + 1, nodeToProcess->GetB(index)(rowIndices(i) - rowIndex, colIndices(i) - colIndex))) ;
+            }
             index += 1 ;
           }
         }
@@ -545,37 +546,18 @@ void AugTree::createHmatrixPred() {
     }
   }
 
-  mat intercept = mat::Ones(numObs, 1) ;
-  mat transIncrementedCovar = (join_rows(intercept.array(), m_predictData.covariateValues.array())).transpose() ;
-  mat incrementedCovarPredictReshuffled = cols(transIncrementedCovar.array(), FmatObsOrder).transpose() ;
-
-  HmatPredPos.col(1) += m_predictData.covariateValues.cols() + 1 ;
-  ArrayXXi covPos = join_rows(rep(uvec::LinSpaced(m_predictData.covariateValues.rows(), 0, m_predictData.covariateValues.rows() - 1).array(),
-                                  m_predictData.covariateValues.cols() + 1),
-                          rep_each(uvec::LinSpaced(m_predictData.covariateValues.cols() + 1, 0, m_predictData.covariateValues.cols()).array(),
-                                   m_predictData.covariateValues.rows())) ;
-  HmatPredPos = join_cols(covPos, HmatPredPos).eval() ; // Could this cause aliasing?
-
-  ArrayXd concatenatedValues = ArrayXd::Zero(HmatPredPos.rows()) ;
-  concatenatedValues.segment(0, incrementedCovarPredictReshuffled.size()) = incrementedCovarPredictReshuffled ;
-  uint secondIndex = incrementedCovarPredictReshuffled.size() ;
-  for (auto & tipNode : GetTipNodes()) {
-    if (tipNode->GetPredIndices().size() > 0) {
-      for (auto & Umat : tipNode->GetUmatList()) {
-        concatenatedValues.segment(secondIndex, Umat.size()) = Umat ;
-        secondIndex += Umat.size() ;
-      }
+  // Adding in the intercept...
+  for (uint i = 0; i < m_predictData.covariateValues.rows(); i++) {
+    tripletList.push_back(Triplet(i, 0, 1)) ;
+  }
+  // Processing other covariate values
+  for (uint rowIndex = 0 ; rowIndex < m_predictData.covariateValues.rows() ; rowIndex++) {
+    for(uint colIndex = 0 ; colIndex < m_predictData.covariateValues.cols() ; colIndex++) {
+      tripletList.push_back(Triplet(rowIndex, colIndex + 1, m_predictData.covariateValues(FmatObsOrder(rowIndex), colIndex))) ;
     }
   }
-  m_HmatPred.resize(incrementedCovarPredictReshuffled.rows(), m_numKnots + incrementedCovarPredictReshuffled.cols()) ;
-  std::vector<Triplet> tripletList;
 
-  // int offset = 0 ;
-
-  for (uint i = 0; i < concatenatedValues.size(); i++) {
-    tripletList.push_back(Triplet(HmatPredPos(i, 0), HmatPredPos(i, 1), concatenatedValues(i))) ;
-  }
-
+  m_HmatPred.resize(m_predictData.covariateValues.rows(), m_numKnots + m_predictData.covariateValues.cols() + 1) ;
   m_HmatPred.setFromTriplets(tripletList.begin(), tripletList.end()) ;
 
   for (auto & tipNode : tipNodes) {
