@@ -327,8 +327,6 @@ void AugTree::UpdateSigmaBetaEtaInvMat() {
 }
 
 void AugTree::createHmatrix() {
-  Rcout << "Creating H matrix! \n" ;
-  fflush(stdout) ;
   int numObs = m_dataset.spatialCoords.rows() ;
 
   std::vector<TreeNode *> tipNodes = GetTipNodes() ;
@@ -347,8 +345,6 @@ void AugTree::createHmatrix() {
 
   std::vector<Triplet> tripletList ;
 
-  Rcout << "Sorting tip nodes! \n" ;
-  fflush(stdout) ;
   std::sort(tipNodes.begin(), tipNodes.end(), [] (TreeNode * first, TreeNode * second) {
     ArrayXi firstAncestorIds = first->GetAncestorIds() ;
     ArrayXi secondAncestorIds = second->GetAncestorIds() ;
@@ -362,9 +358,6 @@ void AugTree::createHmatrix() {
     }
     return firstSmallerThanSecond ;
   }) ; // This is supposed to reorder the tip nodes in such a way that the F matrix has contiguous blocks.
-
-  Rcout << "Done! Creating position matrix! \n" ;
-  fflush(stdout) ;
 
   for (auto & nodeToProcess : tipNodes) {
     ArrayXi observationIndices = nodeToProcess->GetObsInNode() ;
@@ -426,8 +419,7 @@ void AugTree::createHmatrix() {
   // I made m_Hmat row-major to make the updating process, as all values on any
   // given row are associated with the same tip.
   // Don't mind the four nested loops: all it does is traverse all the elements once.
-  Rcout << "Done! Populating pointerOffset... \n" ;
-  fflush(stdout) ;
+
   for (auto & tipNode : tipNodes) {
     uint numObs = tipNode->GetObsInNode().size() ;
     for (uint rowIndex = 0; rowIndex < numObs ; rowIndex++) {
@@ -441,12 +433,8 @@ void AugTree::createHmatrix() {
     }
   }
   m_Hmat.resize(m_dataset.covariateValues.rows(), m_numKnots + m_dataset.covariateValues.cols() + 1) ;
-  Rcout << "Done! Filling in Hmat... \n" ;
-  fflush(stdout) ;
 
   m_Hmat.setFromTriplets(tripletList.begin(), tripletList.end()) ;
-  Rcout << "Done! Leaving createHmat \n" ;
-  fflush(stdout) ;
 }
 
 void AugTree::updateHmatrix() {
