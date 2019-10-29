@@ -330,12 +330,6 @@ void AugTree::createHmatrix() {
   Rcout << "Creating H matrix! \n" ;
   fflush(stdout) ;
   int numObs = m_dataset.spatialCoords.rows() ;
-  int numCovarValues = numObs * (m_dataset.covariateValues.cols() + 1) ; // This is for the covariates...
-  // We can pre-compute the number of non-zero elements in Hmat, thus preventing a number of join operations...
-  uint numElements = numCovarValues ;
-  for (auto & vertex: m_vertexVector) {
-    numElements += vertex->GetNumKnots() * vertex->GetNumObs() ;
-  }
 
   ArrayXi FmatObsOrder = ArrayXi::Zero(numObs) ;
   int rowIndex = 0 ;
@@ -736,11 +730,10 @@ void AugTree::ComputeLogJointPsiMarginal() {
 
   ComputeLogFCandLogCDandDataLL() ;
 
-  Rprintf("Observations log-lik: %.4e \n Log-prior: %.4e \n Log-Cond. dist.: %.4e \n Log-full cond.: %.4e \n \n \n",
-    m_globalLogLik, m_logPrior, m_logCondDist, m_logFullCond) ;
+  // Rprintf("Observations log-lik: %.4e \n Log-prior: %.4e \n Log-Cond. dist.: %.4e \n Log-full cond.: %.4e \n \n \n",
+    // m_globalLogLik, m_logPrior, m_logCondDist, m_logFullCond) ;
   m_logJointPsiMarginal = m_globalLogLik + m_logPrior + m_logCondDist - m_logFullCond ;
-   Rprintf("Joint value: %.4e \n \n", m_logJointPsiMarginal) ;
-   Rcpp::stop("Stop now! \n") ;
+   // Rprintf("Joint value: %.4e \n \n", m_logJointPsiMarginal) ;
 }
 
 void AugTree::ComputeHpred() {
