@@ -6,6 +6,7 @@
 #include "AugTree.h"
 #include "TipNode.h"
 #include "InternalNode.h"
+// #include "gperftools/profiler.h"
 
 using namespace Rcpp ;
 using namespace MRAinla ;
@@ -326,9 +327,16 @@ void AugTree::UpdateSigmaBetaEtaInvMat() {
 }
 
 void AugTree::createHmatrix() {
-
+  Rcout << "Creating H matrix! \n" ;
+  fflush(stdout) ;
   int numObs = m_dataset.spatialCoords.rows() ;
-  ArrayXXi HmatPos(0, 2) ;
+  int numCovarValues = numObs * (m_dataset.covariateValues.cols() + 1) ; // This is for the covariates...
+  // We can pre-compute the number of non-zero elements in Hmat, thus preventing a number of join operations...
+  uint numElements = numCovarValues ;
+  for (auto & vertex: m_vertexVector) {
+    numElements += vertex->GetNumKnots() * vertex->GetNumObs() ;
+  }
+  ArrayXXi HmatPos ;
 
   ArrayXi FmatObsOrder = ArrayXi::Zero(numObs) ;
   int rowIndex = 0 ;
@@ -343,7 +351,8 @@ void AugTree::createHmatrix() {
     ArrayXi idVec = tipNodes.at(i)->GetAncestorIds() ; // Last element is tip node.
     ancestorIdsVec.at(i) = idVec ;
   }
-
+  Rcout << "Sorting tip nodes! \n" ;
+  fflush(stdout) ;
   std::sort(tipNodes.begin(), tipNodes.end(), [] (TreeNode * first, TreeNode * second) {
     ArrayXi firstAncestorIds = first->GetAncestorIds() ;
     ArrayXi secondAncestorIds = second->GetAncestorIds() ;
@@ -358,6 +367,11 @@ void AugTree::createHmatrix() {
     return firstSmallerThanSecond ;
   }) ; // This is supposed to reorder the tip nodes in such a way that the F matrix has contiguous blocks.
 
+  Rcout << "Done! Creating position matrix! \n" ;
+  fflush(stdout) ;
+  uint HmatRowIndex = numCovarValues ;
+  ArrayXi HmatPosFirstCol = ArrayXi::Zero(numElements) ;
+  ArrayXi HmatPosSecondCol = ArrayXi::Zero(numElements) ;
   for (auto & nodeToProcess : tipNodes) {
     ArrayXi observationIndices = nodeToProcess->GetObsInNode() ;
 
@@ -382,9 +396,11 @@ void AugTree::createHmatrix() {
             ArrayXi colIndices = rep_each(uvec::LinSpaced(nodeToProcess->GetB(index).cols(), 0, nodeToProcess->GetB(index).cols() - 1).array(),
                                        nodeToProcess->GetB(index).rows()) + colIndex ;
 
-            ArrayXXi positions = join_rows(rowIndices, colIndices) ;
-            HmatPos = join_cols(HmatPos, positions) ; // Slow, but this is not done many times.
-
+            // ArrayXXi positions = join_rows(rowIndices, colIndices) ;
+            // HmatPos = join_cols(HmatPos, positions) ; // Slow, but this is not done many times.
+            HmatPosFirstCol.segment(HmatRowIndex, rowIndices.size()) = rowIndices ;
+            HmatPosSecondCol.segment(HmatRowIndex, colIndices.size()) = colIndices ;
+            HmatRowIndex += rowIndices.size() ;
             index += 1 ;
           }
         }
@@ -394,10 +410,20 @@ void AugTree::createHmatrix() {
       rowIndex += observationIndices.size() ; // The B matrices should have as many rows as observations in the node...
     }
   }
+  Rcout << "Done! Copying position matrix! \n" ;
+  fflush(stdout) ;
+  Rcout << "Concatenating... \n" ;
+  fflush(stdout) ;
+  HmatPos = join_rows(HmatPosFirstCol, HmatPosSecondCol) ;
+  Rcout << "Done! \n" ;
+  fflush(stdout) ;
 
+  fflush(stdout) ;
   HmatPos.col(1) += m_dataset.covariateValues.cols() + 1 ;
   m_obsOrderForFmat = FmatObsOrder ;
 
+  Rcout << "Done! Creating covariate matrix! \n" ;
+  fflush(stdout) ;
   mat intercept = mat::Ones(numObs, 1) ;
   mat incrementedCovar = join_rows(intercept.array(), m_dataset.covariateValues.array()) ;
   MatrixXd incrementedCovarReshuffled = rows(incrementedCovar.array(), m_obsOrderForFmat) ;
@@ -412,6 +438,8 @@ void AugTree::createHmatrix() {
   // I made m_Hmat row-major to make the updating process, as all values on any
   // given row are associated with the same tip.
   // Don't mind the four nested loops: all it does is traverse all the elements once.
+  Rcout << "Done! Populating pointerOffset... \n" ;
+  fflush(stdout) ;
   for (auto & tipNode : tipNodes) {
     uint numObs = tipNode->GetObsInNode().size() ;
     for (uint rowIndex = 0; rowIndex < numObs ; rowIndex++) {
@@ -424,14 +452,20 @@ void AugTree::createHmatrix() {
       }
     }
   }
-
-  ArrayXXi covPos = join_rows(rep(uvec::LinSpaced(incrementedCovarReshuffled.rows(), 0, incrementedCovarReshuffled.rows() - 1).array(), incrementedCovarReshuffled.cols()),
-                          rep_each(uvec::LinSpaced(incrementedCovarReshuffled.cols(), 0, incrementedCovarReshuffled.cols() - 1).array(), incrementedCovarReshuffled.rows())) ;
-  HmatPos = join_cols(covPos, HmatPos).eval() ; // Could this cause aliasing?
-
+  Rcout << "Done! Last steps for creating HmatPos... \n" ;
+  fflush(stdout) ;
+  // ArrayXXi covPos = join_rows(rep(uvec::LinSpaced(incrementedCovarReshuffled.rows(), 0, incrementedCovarReshuffled.rows() - 1).array(), incrementedCovarReshuffled.cols()),
+                          // rep_each(uvec::LinSpaced(incrementedCovarReshuffled.cols(), 0, incrementedCovarReshuffled.cols() - 1).array(), incrementedCovarReshuffled.rows())) ;
+  // HmatPos = join_cols(covPos, HmatPos).eval() ; // Could this cause aliasing?
+  HmatPos.col(0).segment(0, numCovarValues) = rep(uvec::LinSpaced(incrementedCovarReshuffled.rows(), 0, incrementedCovarReshuffled.rows() - 1).array(), incrementedCovarReshuffled.cols()) ;
+  HmatPos.col(1).segment(1, numCovarValues) = rep_each(uvec::LinSpaced(incrementedCovarReshuffled.cols(), 0, incrementedCovarReshuffled.cols() - 1).array(), incrementedCovarReshuffled.rows()) ;
+  Rcout << "Done! Last steps for creating HmatPos... \n" ;
+  fflush(stdout) ;
   ArrayXd concatenatedValues = ArrayXd::Zero(HmatPos.rows()) ;
   concatenatedValues.segment(0, incrementedCovarReshuffled.size()) = incrementedCovarReshuffled ;
   uint secondIndex = incrementedCovar.size() ;
+  Rcout << "Done! Creating concatenatedValues... \n" ;
+  fflush(stdout) ;
   for (auto & tipNode : GetTipNodes()) {
     if (tipNode->GetObsInNode().size() > 0) {
       for (auto & Bmat : tipNode->GetWlist()) {
@@ -440,6 +474,8 @@ void AugTree::createHmatrix() {
       }
     }
   }
+  Rcout << "Done! Resizing Hmat and populating the triplet list \n" ;
+  fflush(stdout) ;
   m_Hmat.resize(incrementedCovarReshuffled.rows(), m_numKnots + incrementedCovar.cols()) ;
   std::vector<Triplet> tripletList;
 
@@ -449,7 +485,12 @@ void AugTree::createHmatrix() {
     tripletList.push_back(Triplet(HmatPos(i, 0), HmatPos(i, 1), concatenatedValues(i))) ;
   }
 
+  Rcout << "Done! Resizing Hmat and populating the triplet list \n" ;
+  fflush(stdout) ;
+
   m_Hmat.setFromTriplets(tripletList.begin(), tripletList.end()) ;
+  Rcout << "Done! Leaving createHmat \n" ;
+  fflush(stdout) ;
 }
 
 void AugTree::updateHmatrix() {

@@ -219,6 +219,7 @@ public:
   }
   int GetNumKnots() {return m_knotsCoor.timeCoords.size() ;}
   std::vector<TreeNode *> getAncestors() ;
+  int GetNumObs() {return m_obsInNode.size() ;}
 
 protected:
 
