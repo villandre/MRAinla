@@ -333,17 +333,20 @@ void AugTree::createHmatrix() {
   int numCovarValues = numObs * (m_dataset.covariateValues.cols() + 1) ; // This is for the covariates...
   // We can pre-compute the number of non-zero elements in Hmat, thus preventing a number of join operations...
   uint numElements = numCovarValues ;
-  for (auto & vertex: m_vertexVector) {
-    numElements += vertex->GetNumKnots() * vertex->GetNumObs() ;
+  std::vector<TreeNode *> tipNodes = GetTipNodes() ;
+  int numTips = tipNodes.size() ;
+
+  for (auto & tipNode : m_vertexVector) {
+    for (auto & Bmatrix : tipNode->GetWlist()) {
+      numElements += Bmatrix.size() ;
+    }
   }
+
   ArrayXXi HmatPos ;
 
   ArrayXi FmatObsOrder = ArrayXi::Zero(numObs) ;
   int rowIndex = 0 ;
   int colIndex = 0 ;
-
-  std::vector<TreeNode *> tipNodes = GetTipNodes() ;
-  int numTips = tipNodes.size() ;
 
   std::vector<ArrayXi> ancestorIdsVec(numTips) ;
 
@@ -458,7 +461,7 @@ void AugTree::createHmatrix() {
                           // rep_each(uvec::LinSpaced(incrementedCovarReshuffled.cols(), 0, incrementedCovarReshuffled.cols() - 1).array(), incrementedCovarReshuffled.rows())) ;
   // HmatPos = join_cols(covPos, HmatPos).eval() ; // Could this cause aliasing?
   HmatPos.col(0).segment(0, numCovarValues) = rep(uvec::LinSpaced(incrementedCovarReshuffled.rows(), 0, incrementedCovarReshuffled.rows() - 1).array(), incrementedCovarReshuffled.cols()) ;
-  HmatPos.col(1).segment(1, numCovarValues) = rep_each(uvec::LinSpaced(incrementedCovarReshuffled.cols(), 0, incrementedCovarReshuffled.cols() - 1).array(), incrementedCovarReshuffled.rows()) ;
+  HmatPos.col(1).segment(0, numCovarValues) = rep_each(uvec::LinSpaced(incrementedCovarReshuffled.cols(), 0, incrementedCovarReshuffled.cols() - 1).array(), incrementedCovarReshuffled.rows()) ;
   Rcout << "Done! Last steps for creating HmatPos... \n" ;
   fflush(stdout) ;
   ArrayXd concatenatedValues = ArrayXd::Zero(HmatPos.rows()) ;
