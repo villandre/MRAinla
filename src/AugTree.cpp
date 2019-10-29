@@ -528,13 +528,13 @@ void AugTree::createHmatrixPred() {
         int nodePos = GetNodePos(nodeIndex) ;
         if (index < brickAncestors.size()) {
           if (nodeIndex == brickAncestors(index)) {
-            ArrayXi rowIndices = rep(uvec::LinSpaced(nodeToProcess->GetB(index).rows(), 0, nodeToProcess->GetB(index).rows() - 1).array(),
-                                     nodeToProcess->GetB(index).cols()) + rowIndex  ;
-            ArrayXi colIndices = rep_each(uvec::LinSpaced(nodeToProcess->GetB(index).cols(), 0, nodeToProcess->GetB(index).cols() - 1).array(),
-                                          nodeToProcess->GetB(index).rows()) + colIndex ;
+            ArrayXi rowIndices = rep(uvec::LinSpaced(nodeToProcess->GetUpred(index).rows(), 0, nodeToProcess->GetUpred(index).rows() - 1).array(),
+                                     nodeToProcess->GetUpred(index).cols()) + rowIndex  ;
+            ArrayXi colIndices = rep_each(uvec::LinSpaced(nodeToProcess->GetUpred(index).cols(), 0, nodeToProcess->GetUpred(index).cols() - 1).array(),
+                                          nodeToProcess->GetUpred(index).rows()) + colIndex ;
 
             for (uint i = 0; i < rowIndices.size(); i++) {
-              tripletList.push_back(Triplet(rowIndices(i), colIndices(i) + m_dataset.covariateValues.cols() + 1, nodeToProcess->GetB(index)(rowIndices(i) - rowIndex, colIndices(i) - colIndex))) ;
+              tripletList.push_back(Triplet(rowIndices(i), colIndices(i) + m_predictData.covariateValues.cols() + 1, nodeToProcess->GetUpred(index)(rowIndices(i) - rowIndex, colIndices(i) - colIndex))) ;
             }
             index += 1 ;
           }
