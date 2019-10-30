@@ -338,8 +338,6 @@ void AugTree::createHmatrix() {
 
   ArrayXi FmatObsOrder = ArrayXi::Zero(numObs) ;
   int rowIndex = 0 ;
-  int colIndex = 0 ;
-
   std::vector<ArrayXi> ancestorIdsVec(numTips) ;
 
   for (uint i = 0 ; i < tipNodes.size(); i++) {
@@ -363,41 +361,48 @@ void AugTree::createHmatrix() {
     return firstSmallerThanSecond ;
   }) ; // This is supposed to reorder the tip nodes in such a way that the F matrix has contiguous blocks.
 
-  for (auto & nodeToProcess : tipNodes) {
-    ArrayXi observationIndices = nodeToProcess->GetObsInNode() ;
+  ArrayXi colIndexAtEachRes = ArrayXi::Zero(m_M + 1);
 
-    bool test =  observationIndices.size() > 0 ;
-
-    if (test) {
-      FmatObsOrder.segment(rowIndex, observationIndices.size()) = observationIndices ;
-
-      std::vector<TreeNode *> brickList = nodeToProcess->getAncestors() ;
-
-      ArrayXi brickAncestors(brickList.size()) ;
-      for (uint i = 0 ; i < brickAncestors.size() ; i++) {
-        brickAncestors(i) = brickList.at(i)->GetNodeId() ;
+  for (auto & node : m_vertexVector) {
+    if (node->GetDepth() < m_M) {
+      for (uint i = node->GetDepth() + 1; i <= m_M; i++) {
+        colIndexAtEachRes(i) += node->GetNumKnots() ;
       }
-      uint index = 0 ;
-      for (uint nodeIndex = 0; nodeIndex < m_vertexVector.size() ; nodeIndex++) {
-        int nodePos = GetNodePos(nodeIndex) ;
-        if (index < brickAncestors.size()) {
-          if (nodeIndex == brickAncestors(index)) {
-            ArrayXi rowIndices = rep(uvec::LinSpaced(nodeToProcess->GetB(index).rows(), 0, nodeToProcess->GetB(index).rows() - 1).array(),
-                                  nodeToProcess->GetB(index).cols()) + rowIndex  ;
-            ArrayXi colIndices = rep_each(uvec::LinSpaced(nodeToProcess->GetB(index).cols(), 0, nodeToProcess->GetB(index).cols() - 1).array(),
-                                       nodeToProcess->GetB(index).rows()) + colIndex ;
-
-            for (uint i = 0; i < rowIndices.size(); i++) {
-              tripletList.push_back(Triplet(rowIndices(i), colIndices(i) + m_dataset.covariateValues.cols() + 1, nodeToProcess->GetB(index)(rowIndices(i) - rowIndex, colIndices(i) - colIndex))) ;
-            }
-            index += 1 ;
-          }
-        }
-        colIndex += m_vertexVector.at(nodePos)->GetNumKnots() ;
-      }
-      colIndex = 0 ;
-      rowIndex += observationIndices.size() ; // The B matrices should have as many rows as observations in the node...
     }
+  } // Convoluted way of getting cumsum(c(0, Num knots at resolutions 0 to M-1))
+
+  colIndexAtEachRes += (m_dataset.covariateValues.cols() + 1) ; // Covariate columns go before, the +1 is for the intercept.
+  std::vector<TreeNode *> previousBrickAncestors = tipNodes.at(0)->getAncestors() ;
+
+  for (auto & nodeToProcess : tipNodes) {
+
+    if (nodeToProcess->GetObsInNode().size() == 0 ) {
+      continue ;
+    }
+
+    // The idea behind this section of the code is that the column index for producing the section
+    // of the H matrix for a tip node at any given depth i should only change when a different ancestor for the
+    // tip node is reached. The hierarchical structure of the tree explains this.
+    for (uint i = 1 ; i <= m_M; i++) { // The root node is shared by all tips, hence the 1.
+      if (previousBrickAncestors.at(i) != nodeToProcess->getAncestors().at(i)) {
+        colIndexAtEachRes(i) += previousBrickAncestors.at(i)->GetNumKnots() ;
+      }
+    }
+    previousBrickAncestors = nodeToProcess->getAncestors() ;
+
+    FmatObsOrder.segment(rowIndex, nodeToProcess->GetObsInNode().size()) = nodeToProcess->GetObsInNode() ;
+
+    for (uint depthIndex = 0; depthIndex <= m_M; depthIndex++) {
+      ArrayXi rowIndices = rep(uvec::LinSpaced(nodeToProcess->GetB(depthIndex).rows(), 0, nodeToProcess->GetB(depthIndex).rows() - 1).array(),
+          nodeToProcess->GetB(depthIndex).cols()) + rowIndex  ;
+      ArrayXi colIndices = rep_each(uvec::LinSpaced(nodeToProcess->GetB(depthIndex).cols(), 0, nodeToProcess->GetB(depthIndex).cols() - 1).array(),
+          nodeToProcess->GetB(depthIndex).rows()) + colIndexAtEachRes(depthIndex) ;
+
+      for (uint i = 0; i < rowIndices.size(); i++) {
+        tripletList.push_back(Triplet(rowIndices(i), colIndices(i), nodeToProcess->GetB(depthIndex)(rowIndices(i) - rowIndex, colIndices(i) - colIndexAtEachRes(depthIndex)))) ;
+      }
+    }
+    rowIndex += nodeToProcess->GetObsInNode().size() ; // The B matrices should have as many rows as observations in the node...
   }
   m_obsOrderForFmat = FmatObsOrder ;
 
