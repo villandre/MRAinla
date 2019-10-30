@@ -1,5 +1,10 @@
-#include <math.h>
+// [[Rcpp::plugins(openmp)]]
+
+#ifdef _OPENMP
 #include <omp.h>
+#endif
+
+#include <math.h>
 #include <gsl/gsl_sf_gamma.h>
 #include <gsl/gsl_multimin.h>
 
@@ -63,7 +68,6 @@ AugTree::AugTree(uint & M, Array2d & lonRange, Array2d & latRange, Array2d & tim
   for (auto & i : tipNodes) {
     i->SetPredictLocations(m_predictData) ;
   }
-  // createHmatrixPred() ;
 }
 
 void AugTree::BuildTree(const uint & minObsForTimeSplit, const bool splitTime, const unsigned int numKnots0, const unsigned int J)
