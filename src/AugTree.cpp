@@ -475,10 +475,7 @@ void AugTree::updateHmatrixPred() {
 
 void AugTree::createHmatrixPred() {
   uint numObs = m_predictData.spatialCoords.rows() ;
-
-  ArrayXi FmatObsOrder = ArrayXi::Zero(numObs) ;
   uint rowIndex = 0 ;
-  uint colIndex = 0 ;
 
   std::vector<TreeNode *> tipNodes = GetTipNodes() ;
   int numTips = tipNodes.size() ;
@@ -516,43 +513,46 @@ void AugTree::createHmatrixPred() {
     }
   }
 
-  for (auto & nodeToProcess : tipNodes) {
-    ArrayXi observationIndices = nodeToProcess->GetPredIndices() ;
-    std::vector<TreeNode *> ancestorsList = nodeToProcess->getAncestors() ;
+  ArrayXi colIndexAtEachRes = ArrayXi::Zero(m_M + 1);
 
-    bool test =  observationIndices.size() > 0 ;
-
-    if (test) {
-      FmatObsOrder.segment(rowIndex, observationIndices.size()) = observationIndices ;
-
-      std::vector<TreeNode *> brickList = nodeToProcess->getAncestors() ;
-
-      ArrayXi brickAncestors(brickList.size()) ;
-      for (uint i = 0 ; i < brickAncestors.size() ; i++) {
-        brickAncestors(i) = brickList.at(i)->GetNodeId() ;
+  for (auto & node : m_vertexVector) {
+    if (node->GetDepth() < m_M) {
+      for (uint i = node->GetDepth() + 1; i <= m_M; i++) {
+        colIndexAtEachRes(i) += node->GetNumKnots() ;
       }
-      uint index = 0 ;
-
-      for (uint nodeIndex = 0; nodeIndex < m_vertexVector.size() ; nodeIndex++) {
-        int nodePos = GetNodePos(nodeIndex) ;
-        if (index < brickAncestors.size()) {
-          if (nodeIndex == brickAncestors(index)) {
-            ArrayXi rowIndices = rep(uvec::LinSpaced(nodeToProcess->GetUpred(index).rows(), 0, nodeToProcess->GetUpred(index).rows() - 1).array(),
-                                     nodeToProcess->GetUpred(index).cols()) + rowIndex  ;
-            ArrayXi colIndices = rep_each(uvec::LinSpaced(nodeToProcess->GetUpred(index).cols(), 0, nodeToProcess->GetUpred(index).cols() - 1).array(),
-                                          nodeToProcess->GetUpred(index).rows()) + colIndex ;
-
-            for (uint i = 0; i < rowIndices.size(); i++) {
-              tripletList.push_back(Triplet(rowIndices(i), colIndices(i) + m_predictData.covariateValues.cols() + 1, nodeToProcess->GetUpred(index)(rowIndices(i) - rowIndex, colIndices(i) - colIndex))) ;
-            }
-            index += 1 ;
-          }
-        }
-        colIndex += m_vertexVector.at(nodePos)->GetNumKnots() ;
-      }
-      colIndex = 0 ;
-      rowIndex += observationIndices.size() ;
     }
+  } // Convoluted way of getting cumsum(c(0, Num knots at resolutions 0 to M-1))
+
+  colIndexAtEachRes += (m_dataset.covariateValues.cols() + 1) ; // Covariate columns go before, the +1 is for the intercept.
+  std::vector<TreeNode *> previousBrickAncestors = tipNodes.at(0)->getAncestors() ;
+
+  for (auto & nodeToProcess : tipNodes) {
+
+    if (nodeToProcess->GetPredIndices().size() == 0 ) {
+      continue ;
+    }
+
+    // The idea behind this section of the code is that the column index for producing the section
+    // of the H matrix for a tip node at any given depth i should only change when a different ancestor for the
+    // tip node is reached. The hierarchical structure of the tree explains this.
+    for (uint i = 1 ; i <= m_M; i++) { // The root node is shared by all tips, hence the 1.
+      if (previousBrickAncestors.at(i) != nodeToProcess->getAncestors().at(i)) {
+        colIndexAtEachRes(i) += previousBrickAncestors.at(i)->GetNumKnots() ;
+      }
+    }
+    previousBrickAncestors = nodeToProcess->getAncestors() ;
+
+    for (uint depthIndex = 0; depthIndex <= m_M; depthIndex++) {
+      ArrayXi rowIndices = rep(uvec::LinSpaced(nodeToProcess->GetUpred(depthIndex).rows(), 0, nodeToProcess->GetUpred(depthIndex).rows() - 1).array(),
+                               nodeToProcess->GetUpred(depthIndex).cols()) + rowIndex  ;
+      ArrayXi colIndices = rep_each(uvec::LinSpaced(nodeToProcess->GetUpred(depthIndex).cols(), 0, nodeToProcess->GetUpred(depthIndex).cols() - 1).array(),
+                                    nodeToProcess->GetUpred(depthIndex).rows()) + colIndexAtEachRes(depthIndex) ;
+
+      for (uint i = 0; i < rowIndices.size(); i++) {
+        tripletList.push_back(Triplet(rowIndices(i), colIndices(i), nodeToProcess->GetUpred(depthIndex)(rowIndices(i) - rowIndex, colIndices(i) - colIndexAtEachRes(depthIndex)))) ;
+      }
+    }
+    rowIndex += nodeToProcess->GetPredIndices().size() ; // The U matrices should have as many rows as prediction locations in the node...
   }
 
   // Adding in the intercept...
@@ -560,9 +560,9 @@ void AugTree::createHmatrixPred() {
     tripletList.push_back(Triplet(i, 0, 1)) ;
   }
   // Processing other covariate values
-  for (uint rowIndex = 0 ; rowIndex < m_predictData.covariateValues.rows() ; rowIndex++) {
-    for(uint colIndex = 0 ; colIndex < m_predictData.covariateValues.cols() ; colIndex++) {
-      tripletList.push_back(Triplet(rowIndex, colIndex + 1, m_predictData.covariateValues(FmatObsOrder(rowIndex), colIndex))) ;
+  for (uint rowInd = 0 ; rowInd < m_predictData.covariateValues.rows() ; rowInd++) {
+    for(uint colInd = 0 ; colInd < m_predictData.covariateValues.cols() ; colInd++) {
+      tripletList.push_back(Triplet(rowInd, colInd + 1, m_predictData.covariateValues(m_obsOrderForHpredMat(rowInd), colInd))) ;
     }
   }
 
