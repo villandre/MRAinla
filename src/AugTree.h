@@ -31,13 +31,12 @@ struct maternGammaPriorParas : public maternGammaPriorParasWithoutScale{
 };
 
 
-
 namespace MRAinla {
 
 class AugTree
 {
 public:
-  AugTree(uint &, Eigen::Array2d &, Eigen::Array2d &, Eigen::Array2d &, vec &, Eigen::ArrayXXd &, Eigen::ArrayXd &, Eigen::ArrayXXd &, Eigen::ArrayXXd &, Eigen::ArrayXd &, uint &, unsigned long int &, Eigen::ArrayXXd &, const bool, const unsigned int, const unsigned int) ;
+  AugTree(uint &, Eigen::Array2d &, Eigen::Array2d &, Eigen::Array2d &, vec &, Eigen::ArrayXXd &, Eigen::ArrayXd &, Eigen::ArrayXXd &, Eigen::ArrayXXd &, Eigen::ArrayXd &, uint &, unsigned long int &, Eigen::ArrayXXd &, const bool, const unsigned int, const unsigned int, const std::string &) ;
 
   std::vector<TreeNode *> GetVertexVector() {return m_vertexVector ;} ;
 
@@ -148,6 +147,7 @@ private:
   bool m_matern{ true } ;
   double m_spaceNuggetSD{ 1e-6 };
   double m_timeNuggetSD{ 1e-6 } ;
+  std::string m_distMethod ;
 
   int m_M{ 0 } ;
   int m_numTips{ 0 } ;

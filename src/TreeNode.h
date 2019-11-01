@@ -101,26 +101,26 @@ struct inputdata : public spatialcoor {
 };
 
 struct dimensions {
-  Eigen::Array2d longitude ;
   Eigen::Array2d latitude ;
+  Eigen::Array2d longitude ;
   Eigen::Array2d time ;
 
   void print() {
-    Rcpp::Rcout << "Longitude range: \n" << longitude << "\n\n" ;
     Rcpp::Rcout << "Latitude range: \n" << latitude << "\n\n" ;
+    Rcpp::Rcout << "Longitude range: \n" << longitude << "\n\n" ;
     Rcpp::Rcout << "Time range: \n" << time << "\n\n" ;
   }
 
   dimensions() {
-    longitude = Eigen::Array2d::Zero(2) ;
     latitude = Eigen::Array2d::Zero(2) ;
+    longitude = Eigen::Array2d::Zero(2) ;
     time = Eigen::Array2d::Zero(2) ;
   } ;
 
-  dimensions(Eigen::ArrayXd f_lon, Eigen::ArrayXd f_lat, Eigen::ArrayXd f_time)
-    : longitude(f_lon), latitude(f_lat), time(f_time) {
-    uint firstCompare = (f_lon.size() == f_lat.size()) ;
-    uint secondCompare = (f_lat.size() == f_time.size()) ;
+  dimensions(Eigen::ArrayXd f_lat, Eigen::ArrayXd f_lon, Eigen::ArrayXd f_time)
+    : latitude(f_lat), longitude(f_lon), time(f_time) {
+    uint firstCompare = (f_lat.size() == f_time.size()) ;
+    uint secondCompare = (f_lon.size() == f_lat.size()) ;
     if ((firstCompare * secondCompare) == 0) {
       throw Rcpp::exception("Incompatible data specifications. \n") ;
     }
@@ -146,14 +146,9 @@ public:
   virtual void DeriveOmega(const vec &)=0 ;
   virtual void DeriveU(const vec &)=0 ;
   virtual void DeriveD()=0 ;
-  virtual void ComputeWmat(const maternVec &, const maternVec &, const double &, const bool, const double &, const double &)=0 ;
-  // virtual void ComputeParasEtaDeltaTilde(const spatialcoor &, const inputdata &, const vec &)=0 ;
+  virtual void ComputeWmat(const maternVec &, const maternVec &, const double &, const bool, const double &, const double &, const std::string &)=0 ;
   virtual std::vector<std::vector<mat>> & GetAlist() = 0;
   virtual mat & GetKtilde() = 0;
-  // virtual void deriveBtilde(const spatialcoor & )=0 ;
-  // virtual void computeBpred(const spatialcoor &, const vec &)=0 ;
-  // virtual GaussDistParas CombineEtaDelta(const inputdata &, const vec &)=0 ;
-  // virtual GaussDistParas GetEtaDelta() const =0 ;
   virtual mat & GetB(const uint & l)=0 ;
   virtual mat GetSigma()=0 ;
   virtual mat & GetKmatrix()=0 ;
@@ -166,7 +161,7 @@ public:
   virtual std::vector<mat> & GetUmatList()=0 ;
   virtual void SetPredictLocations(const inputdata &)=0 ;
   virtual Eigen::ArrayXi & GetPredIndices()=0 ;
-  virtual void computeUpred(const maternVec &, const maternVec &, const double &, const spatialcoor &, const bool, const double &, const double &)=0 ;
+  virtual void computeUpred(const maternVec &, const maternVec &, const double &, const spatialcoor &, const bool, const double &, const double &, const std::string &)=0 ;
 
   virtual void genRandomKnots(spatialcoor &, const uint &, const gsl_rng *) = 0;
 
@@ -226,12 +221,12 @@ protected:
   TreeNode * m_parent ;
   Eigen::ArrayXi m_obsInNode ;
   int m_depth{ -1 } ;
-  dimensions m_dimensions ; // First dimension is longitude, second is latitude, last is time.
-  spatialcoor m_knotsCoor ;  // First element is spatial coordinates (longitude, latitude), second is time.
+  dimensions m_dimensions ; // First dimension is latitude, second is longitude, last is time.
+  spatialcoor m_knotsCoor ;  // First element is spatial coordinates (latitude, longitude), second is time.
   int m_nodeId{ -1 } ;
 
   std::vector<std::vector<mat>>& GetAtildeList() {return m_AtildeList ;}
-  void baseComputeWmat(const maternVec &, const maternVec &, const double &, const bool, const double &, const double &) ;
+  void baseComputeWmat(const maternVec &, const maternVec &, const double &, const bool, const double &, const double &, const std::string &) ;
   void SetParent(TreeNode * vertexParentPoint) {m_parent = vertexParentPoint ;}
 
   std::vector<std::vector<mat>> m_AtildeList ;
@@ -243,7 +238,7 @@ protected:
   double SqExpCovFunction(const Spatiotemprange &, const double &, const double &, const double &, const double &) ;
   double MaternCovFunction(const Spatiotemprange &, const maternVec &, const maternVec &, const double &, const double &, const double &) ;
 
-  mat computeCovMat(const spatialcoor &, const spatialcoor &, const maternVec &, const maternVec &, const double &, const bool, const double &, const double &) ;
+  mat computeCovMat(const spatialcoor &, const spatialcoor &, const maternVec &, const maternVec &, const double &, const bool, const double &, const double &, const std::string &) ;
   void baseInitialise(const dimensions & dims, const uint & depth, TreeNode * parent, const inputdata & dataset) {
     m_dimensions = dims;
     m_depth = depth ;
@@ -255,7 +250,6 @@ protected:
     }
     m_omegaTilde.resize(m_depth + 1) ;
   }
-  // mat ComputeCovMatrix(const vec &) ;
 
   // For prediction
   void computeBknots() ;

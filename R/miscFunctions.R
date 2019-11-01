@@ -1,6 +1,8 @@
-SimulateSpacetimeData <- function(numObsPerTimeSlice = 225, covFunction, lonRange, latRange, timeValuesInPOSIXct, covariateGenerationFctList, errorSD, distFun = dist, FEvalues) {
+# spaceDistFun must take as an argument a matrix or data.frame with a column named latitude and another called longitude.
+
+SimulateSpacetimeData <- function(numObsPerTimeSlice = 225, covFunction, latRange, lonRange,  timeValuesInPOSIXct, covariateGenerationFctList, errorSD, spaceDistFun, timeDistFun, FEvalues) {
   numSlotsPerRow <- ceiling(sqrt(numObsPerTimeSlice))
-  slotCoordinates <- sapply(list(longitude = lonRange, latitude = latRange), FUN = function(x) {
+  slotCoordinates <- sapply(list(latitude = latRange, longitude = lonRange), FUN = function(x) {
     width <- abs(diff(x)/numSlotsPerRow)
     seq(from = min(x) + width/2, to = max(x) - width/2, length.out = numSlotsPerRow)
   }, USE.NAMES = TRUE)
@@ -17,21 +19,21 @@ SimulateSpacetimeData <- function(numObsPerTimeSlice = 225, covFunction, lonRang
   coordinates$time <- rep(timeValuesInPOSIXct, each = numObsPerTimeSlice)
 
   covariateMatrix <- cbind(1, do.call("cbind", lapply(covariateGenerationFctList, function(x) {
-    covariateValues <- x(coordinates[, c("longitude", "latitude")], coordinates[, "time"])
+    covariateValues <- x(coordinates[, c("latitude", "longitude")], coordinates[, "time"])
     if (is.null(dim(covariateValues))) {
       dim(covariateValues) <- c(length(covariateValues), 1)
     }
     covariateValues
   })))
 
-  spatialDistMatrix <- dist(coordinates[, c("longitude", "latitude")])
-  timeDistMatrix <- dist(coordinates[, "time"])/(3600*24)
+  spatialDistMatrix <- spaceDistFun(coordinates[, c("latitude", "longitude")])
+  timeDistMatrix <- timeDistFun(coordinates[, "time"])
   covarianceMat <- covFunction(spatialDistMatrix, timeDistMatrix)
   meanVector <- drop(covariateMatrix %*% FEvalues)
   fieldValues <- drop(mvtnorm::rmvnorm(n = 1, mean = meanVector, sigma = covarianceMat)) + rnorm(n = length(meanVector), mean = 0, sd = errorSD)
   dataForObject <- cbind(y = fieldValues, as.data.frame(covariateMatrix[, -1]))
   colnames(dataForObject) <- c("y", paste("Covariate", 1:(length(FEvalues) - 1), sep = ""))
-  spacetimeObj <- spacetime::STIDF(sp = sp::SpatialPoints(coordinates[, c("longitude", "latitude")]), data = dataForObject, time = coordinates$time)
+  spacetimeObj <- spacetime::STIDF(sp = sp::SpatialPoints(coordinates[, c("latitude", "longitude")]), data = dataForObject, time = coordinates$time)
   spacetimeObj
 }
 
@@ -44,13 +46,13 @@ plotOutput <- function(inlaMRAoutput, trainingData, testData, realTestValues = N
     control$rasterNrow <- 50
     control$rasterNcol <- 50
   }
-  lonLatMinMax <- lapply(1:2, function(colIndex) {
+  latLonMinMax <- lapply(1:2, function(colIndex) {
     sapply(list(min, max), function(summaryFunction) {
       summaryFunction(testData@sp@coords[ , colIndex], trainingData@sp@coords[ , colIndex])
     })
   })
 
-  landRaster <- raster::raster(nrows = control$rasterNrow, ncols = control$rasterNcol, xmn = lonLatMinMax[[1]][[1]], xmx = lonLatMinMax[[1]][[2]], ymn = lonLatMinMax[[2]][[1]], ymx = lonLatMinMax[[2]][[2]])
+  landRaster <- raster::raster(nrows = control$rasterNrow, ncols = control$rasterNcol, xmn = latLonMinMax[[1]][[1]], xmx = latLonMinMax[[1]][[2]], ymn = latLonMinMax[[2]][[1]], ymx = latLonMinMax[[2]][[2]])
   uniqueTimeValues <- unique(c(time(trainingData), time(testData)))
 
   rasterizeTrainingAndJoint <- function(timePoint) {

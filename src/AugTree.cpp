@@ -38,12 +38,28 @@ struct MVN{
   }
 };
 
-AugTree::AugTree(uint & M, Array2d & lonRange, Array2d & latRange, Array2d & timeRange, vec & observations, ArrayXXd & obsSp, ArrayXd & obsTime, ArrayXXd & predCovariates, ArrayXXd & predSp, ArrayXd & predTime, uint & minObsForTimeSplit, unsigned long int & seed, ArrayXXd & covariates, const bool splitTime, const unsigned int numKnotsRes0, const unsigned int J)
-  : m_M(M)
+AugTree::AugTree(uint & M,
+                 Array2d & latRange,
+                 Array2d & lonRange,
+                 Array2d & timeRange,
+                 vec & observations,
+                 ArrayXXd & obsSp,
+                 ArrayXd & obsTime,
+                 ArrayXXd & predCovariates,
+                 ArrayXXd & predSp,
+                 ArrayXd & predTime,
+                 uint & minObsForTimeSplit,
+                 unsigned long int & seed,
+                 ArrayXXd & covariates,
+                 const bool splitTime,
+                 const unsigned int numKnotsRes0,
+                 const unsigned int J,
+                 const string & distMethod)
+  : m_M(M), m_distMethod(distMethod)
 {
   m_GammaParasSet = false ;
   m_dataset = inputdata(observations, obsSp, obsTime, covariates) ;
-  m_mapDimensions = dimensions(lonRange, latRange, timeRange) ;
+  m_mapDimensions = dimensions(latRange, lonRange, timeRange) ;
   m_randomNumGenerator = gsl_rng_alloc(gsl_rng_taus) ;
   SetPredictData(predSp, predTime, predCovariates) ;
 
@@ -98,7 +114,7 @@ void AugTree::numberNodes() {
   }
 }
 
-// In this version, we first split the longitude, then the latitude, and finally time.
+// In this version, we first split the latitude, then the longitude, and finally time.
 // We make sure that splits don't result in empty regions
 void AugTree::createLevels(TreeNode * parent, const uint & numObsForTimeSplit, const bool splitTime) {
   ArrayXi obsForMedian = parent->GetObsInNode() ;
@@ -110,22 +126,22 @@ void AugTree::createLevels(TreeNode * parent, const uint & numObsForTimeSplit, c
     throw Rcpp::exception("Cannot split empty region or region with only one observation.\n") ;
   }
 
-  // Handling longitude
+  // Handling latitude
 
   ArrayXi elementsInChild = ArrayXi::LinSpaced(obsForMedian.size(), 0, obsForMedian.size()-1) ;
   ArrayXd column = m_dataset.spatialCoords.col(0) ;
   ArrayXd elementsForMedian = elem(column, obsForMedian) ;
   double colMedian = median(elementsForMedian) ;
-  ArrayXd updatedLongitude(2) ;
-  updatedLongitude(0) = childDimensions.at(0).longitude(0) ;
-  updatedLongitude(1) = colMedian ;
-  ArrayXd newChildLongitude(2) ;
-  newChildLongitude(0) = colMedian ;
-  newChildLongitude(1) = childDimensions.at(0).longitude(1) ;
+  ArrayXd updatedLatitude(2) ;
+  updatedLatitude(0) = childDimensions.at(0).latitude(0) ;
+  updatedLatitude(1) = colMedian ;
+  ArrayXd newChildLatitude(2) ;
+  newChildLatitude(0) = colMedian ;
+  newChildLatitude(1) = childDimensions.at(0).latitude(1) ;
   dimensions newDimensions = childDimensions.at(0) ;
-  newDimensions.longitude = newChildLongitude ;
+  newDimensions.latitude = newChildLatitude ;
   childDimensions.push_back(newDimensions) ;
-  childDimensions.at(0).longitude = updatedLongitude ;
+  childDimensions.at(0).latitude = updatedLatitude ;
   ArrayXi greaterElements = find(elementsForMedian > colMedian) ; // In deriveObsInNode, the checks are <=. It follows that observations on the right and upper boundaries of a zone are included.
   ArrayXi updateIndices = elem(elementsInChild, greaterElements) ;
   for (uint innerIndex = 0; innerIndex < updateIndices.size(); innerIndex++) {
@@ -134,23 +150,23 @@ void AugTree::createLevels(TreeNode * parent, const uint & numObsForTimeSplit, c
 
   uint newChildIndex = 2 ;
 
-  // Handling latitude
+  // Handling longitude
 
   for (int j = 0 ; j < 2; j++) {
     ArrayXd column = m_dataset.spatialCoords.col(1) ;
     ArrayXd subColumn = elem(column, obsForMedian) ;
     ArrayXi elementsInChild = find(childMembership == j) ;
     double colMedian = median(elem(subColumn, elementsInChild)) ;
-    ArrayXd updatedLatitude(2) ;
-    updatedLatitude(0) = childDimensions.at(j).latitude(0);
-    updatedLatitude(1) = colMedian ;
-    ArrayXd newChildLatitude(2) ;
-    newChildLatitude(0) = colMedian ;
-    newChildLatitude(1) = childDimensions.at(j).latitude(1) ;
+    ArrayXd updatedLongitude(2) ;
+    updatedLongitude(0) = childDimensions.at(j).longitude(0);
+    updatedLongitude(1) = colMedian ;
+    ArrayXd newChildLongitude(2) ;
+    newChildLongitude(0) = colMedian ;
+    newChildLongitude(1) = childDimensions.at(j).longitude(1) ;
     dimensions newDimensions = childDimensions.at(j) ;
-    newDimensions.latitude = newChildLatitude ;
+    newDimensions.longitude = newChildLongitude ;
     childDimensions.push_back(newDimensions) ;
-    childDimensions.at(j).latitude = updatedLatitude ;
+    childDimensions.at(j).longitude = updatedLongitude ;
     ArrayXi greaterElements = find(elem(subColumn, elementsInChild).array() > colMedian) ;
     ArrayXi updateIndices = elem(elementsInChild, greaterElements) ;
     for (uint innerIndex = 0; innerIndex < updateIndices.size(); innerIndex++) {
@@ -231,7 +247,7 @@ void AugTree::generateKnots(TreeNode * node, const unsigned int numKnotsRes0, co
 }
 
 void AugTree::computeWmats() {
-  m_vertexVector.at(0)->ComputeWmat(m_MRAcovParasSpace, m_MRAcovParasTime, m_spacetimeScaling, m_matern, m_spaceNuggetSD, m_timeNuggetSD) ;
+  m_vertexVector.at(0)->ComputeWmat(m_MRAcovParasSpace, m_MRAcovParasTime, m_spacetimeScaling, m_matern, m_spaceNuggetSD, m_timeNuggetSD, m_distMethod) ;
 
   for (uint level = 1; level <= m_M; level++) {
     std::vector<TreeNode *> levelNodes = GetLevelNodes(level) ;
@@ -241,7 +257,7 @@ void AugTree::computeWmats() {
 
     for (std::vector<TreeNode *>::iterator it = levelNodes.begin(); it < levelNodes.end(); it++)
     {
-      (*it)->ComputeWmat(m_MRAcovParasSpace, m_MRAcovParasTime, m_spacetimeScaling, m_matern, m_spaceNuggetSD, m_timeNuggetSD) ;
+      (*it)->ComputeWmat(m_MRAcovParasSpace, m_MRAcovParasTime, m_spacetimeScaling, m_matern, m_spaceNuggetSD, m_timeNuggetSD, m_distMethod) ;
     }
   }
 }
@@ -718,7 +734,7 @@ void AugTree::ComputeHpred() {
   for (auto & i : tipNodes) {
     ArrayXi predictionsInLeaf = i->GetPredIndices() ;
     if (predictionsInLeaf.size() > 0) {
-      i->computeUpred(m_MRAcovParasSpace, m_MRAcovParasTime, m_spacetimeScaling, m_predictData, m_matern, m_spaceNuggetSD, m_timeNuggetSD) ;
+      i->computeUpred(m_MRAcovParasSpace, m_MRAcovParasTime, m_spacetimeScaling, m_predictData, m_matern, m_spaceNuggetSD, m_timeNuggetSD, m_distMethod) ;
     }
   }
 

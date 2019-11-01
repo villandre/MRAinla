@@ -1,4 +1,5 @@
 #include<RcppEigen.h>
+#include<string.h>
 
 #ifndef HELPER_H
 #define HELPER_H
@@ -13,8 +14,8 @@ struct Spatiotemprange{
 
 // To prevent multiple definitions, I DECLARE the function in the header only. I then define them
 // in the cpp file.
-Spatiotemprange sptimeDistance(const Eigen::ArrayXd & spCoor1, const double & time1, const Eigen::ArrayXd & spCoor2,
-                               const double & time2) ;
+Spatiotemprange sptimeDistance(const Eigen::ArrayXd &, const double &, const Eigen::ArrayXd &,
+                               const double &, const std::string &) ;
 
 Eigen::SparseMatrix<double> createBlockMatrix(std::vector<Eigen::MatrixXd *>) ;
 
@@ -132,5 +133,9 @@ Eigen::Array<typename Derived::Scalar, Eigen::Dynamic, Eigen::Dynamic> rows(cons
   Eigen::Array<typename Derived::Scalar, Eigen::Dynamic, Eigen::Dynamic> resultTrans = cols(matrixToSubset.transpose(), indexVector) ;
   return resultTrans.transpose() ;
 }
+
+double deg2rad(double) ;
+double haversine_distance(double, double, double, double) ;
+double vincenty_distance(double, double, double, double) ;
 
 #endif /* HELPER_H */

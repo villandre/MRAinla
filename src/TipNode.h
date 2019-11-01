@@ -41,9 +41,8 @@ public:
     m_d = val ;
   }
 
-  void ComputeWmat(const maternVec & covParasSp, const maternVec & covParasTime, const double & scaling, const bool matern, const double & spaceNuggetSD, const double & timeNuggetSD) {
-    baseComputeWmat(covParasSp, covParasTime, scaling, matern, spaceNuggetSD, timeNuggetSD) ;
-    // m_Wlist.at(m_depth).triangularView<Eigen::Upper>() = m_Wlist.at(m_depth).triangularView<Eigen::Lower>().eval() ; // Will this cause aliasing?
+  void ComputeWmat(const maternVec & covParasSp, const maternVec & covParasTime, const double & scaling, const bool matern, const double & spaceNuggetSD, const double & timeNuggetSD, const std::string & distMethod) {
+    baseComputeWmat(covParasSp, covParasTime, scaling, matern, spaceNuggetSD, timeNuggetSD, distMethod) ;
     m_SigmaInverse = GetSigma().selfadjointView<Eigen::Upper>().ldlt().solve(Eigen::MatrixXd::Identity(GetSigma().rows(), GetSigma().cols())) ;
   }
 
@@ -84,7 +83,7 @@ public:
 
   void SetPredictLocations(const inputdata &) ;
   Eigen::ArrayXi & GetPredIndices() { return m_predsInNode ;}
-  void computeUpred(const maternVec &, const maternVec &, const double &, const spatialcoor &, const bool, const double &, const double &) ;
+  void computeUpred(const maternVec &, const maternVec &, const double &, const spatialcoor &, const bool, const double &, const double &, const std::string &) ;
 
   void genRandomKnots(spatialcoor & dataCoor, const uint & numKnots, const gsl_rng * RNG) {
 

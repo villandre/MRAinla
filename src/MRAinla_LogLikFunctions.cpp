@@ -9,21 +9,22 @@
 using namespace Eigen;
 using namespace Rcpp;
 using namespace MRAinla;
+using namespace std;
 
 // [[Rcpp::export]]
 
 List setupGridCpp(NumericVector responseValues, NumericMatrix spCoords, NumericMatrix predCoords,
                   NumericVector obsTime,  NumericVector predTime, NumericMatrix covariateMatrix,
                   NumericMatrix predCovariateMatrix, uint M,
-                  NumericVector lonRange, NumericVector latRange, NumericVector timeRange,
+                  NumericVector latRange, NumericVector lonRange, NumericVector timeRange,
                   uint randomSeed, uint cutForTimeSplit, bool splitTime,
-                  int numKnotsRes0, int J)
+                  int numKnotsRes0, int J, String distMethod)
 {
-  ArrayXd lonRinit = as<ArrayXd>(lonRange) ;
   ArrayXd latRinit = as<ArrayXd>(latRange) ;
+  ArrayXd lonRinit = as<ArrayXd>(lonRange) ;
   ArrayXd timeRinit = as<ArrayXd>(timeRange) ;
-  Array2d lonR = lonRinit.segment(0,2) ;
   Array2d latR = latRinit.segment(0,2) ;
+  Array2d lonR = lonRinit.segment(0,2) ;
   Array2d timeR = timeRinit.segment(0,2) ;
   vec response = as<vec>(responseValues) ;
   ArrayXXd sp = as<ArrayXXd>(spCoords) ;
@@ -31,12 +32,13 @@ List setupGridCpp(NumericVector responseValues, NumericMatrix spCoords, NumericM
   ArrayXd predTimeVec = as<ArrayXd>(predTime) ;
   ArrayXXd predCovariates = as<ArrayXXd>(predCovariateMatrix) ;
   ArrayXd time = as<ArrayXd>(obsTime) ;
+  string dMethod = as<std::string>(Rcpp::wrap(distMethod)) ;
 
   unsigned long int seedForRNG = randomSeed ;
 
   ArrayXXd covariateMat = as<ArrayXXd>(covariateMatrix) ;
 
-  AugTree * MRAgrid = new AugTree(M, lonR, latR, timeR, response, sp, time, predCovariates, predSp, predTimeVec, cutForTimeSplit, seedForRNG, covariateMat, splitTime, numKnotsRes0, J) ;
+  AugTree * MRAgrid = new AugTree(M, latR, lonR, timeR, response, sp, time, predCovariates, predSp, predTimeVec, cutForTimeSplit, seedForRNG, covariateMat, splitTime, numKnotsRes0, J, dMethod) ;
 
   XPtr<AugTree> p(MRAgrid, false) ; // Disabled automatic garbage collection.
 
@@ -48,8 +50,8 @@ List setupGridCpp(NumericVector responseValues, NumericMatrix spCoords, NumericM
 double LogJointHyperMarginalToWrap(SEXP treePointer, Rcpp::List MRAhyperparas,
          double fixedEffSD, double errorSD, Rcpp::List MRAcovParasGammaAlphaBeta,
          Rcpp::NumericVector FEmuVec, NumericVector fixedEffGammaAlphaBeta,
-         NumericVector errorGammaAlphaBeta, bool matern, double spaceNuggetSD, double timeNuggetSD,
-         bool recordFullConditional) {
+         NumericVector errorGammaAlphaBeta, bool matern, double spaceNuggetSD,
+         double timeNuggetSD, bool recordFullConditional) {
   mat posteriorMatrix ;
   double outputValue = 0 ;
 
