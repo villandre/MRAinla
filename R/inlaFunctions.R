@@ -32,20 +32,20 @@
 
 MRA_INLA <- function(spacetimeData, errorSDstart, fixedEffSDstart, MRAhyperparasStart, FEmuVec, predictionData = NULL, fixedEffGammaAlphaBeta, errorGammaAlphaBeta,  MRAcovParasGammaAlphaBeta, maximiseOnly = FALSE, control) {
   defaultControl <- list(M = 1, randomSeed = 24,  cutForTimeSplit = 400, maternCovariance = TRUE, nuggetSD = 0.00001, varyFixedEffSD = FALSE, varyMaternSmoothness = FALSE, varyErrorSD = TRUE, splitTime = FALSE, numKnotsRes0 = 20L, J = 4L, numValuesForIS = 200, numThreads = 1, numIterOptim = 200L, distMethod = "haversine")
-  if (length(position <- grep(colnames(spacetimeData@sp@coords), pattern = "lat")) >= 1) {
+  if (length(position <- grep(colnames(spacetimeData@sp@coords), pattern = "lon")) >= 1) {
     colnames(spacetimeData@sp@coords)[[position[[1]]]] <- "x"
     if (!is.null(predictionData)) {
       colnames(predictionData@sp@coords)[[position[[1]]]] <- "x"
     }
   }
-  if (length(position <- grep(colnames(spacetimeData@sp@coords), pattern = "lon")) >= 1) {
+  if (length(position <- grep(colnames(spacetimeData@sp@coords), pattern = "lat")) >= 1) {
     colnames(spacetimeData@sp@coords)[[position[[1]]]] <- "y"
     if (!is.null(predictionData)) {
       colnames(predictionData@sp@coords)[[position[[1]]]] <- "y"
     }
   }
 
-  coordRanges <- mapply(dimName = c("latRange", "lonRange", "timeRange"), code = c("x", "y", "time"), function(dimName, code) {
+  coordRanges <- mapply(dimName = c("lonRange", "latRange", "timeRange"), code = c("x", "y", "time"), function(dimName, code) {
     predCoordinates <- c()
     if (code != "time") {
       bufferSize <- 0.01
@@ -92,7 +92,7 @@ MRA_INLA <- function(spacetimeData, errorSDstart, fixedEffSDstart, MRAhyperparas
 
   covariateMatrix <- as.matrix(spacetimeData@data[, -1, drop = FALSE])
   gridPointers <- lapply(1:control$numThreads, function(x) {
-    setupGridCpp(responseValues = spacetimeData@data[, 1], spCoords = dataCoordinates, predCoords = predCoordinates, obsTime = timeValues, predTime = predTime, covariateMatrix = covariateMatrix, predCovariateMatrix = predCovariates, M = control$M, latRange = control$latRange, lonRange = control$lonRange, timeRange = timeRangeReshaped, randomSeed = control$randomSeed, cutForTimeSplit = control$cutForTimeSplit, splitTime = control$splitTime, numKnotsRes0 = control$numKnotsRes0, J = control$J, distMethod = control$distMethod)$gridPointer
+    setupGridCpp(responseValues = spacetimeData@data[, 1], spCoords = dataCoordinates, predCoords = predCoordinates, obsTime = timeValues, predTime = predTime, covariateMatrix = covariateMatrix, predCovariateMatrix = predCovariates, M = control$M, lonRange = control$lonRange, latRange = control$latRange, timeRange = timeRangeReshaped, randomSeed = control$randomSeed, cutForTimeSplit = control$cutForTimeSplit, splitTime = control$splitTime, numKnotsRes0 = control$numKnotsRes0, J = control$J, distMethod = control$distMethod)$gridPointer
   })
 
   # First we compute values relating to the hyperprior marginal distribution...
@@ -178,6 +178,8 @@ obtainGridValues <- function(gridPointers, xStartValues, control, fixedEffSDstar
   names(upperBound) <- names(xStartValues)
   upperBound <- replace(upperBound, grep(names(upperBound), pattern = "mooth"), log(50)) # This is to avoid an overflow in the computation of the Matern covariance, which for some reason does not tolerate very high smoothness values.
   upperBound <- replace(upperBound, grep(names(upperBound), pattern = "scale"), log(3000)) # This limits the scaling factor to exp(15) in the optimisation. This is to prevent computational issues in the sparse matrix inversion scheme.
+  upperBound <- replace(upperBound, grep(names(upperBound), pattern = "spRho"), log(1e5)) # This limits the spatial rho to 100,000 which would still make points 5,000 km apart have a correlation of 0.9964!
+  upperBound <- replace(upperBound, grep(names(upperBound), pattern = "timeRho"), log(1e5))
   cat("Optimising... \n")
   if (!tryCatch(file.exists(control$fileToSaveOptOutput), error = function(e) FALSE)) { # The tryCatch is necessary to ensure that an error does not occur if control$fileToSaveOptOutput is NULL. If it is undefined, we want the optimisation to take place.
     opt <- nloptr::lbfgs(x0 = log(xStartValues), lower = rep(-10, length(xStartValues)), upper = upperBound, fn = funForOptim, gr = gradForOptim, control = list(xtol_rel = 1e-3, maxeval = control$numIterOptim), envirToSaveValues = storageEnvir)

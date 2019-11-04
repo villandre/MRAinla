@@ -101,26 +101,26 @@ struct inputdata : public spatialcoor {
 };
 
 struct dimensions {
-  Eigen::Array2d latitude ;
   Eigen::Array2d longitude ;
+  Eigen::Array2d latitude ;
   Eigen::Array2d time ;
 
   void print() {
-    Rcpp::Rcout << "Latitude range: \n" << latitude << "\n\n" ;
     Rcpp::Rcout << "Longitude range: \n" << longitude << "\n\n" ;
+    Rcpp::Rcout << "Latitude range: \n" << latitude << "\n\n" ;
     Rcpp::Rcout << "Time range: \n" << time << "\n\n" ;
   }
 
   dimensions() {
-    latitude = Eigen::Array2d::Zero(2) ;
     longitude = Eigen::Array2d::Zero(2) ;
+    latitude = Eigen::Array2d::Zero(2) ;
     time = Eigen::Array2d::Zero(2) ;
   } ;
 
-  dimensions(Eigen::ArrayXd f_lat, Eigen::ArrayXd f_lon, Eigen::ArrayXd f_time)
-    : latitude(f_lat), longitude(f_lon), time(f_time) {
-    uint firstCompare = (f_lat.size() == f_time.size()) ;
-    uint secondCompare = (f_lon.size() == f_lat.size()) ;
+  dimensions(Eigen::ArrayXd f_lon, Eigen::ArrayXd f_lat, Eigen::ArrayXd f_time)
+    : longitude(f_lon), latitude(f_lat), time(f_time) {
+    uint firstCompare = (f_lon.size() == f_lat.size()) ;
+    uint secondCompare = (f_lat.size() == f_time.size()) ;
     if ((firstCompare * secondCompare) == 0) {
       throw Rcpp::exception("Incompatible data specifications. \n") ;
     }
@@ -221,8 +221,8 @@ protected:
   TreeNode * m_parent ;
   Eigen::ArrayXi m_obsInNode ;
   int m_depth{ -1 } ;
-  dimensions m_dimensions ; // First dimension is latitude, second is longitude, last is time.
-  spatialcoor m_knotsCoor ;  // First element is spatial coordinates (latitude, longitude), second is time.
+  dimensions m_dimensions ; // First dimension is longitude, second is latitude, last is time.
+  spatialcoor m_knotsCoor ;  // First element is spatial coordinates (longitude, latitude), second is time.
   int m_nodeId{ -1 } ;
 
   std::vector<std::vector<mat>>& GetAtildeList() {return m_AtildeList ;}

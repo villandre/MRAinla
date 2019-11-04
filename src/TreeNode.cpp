@@ -107,6 +107,5 @@ mat TreeNode::computeCovMat(const spatialcoor & spTime1, const spatialcoor & spT
       }
     }
   }
-
   return covMat ;
 }

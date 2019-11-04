@@ -1,7 +1,7 @@
 // [[Rcpp::plugins(openmp)]]
 
 #ifdef _OPENMP
-#include <omp.h>
+// #include <omp.h>
 #endif
 
 #include <math.h>
@@ -39,8 +39,8 @@ struct MVN{
 };
 
 AugTree::AugTree(uint & M,
-                 Array2d & latRange,
                  Array2d & lonRange,
+                 Array2d & latRange,
                  Array2d & timeRange,
                  vec & observations,
                  ArrayXXd & obsSp,
@@ -59,7 +59,7 @@ AugTree::AugTree(uint & M,
 {
   m_GammaParasSet = false ;
   m_dataset = inputdata(observations, obsSp, obsTime, covariates) ;
-  m_mapDimensions = dimensions(latRange, lonRange, timeRange) ;
+  m_mapDimensions = dimensions(lonRange, latRange, timeRange) ;
   m_randomNumGenerator = gsl_rng_alloc(gsl_rng_taus) ;
   SetPredictData(predSp, predTime, predCovariates) ;
 
@@ -114,7 +114,7 @@ void AugTree::numberNodes() {
   }
 }
 
-// In this version, we first split the latitude, then the longitude, and finally time.
+// In this version, we first split the longitude, then the latitude, and finally time.
 // We make sure that splits don't result in empty regions
 void AugTree::createLevels(TreeNode * parent, const uint & numObsForTimeSplit, const bool splitTime) {
   ArrayXi obsForMedian = parent->GetObsInNode() ;
@@ -126,22 +126,22 @@ void AugTree::createLevels(TreeNode * parent, const uint & numObsForTimeSplit, c
     throw Rcpp::exception("Cannot split empty region or region with only one observation.\n") ;
   }
 
-  // Handling latitude
+  // Handling longitude
 
   ArrayXi elementsInChild = ArrayXi::LinSpaced(obsForMedian.size(), 0, obsForMedian.size()-1) ;
   ArrayXd column = m_dataset.spatialCoords.col(0) ;
   ArrayXd elementsForMedian = elem(column, obsForMedian) ;
   double colMedian = median(elementsForMedian) ;
-  ArrayXd updatedLatitude(2) ;
-  updatedLatitude(0) = childDimensions.at(0).latitude(0) ;
-  updatedLatitude(1) = colMedian ;
-  ArrayXd newChildLatitude(2) ;
-  newChildLatitude(0) = colMedian ;
-  newChildLatitude(1) = childDimensions.at(0).latitude(1) ;
+  ArrayXd updatedLongitude(2) ;
+  updatedLongitude(0) = childDimensions.at(0).longitude(0) ;
+  updatedLongitude(1) = colMedian ;
+  ArrayXd newChildLongitude(2) ;
+  newChildLongitude(0) = colMedian ;
+  newChildLongitude(1) = childDimensions.at(0).longitude(1) ;
   dimensions newDimensions = childDimensions.at(0) ;
-  newDimensions.latitude = newChildLatitude ;
+  newDimensions.longitude = newChildLongitude ;
   childDimensions.push_back(newDimensions) ;
-  childDimensions.at(0).latitude = updatedLatitude ;
+  childDimensions.at(0).longitude = updatedLongitude ;
   ArrayXi greaterElements = find(elementsForMedian > colMedian) ; // In deriveObsInNode, the checks are <=. It follows that observations on the right and upper boundaries of a zone are included.
   ArrayXi updateIndices = elem(elementsInChild, greaterElements) ;
   for (uint innerIndex = 0; innerIndex < updateIndices.size(); innerIndex++) {
@@ -150,23 +150,23 @@ void AugTree::createLevels(TreeNode * parent, const uint & numObsForTimeSplit, c
 
   uint newChildIndex = 2 ;
 
-  // Handling longitude
+  // Handling latitude
 
   for (int j = 0 ; j < 2; j++) {
     ArrayXd column = m_dataset.spatialCoords.col(1) ;
     ArrayXd subColumn = elem(column, obsForMedian) ;
     ArrayXi elementsInChild = find(childMembership == j) ;
     double colMedian = median(elem(subColumn, elementsInChild)) ;
-    ArrayXd updatedLongitude(2) ;
-    updatedLongitude(0) = childDimensions.at(j).longitude(0);
-    updatedLongitude(1) = colMedian ;
-    ArrayXd newChildLongitude(2) ;
-    newChildLongitude(0) = colMedian ;
-    newChildLongitude(1) = childDimensions.at(j).longitude(1) ;
+    ArrayXd updatedLatitude(2) ;
+    updatedLatitude(0) = childDimensions.at(j).latitude(0);
+    updatedLatitude(1) = colMedian ;
+    ArrayXd newChildLatitude(2) ;
+    newChildLatitude(0) = colMedian ;
+    newChildLatitude(1) = childDimensions.at(j).latitude(1) ;
     dimensions newDimensions = childDimensions.at(j) ;
-    newDimensions.longitude = newChildLongitude ;
+    newDimensions.latitude = newChildLatitude ;
     childDimensions.push_back(newDimensions) ;
-    childDimensions.at(j).longitude = updatedLongitude ;
+    childDimensions.at(j).latitude = updatedLatitude ;
     ArrayXi greaterElements = find(elem(subColumn, elementsInChild).array() > colMedian) ;
     ArrayXi updateIndices = elem(elementsInChild, greaterElements) ;
     for (uint innerIndex = 0; innerIndex < updateIndices.size(); innerIndex++) {
@@ -715,6 +715,10 @@ void AugTree::ComputeLogFCandLogCDandDataLL() {
 
 void AugTree::ComputeLogJointPsiMarginal() {
 
+  m_MRAcovParasSpace.print("Spatial parameters:") ;
+  m_MRAcovParasTime.print("Time parameters:") ;
+  Rprintf("Scaling parameter: %.3e \n", m_spacetimeScaling) ;
+
   ComputeLogPriors() ;
 
   if (m_recomputeMRAlogLik) {
@@ -723,10 +727,10 @@ void AugTree::ComputeLogJointPsiMarginal() {
 
   ComputeLogFCandLogCDandDataLL() ;
 
-  // Rprintf("Observations log-lik: %.4e \n Log-prior: %.4e \n Log-Cond. dist.: %.4e \n Log-full cond.: %.4e \n \n \n",
-    // m_globalLogLik, m_logPrior, m_logCondDist, m_logFullCond) ;
+  Rprintf("Observations log-lik: %.4e \n Log-prior: %.4e \n Log-Cond. dist.: %.4e \n Log-full cond.: %.4e \n \n \n",
+    m_globalLogLik, m_logPrior, m_logCondDist, m_logFullCond) ;
   m_logJointPsiMarginal = m_globalLogLik + m_logPrior + m_logCondDist - m_logFullCond ;
-   // Rprintf("Joint value: %.4e \n \n", m_logJointPsiMarginal) ;
+   Rprintf("Joint value: %.4e \n \n", m_logJointPsiMarginal) ;
 }
 
 void AugTree::ComputeHpred() {

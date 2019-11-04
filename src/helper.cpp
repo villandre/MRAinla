@@ -27,16 +27,14 @@ Spatiotemprange sptimeDistance(const Eigen::ArrayXd & spCoor1, const double & ti
     double sp = scaledVec.sum() ;
     sp = std::sqrt(sp) ;
   } else if (method == "haversine") {
-    sp = haversine_distance(spCoor1(0), spCoor1(1), spCoor2(0), spCoor2(1)) ;
+    sp = haversine_distance(spCoor1(0), spCoor1(1), spCoor2(0), spCoor2(1)) ; // Works under the assumption that coordinates are (longitude, latitude)
   } else if (method == "vincenty") {
-    sp = vincenty_distance(spCoor1(0), spCoor1(1), spCoor2(0), spCoor2(1)) ;
+    sp = vincenty_distance(spCoor1(0), spCoor1(1), spCoor2(0), spCoor2(1)) ; // Same as for haversine
   }
   double timeDiff = abs(time2 - time1) ;
 
   return Spatiotemprange(sp, timeDiff) ;
 };
-
-// Pretty slow. Should not be called too often.
 
 sp_mat createBlockMatrix(std::vector<mat *> listOfMatrices) {
   uint numRows = 0 ;
@@ -139,53 +137,34 @@ double deg2rad(double deg)
   return (deg * M_PI / 180.0);
 }
 
-double haversine_distance(double latitude1, double longitude1, double latitude2,
-                          double longitude2)
+// Obtained from https://www.geeksforgeeks.org/haversine-formula-to-find-distance-between-two-points-on-a-sphere/
+
+double haversine_distance(double lon1, double lat1,
+                        double lon2, double lat2)
 {
-  double lat1 = deg2rad(latitude1);
-  double lon1 = deg2rad(longitude1);
-  double lat2 = deg2rad(latitude2);
-  double lon2 = deg2rad(longitude2);
+  // distance between latitudes
+  // and longitudes
+  double dLat = (lat2 - lat1) *
+    M_PI / 180.0;
+  double dLon = (lon2 - lon1) *
+    M_PI / 180.0;
 
-  double d_lat = abs(lat1 - lat2);
-  double d_lon = abs(lon1 - lon2);
+  // convert to radians
+  lat1 = (lat1) * M_PI / 180.0;
+  lat2 = (lat2) * M_PI / 180.0;
 
-  double a = pow(sin(d_lat / 2), 2) + cos(lat1) * cos(lat2) * pow(sin(d_lon / 2), 2);
+  // apply formulae
+  double a = pow(sin(dLat / 2), 2) +
+    pow(sin(dLon / 2), 2) *
+    cos(lat1) * cos(lat2);
 
-  //double d_sigma = 2 * atan2(sqrt(a), sqrt(1 - a));
-  double d_sigma = 2 * asin(sqrt(a));
-
-  return earth_radius_km * d_sigma;
+  double c = 2 * asin(sqrt(a));
+  return earth_radius_km * c;
 }
 
-double vincenty_distance(double latitude1, double longitude1, double latitude2,
-                         double longitude2)
+double vincenty_distance(double longitude1, double latitude1, double longitude2, double latitude2)
 {
-  double lat1 = deg2rad(latitude1);
-  double lon1 = deg2rad(longitude1);
-  double lat2 = deg2rad(latitude2);
-  double lon2 = deg2rad(longitude2);
-
-  double d_lon = abs(lon1 - lon2);
-
-  // Numerator
-  double a = pow(cos(lat2) * sin(d_lon), 2);
-
-  double b = cos(lat1) * sin(lat2);
-  double c = sin(lat1) * cos(lat2) * cos(d_lon);
-  double d = pow(b - c, 2);
-
-  double e = sqrt(a + d);
-
-  // Denominator
-  double f = sin(lat1) * sin(lat2);
-  double g = cos(lat1) * cos(lat2) * cos(d_lon);
-
-  double h = f + g;
-
-  double d_sigma = atan2(e, h);
-
-  return earth_radius_km * d_sigma;
+  Rcpp::stop("Vincenty distance not implemented for now... \n") ;
 }
 
 

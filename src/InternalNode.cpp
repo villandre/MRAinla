@@ -50,11 +50,11 @@ void InternalNode::genRandomKnots(spatialcoor & dataCoor, const uint & numKnots,
   } else {
     ArrayXXd knotsSp = ArrayXXd::Zero(numKnots, 2) ;
 
-    double minLat = m_dimensions.latitude.minCoeff() ;
-    double maxLat = m_dimensions.latitude.maxCoeff() ;
-
     double minLon = m_dimensions.longitude.minCoeff() ;
     double maxLon = m_dimensions.longitude.maxCoeff() ;
+
+    double minLat = m_dimensions.latitude.minCoeff() ;
+    double maxLat = m_dimensions.latitude.maxCoeff() ;
 
     double minTime = m_dimensions.time.minCoeff() ;
     double maxTime = m_dimensions.time.maxCoeff() ;
@@ -64,16 +64,16 @@ void InternalNode::genRandomKnots(spatialcoor & dataCoor, const uint & numKnots,
     double cubeRadiusInPoints = ceil(double(cbrt(numKnots))) ;
 
     double offsetPerc = 0.01 ;
-    double latDist = (maxLat - minLat) * (1-offsetPerc * 2)/(cubeRadiusInPoints - 1) ;
     double lonDist = (maxLon - minLon) * (1-offsetPerc * 2)/(cubeRadiusInPoints - 1) ;
+    double latDist = (maxLat - minLat) * (1-offsetPerc * 2)/(cubeRadiusInPoints - 1) ;
     double timeDist = (maxTime - minTime) * (1-offsetPerc * 2)/(cubeRadiusInPoints - 1) ;
 
     uint rowIndex = 0 ;
-    for (uint latIndex = 0 ; latIndex < cubeRadiusInPoints ; latIndex++) {
-      for (uint lonIndex = 0 ; lonIndex < cubeRadiusInPoints ; lonIndex++) {
+    for (uint lonIndex = 0 ; lonIndex < cubeRadiusInPoints ; lonIndex++) {
+      for (uint latIndex = 0 ; latIndex < cubeRadiusInPoints ; latIndex++) {
         for (uint timeIndex = 0 ; timeIndex < cubeRadiusInPoints ; timeIndex++) {
-          knotsSp(rowIndex, 0) = minLat + offsetPerc * (maxLat - minLat) + double(latIndex) * latDist + gsl_ran_gaussian(RNG, 0.0001) ;
-          knotsSp(rowIndex, 1) = minLon + offsetPerc * (maxLon - minLon) + double(lonIndex) * lonDist + gsl_ran_gaussian(RNG, 0.0001) ;
+          knotsSp(rowIndex, 0) = minLon + offsetPerc * (maxLon - minLon) + double(lonIndex) * lonDist + gsl_ran_gaussian(RNG, 0.0001) ;
+          knotsSp(rowIndex, 1) = minLat + offsetPerc * (maxLat - minLat) + double(latIndex) * latDist + gsl_ran_gaussian(RNG, 0.0001) ;
           time(rowIndex) = minTime + offsetPerc * (maxTime - minTime) + double(timeIndex) * timeDist  + gsl_ran_gaussian(RNG, 0.0001) ;
           rowIndex += 1 ;
           if (rowIndex >= numKnots) break ;

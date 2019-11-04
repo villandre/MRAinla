@@ -16,15 +16,15 @@ using namespace std;
 List setupGridCpp(NumericVector responseValues, NumericMatrix spCoords, NumericMatrix predCoords,
                   NumericVector obsTime,  NumericVector predTime, NumericMatrix covariateMatrix,
                   NumericMatrix predCovariateMatrix, uint M,
-                  NumericVector latRange, NumericVector lonRange, NumericVector timeRange,
+                  NumericVector lonRange, NumericVector latRange, NumericVector timeRange,
                   uint randomSeed, uint cutForTimeSplit, bool splitTime,
                   int numKnotsRes0, int J, String distMethod)
 {
-  ArrayXd latRinit = as<ArrayXd>(latRange) ;
   ArrayXd lonRinit = as<ArrayXd>(lonRange) ;
+  ArrayXd latRinit = as<ArrayXd>(latRange) ;
   ArrayXd timeRinit = as<ArrayXd>(timeRange) ;
-  Array2d latR = latRinit.segment(0,2) ;
   Array2d lonR = lonRinit.segment(0,2) ;
+  Array2d latR = latRinit.segment(0,2) ;
   Array2d timeR = timeRinit.segment(0,2) ;
   vec response = as<vec>(responseValues) ;
   ArrayXXd sp = as<ArrayXXd>(spCoords) ;
@@ -38,7 +38,7 @@ List setupGridCpp(NumericVector responseValues, NumericMatrix spCoords, NumericM
 
   ArrayXXd covariateMat = as<ArrayXXd>(covariateMatrix) ;
 
-  AugTree * MRAgrid = new AugTree(M, latR, lonR, timeR, response, sp, time, predCovariates, predSp, predTimeVec, cutForTimeSplit, seedForRNG, covariateMat, splitTime, numKnotsRes0, J, dMethod) ;
+  AugTree * MRAgrid = new AugTree(M, lonR, latR, timeR, response, sp, time, predCovariates, predSp, predTimeVec, cutForTimeSplit, seedForRNG, covariateMat, splitTime, numKnotsRes0, J, dMethod) ;
 
   XPtr<AugTree> p(MRAgrid, false) ; // Disabled automatic garbage collection.
 

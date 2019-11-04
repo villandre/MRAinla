@@ -47,13 +47,13 @@ plotOutput <- function(inlaMRAoutput, trainingData, testData, realTestValues = N
     control$rasterNrow <- 50
     control$rasterNcol <- 50
   }
-  latLonMinMax <- lapply(1:2, function(colIndex) {
+  lonLatMinMax <- lapply(1:2, function(colIndex) {
     sapply(list(min, max), function(summaryFunction) {
       summaryFunction(testData@sp@coords[ , colIndex], trainingData@sp@coords[ , colIndex])
     })
   })
 
-  landRaster <- raster::raster(nrows = control$rasterNrow, ncols = control$rasterNcol, xmn = latLonMinMax[[1]][[1]], xmx = latLonMinMax[[1]][[2]], ymn = latLonMinMax[[2]][[1]], ymx = latLonMinMax[[2]][[2]])
+  landRaster <- raster::raster(nrows = control$rasterNrow, ncols = control$rasterNcol, xmn = lonLatMinMax[[1]][[1]], xmx = lonLatMinMax[[1]][[2]], ymn = lonLatMinMax[[2]][[1]], ymx = lonLatMinMax[[2]][[2]])
   uniqueTimeValues <- unique(c(time(trainingData), time(testData)))
 
   rasterizeTrainingAndJoint <- function(timePoint) {
@@ -143,7 +143,7 @@ plotSpacetimeData <- function(spacetimeData) {
     raster::rasterize(x = testPoints, y = landRaster, field = subSpacetimeData@data$y)
   }
   rasterList <- lapply(seq_along(unique(time(spacetimeData@time))), getTestRaster)
-  stackedRasters <- stack(rasterList)
+  stackedRasters <- raster::stack(rasterList)
   raster::spplot(stackedRasters, scales = list(draw = TRUE),
          xlab = "Longitude", ylab = "Latitude",
          names.attr = as.character(unique(time(spacetimeData))))
