@@ -17,19 +17,15 @@ typedef Eigen::MatrixXi umat ;
 typedef Eigen::Triplet<double> Triplet;
 
 // Other choices for method: "vincenty" and "euclidean"
-// The assumption is that spCoor1 is a vector of length 2 which lists latitude first, then longitude.
+// The assumption is that spCoor1 is a vector of length 2 which lists longitude first, then latitude.
 Spatiotemprange sptimeDistance(const Eigen::ArrayXd & spCoor1, const double & time1, const Eigen::ArrayXd & spCoor2,
-                               const double & time2, const string & method="haversine") {
+                               const double & time2, const string & method) {
   double sp = 0 ;
-  if (method == "euclidean") {
-    Eigen::ArrayXd diffVec = spCoor1 - spCoor2 ;
-    Eigen::ArrayXd scaledVec = diffVec.pow(2) ;
-    double sp = scaledVec.sum() ;
-    sp = std::sqrt(sp) ;
-  } else if (method == "haversine") {
+  if (method == "haversine") {
     sp = haversine_distance(spCoor1(0), spCoor1(1), spCoor2(0), spCoor2(1)) ; // Works under the assumption that coordinates are (longitude, latitude)
-  } else if (method == "vincenty") {
-    sp = vincenty_distance(spCoor1(0), spCoor1(1), spCoor2(0), spCoor2(1)) ; // Same as for haversine
+  } else { // Input other
+    Rcpp::stop("Input distance method...\n") ;
+    // sp = vincenty_distance(spCoor1(0), spCoor1(1), spCoor2(0), spCoor2(1)) ; // Same as for haversine
   }
   double timeDiff = abs(time2 - time1) ;
 
@@ -132,10 +128,6 @@ using namespace std;
 
 static const double earth_radius_km = 6371.0;
 
-double deg2rad(double deg)
-{
-  return (deg * M_PI / 180.0);
-}
 
 // Obtained from https://www.geeksforgeeks.org/haversine-formula-to-find-distance-between-two-points-on-a-sphere/
 

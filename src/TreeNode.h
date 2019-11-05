@@ -49,7 +49,7 @@ struct maternVec{
     return (fabs(first.m_rho - second.m_rho) < epsilon) && (fabs(first.m_scale - second.m_scale) < epsilon) && (fabs(first.m_smoothness - second.m_smoothness) < epsilon) ;
   }
 
-  void print(std::string header) {
+  void print(std::string header) const {
     Rcpp::Rcout << header << "\n" ;
     Rprintf("Matern parameters: rho = %.4e smoothness = %.4e scale = %.4e \n", m_rho, m_smoothness, m_scale) ;
   }

@@ -715,9 +715,9 @@ void AugTree::ComputeLogFCandLogCDandDataLL() {
 
 void AugTree::ComputeLogJointPsiMarginal() {
 
-  m_MRAcovParasSpace.print("Spatial parameters:") ;
-  m_MRAcovParasTime.print("Time parameters:") ;
-  Rprintf("Scaling parameter: %.3e \n", m_spacetimeScaling) ;
+  // m_MRAcovParasSpace.print("Spatial parameters:") ;
+  // m_MRAcovParasTime.print("Time parameters:") ;
+  // Rprintf("Scaling parameter: %.3e \n", m_spacetimeScaling) ;
 
   ComputeLogPriors() ;
 
@@ -727,10 +727,10 @@ void AugTree::ComputeLogJointPsiMarginal() {
 
   ComputeLogFCandLogCDandDataLL() ;
 
-  Rprintf("Observations log-lik: %.4e \n Log-prior: %.4e \n Log-Cond. dist.: %.4e \n Log-full cond.: %.4e \n \n \n",
-    m_globalLogLik, m_logPrior, m_logCondDist, m_logFullCond) ;
+  // Rprintf("Observations log-lik: %.4e \n Log-prior: %.4e \n Log-Cond. dist.: %.4e \n Log-full cond.: %.4e \n \n \n",
+    // m_globalLogLik, m_logPrior, m_logCondDist, m_logFullCond) ;
   m_logJointPsiMarginal = m_globalLogLik + m_logPrior + m_logCondDist - m_logFullCond ;
-   Rprintf("Joint value: %.4e \n \n", m_logJointPsiMarginal) ;
+   // Rprintf("Joint value: %.4e \n \n", m_logJointPsiMarginal) ;
 }
 
 void AugTree::ComputeHpred() {

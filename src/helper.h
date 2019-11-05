@@ -10,6 +10,9 @@ struct Spatiotemprange{
 
   Spatiotemprange(double & sp, double & time) : sp(sp), time(time) { } ;
   Spatiotemprange() { } ;
+  void print() const {
+    Rprintf("Spatial, temporal range: %.3e, %.3e \n", sp, time) ;
+  }
 };
 
 // To prevent multiple definitions, I DECLARE the function in the header only. I then define them
