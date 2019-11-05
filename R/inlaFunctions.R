@@ -178,8 +178,8 @@ obtainGridValues <- function(gridPointers, xStartValues, control, fixedEffSDstar
   names(upperBound) <- names(xStartValues)
   upperBound <- replace(upperBound, grep(names(upperBound), pattern = "mooth"), log(50)) # This is to avoid an overflow in the computation of the Matern covariance, which for some reason does not tolerate very high smoothness values.
   upperBound <- replace(upperBound, grep(names(upperBound), pattern = "scale"), log(3000)) # This limits the scaling factor to exp(15) in the optimisation. This is to prevent computational issues in the sparse matrix inversion scheme.
-  upperBound <- replace(upperBound, grep(names(upperBound), pattern = "spRho"), log(1e5)) # This limits the spatial rho to 100,000 which would still make points 5,000 km apart have a correlation of 0.9964!
-  upperBound <- replace(upperBound, grep(names(upperBound), pattern = "timeRho"), log(1e5))
+  upperBound <- replace(upperBound, grep(names(upperBound), pattern = "spRho"), log(5e3)) # This is for numerical reasons, as optimisation will produce NAs if very high correlation is assumed.
+  upperBound <- replace(upperBound, grep(names(upperBound), pattern = "timeRho"), log(5e3))
   cat("Optimising... \n")
   if (!tryCatch(file.exists(control$fileToSaveOptOutput), error = function(e) FALSE)) { # The tryCatch is necessary to ensure that an error does not occur if control$fileToSaveOptOutput is NULL. If it is undefined, we want the optimisation to take place.
     opt <- nloptr::lbfgs(x0 = log(xStartValues), lower = rep(-10, length(xStartValues)), upper = upperBound, fn = funForOptim, gr = gradForOptim, control = list(xtol_rel = 1e-3, maxeval = control$numIterOptim), envirToSaveValues = storageEnvir)
@@ -188,7 +188,7 @@ obtainGridValues <- function(gridPointers, xStartValues, control, fixedEffSDstar
       filenameForEnvir <- paste(substr(control$fileToSaveOptOutput, start = 1, stop = gregexpr(pattern = ".Rdata", text = control$fileToSaveOptOutput)[[1]] - 1), "_Envir.Rdata", sep = "")
       save(storageEnvir, file = filenameForEnvir, compress = TRUE)
     }
-    # cat("Optimised values:", exp(opt$par)) ;
+    cat("Optimised values:", exp(opt$par))
   } else {
     load(control$fileToSaveOptOutput)
     lastSlashPos <- tail(gregexpr(pattern = "/", text = control$fileToSaveOptOutput)[[1]], n = 1)
