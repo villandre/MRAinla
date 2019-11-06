@@ -11,7 +11,6 @@
 #' the length of gridRasterList giving the number of knots for each resolution, or a list of vectors giving
 #' the number of knots in each region of the grid for each resolution
 #' @param hyperPriorFunList named list of functions with one argument specifying the hyperprior distributions
-#' @param MRAcovParasGammaAlphaBeta list with two components, named 'space' and 'time'. Each component is itself a list with three components, 'rho', 'smoothness', and 'scale'. Finally, each of these thress components is a vector with two elements, corresponding to the alpha and beta parameters of the Gamma distribution serving as a prior for the MRA space and time hyperparameters.
 #'
 #'
 #' @details Nothing to say for now.
@@ -30,8 +29,8 @@
 #' }
 #' @export
 
-MRA_INLA <- function(spacetimeData, errorSDstart, fixedEffSDstart, MRAhyperparasStart, FEmuVec, predictionData = NULL, fixedEffGammaAlphaBeta, errorGammaAlphaBeta,  MRAcovParasGammaAlphaBeta, maximiseOnly = FALSE, control) {
-  defaultControl <- list(M = 1, randomSeed = 24,  cutForTimeSplit = 400, maternCovariance = TRUE, nuggetSD = 0.00001, varyFixedEffSD = FALSE, varyMaternSmoothness = FALSE, varyErrorSD = TRUE, splitTime = FALSE, numKnotsRes0 = 20L, J = 4L, numValuesForIS = 200, numThreads = 1, numIterOptim = 200L, distMethod = "haversine")
+MRA_INLA <- function(spacetimeData, hyperStart, fixedHyperValues, hyperGammaAlphaBeta, FEmuVec, predictionData = NULL,  maximiseOnly = FALSE, control) {
+  defaultControl <- list(M = 1, randomSeed = 24,  cutForTimeSplit = 400, nuggetSD = 0.00001, splitTime = FALSE, numKnotsRes0 = 20L, J = 4L, numValuesForIS = 200, numThreads = 1, numIterOptim = 200L, distMethod = "haversine")
   if (length(position <- grep(colnames(spacetimeData@sp@coords), pattern = "lon")) >= 1) {
     colnames(spacetimeData@sp@coords)[[position[[1]]]] <- "x"
     if (!is.null(predictionData)) {
@@ -65,8 +64,17 @@ MRA_INLA <- function(spacetimeData, errorSDstart, fixedEffSDstart, MRAhyperparas
   }, SIMPLIFY = FALSE)
   defaultControl <- c(defaultControl, coordRanges)
   # 1e5 is used as a substitute for infinity, which is not understood by the C++ code.
-  if (MRAhyperparasStart$space[["smoothness"]] > 1e5) MRAhyperparasStart$space$smoothness <- 1e5
-  if (MRAhyperparasStart$time[["smoothness"]] > 1e5) MRAhyperparasStart$time$smoothness <- 1e5
+  if ("smoothness" %in% names(hyperStart$space)) {
+    if (hyperStart$space[["smoothness"]] > 1e5) hyperStart$space[["smoothness"]] <- 1e5
+  } else {
+    if (fixedHyperValues$space[["smoothness"]] > 1e5) fixedHyperValues$space[["smoothness"]] <- 1e5
+  }
+
+  if ("smoothness" %in% names(hyperStart$time)) {
+    if (hyperStart$time[["smoothness"]] > 1e5) hyperStart$time[["smoothness"]] <- 1e5
+  } else {
+    if (fixedHyperValues$time[["smoothness"]] > 1e5) fixedHyperValues$time[["smoothness"]] <- 1e5
+  }
 
   for (i in names(control)) {
     defaultControl[[i]] <- control[[i]]
@@ -96,19 +104,8 @@ MRA_INLA <- function(spacetimeData, errorSDstart, fixedEffSDstart, MRAhyperparas
   })
 
   # First we compute values relating to the hyperprior marginal distribution...
-  xStartValues <- c(spRho = MRAhyperparasStart$space[["rho"]], timeRho = MRAhyperparasStart$time[["rho"]], scale = MRAhyperparasStart[["scale"]])
-  if (control$varyFixedEffSD) {
-    xStartValues[["fixedEffSD"]] <- fixedEffSDstart
-  }
-  if (control$varyErrorSD) {
-    xStartValues[["errorSD"]] <- errorSDstart
-  }
-  if (control$varyMaternSmoothness) {
-    xStartValues[["spSmoothness"]] <- MRAhyperparasStart$space[["smoothness"]]
-    xStartValues[["timeSmoothness"]] <- MRAhyperparasStart$time[["smoothness"]]
-  }
 
-  computedValues <- obtainGridValues(gridPointers = gridPointers, xStartValues = xStartValues, control = control, fixedEffSDstart = fixedEffSDstart, errorSDstart = errorSDstart, MRAhyperparasStart = MRAhyperparasStart, MRAcovParasGammaAlphaBeta = MRAcovParasGammaAlphaBeta, fixedEffGammaAlphaBeta = fixedEffGammaAlphaBeta, errorGammaAlphaBeta = errorGammaAlphaBeta, FEmuVec = FEmuVec, predictionData = predictionData, timeBaseline = timeBaseline, maximiseOnly = maximiseOnly)
+  computedValues <- obtainGridValues(gridPointers = gridPointers, hyperStart = hyperStart, hyperGammaAlphaBeta = hyperGammaAlphaBeta, fixedHyperValues = fixedHyperValues, FEmuVec = FEmuVec, predictionData = predictionData, timeBaseline = timeBaseline, maximiseOnly = maximiseOnly, control = control)
   if (maximiseOnly) {
     return(computedValues$output)
   }
@@ -138,35 +135,25 @@ MRA_INLA <- function(spacetimeData, errorSDstart, fixedEffSDstart, MRAhyperparas
   outputList
 }
 
-obtainGridValues <- function(gridPointers, xStartValues, control, fixedEffSDstart, errorSDstart, MRAhyperparasStart, MRAcovParasGammaAlphaBeta, fixedEffGammaAlphaBeta, errorGammaAlphaBeta, FEmuVec, predictionData, timeBaseline, maximiseOnly = FALSE) {
+obtainGridValues <- function(gridPointers, hyperStart, hyperGammaAlphaBeta, fixedHyperValues, FEmuVec, predictionData, timeBaseline, maximiseOnly = FALSE, control) {
 
   # A short optimisation first...
   storageEnvir <- new.env()
   assign(x = "x", value = NULL, envir = storageEnvir)
   assign(x = "value", value = NULL, envir = storageEnvir)
   iterCounter <- 0
-  funForOptim <- function(x, envirToSaveValues) {
+  xStartValues <- unlist(hyperStart)
+  fixedHyperValuesUnlisted <- unlist(fixedHyperValues)
+  funForOptim <- function(xOnLogScale, envirToSaveValues) {
     iterCounter <<- iterCounter + 1
     cat("Performing evaluation ", iterCounter, ".\n")
-    names(x) <- names(xStartValues)
-    xTrans <- exp(x)
-    fixedEffArg <- fixedEffSDstart
-    if (control$varyFixedEffSD) {
-      fixedEffArg <- xTrans[["fixedEffSD"]]
-    }
-    errorArg <- errorSDstart
-    if (control$varyErrorSD) {
-      errorArg <- xTrans[["errorSD"]]
-    }
-    spSmoothnessArg <- MRAhyperparasStart$space[["smoothness"]]
-    timeSmoothnessArg <- MRAhyperparasStart$time[["smoothness"]]
-    if (control$varyMaternSmoothness) {
-      spSmoothnessArg <- xTrans[["spSmoothness"]]
-      timeSmoothnessArg <- xTrans[["timeSmoothness"]]
-    }
-    MRAlist <- list(space = list(rho = xTrans[["spRho"]], smoothness = spSmoothnessArg), time = list(rho = xTrans[["timeRho"]], smoothness = timeSmoothnessArg), scale = xTrans[["scale"]])
-    returnedValue <- -LogJointHyperMarginal(treePointer = gridPointers[[1]], MRAhyperparas = MRAlist, fixedEffSD = fixedEffArg, errorSD = errorArg, MRAcovParasGammaAlphaBeta = MRAcovParasGammaAlphaBeta, FEmuVec = FEmuVec, fixedEffGammaAlphaBeta = fixedEffGammaAlphaBeta, errorGammaAlphaBeta = errorGammaAlphaBeta, matern = control$maternCovariance, spaceNuggetSD = control$nuggetSD, timeNuggetSD = control$nuggetSD, recordFullConditional = FALSE)
-    assign(x = "x", value = cbind(get(x = "x", envir = envirToSaveValues), exp(x)), envir = envirToSaveValues)
+    names(xOnLogScale) <- names(xStartValues)
+    xTrans <- exp(xOnLogScale)
+
+    hyperList <- .prepareHyperList(xTrans, fixedHyperValuesUnlisted = fixedHyperValuesUnlisted)
+
+    returnedValue <- -LogJointHyperMarginal(treePointer = gridPointers[[1]], hyperparaValues = hyperList, hyperGammaAlphaBeta = hyperGammaAlphaBeta, FEmuVec = FEmuVec, spaceNuggetSD = control$nuggetSD, timeNuggetSD = control$nuggetSD, recordFullConditional = FALSE)
+    assign(x = "x", value = cbind(get(x = "x", envir = envirToSaveValues), xTrans), envir = envirToSaveValues)
     assign(x = "value", value = c(get(x = "value", envir = envirToSaveValues), -returnedValue), envir = envirToSaveValues)
     returnedValue
   }
@@ -174,12 +161,13 @@ obtainGridValues <- function(gridPointers, xStartValues, control, fixedEffSDstar
     names(x) <- names(xStartValues)
     numDeriv::grad(func = funForOptim, x = x, method = "simple", envirToSaveValues = envirToSaveValues)
   }
+
   upperBound <- rep(Inf, length(xStartValues))
+
+  if (!is.null(control$upperBound)) {
+    upperBound <- log(unlist(control$upperBound))
+  }
   names(upperBound) <- names(xStartValues)
-  upperBound <- replace(upperBound, grep(names(upperBound), pattern = "mooth"), log(50)) # This is to avoid an overflow in the computation of the Matern covariance, which for some reason does not tolerate very high smoothness values.
-  upperBound <- replace(upperBound, grep(names(upperBound), pattern = "scale"), log(3000)) # This limits the scaling factor to exp(15) in the optimisation. This is to prevent computational issues in the sparse matrix inversion scheme.
-  upperBound <- replace(upperBound, grep(names(upperBound), pattern = "spRho"), log(5e3)) # This is for numerical reasons, as optimisation will produce NAs if very high correlation is assumed.
-  upperBound <- replace(upperBound, grep(names(upperBound), pattern = "timeRho"), log(5e3))
   cat("Optimising... \n")
   if (!tryCatch(file.exists(control$fileToSaveOptOutput), error = function(e) FALSE)) { # The tryCatch is necessary to ensure that an error does not occur if control$fileToSaveOptOutput is NULL. If it is undefined, we want the optimisation to take place.
     opt <- nloptr::lbfgs(x0 = log(xStartValues), lower = rep(-10, length(xStartValues)), upper = upperBound, fn = funForOptim, gr = gradForOptim, control = list(xtol_rel = 1e-3, maxeval = control$numIterOptim), envirToSaveValues = storageEnvir)
@@ -234,7 +222,6 @@ obtainGridValues <- function(gridPointers, xStartValues, control, fixedEffSDstar
     })
     output <- vector("list", length = nrow(paraGrid))
     if (length(gridPointers) == 1) {
-      # output <- lapply(1:nrow(paraGrid), funForGridEst, paraGrid = paraGrid, treePointer = gridPointers[[1]], MRAcovParasGammaAlphaBeta = MRAcovParasGammaAlphaBeta, fixedEffGammaAlphaBeta = fixedEffGammaAlphaBeta, errorGammaAlphaBeta = errorGammaAlphaBeta, fixedEffSDstart = fixedEffSDstart, errorSDstart = errorSDstart, MRAhyperparasStart = MRAhyperparasStart, FEmuVec = FEmuVec, predictionData = predictionData, timeBaseline = timeBaseline, computePrediction = TRUE, control = control)
       startAtIter <- 1
       if (tryCatch(dir.exists(control$folderToSaveISpoints), error = function(e) FALSE)) {
         cat("Loading previously processed IS points... \n")
@@ -248,7 +235,7 @@ obtainGridValues <- function(gridPointers, xStartValues, control, fixedEffSDstar
       if (startAtIter <= length(output)) {
         for (i in startAtIter:length(output)) {
           cat("Processing grid value ", i, "... \n")
-          output[[i]] <- funForGridEst(index = i, paraGrid = paraGrid, treePointer = gridPointers[[1]], MRAcovParasGammaAlphaBeta = MRAcovParasGammaAlphaBeta, fixedEffGammaAlphaBeta = fixedEffGammaAlphaBeta, errorGammaAlphaBeta = errorGammaAlphaBeta, fixedEffSDstart = fixedEffSDstart, errorSDstart = errorSDstart, MRAhyperparasStart = MRAhyperparasStart, FEmuVec = FEmuVec, predictionData = predictionData, timeBaseline = timeBaseline, computePrediction = TRUE, control = control)
+          output[[i]] <- funForGridEst(index = i, paraGrid = paraGrid, treePointer = gridPointers[[1]], hyperGammaAlphaBeta = hyperGammaAlphaBeta, fixedHyperValues = fixedHyperValues, FEmuVec = FEmuVec, predictionData = predictionData, timeBaseline = timeBaseline, computePrediction = TRUE, control = control)
           if (!is.null(control$folderToSaveISpoints)) {
             if (!dir.exists(control$folderToSaveISpoints)) {
               dir.create(path = control$folderToSaveISpoints)
@@ -266,7 +253,7 @@ obtainGridValues <- function(gridPointers, xStartValues, control, fixedEffSDstar
       }
     } else {
       output <- foreach::foreach(var1 = seq_along(listForParallel), .inorder = FALSE) %dopar% {
-        lapply(1:nrow(listForParallel[[var1]]$paraGrid), funForGridEst, paraGrid = listForParallel[[var1]]$paraGrid, treePointer = gridPointers[[var1]], MRAcovParasGammaAlphaBeta = MRAcovParasGammaAlphaBeta, fixedEffGammaAlphaBeta = fixedEffGammaAlphaBeta, errorGammaAlphaBeta = errorGammaAlphaBeta, fixedEffSDstart = fixedEffSDstart, errorSDstart = errorSDstart, MRAhyperparasStart = MRAhyperparasStart, FEmuVec = FEmuVec, predictionData = predictionData, timeBaseline = timeBaseline, computePrediction = TRUE, control = control)
+        lapply(1:nrow(listForParallel[[var1]]$paraGrid), funForGridEst, paraGrid = listForParallel[[var1]]$paraGrid, treePointer = gridPointers[[var1]], hyperGammaAlphaBeta = hyperGammaAlphaBeta, fixedHyperValues = fixedHyperValues, FEmuVec = FEmuVec, predictionData = predictionData, timeBaseline = timeBaseline, computePrediction = TRUE, control = control)
       }
       output <- do.call("c", output)
     }
@@ -286,29 +273,28 @@ obtainGridValues <- function(gridPointers, xStartValues, control, fixedEffSDstar
   valuesOnGrid
 }
 
-funForGridEst <- function(index, paraGrid, treePointer, predictionData, MRAcovParasGammaAlphaBeta, fixedEffGammaAlphaBeta, errorGammaAlphaBeta, fixedEffSDstart, errorSDstart, MRAhyperparasStart, FEmuVec, timeBaseline, computePrediction, control) {
+.prepareHyperList <- function(hyperStartUnlisted, fixedHyperValuesUnlisted) {
+  paraValues <- sapply(c("error", "fixed", "space.rho", "space.smoothness", "time.rho", "time.smoothness", "scale"), function(paraName) {
+    if (length(pos <- grep(pattern = paraName, x = names(hyperStartUnlisted))) > 0) {
+      argValue <- hyperStartUnlisted[[pos]]
+    } else if (length(pos <- grep(pattern = paraName, x = names(fixedHyperValuesUnlisted)))) {
+      argValue <- fixedHyperValuesUnlisted[[pos]] # Already on the correct scale, ie not log scale
+    } else {
+      stop(paste("Missing hyperparameter specification: ", paraName, "! \n", sep = ""))
+    }
+    argValue
+  })
+  list(space = c(rho = paraValues[["space.rho"]], smoothness = paraValues[["space.smoothness"]]), time = c(rho = paraValues[["time.rho"]], smoothness = paraValues[["time.smoothness"]]), scale = paraValues[["scale"]], errorSD = paraValues[["error"]], fixedEffSD = paraValues[["fixed"]])
+}
+
+funForGridEst <- function(index, paraGrid, treePointer, predictionData, hyperGammaAlphaBeta, fixedHyperValues, FEmuVec, timeBaseline, computePrediction, control) {
   x <- unlist(paraGrid[index, ])
-  fixedEffArg <- fixedEffSDstart
-  if (control$varyFixedEffSD) {
-    fixedEffArg <- x[["fixedEffSD"]]
-  }
-  errorArg <- errorSDstart
-  if (control$varyErrorSD) {
-    errorArg <- x[["errorSD"]]
-  }
-  spSmoothnessArg <- MRAhyperparasStart$space[["smoothness"]]
-  timeSmoothnessArg <- MRAhyperparasStart$time[["smoothness"]]
-  if (control$varyMaternSmoothness) {
-    spSmoothnessArg <- x[["spSmoothness"]]
-    timeSmoothnessArg <- x[["timeSmoothness"]]
-  }
-  MRAlist <- list(space = list(rho = x[["spRho"]], smoothness = spSmoothnessArg), time = list(rho = x[["timeRho"]], smoothness = timeSmoothnessArg), scale = x[["scale"]])
+  fixedHyperValuesUnlisted <- unlist(fixedHyperValues)
+  hyperList <- .prepareHyperList(hyperStartUnlisted = x, fixedHyperValuesUnlisted = fixedHyperValuesUnlisted)
 
-  logJointValue <- tryCatch(expr = LogJointHyperMarginal(treePointer = treePointer, MRAhyperparas = MRAlist, fixedEffSD = fixedEffArg, errorSD = errorArg, MRAcovParasGammaAlphaBeta = MRAcovParasGammaAlphaBeta, FEmuVec = FEmuVec, fixedEffGammaAlphaBeta = fixedEffGammaAlphaBeta, errorGammaAlphaBeta = errorGammaAlphaBeta, matern = control$maternCovariance, spaceNuggetSD = control$nuggetSD, timeNuggetSD = control$nuggetSD, recordFullConditional = FALSE), error = function(e) e)
+  logJointValue <- tryCatch(expr = LogJointHyperMarginal(treePointer = treePointer, hyperparaValues = hyperList, hyperGammaAlphaBeta = hyperGammaAlphaBeta, FEmuVec = FEmuVec, spaceNuggetSD = control$nuggetSD, timeNuggetSD = control$nuggetSD, recordFullConditional = FALSE), error = function(e) e)
 
-  errorSD <- ifelse(any(grepl(pattern = "error", x = names(x))), x[[grep(pattern = "error", x = names(x), value = TRUE)]], errorSDstart)
-  fixedEffSD <- ifelse(any(grepl(pattern = "fixedEff", x = names(x))), x[[grep(pattern = "fixedEff", x = names(x), value = TRUE)]], fixedEffSDstart)
-  aList <- list(x = x, errorSD = errorSD, fixedEffSD = fixedEffSD, MRAhyperparas = MRAlist, logJointValue = logJointValue)
+  aList <- list(x = x, errorSD = hyperList$errorSD, fixedEffSD = hyperList$fixedEffSD, MRAhyperparas = hyperList[c("space", "time", "scale")], logJointValue = logJointValue)
   if (!is.null(predictionData) & computePrediction) {
     timeValues <- as.integer(time(predictionData@time))/(3600*24) - timeBaseline # The division is to obtain values in days.
     aList$CondPredStats <- ComputeCondPredStats(treePointer, predictionData@sp@coords, timeValues, as.matrix(predictionData@data))
@@ -397,15 +383,6 @@ maternCov <- function(d, rho, smoothness, scale) {
   con * dScaled^smoothness * besselK(dScaled, smoothness)
 }
 
-LogJointHyperMarginal <- function(treePointer, MRAhyperparas, fixedEffSD, errorSD, MRAcovParasGammaAlphaBeta, FEmuVec, fixedEffGammaAlphaBeta, errorGammaAlphaBeta, matern, spaceNuggetSD, timeNuggetSD, recordFullConditional) {
-  # Hmat is the covariate matrix with a column of 1s at the front for the intercept, with a n x n identity matrix horizontally appended (horizontal/row merge).
-  # MRAprecision has to be a sparse matrix.
-  require(Matrix, quietly = TRUE)
-
-  logDetFun <- function(cholM) {
-    cholM <- as(cholM, "dgCMatrix")
-    2*sum(log(diag(cholM)))
-  }
-
-  LogJointHyperMarginalToWrap(treePointer = treePointer, MRAhyperparas = MRAhyperparas, fixedEffSD = fixedEffSD, errorSD = errorSD, MRAcovParasGammaAlphaBeta = MRAcovParasGammaAlphaBeta, FEmuVec = FEmuVec, fixedEffGammaAlphaBeta =  fixedEffGammaAlphaBeta, errorGammaAlphaBeta = errorGammaAlphaBeta, matern = matern, spaceNuggetSD = spaceNuggetSD, timeNuggetSD = timeNuggetSD, recordFullConditional = TRUE)
+LogJointHyperMarginal <- function(treePointer, hyperparaValues, hyperGammaAlphaBeta, FEmuVec, spaceNuggetSD, timeNuggetSD, recordFullConditional) {
+  LogJointHyperMarginalToWrap(treePointer = treePointer, MRAhyperparas = hyperparaValues[c("space", "time", "scale")], fixedEffSD = hyperparaValues$fixedEffSD, errorSD = hyperparaValues$errorSD, MRAcovParasGammaAlphaBeta = hyperGammaAlphaBeta[c("space", "time", "scale")], FEmuVec = FEmuVec, fixedEffGammaAlphaBeta = hyperGammaAlphaBeta$fixedEffSD, errorGammaAlphaBeta = hyperGammaAlphaBeta$errorSD, spaceNuggetSD = spaceNuggetSD, timeNuggetSD = timeNuggetSD, recordFullConditional = TRUE)
 }

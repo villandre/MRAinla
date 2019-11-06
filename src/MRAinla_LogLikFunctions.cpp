@@ -50,7 +50,7 @@ List setupGridCpp(NumericVector responseValues, NumericMatrix spCoords, NumericM
 double LogJointHyperMarginalToWrap(SEXP treePointer, Rcpp::List MRAhyperparas,
          double fixedEffSD, double errorSD, Rcpp::List MRAcovParasGammaAlphaBeta,
          Rcpp::NumericVector FEmuVec, NumericVector fixedEffGammaAlphaBeta,
-         NumericVector errorGammaAlphaBeta, bool matern, double spaceNuggetSD,
+         NumericVector errorGammaAlphaBeta, double spaceNuggetSD,
          double timeNuggetSD, bool recordFullConditional) {
   mat posteriorMatrix ;
   double outputValue = 0 ;
@@ -71,7 +71,6 @@ double LogJointHyperMarginalToWrap(SEXP treePointer, Rcpp::List MRAhyperparas,
       pointedTree->SetFixedEffGammaAlphaBeta(GammaHyperParas(fixedEffAlphaBeta(0), fixedEffAlphaBeta(1))) ;
       pointedTree->SetErrorGammaAlphaBeta(GammaHyperParas(errorAlphaBeta(0), errorAlphaBeta(1))) ;
       pointedTree->SetFEmu(FEmu) ;
-      pointedTree->SetMatern(matern) ;
       pointedTree->SetSpaceAndTimeNuggetSD(spaceNuggetSD, timeNuggetSD) ;
       std::vector<TreeNode *> tipNodes = pointedTree->GetLevelNodes(pointedTree->GetM()) ;
       for (auto & i : tipNodes) {

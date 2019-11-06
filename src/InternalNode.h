@@ -22,7 +22,7 @@ public:
   void DeriveOmega(const vec &) ;
   void DeriveU(const vec &) ;
   void DeriveD() ;
-  void ComputeWmat(const maternVec &, const maternVec &, const double &, const bool, const double &, const double &, const std::string &) ;
+  void ComputeWmat(const maternVec &, const maternVec &, const double &, const double &, const double &, const std::string &) ;
   void ComputeParasEtaDeltaTilde(const spatialcoor &, const inputdata &, const vec &) ;
   std::vector<std::vector<mat>> & GetAlist() {return m_Alist ;};
   mat & GetKtilde() {return m_Ktilde ;}
@@ -39,7 +39,7 @@ public:
   std::vector<mat> & GetUmatList() { throw Rcpp::exception("UmatList only available in tip nodes! \n") ;}
   void SetPredictLocations(const inputdata & data) { throw Rcpp::exception("Trying to attach predict locations to internal nodes! Predict locations should only be defined in the tips! \n") ;}
   Eigen::ArrayXi & GetPredIndices() { throw Rcpp::exception("Prediction locations not defined in internal nodes! \n");}
-  void computeUpred(const maternVec &, const maternVec &, const double &, const spatialcoor &, const bool, const double &, const double &, const std::string &) {
+  void computeUpred(const maternVec &, const maternVec &, const double &, const spatialcoor &, const double &, const double &, const std::string &) {
     throw Rcpp::exception("Upred matrices need not be computed in internal nodes! \n") ;
   }
 

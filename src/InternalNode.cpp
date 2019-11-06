@@ -156,8 +156,8 @@ void::InternalNode::DeriveD() {
   m_d += thirdTerm ;
 }
 
-void InternalNode::ComputeWmat(const maternVec & covParasSp, const maternVec & covParasTime, const double & scaling, const bool matern, const double & spaceNuggetSD, const double & timeNuggetSD, const string & distMethod) {
-  baseComputeWmat(covParasSp, covParasTime, scaling, matern, spaceNuggetSD, timeNuggetSD, distMethod) ;
+void InternalNode::ComputeWmat(const maternVec & covParasSp, const maternVec & covParasTime, const double & scaling, const double & spaceNuggetSD, const double & timeNuggetSD, const string & distMethod) {
+  baseComputeWmat(covParasSp, covParasTime, scaling, spaceNuggetSD, timeNuggetSD, distMethod) ;
 
   // m_Wlist.at(m_depth).triangularView<Upper>() = m_Wlist.at(m_depth).triangularView<Lower>() ; // Will this cause aliasing?
 

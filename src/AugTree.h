@@ -87,9 +87,6 @@ public:
     m_spaceNuggetSD = spaceNuggetSD ;
     m_timeNuggetSD = timeNuggetSD ;
   }
-  void SetMatern(const bool matern) {
-    m_matern = matern ;
-  }
   void SetRecordFullConditional(const bool recordIt) { m_recordFullConditional = recordIt ;}
 
   void SetPredictData(const mat & spCoords, const vec & timeValues, const mat covariates) {
@@ -144,7 +141,6 @@ private:
   double m_logFullCond{ 0 } ;
   double m_logJointPsiMarginal{ 0 } ;
   int m_numKnots{ 0 } ;
-  bool m_matern{ true } ;
   double m_spaceNuggetSD{ 1e-6 };
   double m_timeNuggetSD{ 1e-6 } ;
   std::string m_distMethod ;
