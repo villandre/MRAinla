@@ -116,6 +116,7 @@ void AugTree::numberNodes() {
 
 // In this version, we first split the longitude, then the latitude, and finally time.
 // We make sure that splits don't result in empty regions
+// numObsForTimeSplit still does nothing
 void AugTree::createLevels(TreeNode * parent, const uint & numObsForTimeSplit, const bool splitTime) {
   ArrayXi obsForMedian = parent->GetObsInNode() ;
   ArrayXi childMembership = ArrayXi::Zero(obsForMedian.size()) ;
@@ -183,7 +184,7 @@ void AugTree::createLevels(TreeNode * parent, const uint & numObsForTimeSplit, c
       bool onlyOneTimePoint = true;
       uint innerIndex = 1 ;
       while(onlyOneTimePoint) {
-        onlyOneTimePoint = (elementsForMedian(innerIndex) == elementsForMedian(0)) ;
+        onlyOneTimePoint = (elementsForMedian(innerIndex) - elementsForMedian(0)) < 2e-3  ; // This is to account for the jittering
         innerIndex += 1 ;
         if (innerIndex == elementsForMedian.size()) break ;
       }
