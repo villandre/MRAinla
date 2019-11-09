@@ -8,8 +8,8 @@
 using namespace Rcpp;
 
 // setupGridCpp
-List setupGridCpp(NumericVector responseValues, NumericMatrix spCoords, NumericMatrix predCoords, NumericVector obsTime, NumericVector predTime, NumericMatrix covariateMatrix, NumericMatrix predCovariateMatrix, uint M, NumericVector lonRange, NumericVector latRange, NumericVector timeRange, uint randomSeed, uint cutForTimeSplit, bool splitTime, int numKnotsRes0, int J, String distMethod);
-RcppExport SEXP _MRAinla_setupGridCpp(SEXP responseValuesSEXP, SEXP spCoordsSEXP, SEXP predCoordsSEXP, SEXP obsTimeSEXP, SEXP predTimeSEXP, SEXP covariateMatrixSEXP, SEXP predCovariateMatrixSEXP, SEXP MSEXP, SEXP lonRangeSEXP, SEXP latRangeSEXP, SEXP timeRangeSEXP, SEXP randomSeedSEXP, SEXP cutForTimeSplitSEXP, SEXP splitTimeSEXP, SEXP numKnotsRes0SEXP, SEXP JSEXP, SEXP distMethodSEXP) {
+List setupGridCpp(NumericVector responseValues, NumericMatrix spCoords, NumericMatrix predCoords, NumericVector obsTime, NumericVector predTime, NumericMatrix covariateMatrix, NumericMatrix predCovariateMatrix, uint Mlon, uint Mlat, uint Mtime, NumericVector lonRange, NumericVector latRange, NumericVector timeRange, uint randomSeed, uint cutForTimeSplit, bool splitTime, int numKnotsRes0, int J, String distMethod);
+RcppExport SEXP _MRAinla_setupGridCpp(SEXP responseValuesSEXP, SEXP spCoordsSEXP, SEXP predCoordsSEXP, SEXP obsTimeSEXP, SEXP predTimeSEXP, SEXP covariateMatrixSEXP, SEXP predCovariateMatrixSEXP, SEXP MlonSEXP, SEXP MlatSEXP, SEXP MtimeSEXP, SEXP lonRangeSEXP, SEXP latRangeSEXP, SEXP timeRangeSEXP, SEXP randomSeedSEXP, SEXP cutForTimeSplitSEXP, SEXP splitTimeSEXP, SEXP numKnotsRes0SEXP, SEXP JSEXP, SEXP distMethodSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -20,7 +20,9 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< NumericVector >::type predTime(predTimeSEXP);
     Rcpp::traits::input_parameter< NumericMatrix >::type covariateMatrix(covariateMatrixSEXP);
     Rcpp::traits::input_parameter< NumericMatrix >::type predCovariateMatrix(predCovariateMatrixSEXP);
-    Rcpp::traits::input_parameter< uint >::type M(MSEXP);
+    Rcpp::traits::input_parameter< uint >::type Mlon(MlonSEXP);
+    Rcpp::traits::input_parameter< uint >::type Mlat(MlatSEXP);
+    Rcpp::traits::input_parameter< uint >::type Mtime(MtimeSEXP);
     Rcpp::traits::input_parameter< NumericVector >::type lonRange(lonRangeSEXP);
     Rcpp::traits::input_parameter< NumericVector >::type latRange(latRangeSEXP);
     Rcpp::traits::input_parameter< NumericVector >::type timeRange(timeRangeSEXP);
@@ -30,7 +32,7 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< int >::type numKnotsRes0(numKnotsRes0SEXP);
     Rcpp::traits::input_parameter< int >::type J(JSEXP);
     Rcpp::traits::input_parameter< String >::type distMethod(distMethodSEXP);
-    rcpp_result_gen = Rcpp::wrap(setupGridCpp(responseValues, spCoords, predCoords, obsTime, predTime, covariateMatrix, predCovariateMatrix, M, lonRange, latRange, timeRange, randomSeed, cutForTimeSplit, splitTime, numKnotsRes0, J, distMethod));
+    rcpp_result_gen = Rcpp::wrap(setupGridCpp(responseValues, spCoords, predCoords, obsTime, predTime, covariateMatrix, predCovariateMatrix, Mlon, Mlat, Mtime, lonRange, latRange, timeRange, randomSeed, cutForTimeSplit, splitTime, numKnotsRes0, J, distMethod));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -126,7 +128,7 @@ END_RCPP
 }
 
 static const R_CallMethodDef CallEntries[] = {
-    {"_MRAinla_setupGridCpp", (DL_FUNC) &_MRAinla_setupGridCpp, 17},
+    {"_MRAinla_setupGridCpp", (DL_FUNC) &_MRAinla_setupGridCpp, 19},
     {"_MRAinla_LogJointHyperMarginalToWrap", (DL_FUNC) &_MRAinla_LogJointHyperMarginalToWrap, 11},
     {"_MRAinla_GetFullCondMean", (DL_FUNC) &_MRAinla_GetFullCondMean, 1},
     {"_MRAinla_GetFullCondSDs", (DL_FUNC) &_MRAinla_GetFullCondSDs, 1},

@@ -15,7 +15,7 @@ using namespace std;
 
 List setupGridCpp(NumericVector responseValues, NumericMatrix spCoords, NumericMatrix predCoords,
                   NumericVector obsTime,  NumericVector predTime, NumericMatrix covariateMatrix,
-                  NumericMatrix predCovariateMatrix, uint M,
+                  NumericMatrix predCovariateMatrix, uint Mlon, uint Mlat, uint Mtime,
                   NumericVector lonRange, NumericVector latRange, NumericVector timeRange,
                   uint randomSeed, uint cutForTimeSplit, bool splitTime,
                   int numKnotsRes0, int J, String distMethod)
@@ -38,7 +38,7 @@ List setupGridCpp(NumericVector responseValues, NumericMatrix spCoords, NumericM
 
   ArrayXXd covariateMat = as<ArrayXXd>(covariateMatrix) ;
 
-  AugTree * MRAgrid = new AugTree(M, lonR, latR, timeR, response, sp, time, predCovariates, predSp, predTimeVec, cutForTimeSplit, seedForRNG, covariateMat, splitTime, numKnotsRes0, J, dMethod) ;
+  AugTree * MRAgrid = new AugTree(Mlon, Mlat, Mtime, lonR, latR, timeR, response, sp, time, predCovariates, predSp, predTimeVec, cutForTimeSplit, seedForRNG, covariateMat, splitTime, numKnotsRes0, J, dMethod) ;
 
   XPtr<AugTree> p(MRAgrid, false) ; // Disabled automatic garbage collection.
 

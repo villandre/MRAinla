@@ -30,7 +30,7 @@
 #' @export
 
 MRA_INLA <- function(spacetimeData, hyperStart, fixedHyperValues, hyperGammaAlphaBeta, FEmuVec, predictionData = NULL,  maximiseOnly = FALSE, control) {
-  defaultControl <- list(M = 1, randomSeed = 24,  cutForTimeSplit = 400, nuggetSD = 0.00001, splitTime = FALSE, numKnotsRes0 = 20L, J = 4L, numValuesForIS = 200, numThreads = 1, numIterOptim = 200L, distMethod = "haversine")
+  defaultControl <- list(Mlon = 1, Mlat = 1, Mtime = 1, randomSeed = 24,  cutForTimeSplit = 400, nuggetSD = 0.00001, splitTime = FALSE, numKnotsRes0 = 20L, J = 4L, numValuesForIS = 200, numThreads = 1, numIterOptim = 200L, distMethod = "haversine")
   if (length(position <- grep(colnames(spacetimeData@sp@coords), pattern = "lon")) >= 1) {
     colnames(spacetimeData@sp@coords)[[position[[1]]]] <- "x"
     if (!is.null(predictionData)) {
@@ -100,7 +100,7 @@ MRA_INLA <- function(spacetimeData, hyperStart, fixedHyperValues, hyperGammaAlph
 
   covariateMatrix <- as.matrix(spacetimeData@data[, -1, drop = FALSE])
   gridPointers <- lapply(1:control$numThreads, function(x) {
-    setupGridCpp(responseValues = spacetimeData@data[, 1], spCoords = dataCoordinates, predCoords = predCoordinates, obsTime = timeValues, predTime = predTime, covariateMatrix = covariateMatrix, predCovariateMatrix = predCovariates, M = control$M, lonRange = control$lonRange, latRange = control$latRange, timeRange = timeRangeReshaped, randomSeed = control$randomSeed, cutForTimeSplit = control$cutForTimeSplit, splitTime = control$splitTime, numKnotsRes0 = control$numKnotsRes0, J = control$J, distMethod = control$distMethod)$gridPointer
+    setupGridCpp(responseValues = spacetimeData@data[, 1], spCoords = dataCoordinates, predCoords = predCoordinates, obsTime = timeValues, predTime = predTime, covariateMatrix = covariateMatrix, predCovariateMatrix = predCovariates, Mlon = control$Mlon, Mlat = control$Mlat, Mtime = control$Mtime, lonRange = control$lonRange, latRange = control$latRange, timeRange = timeRangeReshaped, randomSeed = control$randomSeed, cutForTimeSplit = control$cutForTimeSplit, splitTime = control$splitTime, numKnotsRes0 = control$numKnotsRes0, J = control$J, distMethod = control$distMethod)$gridPointer
   })
 
   # First we compute values relating to the hyperprior marginal distribution...

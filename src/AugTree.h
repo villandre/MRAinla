@@ -36,11 +36,10 @@ namespace MRAinla {
 class AugTree
 {
 public:
-  AugTree(uint &, Eigen::Array2d &, Eigen::Array2d &, Eigen::Array2d &, vec &, Eigen::ArrayXXd &, Eigen::ArrayXd &, Eigen::ArrayXXd &, Eigen::ArrayXXd &, Eigen::ArrayXd &, uint &, unsigned long int &, Eigen::ArrayXXd &, const bool, const unsigned int, const unsigned int, const std::string &) ;
+  AugTree(uint &, uint &, uint &, Eigen::Array2d &, Eigen::Array2d &, Eigen::Array2d &, vec &, Eigen::ArrayXXd &, Eigen::ArrayXd &, Eigen::ArrayXXd &, Eigen::ArrayXXd &, Eigen::ArrayXd &, uint &, unsigned long int &, Eigen::ArrayXXd &, const bool, const unsigned int, const unsigned int, const std::string &) ;
 
   std::vector<TreeNode *> GetVertexVector() {return m_vertexVector ;} ;
 
-  // void ComputeMRAlogLikAlt(const bool WmatsAvailable = false) ;
   std::vector<GaussDistParas> ComputeConditionalPrediction(const inputdata &) ;
 
   void ComputeLogFCandLogCDandDataLL() ;
@@ -146,6 +145,9 @@ private:
   std::string m_distMethod ;
 
   int m_M{ 0 } ;
+  int m_Mlon{ 0 } ;
+  int m_Mlat{ 0 } ;
+  int m_Mtime{ 0 } ;
   int m_numTips{ 0 } ;
   double m_errorSD{ 0 } ;
   double m_fixedEffSD{ 0 } ;
@@ -174,7 +176,7 @@ private:
 
   // Tree construction functions //
   void BuildTree(const uint &, const bool, const unsigned int, const unsigned int) ;
-  void createLevels(TreeNode *, const uint &, const bool) ;
+  void createLevels(TreeNode *, std::string, Eigen::ArrayXi) ;
   void generateKnots(TreeNode *, const unsigned int, const unsigned int) ;
 
   void numberNodes() ;

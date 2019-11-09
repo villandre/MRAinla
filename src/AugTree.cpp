@@ -38,7 +38,9 @@ struct MVN{
   }
 };
 
-AugTree::AugTree(uint & M,
+AugTree::AugTree(uint & Mlon,
+                 uint & Mlat,
+                 uint & Mtime,
                  Array2d & lonRange,
                  Array2d & latRange,
                  Array2d & timeRange,
@@ -55,8 +57,12 @@ AugTree::AugTree(uint & M,
                  const unsigned int numKnotsRes0,
                  const unsigned int J,
                  const string & distMethod)
-  : m_M(M), m_distMethod(distMethod)
+  : m_distMethod(distMethod)
 {
+  m_M = Mlon + Mlat + Mtime ;
+  m_Mlon = Mlon ;
+  m_Mlat = Mlat ;
+  m_Mtime = Mtime ;
   m_GammaParasSet = false ;
   m_dataset = inputdata(observations, obsSp, obsTime, covariates) ;
   m_mapDimensions = dimensions(lonRange, latRange, timeRange) ;
@@ -95,11 +101,17 @@ void AugTree::BuildTree(const uint & minObsForTimeSplit, const bool splitTime, c
   InternalNode * topNode = new InternalNode(m_mapDimensions, m_dataset) ;
 
   m_vertexVector.push_back(topNode) ;
-
-  createLevels(topNode, minObsForTimeSplit, splitTime) ;
+  ArrayXi numSplits(3) ;
+  numSplits << m_Mlon, m_Mlat, m_Mtime;
+  createLevels(topNode, "longitude", numSplits) ;
   numberNodes() ;
 
   generateKnots(topNode, numKnots0, J) ;
+
+  for (auto & i : m_vertexVector) {
+    Rprintf("This is node %i. I contain %i observations and %i knots. \n", i->GetNodeId(),
+            i->GetNumObs(), i->GetNumKnots()) ;
+  }
 }
 
 void AugTree::numberNodes() {
@@ -114,10 +126,9 @@ void AugTree::numberNodes() {
   }
 }
 
-// In this version, we first split the longitude, then the latitude, and finally time.
 // We make sure that splits don't result in empty regions
 // numObsForTimeSplit still does nothing
-void AugTree::createLevels(TreeNode * parent, const uint & numObsForTimeSplit, const bool splitTime) {
+void AugTree::createLevels(TreeNode * parent, std::string splitWhat, ArrayXi numSplitsLeft) {
   ArrayXi obsForMedian = parent->GetObsInNode() ;
   ArrayXi childMembership = ArrayXi::Zero(obsForMedian.size()) ;
   std::vector<dimensions> childDimensions ;
@@ -128,92 +139,64 @@ void AugTree::createLevels(TreeNode * parent, const uint & numObsForTimeSplit, c
   }
 
   // Handling longitude
-
-  ArrayXi elementsInChild = ArrayXi::LinSpaced(obsForMedian.size(), 0, obsForMedian.size()-1) ;
-  ArrayXd column = m_dataset.spatialCoords.col(0) ;
-  ArrayXd elementsForMedian = elem(column, obsForMedian) ;
-  double colMedian = median(elementsForMedian) ;
-  ArrayXd updatedLongitude(2) ;
-  updatedLongitude(0) = childDimensions.at(0).longitude(0) ;
-  updatedLongitude(1) = colMedian ;
-  ArrayXd newChildLongitude(2) ;
-  newChildLongitude(0) = colMedian ;
-  newChildLongitude(1) = childDimensions.at(0).longitude(1) ;
-  dimensions newDimensions = childDimensions.at(0) ;
-  newDimensions.longitude = newChildLongitude ;
-  childDimensions.push_back(newDimensions) ;
-  childDimensions.at(0).longitude = updatedLongitude ;
-  ArrayXi greaterElements = find(elementsForMedian > colMedian) ; // In deriveObsInNode, the checks are <=. It follows that observations on the right and upper boundaries of a zone are included.
-  ArrayXi updateIndices = elem(elementsInChild, greaterElements) ;
-  for (uint innerIndex = 0; innerIndex < updateIndices.size(); innerIndex++) {
-    childMembership(updateIndices(innerIndex)) = 1 ;
-  }
-
-  uint newChildIndex = 2 ;
-
-  // Handling latitude
-
-  for (int j = 0 ; j < 2; j++) {
+  if (splitWhat == "longitude") {
+    ArrayXi elementsInChild = ArrayXi::LinSpaced(obsForMedian.size(), 0, obsForMedian.size()-1) ;
+    ArrayXd column = m_dataset.spatialCoords.col(0) ;
+    ArrayXd elementsForMedian = elem(column, obsForMedian) ;
+    double colMedian = median(elementsForMedian) ;
+    ArrayXd updatedLongitude(2) ;
+    updatedLongitude(0) = childDimensions.at(0).longitude(0) ;
+    updatedLongitude(1) = colMedian ;
+    ArrayXd newChildLongitude(2) ;
+    newChildLongitude(0) = colMedian ;
+    newChildLongitude(1) = childDimensions.at(0).longitude(1) ;
+    dimensions newDimensions = childDimensions.at(0) ;
+    newDimensions.longitude = newChildLongitude ;
+    childDimensions.push_back(newDimensions) ;
+    childDimensions.at(0).longitude = updatedLongitude ;
+  } else if (splitWhat == "latitude") {
+    ArrayXi elementsInChild = ArrayXi::LinSpaced(obsForMedian.size(), 0, obsForMedian.size()-1) ;
     ArrayXd column = m_dataset.spatialCoords.col(1) ;
-    ArrayXd subColumn = elem(column, obsForMedian) ;
-    ArrayXi elementsInChild = find(childMembership == j) ;
-    double colMedian = median(elem(subColumn, elementsInChild)) ;
+    ArrayXd elementsForMedian = elem(column, obsForMedian) ;
+    double colMedian = median(elementsForMedian) ;
     ArrayXd updatedLatitude(2) ;
-    updatedLatitude(0) = childDimensions.at(j).latitude(0);
+    updatedLatitude(0) = childDimensions.at(0).latitude(0) ;
     updatedLatitude(1) = colMedian ;
     ArrayXd newChildLatitude(2) ;
     newChildLatitude(0) = colMedian ;
-    newChildLatitude(1) = childDimensions.at(j).latitude(1) ;
-    dimensions newDimensions = childDimensions.at(j) ;
+    newChildLatitude(1) = childDimensions.at(0).latitude(1) ;
+    dimensions newDimensions = childDimensions.at(0) ;
     newDimensions.latitude = newChildLatitude ;
     childDimensions.push_back(newDimensions) ;
-    childDimensions.at(j).latitude = updatedLatitude ;
-    ArrayXi greaterElements = find(elem(subColumn, elementsInChild).array() > colMedian) ;
-    ArrayXi updateIndices = elem(elementsInChild, greaterElements) ;
-    for (uint innerIndex = 0; innerIndex < updateIndices.size(); innerIndex++) {
-      childMembership(updateIndices(innerIndex)) = newChildIndex ;
-    }
-    newChildIndex += 1 ;
-  }
-  if (splitTime) {
-    // Handling time
-    for (int j = 0 ; j < newChildIndex; j++) {
-      ArrayXd time = elem(m_dataset.timeCoords, obsForMedian) ;
-      ArrayXi elementsInChild = find(childMembership == j) ;
-      ArrayXd elementsForMedian = elem(time, elementsInChild) ;
-      bool onlyOneTimePoint = true;
-      uint innerIndex = 1 ;
-      while(onlyOneTimePoint) {
-        onlyOneTimePoint = (elementsForMedian(innerIndex) - elementsForMedian(0)) < 2e-3  ; // This is to account for the jittering
-        innerIndex += 1 ;
-        if (innerIndex == elementsForMedian.size()) break ;
-      }
+    childDimensions.at(0).latitude = updatedLatitude ;
+  } else if (splitWhat == "time") {
 
-      if (!onlyOneTimePoint) {
-        double colMedian = median(elementsForMedian) ;
-        ArrayXd updatedTime(2) ;
-        updatedTime(0)  = childDimensions.at(j).time(0) ;
-        updatedTime(1) = colMedian ;
-        ArrayXd newChildTime(2) ;
-        newChildTime(0) = colMedian ;
-        newChildTime(1) = childDimensions.at(j).time(1) ;
-        dimensions newDimensions = childDimensions.at(j) ;
-        newDimensions.time = newChildTime ;
-        childDimensions.push_back(newDimensions) ;
-        childDimensions.at(j).time = updatedTime ;
-        ArrayXi greaterElements = find(elem(time, elementsInChild).array() > colMedian) ;
-        ArrayXi updateIndices = elem(elementsInChild, greaterElements) ;
-        for (uint innerIndex = 0 ; innerIndex < updateIndices.size() ; innerIndex++) {
-          childMembership(updateIndices(innerIndex)) = newChildIndex ;
-        }
-        newChildIndex += 1 ;
-      }
+    bool onlyOneTimePoint = true;
+    uint innerIndex = 1 ;
+    ArrayXd elementsForMedian = elem(m_dataset.timeCoords, obsForMedian) ;
+    while(onlyOneTimePoint) {
+      onlyOneTimePoint = (elementsForMedian(innerIndex) - elementsForMedian(0)) < 3e-3  ; // This is to account for the jittering
+      innerIndex += 1 ;
+      if (innerIndex == elementsForMedian.size()) break ;
+    }
+    if (!onlyOneTimePoint) {
+      double colMedian = median(elementsForMedian) ;
+      ArrayXd updatedTime(2) ;
+      updatedTime(0)  = childDimensions.at(0).time(0) ;
+      updatedTime(1) = colMedian ;
+      ArrayXd newChildTime(2) ;
+      newChildTime(0) = colMedian ;
+      newChildTime(1) = childDimensions.at(0).time(1) ;
+      dimensions newDimensions = childDimensions.at(0) ;
+      newDimensions.time = newChildTime ;
+      childDimensions.push_back(newDimensions) ;
+      childDimensions.at(0).time = updatedTime ;
     }
   }
 
-  int incrementedDepth = parent->GetDepth()+1 ;
+  int incrementedDepth = parent->GetDepth() + 1 ;
   for (auto & i : childDimensions) {
-    if (parent->GetDepth() < m_M-1) {
+    if (parent->GetDepth() < m_M - 1) {
       InternalNode * newNode = new InternalNode(i, incrementedDepth, parent, m_dataset) ;
       m_vertexVector.push_back(newNode) ;
       parent->AddChild(newNode) ;
@@ -223,12 +206,43 @@ void AugTree::createLevels(TreeNode * parent, const uint & numObsForTimeSplit, c
       m_vertexVector.push_back(newNode) ;
       parent->AddChild(newNode) ;
     }
-  }
 
+  }
+  // Domain is split with respect to longitude, then latitude, then time.
   if (incrementedDepth < m_M) {
-    incrementedDepth = incrementedDepth + 1 ;
+    if (splitWhat == "longitude") {
+      if (numSplitsLeft(1) > 0) {
+        splitWhat = "latitude" ;
+        numSplitsLeft(1) -= 1 ;
+      } else if (numSplitsLeft(2) > 0){
+        splitWhat = "time" ;
+        numSplitsLeft(2) -= 1 ;
+      } else {
+        numSplitsLeft(0) -= 1 ;
+      }
+    } else if (splitWhat == "latitude") {
+      if (numSplitsLeft(2) > 0){
+        splitWhat = "time" ;
+        numSplitsLeft(2) -= 1 ;
+      } else if (numSplitsLeft(0) > 0) {
+        splitWhat = "longitude" ;
+        numSplitsLeft(0) -= 1 ;
+      } else {
+        numSplitsLeft(1) -= 1 ;
+      }
+    } else {
+      if (numSplitsLeft(0) > 0) {
+        splitWhat = "longitude" ;
+        numSplitsLeft(0) -= 1 ;
+      } else if (numSplitsLeft(1) > 0) {
+        splitWhat = "latitude" ;
+        numSplitsLeft(1) -= 1 ;
+      } else {
+        numSplitsLeft(2) -= 1 ;
+      }
+    }
     for (auto && i : parent->GetChildren()) {
-      createLevels(i, numObsForTimeSplit, splitTime) ;
+      createLevels(i, splitWhat, numSplitsLeft) ;
     }
   }
 }
