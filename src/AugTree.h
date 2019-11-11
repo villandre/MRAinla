@@ -36,7 +36,7 @@ namespace MRAinla {
 class AugTree
 {
 public:
-  AugTree(uint &, uint &, uint &, Eigen::Array2d &, Eigen::Array2d &, Eigen::Array2d &, vec &, Eigen::ArrayXXd &, Eigen::ArrayXd &, Eigen::ArrayXXd &, Eigen::ArrayXXd &, Eigen::ArrayXd &, uint &, unsigned long int &, Eigen::ArrayXXd &, const bool, const unsigned int, const unsigned int, const std::string &) ;
+  AugTree(uint &, uint &, uint &, Eigen::Array2d &, Eigen::Array2d &, Eigen::Array2d &, vec &, Eigen::ArrayXXd &, Eigen::ArrayXd &, Eigen::ArrayXXd &, Eigen::ArrayXXd &, Eigen::ArrayXd &, uint &, unsigned long int &, Eigen::ArrayXXd &, const bool, const unsigned int, double, const std::string &) ;
 
   std::vector<TreeNode *> GetVertexVector() {return m_vertexVector ;} ;
 
@@ -175,9 +175,9 @@ private:
   void diveAndUpdate(TreeNode *, std::vector<TreeNode *> *) ;
 
   // Tree construction functions //
-  void BuildTree(const uint &, const bool, const unsigned int, const unsigned int) ;
+  void BuildTree(const uint &, const bool, const unsigned int, double) ;
   void createLevels(TreeNode *, std::string, Eigen::ArrayXi) ;
-  void generateKnots(TreeNode *, const unsigned int, const unsigned int) ;
+  void generateKnots(TreeNode *, const unsigned int, double) ;
 
   void numberNodes() ;
 

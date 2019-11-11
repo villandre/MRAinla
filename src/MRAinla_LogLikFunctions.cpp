@@ -18,7 +18,7 @@ List setupGridCpp(NumericVector responseValues, NumericMatrix spCoords, NumericM
                   NumericMatrix predCovariateMatrix, uint Mlon, uint Mlat, uint Mtime,
                   NumericVector lonRange, NumericVector latRange, NumericVector timeRange,
                   uint randomSeed, uint cutForTimeSplit, bool splitTime,
-                  int numKnotsRes0, int J, String distMethod)
+                  int numKnotsRes0, double J, String distMethod)
 {
   ArrayXd lonRinit = as<ArrayXd>(lonRange) ;
   ArrayXd latRinit = as<ArrayXd>(latRange) ;

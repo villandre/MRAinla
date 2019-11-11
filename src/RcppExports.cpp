@@ -8,7 +8,7 @@
 using namespace Rcpp;
 
 // setupGridCpp
-List setupGridCpp(NumericVector responseValues, NumericMatrix spCoords, NumericMatrix predCoords, NumericVector obsTime, NumericVector predTime, NumericMatrix covariateMatrix, NumericMatrix predCovariateMatrix, uint Mlon, uint Mlat, uint Mtime, NumericVector lonRange, NumericVector latRange, NumericVector timeRange, uint randomSeed, uint cutForTimeSplit, bool splitTime, int numKnotsRes0, int J, String distMethod);
+List setupGridCpp(NumericVector responseValues, NumericMatrix spCoords, NumericMatrix predCoords, NumericVector obsTime, NumericVector predTime, NumericMatrix covariateMatrix, NumericMatrix predCovariateMatrix, uint Mlon, uint Mlat, uint Mtime, NumericVector lonRange, NumericVector latRange, NumericVector timeRange, uint randomSeed, uint cutForTimeSplit, bool splitTime, int numKnotsRes0, double J, String distMethod);
 RcppExport SEXP _MRAinla_setupGridCpp(SEXP responseValuesSEXP, SEXP spCoordsSEXP, SEXP predCoordsSEXP, SEXP obsTimeSEXP, SEXP predTimeSEXP, SEXP covariateMatrixSEXP, SEXP predCovariateMatrixSEXP, SEXP MlonSEXP, SEXP MlatSEXP, SEXP MtimeSEXP, SEXP lonRangeSEXP, SEXP latRangeSEXP, SEXP timeRangeSEXP, SEXP randomSeedSEXP, SEXP cutForTimeSplitSEXP, SEXP splitTimeSEXP, SEXP numKnotsRes0SEXP, SEXP JSEXP, SEXP distMethodSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
@@ -30,7 +30,7 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< uint >::type cutForTimeSplit(cutForTimeSplitSEXP);
     Rcpp::traits::input_parameter< bool >::type splitTime(splitTimeSEXP);
     Rcpp::traits::input_parameter< int >::type numKnotsRes0(numKnotsRes0SEXP);
-    Rcpp::traits::input_parameter< int >::type J(JSEXP);
+    Rcpp::traits::input_parameter< double >::type J(JSEXP);
     Rcpp::traits::input_parameter< String >::type distMethod(distMethodSEXP);
     rcpp_result_gen = Rcpp::wrap(setupGridCpp(responseValues, spCoords, predCoords, obsTime, predTime, covariateMatrix, predCovariateMatrix, Mlon, Mlat, Mtime, lonRange, latRange, timeRange, randomSeed, cutForTimeSplit, splitTime, numKnotsRes0, J, distMethod));
     return rcpp_result_gen;

@@ -55,7 +55,7 @@ AugTree::AugTree(uint & Mlon,
                  ArrayXXd & covariates,
                  const bool splitTime,
                  const unsigned int numKnotsRes0,
-                 const unsigned int J,
+                 double J,
                  const string & distMethod)
   : m_distMethod(distMethod)
 {
@@ -92,7 +92,7 @@ AugTree::AugTree(uint & Mlon,
   }
 }
 
-void AugTree::BuildTree(const uint & minObsForTimeSplit, const bool splitTime, const unsigned int numKnots0, const unsigned int J)
+void AugTree::BuildTree(const uint & minObsForTimeSplit, const bool splitTime, const unsigned int numKnots0, double J)
 {
   m_vertexVector.reserve(1) ;
 
@@ -107,11 +107,6 @@ void AugTree::BuildTree(const uint & minObsForTimeSplit, const bool splitTime, c
   numberNodes() ;
 
   generateKnots(topNode, numKnots0, J) ;
-
-  for (auto & i : m_vertexVector) {
-    Rprintf("This is node %i. I contain %i observations and %i knots. \n", i->GetNodeId(),
-            i->GetNumObs(), i->GetNumKnots()) ;
-  }
 }
 
 void AugTree::numberNodes() {
@@ -247,10 +242,10 @@ void AugTree::createLevels(TreeNode * parent, std::string splitWhat, ArrayXi num
   }
 }
 
-void AugTree::generateKnots(TreeNode * node, const unsigned int numKnotsRes0, const unsigned int J) {
+void AugTree::generateKnots(TreeNode * node, const unsigned int numKnotsRes0, double J) {
 
   int numNodesAtLevel = GetLevelNodes(node->GetDepth()).size() ;
-  uint numKnotsToGen = std::max(uint(std::ceil((numKnotsRes0 * pow(J, node->GetDepth()))/numNodesAtLevel)), uint(2)) ;
+  int numKnotsToGen = std::max(uint(std::ceil((numKnotsRes0 * pow(J, node->GetDepth()))/numNodesAtLevel)), uint(2)) ;
 
   node->genRandomKnots(m_dataset, numKnotsToGen, m_randomNumGenerator) ;
 
@@ -730,9 +725,9 @@ void AugTree::ComputeLogFCandLogCDandDataLL() {
 
 void AugTree::ComputeLogJointPsiMarginal() {
 
-  m_MRAcovParasSpace.print("Spatial parameters:") ;
-  m_MRAcovParasTime.print("Time parameters:") ;
-  Rprintf("Scaling parameter: %.3e \n", m_spacetimeScaling) ;
+  // m_MRAcovParasSpace.print("Spatial parameters:") ;
+  // m_MRAcovParasTime.print("Time parameters:") ;
+  // Rprintf("Scaling parameter: %.3e \n", m_spacetimeScaling) ;
 
   ComputeLogPriors() ;
 
@@ -742,10 +737,10 @@ void AugTree::ComputeLogJointPsiMarginal() {
 
   ComputeLogFCandLogCDandDataLL() ;
 
-  Rprintf("Observations log-lik: %.4e \n Log-prior: %.4e \n Log-Cond. dist.: %.4e \n Log-full cond.: %.4e \n \n \n",
-  m_globalLogLik, m_logPrior, m_logCondDist, m_logFullCond) ;
+  // Rprintf("Observations log-lik: %.4e \n Log-prior: %.4e \n Log-Cond. dist.: %.4e \n Log-full cond.: %.4e \n \n \n",
+  // m_globalLogLik, m_logPrior, m_logCondDist, m_logFullCond) ;
   m_logJointPsiMarginal = m_globalLogLik + m_logPrior + m_logCondDist - m_logFullCond ;
-   Rprintf("Joint value: %.4e \n \n", m_logJointPsiMarginal) ;
+   // Rprintf("Joint value: %.4e \n \n", m_logJointPsiMarginal) ;
 }
 
 void AugTree::ComputeHpred() {

@@ -163,7 +163,7 @@ public:
   virtual Eigen::ArrayXi & GetPredIndices()=0 ;
   virtual void computeUpred(const maternVec &, const maternVec &, const double &, const spatialcoor &, const double &, const double &, const std::string &)=0 ;
 
-  virtual void genRandomKnots(spatialcoor &, const uint &, const gsl_rng *) = 0;
+  virtual void genRandomKnots(spatialcoor &, int &, const gsl_rng *) = 0;
 
   Eigen::ArrayXi & GetObsInNode() {return m_obsInNode ;}
   dimensions GetDimensions() {return m_dimensions;}
