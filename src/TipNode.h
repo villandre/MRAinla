@@ -85,7 +85,7 @@ public:
   Eigen::ArrayXi & GetPredIndices() { return m_predsInNode ;}
   void computeUpred(const maternVec &, const maternVec &, const double &, const spatialcoor &, const double &, const double &, const std::string &) ;
 
-  void genRandomKnots(spatialcoor & dataCoor, int & numKnots, const gsl_rng * RNG) {
+  void genRandomKnots(spatialcoor & dataCoor, int & numKnots, const gsl_rng * RNG, Eigen::Array<bool, Eigen::Dynamic, 1> &) {
 
     m_knotsCoor = spatialcoor(rows(dataCoor.spatialCoords, m_obsInNode),
                               elem(dataCoor.timeCoords, m_obsInNode)) ;

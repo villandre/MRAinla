@@ -193,6 +193,8 @@ private:
   std::vector<TreeNode *> GetLevel(const uint) ;
   Eigen::ArrayXi m_obsOrderForFmat ;
 
+  Eigen::Array<bool, Eigen::Dynamic, 1> m_assignedPredToKnot ;
+
   // Prediction functions
 
   void distributePredictionData() ;

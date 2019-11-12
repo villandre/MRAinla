@@ -1,5 +1,6 @@
 #include "InternalNode.h"
 #include <gsl/gsl_randist.h>
+#include <random>
 
 using namespace Eigen ;
 using namespace MRAinla ;
@@ -18,38 +19,61 @@ void InternalNode::RemoveChild(TreeNode * childToRemove)
   }
 }
 
-void InternalNode::genRandomKnots(spatialcoor & dataCoor, int & numKnots, const gsl_rng * RNG) {
-  numKnots = min(numKnots, int(m_obsInNode.size()) - 1) ;
-  // numKnots = int(std::ceil(std::sqrt(double(m_obsInNode.size())))) ;
-  if (m_depth == 0) {
-    double a[numKnots], b[dataCoor.timeCoords.size()] ;
+void InternalNode::genRandomKnots(spatialcoor & dataCoor, int & numKnots, const gsl_rng * RNG, Array<bool, Dynamic, 1> & assignedPredLocations) {
+  std::random_device rd ;
+  std::mt19937 g(rd()) ;
+  g.seed(0) ;
+  numKnots = min(numKnots, int(m_obsInNode.size())) ;
+  ArrayXi predObsInNode = deriveObsInNode(dataCoor) ;
+  std::vector<int> subAssignedPredLocations ;
+  if (predObsInNode.size() > 0) {
+    for (uint i = 0; i < predObsInNode.size(); i++) {
+      subAssignedPredLocations.push_back(assignedPredLocations(predObsInNode(i))) ;
+    }
+  }
 
-    for (uint i = 0; i < dataCoor.timeCoords.size() ; i++)
-    {
-      b[i] = (double) i;
+  int numUnassignedPreds = 0 ;
+
+  for (auto & i : subAssignedPredLocations) {
+    if (!i) numUnassignedPreds += 1 ;
+  }
+  int numKnotsFromPred = 0 ;
+  ArrayXXd spacePredCoords(0, 2) ;
+  ArrayXd timePredCoords(0) ;
+  if (numUnassignedPreds > 0) {
+    numKnotsFromPred = min(numKnots, numUnassignedPreds) ;
+
+    std::vector<int> vectorToShuffle ;
+    for (uint i = 0; i < assignedPredLocations.size(); i++) {
+      if (assignedPredLocations(i)) {
+        vectorToShuffle.push_back(i) ;
+      }
+    }
+    std::shuffle(vectorToShuffle.begin(), vectorToShuffle.end(), g) ;
+    ArrayXi shuffledPredIndices(numKnotsFromPred) ;
+    for (uint i = 0 ; i < numKnotsFromPred; i++) {
+      shuffledPredIndices(i) = vectorToShuffle.at(i) ;
+      assignedPredLocations(shuffledPredIndices(i)) = true ;
     }
 
-    ArrayXi aConverted = ArrayXi::Zero(numKnots) ;
+    spacePredCoords = rows(dataCoor.spatialCoords, shuffledPredIndices) ;
+    timePredCoords = elem(dataCoor.timeCoords, shuffledPredIndices) ;
+  }
 
-    gsl_ran_choose(RNG, a, numKnots, b, dataCoor.timeCoords.size(), sizeof (double));
+  ArrayXXd knotsSp(0, 2) ;
+  ArrayXd time(0) ;
+  if (numKnots - numKnotsFromPred > 0) {
 
-    for (uint i = 0 ; i < numKnots ; i++) {
-      aConverted(i) = a[i] ;
-    }
+    numKnots -= numKnotsFromPred ;
+    knotsSp.resize(numKnots, 2) ;
+    time.resize(numKnots) ;
 
-    ArrayXXd jitteredSpace = rows(dataCoor.spatialCoords, aConverted) ;
-    ArrayXd jitteredTime = elem(dataCoor.timeCoords, aConverted) ;
+    double numPointsPerEdge = ceil(double(numKnots + 16)/12) ;
+    // For now, let's check what happens when the number of knots is always 8 + 12*i,
+    // thus ensuring a uniform spread in the space.
+    numKnots = numPointsPerEdge * 12 - 16 ;
 
-    for (uint i = 0; i < jitteredSpace.size(); i++) {
-      jitteredSpace(i) += gsl_ran_gaussian(RNG, 0.00001) ;
-    }
-
-    for (uint i = 0; i < jitteredTime.size(); i++) {
-      jitteredTime(i) += gsl_ran_gaussian(RNG, 0.00001) ;
-    }
-    m_knotsCoor = spatialcoor(jitteredSpace, jitteredTime) ;
-  } else {
-    ArrayXXd knotsSp = ArrayXXd::Zero(numKnots, 2) ;
+    knotsSp = ArrayXXd::Zero(numKnots, 2) ;
 
     double minLon = m_dimensions.longitude.minCoeff() ;
     double maxLon = m_dimensions.longitude.maxCoeff() ;
@@ -60,31 +84,53 @@ void InternalNode::genRandomKnots(spatialcoor & dataCoor, int & numKnots, const 
     double minTime = m_dimensions.time.minCoeff() ;
     double maxTime = m_dimensions.time.maxCoeff() ;
 
-    ArrayXd time = ArrayXd::Zero(numKnots) ;
-
-    double cubeRadiusInPoints = ceil(double(cbrt(numKnots))) ;
-
     double offsetPerc = 0.00001 ;
-    double lonDist = (maxLon - minLon) * (1-offsetPerc * 2)/(cubeRadiusInPoints - 1) ;
-    double latDist = (maxLat - minLat) * (1-offsetPerc * 2)/(cubeRadiusInPoints - 1) ;
-    double timeDist = (maxTime - minTime) * (1-offsetPerc * 2)/(cubeRadiusInPoints - 1) ;
+    double lonDist = (maxLon - minLon) * (1-offsetPerc * 2)/(numPointsPerEdge - 1) ;
+    double latDist = (maxLat - minLat) * (1-offsetPerc * 2)/(numPointsPerEdge - 1) ;
+    double timeDist = (maxTime - minTime) * (1-offsetPerc * 2)/(numPointsPerEdge - 1) ;
 
-    uint rowIndex = 0 ;
-    for (uint lonIndex = 0 ; lonIndex < cubeRadiusInPoints ; lonIndex++) {
-      for (uint latIndex = 0 ; latIndex < cubeRadiusInPoints ; latIndex++) {
-        for (uint timeIndex = 0 ; timeIndex < cubeRadiusInPoints ; timeIndex++) {
-          knotsSp(rowIndex, 0) = minLon + offsetPerc * (maxLon - minLon) + double(lonIndex) * lonDist + gsl_ran_gaussian(RNG, 0.000001) ;
-          knotsSp(rowIndex, 1) = minLat + offsetPerc * (maxLat - minLat) + double(latIndex) * latDist + gsl_ran_gaussian(RNG, 0.000001) ;
-          time(rowIndex) = minTime + offsetPerc * (maxTime - minTime) + double(timeIndex) * timeDist  + gsl_ran_gaussian(RNG, 0.000001) ;
-          rowIndex += 1 ;
-          if (rowIndex >= numKnots) break ;
-        }
-        if (rowIndex >= numKnots) break ;
-      }
-      if (rowIndex >= numKnots) break ;
+    Array3d scalingArray = {lonDist, latDist, timeDist} ;
+    Array3d offsetCoords = {minLon + offsetPerc/2 * (maxLon - minLon),
+                            minLat + offsetPerc/2 * (maxLat - minLat),
+                            minTime + offsetPerc/2 * (maxTime - minTime)} ;
+
+    // We place the corners first.
+    intCube cubeForKnots(numPointsPerEdge, scalingArray, offsetCoords) ;
+
+    std::array<Eigen::Array3d, 8> corners = cubeForKnots.getCorners(false) ;
+    uint index = 0 ;
+    for (auto & corner : corners) {
+      knotsSp.row(index) = corner.head(2) ;
+      time(index) = corner(2) ;
     }
-    m_knotsCoor = spatialcoor(knotsSp, time) ;
+
+    if (numKnots > 8) {
+      uint numRemainingKnots = numKnots - 8 ;
+      uint pointIndex = 0 ;
+      uint edgeIndex = 0 ;
+      for (uint i = 0 ; i < numRemainingKnots; i++) {
+        if (edgeIndex % 12 == 0) {
+          edgeIndex = 0 ;
+          pointIndex += 1 ;
+        }
+        Array3d knotArray = cubeForKnots.getEdgePointCoor(edgeIndex, pointIndex) ;
+        knotsSp.row(index) = knotArray.head(2) ;
+        time(index) = knotArray(2) ;
+        edgeIndex += 1 ;
+        index += 1 ;
+      }
+
+    }
   }
+  ArrayXXd mergedSpace = join_cols(spacePredCoords, knotsSp) ;
+  ArrayXd mergedTime = join_cols(timePredCoords, time) ;
+  std::uniform_real_distribution<double> distribution(0.0, 0.000001);
+  for (uint i = 0; i < mergedTime.size(); i++) {
+    mergedTime(i) += distribution(g) ;
+    mergedSpace(i) += distribution(g) ;
+    mergedSpace(i + mergedTime.size()) += distribution(g) ;
+  }
+  m_knotsCoor = spatialcoor(mergedSpace, mergedTime) ;
 }
 
 void InternalNode::DeriveAtilde() {

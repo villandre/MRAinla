@@ -4,6 +4,68 @@
 #define INTERMEDIATENODE_H
 namespace MRAinla
 {
+
+struct intCube{
+  int edgeLengthInUnits ;
+  Eigen::Array3d scalingFactors ;
+  Eigen::Array3d offsetCoords ;
+  intCube() { } ;
+  intCube(int edgeLength, Eigen::Array3d scalingFactors, Eigen::Array3d offsetCoords): edgeLengthInUnits(edgeLength),
+    scalingFactors(scalingFactors), offsetCoords(offsetCoords) {  }
+  std::array<Eigen::Array3d, 8> getCorners(bool units) {
+    Eigen::Array3d coef = Eigen::Array3d::Constant(edgeLengthInUnits) ;
+    Eigen::Array3d offset = Eigen::Array3d::Zero(edgeLengthInUnits) ;
+    if (!units) {
+      coef = scalingFactors ;
+      offset = offsetCoords ;
+    }
+    uint index = 0 ;
+    std::array<Eigen::Array3d, 8> corners ;
+    for (uint width = 0 ; width < 2 ; width++) {
+      for (uint height = 0 ; height < 2 ; height++) {
+        for (uint depth = 0 ; depth < 2 ; depth++) {
+          corners.at(index) = {width * coef(0) + offset(0),
+                               height * coef(1) + offset(1),
+                               depth * coef(2) + offset(2) } ;
+          index += 1 ;
+        }
+      }
+    }
+    return corners ;
+  }
+  Eigen::Array3d getEdgePointCoor(uint edgeIndex, uint pointIndex) {
+    Eigen::Array3d pointReturn ;
+    double pointIndexRecast = double(pointIndex) ;
+    switch (edgeIndex) {
+    case 0:
+      pointReturn  << 0, 0, pointIndexRecast ;
+    case 1:
+      pointReturn  << 0, pointIndexRecast, 0 ;
+    case 2:
+      pointReturn << 0, 0, pointIndexRecast ;
+    case 3:
+      pointReturn << edgeLengthInUnits, pointIndexRecast, 0 ;
+    case 4:
+      pointReturn << edgeLengthInUnits, 0, pointIndexRecast ;
+    case 5:
+      pointReturn << 0, edgeLengthInUnits, pointIndexRecast ;
+    case 6:
+      pointReturn << pointIndexRecast, edgeLengthInUnits, 0 ;
+    case 7:
+      pointReturn << 0, pointIndexRecast, edgeLengthInUnits ;
+    case 8:
+      pointReturn << pointIndexRecast, 0 , edgeLengthInUnits ;
+    case 9:
+      pointReturn << edgeLengthInUnits, edgeLengthInUnits, pointIndexRecast ;
+    case 10:
+      pointReturn << pointIndexRecast, edgeLengthInUnits, edgeLengthInUnits ;
+    case 11:
+      pointReturn << edgeLengthInUnits, pointIndexRecast, edgeLengthInUnits ;
+    } ;
+    return pointReturn * scalingFactors + offsetCoords ;
+  }
+};
+
 class InternalNode : public TreeNode
 {
 public:
@@ -43,7 +105,7 @@ public:
     throw Rcpp::exception("Upred matrices need not be computed in internal nodes! \n") ;
   }
 
-  void genRandomKnots(spatialcoor &, int &, const gsl_rng *) ;
+  void genRandomKnots(spatialcoor &, int &, const gsl_rng *, Eigen::Array<bool, Eigen::Dynamic, 1> &) ;
 
   InternalNode(const dimensions & dims, const uint & depth, TreeNode * parent,
                const inputdata & dataset) {

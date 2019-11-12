@@ -68,7 +68,8 @@ AugTree::AugTree(uint & Mlon,
   m_mapDimensions = dimensions(lonRange, latRange, timeRange) ;
   m_randomNumGenerator = gsl_rng_alloc(gsl_rng_taus) ;
   SetPredictData(predSp, predTime, predCovariates) ;
-
+  m_assignedPredToKnot = Array<bool, Dynamic, 1>(m_predictData.timeCoords.size()) ;
+  m_assignedPredToKnot.head(m_assignedPredToKnot.size()) = false ;
   gsl_rng_set(m_randomNumGenerator, seed) ;
 
   m_fixedEffParameters = Eigen::VectorXd::Zero(m_dataset.covariateValues.cols() + 1);
@@ -247,7 +248,7 @@ void AugTree::generateKnots(TreeNode * node, const unsigned int numKnotsRes0, do
   int numNodesAtLevel = GetLevelNodes(node->GetDepth()).size() ;
   int numKnotsToGen = std::max(uint(std::ceil((numKnotsRes0 * pow(J, node->GetDepth()))/numNodesAtLevel)), uint(2)) ;
 
-  node->genRandomKnots(m_dataset, numKnotsToGen, m_randomNumGenerator) ;
+  node->genRandomKnots(m_dataset, numKnotsToGen, m_randomNumGenerator, m_assignedPredToKnot) ;
 
   if (node->GetChildren().at(0) != NULL) {
     for (auto &i : node->GetChildren()) {
