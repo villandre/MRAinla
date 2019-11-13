@@ -77,6 +77,11 @@ struct spatialcoor {
     Eigen::ArrayXd subTimeCoords = elem(timeCoords, indices) ;
     return spatialcoor(subSpatialCoords, subTimeCoords) ;
   };
+  void print() {
+    Rcpp::Rcout << "Space coordinates:" << std::endl
+                << spatialCoords << std::endl << "Time coordinates:"
+                << timeCoords << std::endl ;
+  }
 };
 
 struct inputdata : public spatialcoor {

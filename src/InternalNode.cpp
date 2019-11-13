@@ -20,11 +20,13 @@ void InternalNode::RemoveChild(TreeNode * childToRemove)
 }
 
 void InternalNode::genRandomKnots(spatialcoor & dataCoor, int & numKnots, const gsl_rng * RNG, Array<bool, Dynamic, 1> & assignedPredLocations) {
+  Rcpp::Rcout << "Entered genRandomKnots... " << std::endl ;
   std::random_device rd ;
   std::mt19937 g(rd()) ;
   g.seed(0) ;
   numKnots = min(numKnots, int(m_obsInNode.size())) ;
   ArrayXi predObsInNode = deriveObsInNode(dataCoor) ;
+  Rprintf("Number of predictions in node: %i \n", predObsInNode.size()) ;
   std::vector<int> subAssignedPredLocations ;
   if (predObsInNode.size() > 0) {
     for (uint i = 0; i < predObsInNode.size(); i++) {
@@ -37,6 +39,7 @@ void InternalNode::genRandomKnots(spatialcoor & dataCoor, int & numKnots, const 
   for (auto & i : subAssignedPredLocations) {
     if (!i) numUnassignedPreds += 1 ;
   }
+  Rprintf("Number of pred. nodes to be assigned: %i \n", numUnassignedPreds) ;
   int numKnotsFromPred = 0 ;
   ArrayXXd spacePredCoords(0, 2) ;
   ArrayXd timePredCoords(0) ;
@@ -44,8 +47,8 @@ void InternalNode::genRandomKnots(spatialcoor & dataCoor, int & numKnots, const 
     numKnotsFromPred = min(numKnots, numUnassignedPreds) ;
 
     std::vector<int> vectorToShuffle ;
-    for (uint i = 0; i < assignedPredLocations.size(); i++) {
-      if (assignedPredLocations(i)) {
+    for (uint i = 0; i < subAssignedPredLocations.size(); i++) {
+      if (!subAssignedPredLocations.at(i)) {
         vectorToShuffle.push_back(i) ;
       }
     }
@@ -58,20 +61,23 @@ void InternalNode::genRandomKnots(spatialcoor & dataCoor, int & numKnots, const 
 
     spacePredCoords = rows(dataCoor.spatialCoords, shuffledPredIndices) ;
     timePredCoords = elem(dataCoor.timeCoords, shuffledPredIndices) ;
+    Rprintf("Number of time elements (pred. phase): %i \n", timePredCoords.size()) ;
   }
 
   ArrayXXd knotsSp(0, 2) ;
   ArrayXd time(0) ;
+  Rprintf("Number of knots left to assign in node %i: %i \n", m_nodeId, numKnots - numKnotsFromPred) ;
   if (numKnots - numKnotsFromPred > 0) {
-
     numKnots -= numKnotsFromPred ;
-    knotsSp.resize(numKnots, 2) ;
-    time.resize(numKnots) ;
 
     double numPointsPerEdge = ceil(double(numKnots + 16)/12) ;
     // For now, let's check what happens when the number of knots is always 8 + 12*i,
     // thus ensuring a uniform spread in the space.
     numKnots = numPointsPerEdge * 12 - 16 ;
+
+    knotsSp.resize(numKnots, 2) ;
+    time.resize(numKnots) ;
+    Rprintf("Adding %i knots. \n", numKnots) ;
 
     knotsSp = ArrayXXd::Zero(numKnots, 2) ;
 
@@ -93,6 +99,7 @@ void InternalNode::genRandomKnots(spatialcoor & dataCoor, int & numKnots, const 
     Array3d offsetCoords = {minLon + offsetPerc/2 * (maxLon - minLon),
                             minLat + offsetPerc/2 * (maxLat - minLat),
                             minTime + offsetPerc/2 * (maxTime - minTime)} ;
+    Rcpp::Rcout << "Offset coords: " << offsetCoords << std::endl ;
 
     // We place the corners first.
     intCube cubeForKnots(numPointsPerEdge, scalingArray, offsetCoords) ;
@@ -102,7 +109,9 @@ void InternalNode::genRandomKnots(spatialcoor & dataCoor, int & numKnots, const 
     for (auto & corner : corners) {
       knotsSp.row(index) = corner.head(2) ;
       time(index) = corner(2) ;
+      index += 1 ;
     }
+    Rcpp::Rcout << "Assigned corner coordinates: " << std::endl << knotsSp << std::endl ;
 
     if (numKnots > 8) {
       uint numRemainingKnots = numKnots - 8 ;
@@ -119,11 +128,14 @@ void InternalNode::genRandomKnots(spatialcoor & dataCoor, int & numKnots, const 
         edgeIndex += 1 ;
         index += 1 ;
       }
-
     }
   }
+  Rprintf("Number of time elements (next phase): %i \n", time.size()) ;
   ArrayXXd mergedSpace = join_cols(spacePredCoords, knotsSp) ;
   ArrayXd mergedTime = join_cols(timePredCoords, time) ;
+  Rprintf("Listed %i space and %i time coords for pred. knots.\n",
+          mergedSpace.rows(),
+          mergedTime.size()) ;
   std::uniform_real_distribution<double> distribution(0.0, 0.000001);
   for (uint i = 0; i < mergedTime.size(); i++) {
     mergedTime(i) += distribution(g) ;

@@ -42,7 +42,7 @@ struct intCube{
     case 1:
       pointReturn  << 0, pointIndexRecast, 0 ;
     case 2:
-      pointReturn << 0, 0, pointIndexRecast ;
+      pointReturn <<  pointIndexRecast, 0, 0 ;
     case 3:
       pointReturn << edgeLengthInUnits, pointIndexRecast, 0 ;
     case 4:
