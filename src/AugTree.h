@@ -46,7 +46,6 @@ public:
   void ComputeLogPriors() ;
 
   double GetMRAlogLik() const {return m_MRAlogLik ;}
-  gsl_rng * GetRandomNumGenerator() {return m_randomNumGenerator ;}
   inputdata GetDataset() {return m_dataset;}
   int GetNumTips() {return m_numTips ;}
   int GetNumKnots() {return m_numKnots ;}
@@ -57,9 +56,6 @@ public:
   double GetLogJointPsiMarginal() { return m_logJointPsiMarginal ;}
   Eigen::ArrayXi GetObsOrderForHpredMat() { return m_obsOrderForHpredMat ;}
 
-  void SetRNG(gsl_rng * myRNG) { m_randomNumGenerator = myRNG ;}
-
-  // void SetCovParameters(vec & covParas) {m_covParameters = covParas ;}
   void SetFixedEffParameters(vec & fixedParas) {
     if (fixedParas.isApprox(m_fixedEffParameters)) m_recomputeGlobalLogLik = true ;
     m_fixedEffParameters = fixedParas ;
@@ -114,8 +110,7 @@ public:
   vec ComputeEvar() ;
 
   ~ AugTree() {
-    deallocate_container(m_vertexVector) ;
-    gsl_rng_free(m_randomNumGenerator) ;};
+    deallocate_container(m_vertexVector) ;}
 
 private:
 
@@ -167,9 +162,8 @@ private:
   dimensions m_mapDimensions;
 
   inputdata m_dataset ; // First element is response, second is spatial coordinates, last is time.
-  // Note that the generator's seed is determined by the system variable
-  // GSL_RNG_SEED and takes value 0 by default.
-  gsl_rng * m_randomNumGenerator ;
+
+  std::mt19937_64 m_randomNumGenerator ;
 
   std::vector<TreeNode *> Descendants(std::vector<TreeNode *>) ;
   void diveAndUpdate(TreeNode *, std::vector<TreeNode *> *) ;

@@ -3,10 +3,9 @@
 #include <cstdio>
 #include <cstdlib>
 #include <iostream>
+#include <random>
 
 #include <assert.h>
-#include <gsl/gsl_rng.h>
-#include <gsl/gsl_sf_log.h>
 
 #include <RcppGSL.h>
 #include <RcppEigen.h>
@@ -78,9 +77,10 @@ struct spatialcoor {
     return spatialcoor(subSpatialCoords, subTimeCoords) ;
   };
   void print() {
-    Rcpp::Rcout << "Space coordinates:" << std::endl
-                << spatialCoords << std::endl << "Time coordinates:"
-                << timeCoords << std::endl ;
+    Eigen::ArrayXXd merged(spatialCoords.rows(), spatialCoords.cols() + 1) ;
+    merged << spatialCoords, timeCoords ;
+    Rcpp::Rcout << "Space and time coordinates:" << std::endl ;
+    Rcpp::Rcout << merged << std::endl ;
   }
 };
 
@@ -168,7 +168,7 @@ public:
   virtual Eigen::ArrayXi & GetPredIndices()=0 ;
   virtual void computeUpred(const maternVec &, const maternVec &, const double &, const spatialcoor &, const double &, const double &, const std::string &)=0 ;
 
-  virtual void genRandomKnots(spatialcoor &, int &, const gsl_rng *, Eigen::Array<bool, Eigen::Dynamic, 1> & assignedPredLocations) = 0;
+  virtual void genRandomKnots(spatialcoor &, int &, std::mt19937_64 &, Eigen::Array<bool, Eigen::Dynamic, 1> & assignedPredLocations) = 0;
 
   Eigen::ArrayXi & GetObsInNode() {return m_obsInNode ;}
   dimensions GetDimensions() {return m_dimensions;}

@@ -1,4 +1,3 @@
-#include <gsl/gsl_sf_exp.h>
 #include <math.h>
 
 #include "TreeNode.h"

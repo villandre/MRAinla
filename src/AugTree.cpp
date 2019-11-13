@@ -5,8 +5,6 @@
 #endif
 
 #include <math.h>
-#include <gsl/gsl_sf_gamma.h>
-#include <gsl/gsl_multimin.h>
 
 #include "AugTree.h"
 #include "TipNode.h"
@@ -66,11 +64,13 @@ AugTree::AugTree(uint & Mlon,
   m_GammaParasSet = false ;
   m_dataset = inputdata(observations, obsSp, obsTime, covariates) ;
   m_mapDimensions = dimensions(lonRange, latRange, timeRange) ;
-  m_randomNumGenerator = gsl_rng_alloc(gsl_rng_taus) ;
+  std::random_device rd ;
+  std::mt19937_64 generator(rd()) ;
+  generator.seed(seed) ;
+  m_randomNumGenerator = generator ;
   SetPredictData(predSp, predTime, predCovariates) ;
   m_assignedPredToKnot = Array<bool, Dynamic, 1>(m_predictData.timeCoords.size()) ;
   m_assignedPredToKnot.segment(0, m_assignedPredToKnot.size()) = false ;
-  gsl_rng_set(m_randomNumGenerator, seed) ;
 
   m_fixedEffParameters = Eigen::VectorXd::Zero(m_dataset.covariateValues.cols() + 1);
 
@@ -108,13 +108,13 @@ void AugTree::BuildTree(const uint & minObsForTimeSplit, const bool splitTime, c
   numberNodes() ;
 
   generateKnots(topNode, numKnots0, J) ;
-  for (auto & i : m_vertexVector) {
-    Rprintf("Number of knots in node %i: %i.\n", i->GetNodeId(), i->GetNumKnots()) ;
-    if (i->GetDepth() < m_M) {
-      Rcout << "The knots are:" << std::endl;
-      i->GetKnotsCoor().print() ;
-    }
-  }
+  // for (auto & i : m_vertexVector) {
+  //   Rprintf("Number of knots in node %i: %i.\n", i->GetNodeId(), i->GetNumKnots()) ;
+  //   if (i->GetDepth() < m_M) {
+  //     Rcout << "The knots are:" << std::endl;
+  //     i->GetKnotsCoor().print() ;
+  //   }
+  // }
 }
 
 void AugTree::numberNodes() {

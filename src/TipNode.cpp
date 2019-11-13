@@ -1,5 +1,4 @@
 #include "TipNode.h"
-#include <gsl/gsl_randist.h>
 
 using namespace Eigen ;
 using namespace MRAinla ;
