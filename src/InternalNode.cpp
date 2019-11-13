@@ -21,35 +21,28 @@ void InternalNode::genRandomKnots(spatialcoor & dataCoor, int & numKnots, std::m
 
   numKnots = min(numKnots, int(m_obsInNode.size())) ;
   ArrayXi predObsInNode = deriveObsInNode(dataCoor) ;
-  std::vector<int> subAssignedPredLocations ;
+
+  std::vector<int> unassignedPredObsInNode ;
   if (predObsInNode.size() > 0) {
     for (uint i = 0; i < predObsInNode.size(); i++) {
-      subAssignedPredLocations.push_back(assignedPredLocations(predObsInNode(i))) ;
+      if (!assignedPredLocations(predObsInNode(i)))
+        unassignedPredObsInNode.push_back(predObsInNode(i)) ;
     }
   }
 
-  int numUnassignedPreds = 0 ;
+  int numUnassignedPreds = unassignedPredObsInNode.size() ;
 
-  for (auto & i : subAssignedPredLocations) {
-    if (!i) numUnassignedPreds += 1 ;
-  }
   int numKnotsFromPred = 0 ;
   ArrayXXd spacePredCoords(0, 2) ;
   ArrayXd timePredCoords(0) ;
   if (numUnassignedPreds > 0) {
     numKnotsFromPred = min(numKnots, numUnassignedPreds) ;
 
-    std::vector<int> vectorToShuffle ;
-    for (uint i = 0; i < subAssignedPredLocations.size(); i++) {
-      if (!subAssignedPredLocations.at(i)) {
-        vectorToShuffle.push_back(i) ;
-      }
-    }
-    std::shuffle(vectorToShuffle.begin(), vectorToShuffle.end(), generator) ;
+    std::shuffle(unassignedPredObsInNode.begin(), unassignedPredObsInNode.end(), generator) ;
     ArrayXi shuffledPredIndices(numKnotsFromPred) ;
     for (uint i = 0 ; i < numKnotsFromPred; i++) {
-      shuffledPredIndices(i) = vectorToShuffle.at(i) ;
-      assignedPredLocations(shuffledPredIndices(i)) = true ;
+      shuffledPredIndices(i) = unassignedPredObsInNode.at(i) ;
+      assignedPredLocations(unassignedPredObsInNode.at(i)) = true ;
     }
 
     spacePredCoords = rows(dataCoor.spatialCoords, shuffledPredIndices) ;
@@ -80,7 +73,7 @@ void InternalNode::genRandomKnots(spatialcoor & dataCoor, int & numKnots, std::m
     double minTime = m_dimensions.time.minCoeff() ;
     double maxTime = m_dimensions.time.maxCoeff() ;
 
-    double offsetPerc = 0.00001 ;
+    double offsetPerc = 1e-5 ;
     double lonDist = (maxLon - minLon) * (1-offsetPerc * 2)/(double(numPointsPerEdge) - 1) ;
     double latDist = (maxLat - minLat) * (1-offsetPerc * 2)/(double(numPointsPerEdge) - 1) ;
     double timeDist = (maxTime - minTime) * (1-offsetPerc * 2)/(double(numPointsPerEdge) - 1) ;
