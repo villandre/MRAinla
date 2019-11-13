@@ -108,13 +108,6 @@ void AugTree::BuildTree(const uint & minObsForTimeSplit, const bool splitTime, c
   numberNodes() ;
 
   generateKnots(topNode, numKnots0, J) ;
-  // for (auto & i : m_vertexVector) {
-  //   Rprintf("Number of knots in node %i: %i.\n", i->GetNodeId(), i->GetNumKnots()) ;
-  //   if (i->GetDepth() < m_M) {
-  //     Rcout << "The knots are:" << std::endl;
-  //     i->GetKnotsCoor().print() ;
-  //   }
-  // }
 }
 
 void AugTree::numberNodes() {

@@ -81,9 +81,9 @@ void InternalNode::genRandomKnots(spatialcoor & dataCoor, int & numKnots, std::m
     double maxTime = m_dimensions.time.maxCoeff() ;
 
     double offsetPerc = 0.00001 ;
-    double lonDist = (maxLon - minLon) * (1-offsetPerc * 2)/(numPointsPerEdge - 1) ;
-    double latDist = (maxLat - minLat) * (1-offsetPerc * 2)/(numPointsPerEdge - 1) ;
-    double timeDist = (maxTime - minTime) * (1-offsetPerc * 2)/(numPointsPerEdge - 1) ;
+    double lonDist = (maxLon - minLon) * (1-offsetPerc * 2)/(double(numPointsPerEdge) - 1) ;
+    double latDist = (maxLat - minLat) * (1-offsetPerc * 2)/(double(numPointsPerEdge) - 1) ;
+    double timeDist = (maxTime - minTime) * (1-offsetPerc * 2)/(double(numPointsPerEdge) - 1) ;
 
     Array3d scalingArray = {lonDist, latDist, timeDist} ;
     Array3d offsetCoords = {minLon + offsetPerc * (maxLon - minLon),
@@ -122,7 +122,7 @@ void InternalNode::genRandomKnots(spatialcoor & dataCoor, int & numKnots, std::m
   ArrayXXd mergedSpace = join_cols(spacePredCoords, knotsSp) ;
   ArrayXd mergedTime = join_cols(timePredCoords, time) ;
 
-  std::uniform_real_distribution<double> distribution(0.0, 0.000001);
+  std::uniform_real_distribution<double> distribution(-1e-6, 1e-6);
   for (uint i = 0; i < mergedTime.size(); i++) {
     mergedTime(i) += distribution(generator) ;
     mergedSpace(i) += distribution(generator) ;

@@ -16,7 +16,7 @@ struct intCube{
     Eigen::Array3d coef = Eigen::Array3d::Constant(edgeLengthInUnits) ;
     Eigen::Array3d offset = Eigen::Array3d::Zero(edgeLengthInUnits) ;
     if (!units) {
-      coef = scalingFactors * edgeLengthInUnits ;
+      coef = scalingFactors * (edgeLengthInUnits - 1) ;
       offset = offsetCoords ;
     }
     uint index = 0 ;
@@ -40,37 +40,37 @@ struct intCube{
       pointReturn  << pointIndex, 0, 0 ;
       break ;
     case 1:
-      pointReturn  << edgeLengthInUnits, 0, pointIndex ;
+      pointReturn  << (edgeLengthInUnits - 1), 0, pointIndex ;
       break ;
     case 2:
-      pointReturn << (edgeLengthInUnits - pointIndex), 0, edgeLengthInUnits ;
+      pointReturn << (edgeLengthInUnits - pointIndex - 1), 0, (edgeLengthInUnits - 1) ;
       break ;
     case 3:
-      pointReturn << 0, 0, (edgeLengthInUnits - pointIndex) ;
+      pointReturn << 0, 0, (edgeLengthInUnits - pointIndex - 1) ;
       break ;
     case 4:
-      pointReturn  << pointIndex, edgeLengthInUnits, 0  ;
+      pointReturn  << pointIndex, (edgeLengthInUnits - 1), 0  ;
       break ;
     case 5:
-      pointReturn  << edgeLengthInUnits, edgeLengthInUnits, pointIndex ;
+      pointReturn  << (edgeLengthInUnits - 1), (edgeLengthInUnits - 1), pointIndex ;
       break ;
     case 6:
-      pointReturn <<  (edgeLengthInUnits - pointIndex), edgeLengthInUnits, edgeLengthInUnits ;
+      pointReturn <<  (edgeLengthInUnits - pointIndex - 1), (edgeLengthInUnits - 1), (edgeLengthInUnits - 1) ;
       break ;
     case 7:
-      pointReturn << 0, edgeLengthInUnits, (edgeLengthInUnits - pointIndex) ;
+      pointReturn << 0, (edgeLengthInUnits - 1), (edgeLengthInUnits - pointIndex - 1) ;
       break ;
     case 8:
       pointReturn << 0, pointIndex, 0 ;
       break ;
     case 9:
-      pointReturn << edgeLengthInUnits, (edgeLengthInUnits - pointIndex), 0 ;
+      pointReturn << (edgeLengthInUnits - 1), (edgeLengthInUnits - pointIndex - 1), 0 ;
       break ;
     case 10:
-      pointReturn << edgeLengthInUnits, pointIndex, edgeLengthInUnits ;
+      pointReturn << (edgeLengthInUnits - 1), pointIndex, (edgeLengthInUnits - 1);
       break ;
     case 11:
-      pointReturn << 0, (edgeLengthInUnits - pointIndex), edgeLengthInUnits ;
+      pointReturn << 0, (edgeLengthInUnits - pointIndex - 1), (edgeLengthInUnits - 1) ;
       break ;
     } ;
     Eigen::ArrayXd pointReturnRecast = pointReturn.cast<double>() ;
