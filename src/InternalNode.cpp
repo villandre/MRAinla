@@ -35,6 +35,7 @@ void InternalNode::genRandomKnots(spatialcoor & dataCoor, int & numKnots, std::m
   int numKnotsFromPred = 0 ;
   ArrayXXd spacePredCoords(0, 2) ;
   ArrayXd timePredCoords(0) ;
+
   if (numUnassignedPreds > 0) {
     numKnotsFromPred = min(numKnots, numUnassignedPreds) ;
 
@@ -119,7 +120,7 @@ void InternalNode::genRandomKnots(spatialcoor & dataCoor, int & numKnots, std::m
   for (uint i = 0; i < mergedTime.size(); i++) {
     mergedTime(i) += distribution(generator) ;
     mergedSpace(i) += distribution(generator) ;
-    mergedSpace(i + mergedTime.size()) += distribution(generator) ;
+    mergedSpace(i + mergedSpace.rows()) += distribution(generator) ;
   }
   m_knotsCoor = spatialcoor(mergedSpace, mergedTime) ;
 }
