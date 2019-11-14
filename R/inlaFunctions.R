@@ -190,9 +190,12 @@ obtainGridValues <- function(gridPointers, hyperStart, hyperGammaAlphaBeta, fixe
   }
 
   opt$value <- -opt$value # Correcting for the inversion used to maximise instead of minimise
-  sampleWeights <- exp(storageEnvir$value - max(storageEnvir$value))
-  sampleWeights <- sampleWeights/sum(sampleWeights)
-  varCovar <- cov.wt(x = t(storageEnvir$x), wt = sampleWeights)$cov
+  sampleWeights <- exp(storageEnvir$value - max(storageEnvir$value, na.rm = TRUE))
+  sampleWeights <- sampleWeights/sum(sampleWeights, na.rm = TRUE)
+  if (any(is.na(sampleWeights))) {
+    warning("Warning: Optimiser recovered after producing NA values (probably after visiting a parameter combination on the boundaries. \n")
+  }
+  varCovar <- cov.wt(x = t(storageEnvir$x[, !is.na(sampleWeights)]), wt = sampleWeights[!is.na(sampleWeights)])$cov
   solution <- exp(opt$par)
   if (maximiseOnly) {
     names(solution) <- names(xStartValues)
