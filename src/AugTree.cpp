@@ -1,7 +1,7 @@
 // [[Rcpp::plugins(openmp)]]
 
 #ifdef _OPENMP
-// #include <omp.h>
+#include <omp.h>
 #endif
 
 #include <math.h>
@@ -73,8 +73,9 @@ AugTree::AugTree(uint & Mlon,
   m_assignedPredToKnot.segment(0, m_assignedPredToKnot.size()) = false ;
 
   m_fixedEffParameters = Eigen::VectorXd::Zero(m_dataset.covariateValues.cols() + 1);
-
+  Rcout << "Building the grid..." << std::endl ;
   BuildTree(minObsForTimeSplit, splitTime, numKnotsRes0, J) ;
+  Rcout << "Grid built!" << std::endl ;
 
   m_numKnots = 0 ;
 
@@ -91,6 +92,9 @@ AugTree::AugTree(uint & Mlon,
   for (auto & i : tipNodes) {
     i->SetPredictLocations(m_predictData) ;
   }
+  // for (auto & i : m_vertexVector) {
+  //   Rprintf("This is node %i. I contain %i knots and %i observations. \n", i->GetNodeId(), i->GetNumKnots(), i->GetNumObs()) ;
+  // }
 }
 
 void AugTree::BuildTree(const uint & minObsForTimeSplit, const bool splitTime, const unsigned int numKnots0, double J)
@@ -247,10 +251,11 @@ void AugTree::generateKnots(TreeNode * node, const unsigned int numKnotsRes0, do
 
   int numNodesAtLevel = GetLevelNodes(node->GetDepth()).size() ;
   int numKnotsToGen = std::max(uint(std::ceil((numKnotsRes0 * pow(J, node->GetDepth()))/numNodesAtLevel)), uint(2)) ;
+  // node->genRandomKnots(m_dataset, numKnotsToGen, m_randomNumGenerator) ;
   if (node->GetDepth() < m_M) {
-    node->genRandomKnots(m_predictData, numKnotsToGen, m_randomNumGenerator, m_assignedPredToKnot) ;
+    node->genKnotsOnCube(m_predictData, numKnotsToGen, m_randomNumGenerator, m_assignedPredToKnot) ;
   } else {
-    node->genRandomKnots(m_dataset, numKnotsToGen, m_randomNumGenerator, m_assignedPredToKnot) ;
+    node->genKnotsOnCube(m_dataset, numKnotsToGen, m_randomNumGenerator, m_assignedPredToKnot) ;
   }
   if (node->GetChildren().at(0) != NULL) {
     for (auto &i : node->GetChildren()) {
@@ -285,17 +290,17 @@ std::vector<TreeNode *> AugTree::GetLevelNodes(const uint & level) {
   return nodesInLevel ;
 }
 
-void AugTree::deriveAtildeMatrices() {
-  for (int level = m_M; level >= 0 ; level--) {
-    uint levelRecast = (uint) level ;
-    std::vector<TreeNode *> levelNodes = GetLevelNodes(levelRecast) ;
-
-    // #pragma omp parallel for
-    for (std::vector<TreeNode *>::iterator it = levelNodes.begin(); it < levelNodes.end(); it++) {
-      (*it)->DeriveAtilde() ;
-    }
-  }
-}
+// void AugTree::deriveAtildeMatrices() {
+//   for (int level = m_M; level >= 0 ; level--) {
+//     uint levelRecast = (uint) level ;
+//     std::vector<TreeNode *> levelNodes = GetLevelNodes(levelRecast) ;
+//
+//     // #pragma omp parallel for
+//     for (std::vector<TreeNode *>::iterator it = levelNodes.begin(); it < levelNodes.end(); it++) {
+//       (*it)->DeriveAtilde() ;
+//     }
+//   }
+// }
 
 std::vector<TreeNode *> AugTree::GetLevel(const uint level) {
   std::vector<TreeNode *> nodesAtLevel;

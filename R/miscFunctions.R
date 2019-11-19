@@ -42,6 +42,11 @@ plotOutput <- function(inlaMRAoutput, trainingData, testData, realTestValues = N
   if (!("width" %in% names(control))) {
     control$width <- control$height <- 1600
   }
+  testDays <- sort(unique(time(testData)))
+  trainingDays <- sort(unique(time(trainingData)))
+  if (is.null(control$onlyDaysWithTest)) {
+    control$onlyDaysWithTest <- FALSE
+  }
 
   if (!("rasterNrow" %in% names(control))) {
     control$rasterNrow <- 50
@@ -55,6 +60,17 @@ plotOutput <- function(inlaMRAoutput, trainingData, testData, realTestValues = N
 
   landRaster <- raster::raster(nrows = control$rasterNrow, ncols = control$rasterNcol, xmn = lonLatMinMax[[1]][[1]], xmx = lonLatMinMax[[1]][[2]], ymn = lonLatMinMax[[2]][[1]], ymx = lonLatMinMax[[2]][[2]])
   uniqueTimeValues <- unique(c(time(trainingData), time(testData)))
+  if (control$onlyDaysWithTest) {
+    uniqueTimeValues <- testDays
+    dayBefore <- tail(trainingDays[trainingDays < min(testDays)], n = 1)
+    dayAfter <- head(trainingDays[trainingDays > max(testDays)], n = 1)
+    if (length(dayBefore) > 0) {
+      uniqueTimeValues <- c(dayBefore, uniqueTimeValues)
+    }
+    if (length(dayAfter) > 0) {
+      uniqueTimeValues <- c(uniqueTimeValues, dayAfter)
+    }
+  }
 
   rasterizeTrainingAndJoint <- function(timePoint) {
     rasterList <- list()
@@ -93,13 +109,14 @@ plotOutput <- function(inlaMRAoutput, trainingData, testData, realTestValues = N
   }
   dailyRasters <- lapply(uniqueTimeValues, rasterizeTrainingAndJoint)
 
-  rasterNames <- names(dailyRasters[[1]])
-  stackedRastersList <- lapply(rasterNames, function(dataName) {
+  funToGetStackedRaster <- function(dataName) {
     nullPos <- sapply(dailyRasters, function(x) is.null(x[[dataName]]))
     stackedRasters <- raster::stack(lapply(dailyRasters, function(x) x[[dataName]])[!nullPos])
     names(stackedRasters) <- paste(dataName, ":", as.character(uniqueTimeValues[!nullPos]), sep = "")
     stackedRasters
-  })
+  }
+  rasterNames <- names(dailyRasters[[1]])
+  stackedRastersList <- lapply(rasterNames, FUN = funToGetStackedRaster)
   names(stackedRastersList) <- rasterNames
 
   if (!is.null(filename)) {

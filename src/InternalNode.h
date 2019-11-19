@@ -92,13 +92,13 @@ public:
     }
     return currentAddress->GetDepth() ;
   }
-  void DeriveAtilde() ;
-  void DeriveOmega(const vec &) ;
-  void DeriveU(const vec &) ;
-  void DeriveD() ;
+  // void DeriveAtilde() ;
+  // void DeriveOmega(const vec &) ;
+  // void DeriveU(const vec &) ;
+  // void DeriveD() ;
   void ComputeWmat(const maternVec &, const maternVec &, const double &, const double &, const double &, const std::string &) ;
   void ComputeParasEtaDeltaTilde(const spatialcoor &, const inputdata &, const vec &) ;
-  std::vector<std::vector<mat>> & GetAlist() {return m_Alist ;};
+  // std::vector<std::vector<mat>> & GetAlist() {return m_Alist ;};
   mat & GetKtilde() {return m_Ktilde ;}
 
   mat & GetB(const uint & l) { throw Rcpp::exception("Trying to get B matrix in internal node.\n") ;}
@@ -107,7 +107,7 @@ public:
   mat * GetKmatrixAddress() {return &m_K ;}
   mat * GetKmatrixInverseAddress() { return &(m_Wlist.back()) ;}
   mat GetKmatrixInverse() {return m_Wlist.back() ;}
-  vec & GetOmega(const uint & order) { return m_omega.at(order) ;}
+  // vec & GetOmega(const uint & order) { return m_omega.at(order) ;}
   void SetUncorrSD(const double &) {throw Rcpp::exception("Trying to add uncorrelated error for internal nodes! \n") ;}
   mat & GetUpred(const uint & l) { throw Rcpp::exception("Upred matrices only computed for tip nodes! \n") ;}
   std::vector<mat> & GetUmatList() { throw Rcpp::exception("UmatList only available in tip nodes! \n") ;}
@@ -117,35 +117,36 @@ public:
     throw Rcpp::exception("Upred matrices need not be computed in internal nodes! \n") ;
   }
 
-  void genRandomKnots(spatialcoor &, int &, std::mt19937_64 &, Eigen::Array<bool, Eigen::Dynamic, 1> &) ;
+  void genKnotsOnCube(spatialcoor &, int &, std::mt19937_64 &, Eigen::Array<bool, Eigen::Dynamic, 1> &) ;
+  void genRandomKnots(spatialcoor &, int &, std::mt19937_64 &) ;
 
   InternalNode(const dimensions & dims, const uint & depth, TreeNode * parent,
                const inputdata & dataset) {
     baseInitialise(dims, depth, parent, dataset) ;
     m_obsInNode = deriveObsInNode(dataset) ;
-    m_omega.resize(m_depth + 1) ;
-    m_Alist.resize(m_depth+1) ;
-    for (uint i = 0; i < m_Alist.size(); i++) {
-      m_Alist.at(i).resize(i+1) ;
-    }
+    // m_omega.resize(m_depth + 1) ;
+    // m_Alist.resize(m_depth+1) ;
+    // for (uint i = 0; i < m_Alist.size(); i++) {
+    //   m_Alist.at(i).resize(i+1) ;
+    // }
   }
 
   InternalNode(const dimensions & dims, const inputdata & dataset) {
     baseInitialise(dims, 0, this, dataset) ;
     int numObs = dataset.responseValues.size() ;
     m_obsInNode = Eigen::VectorXi::LinSpaced(numObs, 0, numObs - 1) ;
-    m_omega.resize(m_depth + 1) ;
-    m_Alist.resize(m_depth+1) ;
-    for (uint i = 0; i < m_Alist.size(); i++) {
-      m_Alist.at(i).resize(i+1) ;
-    }
+    // m_omega.resize(m_depth + 1) ;
+    // m_Alist.resize(m_depth+1) ;
+    // for (uint i = 0; i < m_Alist.size(); i++) {
+    //   m_Alist.at(i).resize(i+1) ;
+    // }
   }
 
 protected:
 
   std::vector<TreeNode *> m_children ;
-  std::vector<std::vector<mat>> m_Alist ;
-  std::vector<vec> m_omega ;
+  // std::vector<std::vector<mat>> m_Alist ;
+  // std::vector<vec> m_omega ;
   mat m_Ktilde ;
   mat m_KtildeInverse ;
   mat m_K ;

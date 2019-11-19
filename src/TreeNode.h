@@ -147,12 +147,12 @@ public:
   virtual std::vector<TreeNode *> GetChildren()=0;
   virtual void RemoveChildren()=0;
   virtual int GetM()=0;
-  virtual void DeriveAtilde()=0 ;
-  virtual void DeriveOmega(const vec &)=0 ;
-  virtual void DeriveU(const vec &)=0 ;
-  virtual void DeriveD()=0 ;
+  // virtual void DeriveAtilde()=0 ;
+  // virtual void DeriveOmega(const vec &)=0 ;
+  // virtual void DeriveU(const vec &)=0 ;
+  // virtual void DeriveD()=0 ;
   virtual void ComputeWmat(const maternVec &, const maternVec &, const double &, const double &, const double &, const std::string &)=0 ;
-  virtual std::vector<std::vector<mat>> & GetAlist() = 0;
+  // virtual std::vector<std::vector<mat>> & GetAlist() = 0;
   virtual mat & GetKtilde() = 0;
   virtual mat & GetB(const uint & l)=0 ;
   virtual mat GetSigma()=0 ;
@@ -160,7 +160,7 @@ public:
   virtual mat * GetKmatrixAddress()=0 ;
   virtual mat * GetKmatrixInverseAddress()=0 ;
   virtual mat GetKmatrixInverse()=0 ;
-  virtual vec & GetOmega(const uint &)=0 ;
+  // virtual vec & GetOmega(const uint &)=0 ;
   virtual void SetUncorrSD(const double &)=0 ;
   virtual mat & GetUpred(const uint & l)=0 ;
   virtual std::vector<mat> & GetUmatList()=0 ;
@@ -168,21 +168,22 @@ public:
   virtual Eigen::ArrayXi & GetPredIndices()=0 ;
   virtual void computeUpred(const maternVec &, const maternVec &, const double &, const spatialcoor &, const double &, const double &, const std::string &)=0 ;
 
-  virtual void genRandomKnots(spatialcoor &, int &, std::mt19937_64 &, Eigen::Array<bool, Eigen::Dynamic, 1> & assignedPredLocations) = 0;
+  virtual void genKnotsOnCube(spatialcoor &, int &, std::mt19937_64 &, Eigen::Array<bool, Eigen::Dynamic, 1> &) = 0;
+  virtual void genRandomKnots(spatialcoor &, int &, std::mt19937_64 &) = 0;
 
   Eigen::ArrayXi & GetObsInNode() {return m_obsInNode ;}
   dimensions GetDimensions() {return m_dimensions;}
   int GetDepth() {return m_depth ;}
 
-  mat & GetAtildeList(uint & i, uint & j) {return m_AtildeList.at(i).at(j) ;}
-  mat GetOmegaTilde(uint & k) { return m_omegaTilde.at(k) ;}
+  // mat & GetAtildeList(uint & i, uint & j) {return m_AtildeList.at(i).at(j) ;}
+  // mat GetOmegaTilde(uint & k) { return m_omegaTilde.at(k) ;}
   spatialcoor & GetKnotsCoor() {return m_knotsCoor;}
 
   std::vector<mat> & GetWlist() {return m_Wlist ;}
   uint GetNodeId() { return m_nodeId ;}
 
-  double GetU() {return m_u ;}
-  double GetD() {return m_d ;}
+  // double GetU() {return m_u ;}
+  // double GetD() {return m_d ;}
   void SetNodeId(const uint i) { m_nodeId = i ;}
 
   virtual ~ TreeNode() { } ;
@@ -194,9 +195,8 @@ public:
   void completeBknots(const vec &, const uint) ;
   std::vector<mat> GetBknots() const { return m_bKnots ;}
 
-
-  void clearAtildeList() {m_AtildeList.clear() ;}
-  void clearOmegaTilde() {m_omegaTilde.clear() ;}
+  // void clearAtildeList() {m_AtildeList.clear() ;}
+  // void clearOmegaTilde() {m_omegaTilde.clear() ;}
 
   uvec GetAncestorIds() {
     std::vector<TreeNode *> ancestorsList = getAncestors() ;
@@ -230,15 +230,15 @@ protected:
   spatialcoor m_knotsCoor ;  // First element is spatial coordinates (longitude, latitude), second is time.
   int m_nodeId{ -1 } ;
 
-  std::vector<std::vector<mat>>& GetAtildeList() {return m_AtildeList ;}
+  // std::vector<std::vector<mat>>& GetAtildeList() {return m_AtildeList ;}
   void baseComputeWmat(const maternVec &, const maternVec &, const double &, const double &, const double &, const std::string &) ;
   void SetParent(TreeNode * vertexParentPoint) {m_parent = vertexParentPoint ;}
 
-  std::vector<std::vector<mat>> m_AtildeList ;
+  // std::vector<std::vector<mat>> m_AtildeList ;
   std::vector<mat> m_Wlist ;
-  std::vector<vec> m_omegaTilde ;
-  double m_u ;
-  double m_d ;
+  // std::vector<vec> m_omegaTilde ;
+  // double m_u ;
+  // double m_d ;
 
   double MaternCovFunction(const Spatiotemprange &, const maternVec &, const maternVec &, const double &, const double &, const double &) ;
 
@@ -248,11 +248,11 @@ protected:
     m_depth = depth ;
     m_parent = parent ;
     m_Wlist.resize(m_depth+1) ;
-    m_AtildeList.resize(m_depth+1) ;
-    for (uint i = 0; i < m_AtildeList.size(); i++) {
-      m_AtildeList.at(i).resize(i+1) ;
-    }
-    m_omegaTilde.resize(m_depth + 1) ;
+    // m_AtildeList.resize(m_depth+1) ;
+    // for (uint i = 0; i < m_AtildeList.size(); i++) {
+    //   m_AtildeList.at(i).resize(i+1) ;
+    // }
+    // m_omegaTilde.resize(m_depth + 1) ;
   }
 
   // For prediction

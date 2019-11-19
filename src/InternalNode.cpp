@@ -17,8 +17,53 @@ void InternalNode::RemoveChild(TreeNode * childToRemove)
   }
 }
 
-void InternalNode::genRandomKnots(spatialcoor & dataCoor, int & numKnots, std::mt19937_64 & generator, Array<bool, Dynamic, 1> & assignedPredLocations) {
+void InternalNode::genRandomKnots(spatialcoor & dataCoor, int & numKnots, std::mt19937_64 & generator) {
 
+  if (m_depth == 0) {
+    ArrayXXd spaceCoords(0, 2) ;
+    ArrayXd timeCoords(0) ;
+
+    std::vector<int> obsInNodeVec ;
+
+    for (uint i = 0; i < m_obsInNode.size(); i++) {
+      obsInNodeVec.push_back(m_obsInNode(i)) ;
+    }
+
+    std::shuffle(obsInNodeVec.begin(), obsInNodeVec.end(), generator) ;
+
+    ArrayXi shuffledIndices(numKnots) ;
+    for (uint i = 0 ; i < numKnots; i++) {
+      shuffledIndices(i) = obsInNodeVec.at(i) ;
+    }
+    spaceCoords = rows(dataCoor.spatialCoords, shuffledIndices) ;
+    timeCoords = elem(dataCoor.timeCoords, shuffledIndices) ;
+
+    m_knotsCoor = spatialcoor(spaceCoords, timeCoords) ;
+  }
+
+  numKnots = min(numKnots, int(m_obsInNode.size())) ;
+
+  m_knotsCoor = spatialcoor(ArrayXXd::Zero(numKnots, 2), ArrayXd::Zero(numKnots)) ;
+
+  double minLon = m_dimensions.longitude.minCoeff() ;
+  double maxLon = m_dimensions.longitude.maxCoeff() ;
+
+  double minLat = m_dimensions.latitude.minCoeff() ;
+  double maxLat = m_dimensions.latitude.maxCoeff() ;
+
+  double minTime = m_dimensions.time.minCoeff() ;
+  double maxTime = m_dimensions.time.maxCoeff() ;
+
+  std::uniform_real_distribution<double> distribution(0, 1);
+  for (uint i = 0; i < m_knotsCoor.spatialCoords.rows(); i++) {
+    m_knotsCoor.spatialCoords(i,0) =  distribution(generator) * (maxLon - minLon) + minLon ;
+    m_knotsCoor.spatialCoords(i,1) =  distribution(generator) * (maxLat - minLat) + minLat ;
+    m_knotsCoor.timeCoords(i) =  distribution(generator) * (maxTime - minTime) + minTime ;
+  }
+}
+
+
+void InternalNode::genKnotsOnCube(spatialcoor & dataCoor, int & numKnots, std::mt19937_64 & generator, Array<bool, Dynamic, 1> & assignedPredLocations) {
   numKnots = min(numKnots, int(m_obsInNode.size())) ;
   ArrayXi predObsInNode = deriveObsInNode(dataCoor) ;
 
@@ -125,75 +170,75 @@ void InternalNode::genRandomKnots(spatialcoor & dataCoor, int & numKnots, std::m
   m_knotsCoor = spatialcoor(mergedSpace, mergedTime) ;
 }
 
-void InternalNode::DeriveAtilde() {
+// void InternalNode::DeriveAtilde() {
+//
+//   for (uint k = 0; k <= m_depth ; k++) {
+//     for (uint l = 0; l <= k ; l++) {
+//       mat containerMat = mat::Zero(m_children.at(0)->GetAtildeList(k, l).rows(),
+//                            m_children.at(0)->GetAtildeList(k, l).cols()) ;
+//
+//       for (auto & i : m_children) {
+//         containerMat += i->GetAtildeList(k,l) ;
+//       }
+//       m_Alist.at(k).at(l) = containerMat ;
+//     }
+//   }
+//   // for (auto & i : m_children) {
+//   //   i->clearAtildeList() ;
+//   // }
+//   m_KtildeInverse = GetKmatrixInverse() + m_Alist.at(m_depth).at(m_depth) ;
+//
+//   m_Ktilde = m_KtildeInverse.ldlt().solve(mat::Identity(m_KtildeInverse.rows(), m_KtildeInverse.rows())) ;
+//
+//   for (uint k = 0; k <= m_depth ; k++) {
+//     for (uint l = 0; l <= k ; l++) {
+//
+//       m_AtildeList.at(k).at(l) = m_Alist.at(k).at(l) -
+//         m_Alist.at(m_depth).at(k).transpose() * m_Ktilde * m_Alist.at(m_depth).at(l) ;
+//     }
+//   }
+// }
 
-  for (uint k = 0; k <= m_depth ; k++) {
-    for (uint l = 0; l <= k ; l++) {
-      mat containerMat = mat::Zero(m_children.at(0)->GetAtildeList(k, l).rows(),
-                           m_children.at(0)->GetAtildeList(k, l).cols()) ;
+// void InternalNode::DeriveOmega(const vec & responseValues) {
+//   for (uint k = 0; k <= m_depth ; k++) {
+//     vec containerVec = vec::Zero(m_children.at(0)->GetOmegaTilde(k).size()) ;
+//
+//     for (auto & i: m_children) {
+//       containerVec += i->GetOmegaTilde(k) ;
+//     }
+//     m_omega.at(k) = containerVec ;
+//   }
+//
+//   for (uint k = 0; k <= m_depth ; k++) {
+//     vec secondTerm = m_Alist.at(m_depth).at(k).transpose() * m_Ktilde * m_omega.at(m_depth) ;
+//     m_omegaTilde.at(k) = m_omega.at(k) -  secondTerm;
+//   }
+// }
 
-      for (auto & i : m_children) {
-        containerMat += i->GetAtildeList(k,l) ;
-      }
-      m_Alist.at(k).at(l) = containerMat ;
-    }
-  }
-  // for (auto & i : m_children) {
-  //   i->clearAtildeList() ;
-  // }
-  m_KtildeInverse = GetKmatrixInverse() + m_Alist.at(m_depth).at(m_depth) ;
-
-  m_Ktilde = m_KtildeInverse.ldlt().solve(mat::Identity(m_KtildeInverse.rows(), m_KtildeInverse.rows())) ;
-
-  for (uint k = 0; k <= m_depth ; k++) {
-    for (uint l = 0; l <= k ; l++) {
-
-      m_AtildeList.at(k).at(l) = m_Alist.at(k).at(l) -
-        m_Alist.at(m_depth).at(k).transpose() * m_Ktilde * m_Alist.at(m_depth).at(l) ;
-    }
-  }
-}
-
-void InternalNode::DeriveOmega(const vec & responseValues) {
-  for (uint k = 0; k <= m_depth ; k++) {
-    vec containerVec = vec::Zero(m_children.at(0)->GetOmegaTilde(k).size()) ;
-
-    for (auto & i: m_children) {
-      containerVec += i->GetOmegaTilde(k) ;
-    }
-    m_omega.at(k) = containerVec ;
-  }
-
-  for (uint k = 0; k <= m_depth ; k++) {
-    vec secondTerm = m_Alist.at(m_depth).at(k).transpose() * m_Ktilde * m_omega.at(m_depth) ;
-    m_omegaTilde.at(k) = m_omega.at(k) -  secondTerm;
-  }
-}
-
-void InternalNode::DeriveU(const vec & responseValues) {
-  mat firstTerm = -m_omega.at(m_depth).transpose() * m_Ktilde * m_omega.at(m_depth) ;
-  double secondTerm = 0 ;
-
-  for (auto & i : m_children) {
-    secondTerm += i->GetU() ;
-  }
-  m_u = firstTerm(0,0) + secondTerm ;
-}
-
-void::InternalNode::DeriveD() {
-
-  double value = m_KtildeInverse.ldlt().vectorD().array().log().sum() ;
-
-  m_d = value ;
-  double otherValue = GetKmatrixInverse().selfadjointView<Upper>().ldlt().vectorD().array().log().sum() ;
-  m_d = m_d - otherValue ;
-  double thirdTerm = 0 ;
-
-  for (auto & i : m_children) {
-    thirdTerm += i->GetD() ;
-  }
-  m_d += thirdTerm ;
-}
+// void InternalNode::DeriveU(const vec & responseValues) {
+//   mat firstTerm = -m_omega.at(m_depth).transpose() * m_Ktilde * m_omega.at(m_depth) ;
+//   double secondTerm = 0 ;
+//
+//   for (auto & i : m_children) {
+//     secondTerm += i->GetU() ;
+//   }
+//   m_u = firstTerm(0,0) + secondTerm ;
+// }
+//
+// void::InternalNode::DeriveD() {
+//
+//   double value = m_KtildeInverse.ldlt().vectorD().array().log().sum() ;
+//
+//   m_d = value ;
+//   double otherValue = GetKmatrixInverse().selfadjointView<Upper>().ldlt().vectorD().array().log().sum() ;
+//   m_d = m_d - otherValue ;
+//   double thirdTerm = 0 ;
+//
+//   for (auto & i : m_children) {
+//     thirdTerm += i->GetD() ;
+//   }
+//   m_d += thirdTerm ;
+// }
 
 void InternalNode::ComputeWmat(const maternVec & covParasSp, const maternVec & covParasTime, const double & scaling, const double & spaceNuggetSD, const double & timeNuggetSD, const string & distMethod) {
   baseComputeWmat(covParasSp, covParasTime, scaling, spaceNuggetSD, timeNuggetSD, distMethod) ;
