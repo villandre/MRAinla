@@ -4,13 +4,6 @@ using namespace Eigen ;
 using namespace MRAinla ;
 using namespace std ;
 
-// void TipNode::DeriveOmega(const vec & responseValues) {
-//   vec subResponses = elem(responseValues.array(), m_obsInNode) ;
-//   for (uint i = 0 ; i < m_depth; i++) {
-//     m_omegaTilde.at(i) = GetB(i).transpose() * m_SigmaInverse * subResponses ;
-//   }
-// }
-
 void TipNode::computeUpred(const maternVec & covParasSp, const maternVec & covParasTime, const double & scaling, const spatialcoor & predictLocations,
                            const double & spaceNuggetSD, const double & timeNuggetSD, const string & distMethod) {
   if (m_predsInNode.size() > 0) {

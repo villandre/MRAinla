@@ -127,9 +127,7 @@ private:
   bool m_recomputeMRAlogLik{ true } ; // When this flag is true, more computations are required to get the log-lik.
   bool m_recomputeGlobalLogLik{ true } ; // When this flag is true, the global log-likelihood (conditional on all mean parameters) needs to be recomputed.
 
-  // double m_MRAlogLik{ 0 } ;
   double m_globalLogLik{ 0 } ;
-  // double m_fixedEffContrib{ 0 } ;
   double m_logPrior{ 0 } ;
   double m_logCondDist{ 0 } ;
   double m_logFullCond{ 0 } ;
@@ -146,7 +144,7 @@ private:
   int m_numTips{ 0 } ;
   double m_errorSD{ 0 } ;
   double m_fixedEffSD{ 0 } ;
-  // vec m_spatialComponents ;
+
   maternGammaPriorParasWithoutScale m_maternParasGammaAlphaBetaSpace ;
   maternGammaPriorParasWithoutScale m_maternParasGammaAlphaBetaTime ;
   GammaHyperParas m_maternSpacetimeScalingGammaAlphaBeta ;
@@ -174,33 +172,15 @@ private:
   void generateKnots(TreeNode *, const unsigned int, double) ;
 
   void numberNodes() ;
-
-  // Likelihood computations functions
-
   void computeWmats() ;
-  // void deriveAtildeMatrices() ;
-  // void computeOmegas() ;
-
-  // void computeU() ;
-  // void computeD() ;
-
   std::vector<TreeNode *> GetLevel(const uint) ;
   Eigen::ArrayXi m_obsOrderForFmat ;
 
   Eigen::Array<bool, Eigen::Dynamic, 1> m_assignedPredToKnot ;
 
-  // Prediction functions
-
-  // void distributePredictionData() ;
-  // void computeBtildeInTips() ;
   inputdata m_predictData ;
   Eigen::ArrayXi m_obsOrderForHpredMat ;
-
-  // INLA functions
-  // vec m_MRArandomValues ;
-  // vec m_MRAetaValues ;
   vec m_Vstar ;
-  // vec m_MRAvalues ;
   vec m_FullCondMean ;
   vec m_FullCondSDs ;
   Eigen::SimplicialLDLT<Eigen::SparseMatrix<double>> m_FullCondPrecisionChol ;
@@ -228,10 +208,6 @@ private:
   void createHmatrix() ;
   void updateHmatrix() ;
   void updateHmatrixPred() ;
-  // vec optimJointHyperMarg(const vec &, const double, const double, const double, const double) ;
-  // double logDeterminantQmat() ;
-
-  // double logDeterminantFullConditional() ;
   vec ComputeFullConditionalMean(const vec &) ;
   void ComputeFullCondSDsFE() ;
   template <typename MatrixType>

@@ -18,41 +18,10 @@ public:
   void RemoveChildren() {}
   int GetM() {return m_depth ;}
 
-  // void DeriveAtilde() {
-  //   for (uint k = 0; k < m_depth; k++) {
-  //     for (uint l = 0; l <= k; l++) {
-  //       m_AtildeList.at(k).at(l) = GetB(k).transpose() * m_SigmaInverse * GetB(l) ;
-  //     }
-  //   }
-  // }
-
-  // void DeriveOmega(const vec &) ;
-
-  // void DeriveU(const vec & responseValues) {
-  //   vec subResponse = elem(responseValues.array(), m_obsInNode) ;
-  //   mat uInMat = subResponse.transpose() * m_SigmaInverse *
-  //     subResponse ;
-  //   m_u = uInMat(0,0) ; // uInMat is supposed to be a 1x1 matrix.
-  // }
-
-  // void DeriveD() {
-  //   double val = 0;
-  //   val = GetSigma().selfadjointView<Eigen::Upper>().ldlt().vectorD().array().log().sum() ;
-  //   m_d = val ;
-  // }
-
   void ComputeWmat(const maternVec & covParasSp, const maternVec & covParasTime, const double & scaling, const double & spaceNuggetSD, const double & timeNuggetSD, const std::string & distMethod) {
     baseComputeWmat(covParasSp, covParasTime, scaling, spaceNuggetSD, timeNuggetSD, distMethod) ;
     m_SigmaInverse = GetSigma().selfadjointView<Eigen::Upper>().ldlt().solve(Eigen::MatrixXd::Identity(GetSigma().rows(), GetSigma().cols())) ;
   }
-
-  // void ComputeParasEtaDeltaTilde(const spatialcoor &, const inputdata &, const vec &) ;
-  // std::vector<std::vector<mat>> & GetAlist() {throw Rcpp::exception("Trying to get an A matrix in a tip node! \n") ;}
-  mat & GetKtilde() {throw Rcpp::exception("Trying to get Ktilde in a tip node! \n") ;}
-  // void deriveBtilde(const spatialcoor & ) ;
-  // void computeBpred(const spatialcoor &, const vec &) ;
-  // GaussDistParas CombineEtaDelta(const inputdata &, const vec &) ;
-  // GaussDistParas GetEtaDelta() const { return m_deltaTilde ;}
 
   mat & GetB(const uint & l) {
     if (l > m_depth) {
@@ -74,7 +43,6 @@ public:
   mat * GetKmatrixAddress() {return &m_SigmaInverse ;}
   mat * GetKmatrixInverseAddress() { return &m_Wlist.at(m_depth) ;}
   mat GetKmatrixInverse() {return GetSigma() - std::pow(m_uncorrSD, 2) * Eigen::MatrixXd::Identity(GetSigma().rows(), GetSigma().cols());}
-  // vec & GetOmega(const uint & order) { throw Rcpp::exception("Trying to get omega vector in tip node! \n") ;}
   void SetUncorrSD(const double & sd) {
     m_uncorrSD = sd ;
   }

@@ -290,18 +290,6 @@ std::vector<TreeNode *> AugTree::GetLevelNodes(const uint & level) {
   return nodesInLevel ;
 }
 
-// void AugTree::deriveAtildeMatrices() {
-//   for (int level = m_M; level >= 0 ; level--) {
-//     uint levelRecast = (uint) level ;
-//     std::vector<TreeNode *> levelNodes = GetLevelNodes(levelRecast) ;
-//
-//     // #pragma omp parallel for
-//     for (std::vector<TreeNode *>::iterator it = levelNodes.begin(); it < levelNodes.end(); it++) {
-//       (*it)->DeriveAtilde() ;
-//     }
-//   }
-// }
-
 std::vector<TreeNode *> AugTree::GetLevel(const uint level) {
   std::vector<TreeNode *> nodesAtLevel;
   if (level == 0) {
@@ -314,10 +302,6 @@ std::vector<TreeNode *> AugTree::GetLevel(const uint level) {
     }
   }
   return nodesAtLevel ;
-}
-
-void AugTree::CleanPredictionComponents() {
-  //TO_DO
 }
 
 void AugTree::CreateSigmaBetaEtaInvMat() {
@@ -739,9 +723,9 @@ void AugTree::ComputeLogJointPsiMarginal() {
 
   ComputeLogPriors() ;
 
-  if (m_recomputeMRAlogLik) {
+  // if (m_recomputeMRAlogLik) {
     computeWmats() ;
-  }
+  // }
 
   ComputeLogFCandLogCDandDataLL() ;
 
