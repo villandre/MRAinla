@@ -99,7 +99,7 @@ public:
   void ComputeWmat(const maternVec &, const maternVec &, const double &, const double &, const double &, const std::string &) ;
   void ComputeParasEtaDeltaTilde(const spatialcoor &, const inputdata &, const vec &) ;
   // std::vector<std::vector<mat>> & GetAlist() {return m_Alist ;};
-  mat & GetKtilde() {return m_Ktilde ;}
+  // mat & GetKtilde() {return m_Ktilde ;}
 
   mat & GetB(const uint & l) { throw Rcpp::exception("Trying to get B matrix in internal node.\n") ;}
   mat GetSigma() { throw Rcpp::exception("Trying to get Sigma matrix in internal node.\n") ;}
@@ -147,13 +147,13 @@ protected:
   std::vector<TreeNode *> m_children ;
   // std::vector<std::vector<mat>> m_Alist ;
   // std::vector<vec> m_omega ;
-  mat m_Ktilde ;
-  mat m_KtildeInverse ;
+  // mat m_Ktilde ;
+  // mat m_KtildeInverse ;
   mat m_K ;
 
   // Prediction elements
 
-  GaussDistParas m_etaTilde ;
+  // GaussDistParas m_etaTilde ;
 };
 }
 #endif /* INTERMEDIATENODE_H */

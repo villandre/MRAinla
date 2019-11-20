@@ -100,7 +100,7 @@ public:
   void createHmatrixPred() ;
   void CreateSigmaBetaEtaInvMat() ;
   void UpdateSigmaBetaEtaInvMat() ;
-  sp_mat createQ() ;
+  // sp_mat createQ() ;
 
   void ComputeLogJointPsiMarginal() ;
   vec GetFullCondMean() { return m_FullCondMean ;}
@@ -146,7 +146,7 @@ private:
   int m_numTips{ 0 } ;
   double m_errorSD{ 0 } ;
   double m_fixedEffSD{ 0 } ;
-  vec m_spatialComponents ;
+  // vec m_spatialComponents ;
   maternGammaPriorParasWithoutScale m_maternParasGammaAlphaBetaSpace ;
   maternGammaPriorParasWithoutScale m_maternParasGammaAlphaBetaTime ;
   GammaHyperParas m_maternSpacetimeScalingGammaAlphaBeta ;
@@ -191,8 +191,8 @@ private:
 
   // Prediction functions
 
-  void distributePredictionData() ;
-  void computeBtildeInTips() ;
+  // void distributePredictionData() ;
+  // void computeBtildeInTips() ;
   inputdata m_predictData ;
   Eigen::ArrayXi m_obsOrderForHpredMat ;
 
