@@ -51,7 +51,7 @@ double LogJointHyperMarginalToWrap(SEXP treePointer, Rcpp::List MRAhyperparas,
          double fixedEffSD, double errorSD, Rcpp::List MRAcovParasGammaAlphaBeta,
          Rcpp::NumericVector FEmuVec, NumericVector fixedEffGammaAlphaBeta,
          NumericVector errorGammaAlphaBeta, double spaceNuggetSD,
-         double timeNuggetSD, bool recordFullConditional) {
+         double timeNuggetSD, bool recordFullConditional, bool processPredictions) {
   mat posteriorMatrix ;
   double outputValue = 0 ;
 
@@ -82,6 +82,7 @@ double LogJointHyperMarginalToWrap(SEXP treePointer, Rcpp::List MRAhyperparas,
 
     pointedTree->SetMRAcovParas(MRAhyperparas) ;
     pointedTree->SetRecordFullConditional(recordFullConditional) ;
+    pointedTree->SetProcessPredictions(processPredictions) ;
 
     pointedTree->ComputeLogJointPsiMarginal() ;
 
@@ -135,9 +136,13 @@ Rcpp::List ComputeCondPredStats(SEXP treePointer, NumericMatrix spCoordsForPredi
   if (!(treePointer == NULL))
   {
     XPtr<AugTree> pointedTree(treePointer) ; // Becomes a regular pointer again.
-    pointedTree->ComputeHpred() ;
+
+    // pointedTree->ComputeHpred() ;
+
     Hmean = pointedTree->GetHmatPred() * pointedTree->GetFullCondMean() ;
+    Rcout << "Computing Evar..." << std::endl ;
     Evar = pointedTree->ComputeEvar() ;
+    Rcout << "Done!" << std::endl ;
   }
   else
   {

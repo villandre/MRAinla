@@ -164,6 +164,12 @@ public:
   virtual void genKnotsOnCube(spatialcoor &, int &, std::mt19937_64 &, Eigen::Array<bool, Eigen::Dynamic, 1> &) = 0;
   virtual void genRandomKnots(spatialcoor &, int &, std::mt19937_64 &) = 0;
 
+  void clearWmatrices() {
+    for (auto & i : m_Wlist) {
+      i.resize(0, 0) ;
+    }
+  }
+
   Eigen::ArrayXi & GetObsInNode() {return m_obsInNode ;}
   dimensions GetDimensions() {return m_dimensions;}
   int GetDepth() {return m_depth ;}
@@ -179,9 +185,6 @@ public:
   void SetPredictLocations(const spatialcoor & predictLocations) ;
 
   Eigen::ArrayXi deriveObsInNode(const spatialcoor &) ;
-  void initiateBknots(const vec &) ;
-  void completeBknots(const vec &, const uint) ;
-  std::vector<mat> GetBknots() const { return m_bKnots ;}
 
   uvec GetAncestorIds() {
     std::vector<TreeNode *> ancestorsList = getAncestors() ;

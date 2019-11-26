@@ -76,7 +76,11 @@ plotOutput <- function(inlaMRAoutput, trainingData, testData, realTestValues = N
     rasterList <- list()
     trainingDataIndices <- time(trainingData) == timePoint
     testDataIndices <- time(testData) == timePoint
-    rasterList$landRasterTraining <- raster::rasterize(x = trainingData@sp@coords[trainingDataIndices, ], y = landRaster, field = trainingData@data[trainingDataIndices , 1])
+    if (any(trainingDataIndices)) {
+      rasterList$landRasterTraining <- raster::rasterize(x = trainingData@sp@coords[trainingDataIndices, ], y = landRaster, field = trainingData@data[trainingDataIndices , 1])
+    } else {
+      rasterList$landRasterTraining <- landRaster
+    }
     landRasterJointSD <- NULL
     landRasterTest <- NULL
     if (any(testDataIndices)) {
@@ -110,9 +114,16 @@ plotOutput <- function(inlaMRAoutput, trainingData, testData, realTestValues = N
   dailyRasters <- lapply(uniqueTimeValues, rasterizeTrainingAndJoint)
 
   funToGetStackedRaster <- function(dataName) {
-    nullPos <- sapply(dailyRasters, function(x) is.null(x[[dataName]]))
-    stackedRasters <- raster::stack(lapply(dailyRasters, function(x) x[[dataName]])[!nullPos])
-    names(stackedRasters) <- paste(dataName, ":", as.character(uniqueTimeValues[!nullPos]), sep = "")
+    nullAndEmptyPos <- sapply(dailyRasters, function(x) {
+      if (is.null(x[[dataName]])) {
+        return(TRUE)
+      } else {
+        if (all(is.na(raster::values(x[[dataName]])))) return(TRUE)
+      }
+      FALSE
+    })
+    stackedRasters <- raster::stack(lapply(dailyRasters, function(x) x[[dataName]])[!nullAndEmptyPos])
+    names(stackedRasters) <- paste(dataName, ":", as.character(uniqueTimeValues[!nullAndEmptyPos]), sep = "")
     stackedRasters
   }
   rasterNames <- names(dailyRasters[[1]])

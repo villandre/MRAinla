@@ -1,8 +1,8 @@
 // [[Rcpp::plugins(openmp)]]
 
-#ifdef _OPENMP
+// #ifdef _OPENMP
 #include <omp.h>
-#endif
+// #endif
 
 #include <math.h>
 
@@ -271,7 +271,7 @@ void AugTree::computeWmats() {
     std::vector<TreeNode *> levelNodes = GetLevelNodes(level) ;
 
     // Trying openmp. We need to have a standard looping structure.
-    // #pragma omp parallel for
+    // pragma omp parallel for
 
     for (std::vector<TreeNode *>::iterator it = levelNodes.begin(); it < levelNodes.end(); it++)
     {
@@ -648,17 +648,28 @@ void AugTree::ComputeLogPriors() {
 void AugTree::ComputeLogFCandLogCDandDataLL() {
 
   int n = m_dataset.responseValues.size() ;
-
+  Rcout << "Creating SigmaBetaEtaInv..." << std::endl ;
   if (m_SigmaFEandEtaInv.rows() == 0) {
     CreateSigmaBetaEtaInvMat() ;
   } else {
     UpdateSigmaBetaEtaInvMat() ;
   }
+  Rcout << "Done! Creating Hpred..." << std::endl ;
+  if (m_processPredictions) {
+    ComputeHpred() ;
+  }
 
+  // for (auto & i: m_vertexVector) {
+  //   if (i->GetDepth() < m_M) { // For internal nodes
+  //     i->clearWmatrices() ;
+  //   }
+  // }
+  Rcout << "Done! Computing Chol. SigmaFEeta..." << std::endl ;
+  fflush(stdout) ;
   Eigen::SimplicialLDLT<Eigen::SparseMatrix<double>> blockChol(m_SigmaFEandEtaInv) ;
 
   double logDetSigmaKFEinv = blockChol.vectorD().array().log().sum() ;
-
+  Rcout << "Done! Creating H matrix..." << std::endl ;
   if (m_recomputeMRAlogLik) {
     if (m_Hmat.size() == 0) {
       createHmatrix() ;
@@ -666,21 +677,32 @@ void AugTree::ComputeLogFCandLogCDandDataLL() {
       updateHmatrix() ;
     }
   }
-
-  sp_mat secondTerm ;
-  secondTerm = std::pow(m_errorSD, -2) * m_Hmat.transpose() * m_Hmat ;
+  Rcout << "Done! Scaling responses..." << std::endl ;
+  fflush(stdout) ;
   vec responsesReshuffled = elem(m_dataset.responseValues.array(), m_obsOrderForFmat) ;
+  mat scaledResponse = std::pow(m_errorSD, -2) * responsesReshuffled.transpose() * m_Hmat ;
+  Rcout << "Done! Computing secondTerm..." << std::endl ;
+  fflush(stdout)  ;
+  sp_mat secondTerm = std::pow(m_errorSD, -2) * m_Hmat.transpose() * m_Hmat ;
 
-  mat scaledResponse ;
-  scaledResponse.noalias() = std::pow(m_errorSD, -2) * responsesReshuffled.transpose() * m_Hmat ;
-
+  Rcout << "Done! analysing sparsity pattern..." << std::endl ;
+  fflush(stdout) ;
   if (m_logFullCond == 0) { // This is the first iteration...
-    m_FullCondPrecisionChol.analyzePattern(m_SigmaFEandEtaInv + secondTerm) ;
+    try {
+      m_FullCondPrecisionChol.analyzePattern(m_SigmaFEandEtaInv + secondTerm) ;
+    } catch(std::bad_alloc& ex) {
+      forward_exception_to_r(ex) ;
+    }
   }
+  Rcout << "Done! Computing Full Cond. Chol..." << std::endl ;
+  fflush(stdout) ;
   m_FullCondPrecisionChol.factorize(m_SigmaFEandEtaInv + secondTerm) ; // The sparsity pattern in matToInvert is always the same, notwithstand the hyperparameter values.
-
+  secondTerm.resize(0,0) ; // Making sure it doesn't clog the memory (although I suspect this is not necessary)
+  Rcout << "Done! Computing Full Cond. SDs..." << std::endl ;
+  fflush(stdout) ;
   ComputeFullCondSDsFE() ;
-
+  Rcout << "Done! Computing updated means..." << std::endl ;
+  fflush(stdout) ;
   vec updatedMean = m_FullCondPrecisionChol.solve(scaledResponse.transpose()) ;
   if(m_FullCondPrecisionChol.info()!=Success) {
     // solving failed
@@ -694,15 +716,19 @@ void AugTree::ComputeLogFCandLogCDandDataLL() {
 
   vec fixedEffMeans = m_Vstar.head(m_fixedEffParameters.size()) ;
   SetFixedEffParameters(fixedEffMeans) ;
-
+  Rcout << "Done! Computing log-det Q..." << std::endl ;
+  fflush(stdout) ;
   double logDetQmat = m_FullCondPrecisionChol.vectorD().array().log().sum() ; // In LDLT, the L matrix has a diagonal with 1s, meaning that its determinant is 1. It follows that the determinant of the original matrix is simply the product of the elements in the D matrix.
 
   m_logFullCond = 0.5 * logDetQmat ; // Since we arbitrarily evaluate always at the full-conditional mean, the exponential part of the distribution reduces to 0.
 
   // Computing p(v* | Psi)
   mat logLikTerm ;
+  Rcout << "Done! Computing log-lik..." << std::endl ;
+  fflush(stdout) ;
   logLikTerm.noalias() = -0.5 * m_Vstar.transpose() * m_SigmaFEandEtaInv.selfadjointView<Upper>() * m_Vstar ;
-
+  Rcout << "Done! Finalising..." << std::endl ;
+  fflush(stdout) ;
   m_logCondDist = logLikTerm(0,0) + 0.5 * logDetSigmaKFEinv ;
 
   // Computing p(y | v*, Psi)

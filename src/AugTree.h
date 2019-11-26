@@ -70,6 +70,9 @@ public:
     m_errorSD = errorSD ;
   }
   void SetMRAcovParas(const Rcpp::List &) ;
+  void SetProcessPredictions(bool processPredictions) {
+    m_processPredictions = processPredictions ;
+  }
 
   std::vector<TreeNode *> GetLevelNodes(const uint & level) ;
   std::vector<TreeNode *> GetTipNodes() { return GetLevelNodes(m_M) ;}
@@ -126,6 +129,7 @@ private:
 
   bool m_recomputeMRAlogLik{ true } ; // When this flag is true, more computations are required to get the log-lik.
   bool m_recomputeGlobalLogLik{ true } ; // When this flag is true, the global log-likelihood (conditional on all mean parameters) needs to be recomputed.
+  bool m_processPredictions{ false } ; // When this flag is true, the H matrix for predictions is computed.
 
   double m_globalLogLik{ 0 } ;
   double m_logPrior{ 0 } ;
@@ -198,11 +202,6 @@ private:
     std::vector<mat *> KmatrixInverseList(m_vertexVector.size()) ;
     for (auto & i : m_vertexVector) KmatrixInverseList.at(i->GetNodeId()) = i->GetKmatrixInverseAddress() ;
     return KmatrixInverseList ;
-  }
-  std::vector<mat *> getKmatricesPointers() {
-    std::vector<mat *> KmatrixList(m_vertexVector.size()) ;
-    for (auto & i : m_vertexVector) KmatrixList.at(i->GetNodeId()) = i->GetKmatrixAddress() ;
-    return KmatrixList ;
   }
 
   void createHmatrix() ;
