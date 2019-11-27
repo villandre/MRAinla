@@ -1,3 +1,8 @@
+// [[Rcpp::plugins(openmp)]]
+#ifndef EIGEN_DONT_PARALLELIZE
+#define EIGEN_DONT_PARALLELIZE
+#endif
+
 #include <algorithm>
 #include <vector>
 #include <cstdio>
