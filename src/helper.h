@@ -20,10 +20,9 @@ struct Spatiotemprange{
 Spatiotemprange sptimeDistance(const Eigen::ArrayXd &, const double &, const Eigen::ArrayXd &,
                                const double &, const std::string &) ;
 
-Eigen::SparseMatrix<double> createBlockMatrix(std::vector<Eigen::MatrixXd *>) ;
+Eigen::SparseMatrix<double, Eigen::RowMajor> createBlockMatrix(std::vector<Eigen::MatrixXd *>) ;
 
 // double logDetBlockMatrix(const Eigen::SparseMatrix<double> &, const Eigen::VectorXi &) ;
-Eigen::SparseMatrix<double> invertSymmBlockDiag(const Eigen::SparseMatrix<double> &, const Eigen::VectorXi &) ;
 double logNormPDF(const Eigen::VectorXd &, const Eigen::VectorXd &, const Eigen::VectorXd &) ;
 double maternCov(const double &, const double &, const double &, const double &, const double &) ;
 // Inlining the function solves the linking issue I encountered. As it turns out, templated functions

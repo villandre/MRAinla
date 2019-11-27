@@ -11,7 +11,7 @@ using namespace std ;
 using namespace math ;
 typedef Eigen::VectorXd vec ;
 typedef Eigen::MatrixXd mat ;
-typedef Eigen::SparseMatrix<double> sp_mat ;
+typedef Eigen::SparseMatrix<double, Eigen::RowMajor> sp_mat ;
 typedef Eigen::VectorXi uvec ;
 typedef Eigen::MatrixXi umat ;
 typedef Eigen::Triplet<double> Triplet;
