@@ -67,38 +67,46 @@ struct maternVec{
 
 struct spatialcoor {
   Eigen::ArrayXXd spatialCoords  ;
-  Eigen::ArrayXd timeCoords ;
 
   spatialcoor() {
     spatialCoords = Eigen::ArrayXXd(0, 2) ;
-    timeCoords = Eigen::ArrayXd(0) ;
   } ;
-  spatialcoor(Eigen::ArrayXXd f_sp, Eigen::ArrayXd f_time) : spatialCoords(f_sp), timeCoords(f_time) { } ;
+  spatialcoor(Eigen::ArrayXXd f_sp) : spatialCoords(f_sp) { } ;
 
   spatialcoor subset(Eigen::ArrayXi & indices)  const {
     Eigen::ArrayXXd subSpatialCoords = rows(spatialCoords, indices) ;
-    Eigen::ArrayXd subTimeCoords = elem(timeCoords, indices) ;
-    return spatialcoor(subSpatialCoords, subTimeCoords) ;
+    return spatialcoor(subSpatialCoords) ;
   };
   void print() {
-    Eigen::ArrayXXd merged(spatialCoords.rows(), spatialCoords.cols() + 1) ;
+    Rcpp::Rcout << "Space coordinates:" << std::endl ;
+    Rcpp::Rcout << spatialCoords << std::endl ;
+  }
+};
+
+struct spatiotempcoor : public spatialcoor {
+  Eigen::ArrayXd timeCoords ;
+  spatiotempcoor() : spatialcoor() { } ;
+  spatiotempcoor(Eigen::ArrayXXd spatialCoords, Eigen::ArrayXd timeCoords) : spatialcoor(spatialCoords),
+  timeCoords(timeCoords) {  }
+  void print() {
+    Eigen::ArrayXXd merged(spatialCoords.rows(), 3) ;
     merged << spatialCoords, timeCoords ;
-    Rcpp::Rcout << "Space and time coordinates:" << std::endl ;
+    Rcpp::Rcout << "Spatiotemporal coords: " << std::endl ;
     Rcpp::Rcout << merged << std::endl ;
   }
 };
 
-struct inputdata : public spatialcoor {
+struct inputdata : public spatiotempcoor {
   Eigen::VectorXd responseValues ;
   Eigen::MatrixXd covariateValues ;
 
-  inputdata() : spatialcoor() {
+  inputdata() : spatiotempcoor() {
     responseValues = Eigen::VectorXd(0) ;
     covariateValues = Eigen::MatrixXd(0, 0) ;
   };
 
   inputdata(Eigen::VectorXd f_responses, Eigen::ArrayXXd f_sp, Eigen::ArrayXd f_time, Eigen::MatrixXd f_covariates)
-    : spatialcoor(f_sp, f_time), responseValues(f_responses), covariateValues(f_covariates) {  } ;
+    : spatiotempcoor(f_sp, f_time), responseValues(f_responses), covariateValues(f_covariates) {  } ;
 
   inputdata subset(Eigen::ArrayXi & indices)  const {
     Eigen::ArrayXXd subSpatialCoords = rows(spatialCoords, indices) ;
@@ -109,28 +117,24 @@ struct inputdata : public spatialcoor {
   }
 };
 
-struct dimensions {
+struct spaceDimensions {
   Eigen::Array2d longitude ;
   Eigen::Array2d latitude ;
-  Eigen::Array2d time ;
 
   void print() {
     Rcpp::Rcout << "Longitude range: \n" << longitude << "\n\n" ;
     Rcpp::Rcout << "Latitude range: \n" << latitude << "\n\n" ;
-    Rcpp::Rcout << "Time range: \n" << time << "\n\n" ;
   }
 
-  dimensions() {
+  spaceDimensions() {
     longitude = Eigen::Array2d::Zero(2) ;
     latitude = Eigen::Array2d::Zero(2) ;
-    time = Eigen::Array2d::Zero(2) ;
   } ;
 
-  dimensions(Eigen::ArrayXd f_lon, Eigen::ArrayXd f_lat, Eigen::ArrayXd f_time)
-    : longitude(f_lon), latitude(f_lat), time(f_time) {
+  spaceDimensions(Eigen::ArrayXd f_lon, Eigen::ArrayXd f_lat)
+    : longitude(f_lon), latitude(f_lat) {
     uint firstCompare = (f_lon.size() == f_lat.size()) ;
-    uint secondCompare = (f_lat.size() == f_time.size()) ;
-    if ((firstCompare * secondCompare) == 0) {
+    if (firstCompare == 0) {
       throw Rcpp::exception("Incompatible data specifications. \n") ;
     }
   } ;
@@ -151,7 +155,7 @@ public:
   virtual std::vector<TreeNode *> GetChildren()=0;
   virtual void RemoveChildren()=0;
   virtual int GetM()=0;
-  virtual void ComputeWmat(const maternVec &, const maternVec &, const double &, const double &, const double &, const std::string &)=0 ;
+  virtual void ComputeWmat(const maternVec &, const double &, const double &, const std::string &)=0 ;
   virtual mat & GetB(const uint & l)=0 ;
   virtual mat GetSigma()=0 ;
   virtual mat & GetKmatrix()=0 ;
@@ -163,9 +167,9 @@ public:
   virtual std::vector<mat> & GetUmatList()=0 ;
   virtual void SetPredictLocations(const inputdata &)=0 ;
   virtual Eigen::ArrayXi & GetPredIndices()=0 ;
-  virtual void computeUpred(const maternVec &, const maternVec &, const double &, const spatialcoor &, const double &, const double &, const std::string &)=0 ;
+  virtual void computeUpred(const maternVec &, const double &, const spatialcoor &, const double &, const std::string &)=0 ;
 
-  virtual void genKnotsOnCube(spatialcoor &, int &, std::mt19937_64 &, Eigen::Array<bool, Eigen::Dynamic, 1> &) = 0;
+  virtual void genKnotsOnSquare(spatialcoor &, int &, std::mt19937_64 &, Eigen::Array<bool, Eigen::Dynamic, 1> &) = 0;
   virtual void genRandomKnots(spatialcoor &, int &, std::mt19937_64 &) = 0;
 
   void clearWmatrices() {
@@ -175,7 +179,7 @@ public:
   }
 
   Eigen::ArrayXi & GetObsInNode() {return m_obsInNode ;}
-  dimensions GetDimensions() {return m_dimensions;}
+  spaceDimensions GetDimensions() {return m_dimensions;}
   int GetDepth() {return m_depth ;}
 
   spatialcoor & GetKnotsCoor() {return m_knotsCoor;}
@@ -209,7 +213,7 @@ public:
     }
     return siblingVec ;
   }
-  int GetNumKnots() {return m_knotsCoor.timeCoords.size() ;}
+  int GetNumKnots() {return m_knotsCoor.spatialCoords.rows();}
   std::vector<TreeNode *> getAncestors() ;
   int GetNumObs() {return m_obsInNode.size() ;}
 
@@ -218,19 +222,19 @@ protected:
   TreeNode * m_parent ;
   Eigen::ArrayXi m_obsInNode ;
   int m_depth{ -1 } ;
-  dimensions m_dimensions ; // First dimension is longitude, second is latitude, last is time.
-  spatialcoor m_knotsCoor ;  // First element is spatial coordinates (longitude, latitude), second is time.
+  spaceDimensions m_dimensions ; // First dimension is longitude, second is latitude
+  spatialcoor m_knotsCoor ;
   int m_nodeId{ -1 } ;
 
-  void baseComputeWmat(const maternVec &, const maternVec &, const double &, const double &, const double &, const std::string &) ;
+  void baseComputeWmat(const maternVec &, const double &, const double &, const std::string &) ;
   void SetParent(TreeNode * vertexParentPoint) {m_parent = vertexParentPoint ;}
 
   std::vector<mat> m_Wlist ;
 
-  double MaternCovFunction(const Spatiotemprange &, const maternVec &, const maternVec &, const double &, const double &, const double &) ;
+  double MaternCovFunction(const double &, const maternVec &, const double &, const double &) ;
 
-  mat computeCovMat(const spatialcoor &, const spatialcoor &, const maternVec &, const maternVec &, const double &, const double &, const double &, const std::string &) ;
-  void baseInitialise(const dimensions & dims, const uint & depth, TreeNode * parent, const inputdata & dataset) {
+  mat computeCovMat(const spatialcoor &, const spatialcoor &, const maternVec &, const double &, const double &, const std::string &) ;
+  void baseInitialise(const spaceDimensions & dims, const uint & depth, TreeNode * parent, const inputdata & dataset) {
     m_dimensions = dims;
     m_depth = depth ;
     m_parent = parent ;

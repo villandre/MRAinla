@@ -36,32 +36,27 @@ struct MVN{
 
 AugTree::AugTree(uint & Mlon,
                  uint & Mlat,
-                 uint & Mtime,
                  Array2d & lonRange,
                  Array2d & latRange,
-                 Array2d & timeRange,
                  vec & observations,
                  ArrayXXd & obsSp,
                  ArrayXd & obsTime,
                  ArrayXXd & predCovariates,
                  ArrayXXd & predSp,
                  ArrayXd & predTime,
-                 uint & minObsForTimeSplit,
                  unsigned long int & seed,
                  ArrayXXd & covariates,
-                 const bool splitTime,
                  const unsigned int numKnotsRes0,
                  double J,
                  const string & distMethod)
   : m_distMethod(distMethod)
 {
-  m_M = Mlon + Mlat + Mtime ;
+  m_M = Mlon + Mlat ;
   m_Mlon = Mlon ;
   m_Mlat = Mlat ;
-  m_Mtime = Mtime ;
   m_GammaParasSet = false ;
   m_dataset = inputdata(observations, obsSp, obsTime, covariates) ;
-  m_mapDimensions = dimensions(lonRange, latRange, timeRange) ;
+  m_mapDimensions = spaceDimensions(lonRange, latRange) ;
   std::random_device rd ;
   std::mt19937_64 generator(rd()) ;
   generator.seed(seed) ;
@@ -72,13 +67,13 @@ AugTree::AugTree(uint & Mlon,
 
   m_fixedEffParameters = Eigen::VectorXd::Zero(m_dataset.covariateValues.cols() + 1);
   Rcout << "Building the grid..." << std::endl ;
-  BuildTree(minObsForTimeSplit, splitTime, numKnotsRes0, J) ;
+  BuildTree(numKnotsRes0, J) ;
   Rcout << "Grid built!" << std::endl ;
 
   m_numKnots = 0 ;
 
   for (uint i = 0 ; i < m_vertexVector.size() ; i++) {
-    m_numKnots += m_vertexVector.at(i)->GetKnotsCoor().timeCoords.size() ;
+    m_numKnots += m_vertexVector.at(i)->GetKnotsCoor().spatialCoords.rows() ;
   }
   m_FullCondMean = Eigen::VectorXd::Zero(m_numKnots + m_fixedEffParameters.size()) ;
   m_FullCondSDs = Eigen::VectorXd::Zero(m_numKnots + m_fixedEffParameters.size()) ;
@@ -95,7 +90,7 @@ AugTree::AugTree(uint & Mlon,
   // }
 }
 
-void AugTree::BuildTree(const uint & minObsForTimeSplit, const bool splitTime, const unsigned int numKnots0, double J)
+void AugTree::BuildTree(const unsigned int numKnots0, double J)
 {
   m_vertexVector.reserve(1) ;
 
@@ -104,8 +99,8 @@ void AugTree::BuildTree(const uint & minObsForTimeSplit, const bool splitTime, c
   InternalNode * topNode = new InternalNode(m_mapDimensions, m_dataset) ;
 
   m_vertexVector.push_back(topNode) ;
-  ArrayXi numSplits(3) ;
-  numSplits << m_Mlon, m_Mlat, m_Mtime;
+  ArrayXi numSplits(2) ;
+  numSplits << m_Mlon, m_Mlat ;
   createLevels(topNode, "longitude", numSplits) ;
   numberNodes() ;
 
@@ -125,11 +120,11 @@ void AugTree::numberNodes() {
 }
 
 // We make sure that splits don't result in empty regions
-// numObsForTimeSplit still does nothing
+
 void AugTree::createLevels(TreeNode * parent, std::string splitWhat, ArrayXi numSplitsLeft) {
   ArrayXi obsForMedian = parent->GetObsInNode() ;
   ArrayXi childMembership = ArrayXi::Zero(obsForMedian.size()) ;
-  std::vector<dimensions> childDimensions ;
+  std::vector<spaceDimensions> childDimensions ;
   childDimensions.push_back(parent->GetDimensions()) ;
 
   if (obsForMedian.size() <= 1) {
@@ -148,7 +143,7 @@ void AugTree::createLevels(TreeNode * parent, std::string splitWhat, ArrayXi num
     ArrayXd newChildLongitude(2) ;
     newChildLongitude(0) = colMedian ;
     newChildLongitude(1) = childDimensions.at(0).longitude(1) ;
-    dimensions newDimensions = childDimensions.at(0) ;
+    spaceDimensions newDimensions = childDimensions.at(0) ;
     newDimensions.longitude = newChildLongitude ;
     childDimensions.push_back(newDimensions) ;
     childDimensions.at(0).longitude = updatedLongitude ;
@@ -163,33 +158,10 @@ void AugTree::createLevels(TreeNode * parent, std::string splitWhat, ArrayXi num
     ArrayXd newChildLatitude(2) ;
     newChildLatitude(0) = colMedian ;
     newChildLatitude(1) = childDimensions.at(0).latitude(1) ;
-    dimensions newDimensions = childDimensions.at(0) ;
+    spaceDimensions newDimensions = childDimensions.at(0) ;
     newDimensions.latitude = newChildLatitude ;
     childDimensions.push_back(newDimensions) ;
     childDimensions.at(0).latitude = updatedLatitude ;
-  } else if (splitWhat == "time") {
-
-    bool onlyOneTimePoint = true;
-    uint innerIndex = 1 ;
-    ArrayXd elementsForMedian = elem(m_dataset.timeCoords, obsForMedian) ;
-    while(onlyOneTimePoint) {
-      onlyOneTimePoint = (elementsForMedian(innerIndex) - elementsForMedian(0)) < 3e-3  ; // This is to account for the jittering
-      innerIndex += 1 ;
-      if (innerIndex == elementsForMedian.size()) break ;
-    }
-    if (!onlyOneTimePoint) {
-      double colMedian = median(elementsForMedian) ;
-      ArrayXd updatedTime(2) ;
-      updatedTime(0)  = childDimensions.at(0).time(0) ;
-      updatedTime(1) = colMedian ;
-      ArrayXd newChildTime(2) ;
-      newChildTime(0) = colMedian ;
-      newChildTime(1) = childDimensions.at(0).time(1) ;
-      dimensions newDimensions = childDimensions.at(0) ;
-      newDimensions.time = newChildTime ;
-      childDimensions.push_back(newDimensions) ;
-      childDimensions.at(0).time = updatedTime ;
-    }
   }
 
   int incrementedDepth = parent->GetDepth() + 1 ;
@@ -206,37 +178,21 @@ void AugTree::createLevels(TreeNode * parent, std::string splitWhat, ArrayXi num
     }
 
   }
-  // Domain is split with respect to longitude, then latitude, then time.
+  // Domain is split with respect to longitude, then latitude
   if (incrementedDepth < m_M) {
     if (splitWhat == "longitude") {
       if (numSplitsLeft(1) > 0) {
         splitWhat = "latitude" ;
         numSplitsLeft(1) -= 1 ;
-      } else if (numSplitsLeft(2) > 0){
-        splitWhat = "time" ;
-        numSplitsLeft(2) -= 1 ;
       } else {
         numSplitsLeft(0) -= 1 ;
       }
     } else if (splitWhat == "latitude") {
-      if (numSplitsLeft(2) > 0){
-        splitWhat = "time" ;
-        numSplitsLeft(2) -= 1 ;
-      } else if (numSplitsLeft(0) > 0) {
-        splitWhat = "longitude" ;
-        numSplitsLeft(0) -= 1 ;
-      } else {
-        numSplitsLeft(1) -= 1 ;
-      }
-    } else {
       if (numSplitsLeft(0) > 0) {
         splitWhat = "longitude" ;
         numSplitsLeft(0) -= 1 ;
-      } else if (numSplitsLeft(1) > 0) {
-        splitWhat = "latitude" ;
-        numSplitsLeft(1) -= 1 ;
       } else {
-        numSplitsLeft(2) -= 1 ;
+        numSplitsLeft(1) -= 1 ;
       }
     }
     for (auto && i : parent->GetChildren()) {
@@ -251,9 +207,9 @@ void AugTree::generateKnots(TreeNode * node, const unsigned int numKnotsRes0, do
   int numKnotsToGen = std::max(uint(std::ceil((numKnotsRes0 * pow(J, node->GetDepth()))/numNodesAtLevel)), uint(2)) ;
   // node->genRandomKnots(m_dataset, numKnotsToGen, m_randomNumGenerator) ;
   if (node->GetDepth() < m_M) {
-    node->genKnotsOnCube(m_predictData, numKnotsToGen, m_randomNumGenerator, m_assignedPredToKnot) ;
+    node->genKnotsOnSquare(m_predictData, numKnotsToGen, m_randomNumGenerator, m_assignedPredToKnot) ;
   } else {
-    node->genKnotsOnCube(m_dataset, numKnotsToGen, m_randomNumGenerator, m_assignedPredToKnot) ;
+    node->genKnotsOnSquare(m_dataset, numKnotsToGen, m_randomNumGenerator, m_assignedPredToKnot) ;
   }
   if (node->GetChildren().at(0) != NULL) {
     for (auto &i : node->GetChildren()) {
@@ -263,7 +219,7 @@ void AugTree::generateKnots(TreeNode * node, const unsigned int numKnotsRes0, do
 }
 
 void AugTree::computeWmats() {
-  m_vertexVector.at(0)->ComputeWmat(m_MRAcovParasSpace, m_MRAcovParasTime, m_spacetimeScaling, m_spaceNuggetSD, m_timeNuggetSD, m_distMethod) ;
+  m_vertexVector.at(0)->ComputeWmat(m_MRAcovParasSpace, m_spacetimeScaling, m_spaceNuggetSD, m_distMethod) ;
 
   for (uint level = 1; level <= m_M; level++) {
     std::vector<TreeNode *> levelNodes = GetLevelNodes(level) ;
@@ -273,7 +229,7 @@ void AugTree::computeWmats() {
 
     for (std::vector<TreeNode *>::iterator it = levelNodes.begin(); it < levelNodes.end(); it++)
     {
-      (*it)->ComputeWmat(m_MRAcovParasSpace, m_MRAcovParasTime, m_spacetimeScaling, m_spaceNuggetSD, m_timeNuggetSD, m_distMethod) ;
+      (*it)->ComputeWmat(m_MRAcovParasSpace, m_spacetimeScaling, m_spaceNuggetSD, m_distMethod) ;
     }
   }
 }
@@ -626,13 +582,12 @@ void AugTree::ComputeLogPriors() {
   priorCombinations.push_back(std::make_pair(m_MRAcovParasSpace.m_rho, m_maternParasGammaAlphaBetaSpace.m_rho)) ;
   priorCombinations.push_back(std::make_pair(m_MRAcovParasSpace.m_smoothness, m_maternParasGammaAlphaBetaSpace.m_smoothness)) ;
 
-  priorCombinations.push_back(std::make_pair(m_MRAcovParasTime.m_rho, m_maternParasGammaAlphaBetaTime.m_rho)) ;
-  priorCombinations.push_back(std::make_pair(m_MRAcovParasTime.m_smoothness, m_maternParasGammaAlphaBetaTime.m_smoothness)) ;
-
   priorCombinations.push_back(std::make_pair(m_spacetimeScaling, m_maternSpacetimeScalingGammaAlphaBeta)) ;
 
   priorCombinations.push_back(std::make_pair(m_fixedEffSD, m_fixedEffGammaAlphaBeta)) ;
   priorCombinations.push_back(std::make_pair(m_errorSD, m_errorGammaAlphaBeta)) ;
+
+  priorCombinations.push_back(std::make_pair(m_timeCovPara, m_timeCovParaGammaAlphaBeta)) ;
 
   double logPrior = 0 ;
 
@@ -764,7 +719,7 @@ void AugTree::ComputeHpred() {
   for (auto & i : tipNodes) {
     ArrayXi predictionsInLeaf = i->GetPredIndices() ;
     if (predictionsInLeaf.size() > 0) {
-      i->computeUpred(m_MRAcovParasSpace, m_MRAcovParasTime, m_spacetimeScaling, m_predictData, m_spaceNuggetSD, m_timeNuggetSD, m_distMethod) ;
+      i->computeUpred(m_MRAcovParasSpace, m_spacetimeScaling, m_predictData, m_spaceNuggetSD, m_distMethod) ;
     }
   }
 
@@ -825,8 +780,6 @@ void AugTree::SetMRAcovParasGammaAlphaBeta(const Rcpp::List & MRAcovParasList) {
   m_maternSpacetimeScalingGammaAlphaBeta = scaling ;
   m_maternParasGammaAlphaBetaSpace = maternGammaPriorParasWithoutScale(GammaHyperParas(Rcpp::as<vec>(spaceParas["rho"])),
                                             GammaHyperParas(Rcpp::as<vec>(spaceParas["smoothness"]))) ;
-  m_maternParasGammaAlphaBetaTime = maternGammaPriorParasWithoutScale(GammaHyperParas(Rcpp::as<vec>(timeParas["rho"])),
-                                            GammaHyperParas(Rcpp::as<vec>(timeParas["smoothness"]))) ;
 }
 
 void AugTree::ComputeFullCondSDsFE() {

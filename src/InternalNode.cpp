@@ -21,7 +21,6 @@ void InternalNode::genRandomKnots(spatialcoor & dataCoor, int & numKnots, std::m
 
   if (m_depth == 0) {
     ArrayXXd spaceCoords(0, 2) ;
-    ArrayXd timeCoords(0) ;
 
     std::vector<int> obsInNodeVec ;
 
@@ -36,14 +35,13 @@ void InternalNode::genRandomKnots(spatialcoor & dataCoor, int & numKnots, std::m
       shuffledIndices(i) = obsInNodeVec.at(i) ;
     }
     spaceCoords = rows(dataCoor.spatialCoords, shuffledIndices) ;
-    timeCoords = elem(dataCoor.timeCoords, shuffledIndices) ;
 
-    m_knotsCoor = spatialcoor(spaceCoords, timeCoords) ;
+    m_knotsCoor = spatialcoor(spaceCoords) ;
   }
 
   numKnots = min(numKnots, int(m_obsInNode.size())) ;
 
-  m_knotsCoor = spatialcoor(ArrayXXd::Zero(numKnots, 2), ArrayXd::Zero(numKnots)) ;
+  m_knotsCoor = spatialcoor(ArrayXXd::Zero(numKnots, 2)) ;
 
   double minLon = m_dimensions.longitude.minCoeff() ;
   double maxLon = m_dimensions.longitude.maxCoeff() ;
@@ -51,19 +49,14 @@ void InternalNode::genRandomKnots(spatialcoor & dataCoor, int & numKnots, std::m
   double minLat = m_dimensions.latitude.minCoeff() ;
   double maxLat = m_dimensions.latitude.maxCoeff() ;
 
-  double minTime = m_dimensions.time.minCoeff() ;
-  double maxTime = m_dimensions.time.maxCoeff() ;
-
   std::uniform_real_distribution<double> distribution(0, 1);
   for (uint i = 0; i < m_knotsCoor.spatialCoords.rows(); i++) {
     m_knotsCoor.spatialCoords(i,0) =  distribution(generator) * (maxLon - minLon) + minLon ;
     m_knotsCoor.spatialCoords(i,1) =  distribution(generator) * (maxLat - minLat) + minLat ;
-    m_knotsCoor.timeCoords(i) =  distribution(generator) * (maxTime - minTime) + minTime ;
   }
 }
 
-
-void InternalNode::genKnotsOnCube(spatialcoor & dataCoor, int & numKnots, std::mt19937_64 & generator, Array<bool, Dynamic, 1> & assignedPredLocations) {
+void InternalNode::genKnotsOnSquare(spatialcoor & dataCoor, int & numKnots, std::mt19937_64 & generator, Array<bool, Dynamic, 1> & assignedPredLocations) {
   numKnots = min(numKnots, int(m_obsInNode.size())) ;
   ArrayXi predObsInNode = deriveObsInNode(dataCoor) ;
 
@@ -79,7 +72,6 @@ void InternalNode::genKnotsOnCube(spatialcoor & dataCoor, int & numKnots, std::m
 
   int numKnotsFromPred = 0 ;
   ArrayXXd spacePredCoords(0, 2) ;
-  ArrayXd timePredCoords(0) ;
 
   if (numUnassignedPreds > 0) {
     numKnotsFromPred = min(numKnots, numUnassignedPreds) ;
@@ -92,11 +84,9 @@ void InternalNode::genKnotsOnCube(spatialcoor & dataCoor, int & numKnots, std::m
     }
 
     spacePredCoords = rows(dataCoor.spatialCoords, shuffledPredIndices) ;
-    timePredCoords = elem(dataCoor.timeCoords, shuffledPredIndices) ;
   }
 
   ArrayXXd knotsSp(0, 2) ;
-  ArrayXd time(0) ;
 
   if (numKnots - numKnotsFromPred > 0) {
     numKnots -= numKnotsFromPred ;
@@ -106,7 +96,6 @@ void InternalNode::genKnotsOnCube(spatialcoor & dataCoor, int & numKnots, std::m
     // thus ensuring a uniform spread in the space.
     numKnots = numPointsPerEdge * 12 - 16 ;
     knotsSp.resize(numKnots, 2) ;
-    time.resize(numKnots) ;
 
     knotsSp = ArrayXXd::Zero(numKnots, 2) ;
 
@@ -116,28 +105,23 @@ void InternalNode::genKnotsOnCube(spatialcoor & dataCoor, int & numKnots, std::m
     double minLat = m_dimensions.latitude.minCoeff() ;
     double maxLat = m_dimensions.latitude.maxCoeff() ;
 
-    double minTime = m_dimensions.time.minCoeff() ;
-    double maxTime = m_dimensions.time.maxCoeff() ;
-
     double offsetPerc = 1e-5 ;
     double lonDist = (maxLon - minLon) * (1-offsetPerc * 2)/(double(numPointsPerEdge) - 1) ;
     double latDist = (maxLat - minLat) * (1-offsetPerc * 2)/(double(numPointsPerEdge) - 1) ;
-    double timeDist = (maxTime - minTime) * (1-offsetPerc * 2)/(double(numPointsPerEdge) - 1) ;
 
-    Array3d scalingArray = {lonDist, latDist, timeDist} ;
-    Array3d offsetCoords = {minLon + offsetPerc * (maxLon - minLon),
-                            minLat + offsetPerc * (maxLat - minLat),
-                            minTime + offsetPerc * (maxTime - minTime)} ;
+    Array2d scalingArray = {lonDist, latDist} ;
+    Array2d offsetCoords = {minLon + offsetPerc * (maxLon - minLon),
+                            minLat + offsetPerc * (maxLat - minLat)
+                            } ;
 
-    intCube cubeForKnots(numPointsPerEdge, scalingArray, offsetCoords) ;
+    intSquare squareForKnots(numPointsPerEdge, scalingArray, offsetCoords) ;
 
     // We place the corners first.
 
-    std::array<Eigen::Array3d, 8> corners = cubeForKnots.getCorners(false) ;
+    std::array<Eigen::Array2d, 4> corners = squareForKnots.getCorners(false) ;
     uint index = 0 ;
     for (auto & corner : corners) {
       knotsSp.row(index) = corner.head(2) ;
-      time(index) = corner(2) ;
       index += 1 ;
     }
 
@@ -150,28 +134,25 @@ void InternalNode::genKnotsOnCube(spatialcoor & dataCoor, int & numKnots, std::m
           edgeIndex = 0 ;
           pointIndex += 1 ;
         }
-        Array3d knotArray = cubeForKnots.getEdgePointCoor(edgeIndex, pointIndex) ;
+        Array2d knotArray = squareForKnots.getEdgePointCoor(edgeIndex, pointIndex) ;
         knotsSp.row(index) = knotArray.head(2) ;
-        time(index) = knotArray(2) ;
         edgeIndex += 1 ;
         index += 1 ;
       }
     }
   }
   ArrayXXd mergedSpace = join_cols(spacePredCoords, knotsSp) ;
-  ArrayXd mergedTime = join_cols(timePredCoords, time) ;
 
   std::uniform_real_distribution<double> distribution(-1e-6, 1e-6);
-  for (uint i = 0; i < mergedTime.size(); i++) {
-    mergedTime(i) += distribution(generator) ;
+  for (uint i = 0; i < mergedSpace.rows(); i++) {
     mergedSpace(i) += distribution(generator) ;
     mergedSpace(i + mergedSpace.rows()) += distribution(generator) ;
   }
-  m_knotsCoor = spatialcoor(mergedSpace, mergedTime) ;
+  m_knotsCoor = spatialcoor(mergedSpace) ;
 }
 
-void InternalNode::ComputeWmat(const maternVec & covParasSp, const maternVec & covParasTime, const double & scaling, const double & spaceNuggetSD, const double & timeNuggetSD, const string & distMethod) {
-  baseComputeWmat(covParasSp, covParasTime, scaling, spaceNuggetSD, timeNuggetSD, distMethod) ;
+void InternalNode::ComputeWmat(const maternVec & covParasSp, const double & scaling, const double & spaceNuggetSD, const string & distMethod) {
+  baseComputeWmat(covParasSp, scaling, spaceNuggetSD, distMethod) ;
 
   // m_Wlist.at(m_depth).triangularView<Upper>() = m_Wlist.at(m_depth).triangularView<Lower>() ; // Will this cause aliasing?
 

@@ -18,8 +18,8 @@ public:
   void RemoveChildren() {}
   int GetM() {return m_depth ;}
 
-  void ComputeWmat(const maternVec & covParasSp, const maternVec & covParasTime, const double & scaling, const double & spaceNuggetSD, const double & timeNuggetSD, const std::string & distMethod) {
-    baseComputeWmat(covParasSp, covParasTime, scaling, spaceNuggetSD, timeNuggetSD, distMethod) ;
+  void ComputeWmat(const maternVec & covParasSp, const double & scaling, const double & spaceNuggetSD, const std::string & distMethod) {
+    baseComputeWmat(covParasSp, scaling, spaceNuggetSD, distMethod) ;
     m_SigmaInverse = GetSigma().selfadjointView<Eigen::Upper>().ldlt().solve(Eigen::MatrixXd::Identity(GetSigma().rows(), GetSigma().cols())) ;
   }
 
@@ -51,18 +51,16 @@ public:
 
   void SetPredictLocations(const inputdata &) ;
   Eigen::ArrayXi & GetPredIndices() { return m_predsInNode ;}
-  void computeUpred(const maternVec &, const maternVec &, const double &, const spatialcoor &, const double &, const double &, const std::string &) ;
+  void computeUpred(const maternVec &, const double &, const spatialcoor &, const double &, const std::string &) ;
 
-  void genKnotsOnCube(spatialcoor & dataCoor, int & numKnots, std::mt19937_64 & RNG, Eigen::Array<bool, Eigen::Dynamic, 1> &) {
-    m_knotsCoor = spatialcoor(rows(dataCoor.spatialCoords, m_obsInNode),
-                              elem(dataCoor.timeCoords, m_obsInNode)) ;
+  void genKnotsOnSquare(spatialcoor & dataCoor, int & numKnots, std::mt19937_64 & RNG, Eigen::Array<bool, Eigen::Dynamic, 1> &) {
+    m_knotsCoor = spatialcoor(rows(dataCoor.spatialCoords, m_obsInNode)) ;
   }
   void genRandomKnots(spatialcoor & dataCoor, int & numKnots, std::mt19937_64 & generator) {
-    m_knotsCoor = spatialcoor(rows(dataCoor.spatialCoords, m_obsInNode),
-                              elem(dataCoor.timeCoords, m_obsInNode)) ;
+    m_knotsCoor = spatialcoor(rows(dataCoor.spatialCoords, m_obsInNode)) ;
   }
 
-  TipNode(const dimensions & dims, const uint & depth, TreeNode * parent,
+  TipNode(const spaceDimensions & dims, const uint & depth, TreeNode * parent,
           const inputdata & dataset) {
     baseInitialise(dims, depth, parent, dataset) ;
     m_UmatList.resize(m_depth + 1) ;

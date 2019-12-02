@@ -17,8 +17,7 @@ struct Spatiotemprange{
 
 // To prevent multiple definitions, I DECLARE the function in the header only. I then define them
 // in the cpp file.
-Spatiotemprange sptimeDistance(const Eigen::ArrayXd &, const double &, const Eigen::ArrayXd &,
-                               const double &, const std::string &) ;
+double spDistance(const Eigen::ArrayXd &, const Eigen::ArrayXd &, const std::string &) ;
 
 Eigen::SparseMatrix<double, Eigen::RowMajor> createBlockMatrix(std::vector<Eigen::MatrixXd *>) ;
 

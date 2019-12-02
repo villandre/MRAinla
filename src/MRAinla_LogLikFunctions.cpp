@@ -15,17 +15,14 @@ using namespace std;
 
 List setupGridCpp(NumericVector responseValues, NumericMatrix spCoords, NumericMatrix predCoords,
                   NumericVector obsTime,  NumericVector predTime, NumericMatrix covariateMatrix,
-                  NumericMatrix predCovariateMatrix, uint Mlon, uint Mlat, uint Mtime,
-                  NumericVector lonRange, NumericVector latRange, NumericVector timeRange,
-                  uint randomSeed, uint cutForTimeSplit, bool splitTime,
-                  int numKnotsRes0, double J, String distMethod)
+                  NumericMatrix predCovariateMatrix, uint Mlon, uint Mlat,
+                  NumericVector lonRange, NumericVector latRange,
+                  uint randomSeed, int numKnotsRes0, double J, String distMethod)
 {
   ArrayXd lonRinit = as<ArrayXd>(lonRange) ;
   ArrayXd latRinit = as<ArrayXd>(latRange) ;
-  ArrayXd timeRinit = as<ArrayXd>(timeRange) ;
   Array2d lonR = lonRinit.segment(0,2) ;
   Array2d latR = latRinit.segment(0,2) ;
-  Array2d timeR = timeRinit.segment(0,2) ;
   vec response = as<vec>(responseValues) ;
   ArrayXXd sp = as<ArrayXXd>(spCoords) ;
   ArrayXXd predSp = as<ArrayXXd>(predCoords) ;
@@ -38,7 +35,7 @@ List setupGridCpp(NumericVector responseValues, NumericMatrix spCoords, NumericM
 
   ArrayXXd covariateMat = as<ArrayXXd>(covariateMatrix) ;
 
-  AugTree * MRAgrid = new AugTree(Mlon, Mlat, Mtime, lonR, latR, timeR, response, sp, time, predCovariates, predSp, predTimeVec, cutForTimeSplit, seedForRNG, covariateMat, splitTime, numKnotsRes0, J, dMethod) ;
+  AugTree * MRAgrid = new AugTree(Mlon, Mlat, lonR, latR, response, sp, time, predCovariates, predSp, predTimeVec, seedForRNG, covariateMat, numKnotsRes0, J, dMethod) ;
 
   XPtr<AugTree> p(MRAgrid, false) ; // Disabled automatic garbage collection.
 
@@ -48,10 +45,10 @@ List setupGridCpp(NumericVector responseValues, NumericMatrix spCoords, NumericM
 // [[Rcpp::export]]
 
 double LogJointHyperMarginalToWrap(SEXP treePointer, Rcpp::List MRAhyperparas,
-         double fixedEffSD, double errorSD, Rcpp::List MRAcovParasGammaAlphaBeta,
+         double timeCovPara, double fixedEffSD, double errorSD, Rcpp::List MRAcovParasGammaAlphaBeta,
          Rcpp::NumericVector FEmuVec, NumericVector fixedEffGammaAlphaBeta,
-         NumericVector errorGammaAlphaBeta, double spaceNuggetSD,
-         double timeNuggetSD, bool recordFullConditional, bool processPredictions) {
+         NumericVector errorGammaAlphaBeta, NumericVector timeGammaAlphaBeta,
+         double spaceNuggetSD, bool recordFullConditional, bool processPredictions) {
   mat posteriorMatrix ;
   double outputValue = 0 ;
 
@@ -70,8 +67,9 @@ double LogJointHyperMarginalToWrap(SEXP treePointer, Rcpp::List MRAhyperparas,
 
       pointedTree->SetFixedEffGammaAlphaBeta(GammaHyperParas(fixedEffAlphaBeta(0), fixedEffAlphaBeta(1))) ;
       pointedTree->SetErrorGammaAlphaBeta(GammaHyperParas(errorAlphaBeta(0), errorAlphaBeta(1))) ;
+      pointedTree->SetTimeCovParaGammaAlphaBeta(GammaHyperParas(timeGammaAlphaBeta(0), timeGammaAlphaBeta(1))) ;
       pointedTree->SetFEmu(FEmu) ;
-      pointedTree->SetSpaceAndTimeNuggetSD(spaceNuggetSD, timeNuggetSD) ;
+      pointedTree->SetSpaceNuggetSD(spaceNuggetSD) ;
       std::vector<TreeNode *> tipNodes = pointedTree->GetLevelNodes(pointedTree->GetM()) ;
       for (auto & i : tipNodes) {
         i->SetUncorrSD(0.001) ; // Is this a nugget effect?

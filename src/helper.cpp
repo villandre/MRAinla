@@ -18,8 +18,7 @@ typedef Eigen::Triplet<double> Triplet;
 
 // Other choices for method: "vincenty" and "euclidean"
 // The assumption is that spCoor1 is a vector of length 2 which lists longitude first, then latitude.
-Spatiotemprange sptimeDistance(const Eigen::ArrayXd & spCoor1, const double & time1, const Eigen::ArrayXd & spCoor2,
-                               const double & time2, const string & method) {
+double spDistance(const Eigen::ArrayXd & spCoor1, const Eigen::ArrayXd & spCoor2, const string & method) {
   double sp = 0 ;
   if (method == "haversine") {
     sp = haversine_distance(spCoor1(0), spCoor1(1), spCoor2(0), spCoor2(1)) ; // Works under the assumption that coordinates are (longitude, latitude)
@@ -27,9 +26,8 @@ Spatiotemprange sptimeDistance(const Eigen::ArrayXd & spCoor1, const double & ti
     Rcpp::stop("Input distance method...\n") ;
     // sp = vincenty_distance(spCoor1(0), spCoor1(1), spCoor2(0), spCoor2(1)) ; // Same as for haversine
   }
-  double timeDiff = abs(time2 - time1) ;
 
-  return Spatiotemprange(sp, timeDiff) ;
+  return sp ;
 };
 
 sp_mat createBlockMatrix(std::vector<mat *> listOfMatrices) {

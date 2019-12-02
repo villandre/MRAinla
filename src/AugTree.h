@@ -36,7 +36,7 @@ namespace MRAinla {
 class AugTree
 {
 public:
-  AugTree(uint &, uint &, uint &, Eigen::Array2d &, Eigen::Array2d &, Eigen::Array2d &, vec &, Eigen::ArrayXXd &, Eigen::ArrayXd &, Eigen::ArrayXXd &, Eigen::ArrayXXd &, Eigen::ArrayXd &, uint &, unsigned long int &, Eigen::ArrayXXd &, const bool, const unsigned int, double, const std::string &) ;
+  AugTree(uint &, uint &, Eigen::Array2d &, Eigen::Array2d &, vec &, Eigen::ArrayXXd &, Eigen::ArrayXd &, Eigen::ArrayXXd &, Eigen::ArrayXXd &, Eigen::ArrayXd &, unsigned long int &, Eigen::ArrayXXd &, const unsigned int, double, const std::string &) ;
 
   std::vector<TreeNode *> GetVertexVector() {return m_vertexVector ;} ;
 
@@ -79,11 +79,11 @@ public:
 
   void SetErrorGammaAlphaBeta(const GammaHyperParas & alphaBeta) {m_errorGammaAlphaBeta = alphaBeta ;}
   void SetFixedEffGammaAlphaBeta(const GammaHyperParas & alphaBeta) {m_fixedEffGammaAlphaBeta = alphaBeta ;}
+  void SetTimeCovParaGammaAlphaBeta(const GammaHyperParas & alphaBeta) {m_timeCovParaGammaAlphaBeta = alphaBeta ;}
   void SetMRAcovParasGammaAlphaBeta(const Rcpp::List &) ;
   void SetFEmu(const vec & muVec) {m_FEmu = muVec ;}
-  void SetSpaceAndTimeNuggetSD(const double & spaceNuggetSD, const double & timeNuggetSD) {
+  void SetSpaceNuggetSD(const double & spaceNuggetSD) {
     m_spaceNuggetSD = spaceNuggetSD ;
-    m_timeNuggetSD = timeNuggetSD ;
   }
   void SetRecordFullConditional(const bool recordIt) { m_recordFullConditional = recordIt ;}
 
@@ -137,31 +137,30 @@ private:
   double m_logFullCond{ 0 } ;
   double m_logJointPsiMarginal{ 0 } ;
   int m_numKnots{ 0 } ;
-  double m_spaceNuggetSD{ 1e-6 };
-  double m_timeNuggetSD{ 1e-6 } ;
+  double m_spaceNuggetSD{ 1e-6 } ;
   std::string m_distMethod ;
 
   int m_M{ 0 } ;
   int m_Mlon{ 0 } ;
   int m_Mlat{ 0 } ;
-  int m_Mtime{ 0 } ;
   int m_numTips{ 0 } ;
   double m_errorSD{ 0 } ;
   double m_fixedEffSD{ 0 } ;
 
   maternGammaPriorParasWithoutScale m_maternParasGammaAlphaBetaSpace ;
-  maternGammaPriorParasWithoutScale m_maternParasGammaAlphaBetaTime ;
   GammaHyperParas m_maternSpacetimeScalingGammaAlphaBeta ;
   GammaHyperParas m_fixedEffGammaAlphaBeta ;
   GammaHyperParas m_errorGammaAlphaBeta ;
+  GammaHyperParas m_timeCovParaGammaAlphaBeta ;
 
   maternVec m_MRAcovParasSpace ;
   maternVec m_MRAcovParasTime ;
   double m_spacetimeScaling{ 1e-5 } ;
   vec m_fixedEffParameters ;
   vec m_FEmu ;
+  double m_timeCovPara{ 0 } ;
 
-  dimensions m_mapDimensions;
+  spaceDimensions m_mapDimensions;
 
   inputdata m_dataset ; // First element is response, second is spatial coordinates, last is time.
 
@@ -171,7 +170,7 @@ private:
   void diveAndUpdate(TreeNode *, std::vector<TreeNode *> *) ;
 
   // Tree construction functions //
-  void BuildTree(const uint &, const bool, const unsigned int, double) ;
+  void BuildTree(const unsigned int, double) ;
   void createLevels(TreeNode *, std::string, Eigen::ArrayXi) ;
   void generateKnots(TreeNode *, const unsigned int, double) ;
 
