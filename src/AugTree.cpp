@@ -1,5 +1,3 @@
-// [[Rcpp::plugins(openmp)]]
-
 // #ifdef _OPENMP
 #include <omp.h>
 // #endif
@@ -666,7 +664,7 @@ void AugTree::ComputeLogFCandLogCDandDataLL() {
   // }
   Rcout << "Done! Computing Chol. SigmaFEeta..." << std::endl ;
   fflush(stdout) ;
-  Eigen::SimplicialLDLT<Eigen::SparseMatrix<double>> blockChol(m_SigmaFEandEtaInv) ;
+  Eigen::SimplicialLDLT<sp_mat> blockChol(m_SigmaFEandEtaInv) ;
 
   double logDetSigmaKFEinv = blockChol.vectorD().array().log().sum() ;
   Rcout << "Done! Creating H matrix..." << std::endl ;
@@ -683,7 +681,7 @@ void AugTree::ComputeLogFCandLogCDandDataLL() {
   mat scaledResponse = std::pow(m_errorSD, -2) * responsesReshuffled.transpose() * m_Hmat ;
   Rcout << "Done! Computing secondTerm..." << std::endl ;
   fflush(stdout)  ;
-  sp_mat secondTerm = std::pow(m_errorSD, -2) * m_Hmat.transpose() * m_Hmat ;
+  sp_mat secondTerm = std::pow(m_errorSD, -2) * (m_Hmat.transpose() * m_Hmat) ;
 
   Rcout << "Done! analysing sparsity pattern..." << std::endl ;
   fflush(stdout) ;
@@ -756,7 +754,7 @@ void AugTree::ComputeLogJointPsiMarginal() {
   ComputeLogFCandLogCDandDataLL() ;
 
   // Rprintf("Observations log-lik: %.4e \n Log-prior: %.4e \n Log-Cond. dist.: %.4e \n Log-full cond.: %.4e \n \n \n",
-  // m_globalLogLik, m_logPrior, m_logCondDist, m_logFullCond) ;
+  //  m_globalLogLik, m_logPrior, m_logCondDist, m_logFullCond) ;
   m_logJointPsiMarginal = m_globalLogLik + m_logPrior + m_logCondDist - m_logFullCond ;
    // Rprintf("Joint value: %.4e \n \n", m_logJointPsiMarginal) ;
 }

@@ -145,7 +145,7 @@ plotOutput <- function(inlaMRAoutput, trainingData, testData, realTestValues = N
     stop("Unrecognised plot type requested: please select one of: joint, training, SD, fittedVSrealNoSp.")
   }
   rangeForScale <- range(raster::values(stackedRasters), na.rm = TRUE)
-  plot(stackedRasters, interpolate = FALSE, col = rev( rainbow( 20, start = 0, end = 1) ), breaks = seq(floor(rangeForScale[[1]]), ceiling(rangeForScale[[2]]), length.out = 19))
+  plot(stackedRasters, interpolate = FALSE, col = rev( rainbow( 20, start = 0, end = 1) ), breaks = seq(floor(rangeForScale[[1]]), ceiling(rangeForScale[[2]]), length.out = 19), cex = 2)
 
   if (!is.null(filename)) {
     dev.off()
@@ -153,10 +153,10 @@ plotOutput <- function(inlaMRAoutput, trainingData, testData, realTestValues = N
   invisible(0)
 }
 
-plotSpacetimeData <- function(spacetimeData) {
+plotSpacetimeData <- function(spacetimeData, fontsize) {
 
   width <- ceiling(sqrt(nrow(spacetimeData@sp@coords)/length(unique(time(spacetimeData@time)))))
-  padding <- 0.1
+  padding <- 0.01
   landRaster <- raster::raster(nrows = width, ncols = width, xmn = min(spacetimeData@sp@coords[ , 1]) - padding, xmx = max(spacetimeData@sp@coords[ , 1]) + padding, ymn = min(spacetimeData@sp@coords[ , 2]) - padding, ymx = max(spacetimeData@sp@coords[ , 2]) + padding)
   getTestRaster <- function(dayIndex) {
 
@@ -172,7 +172,8 @@ plotSpacetimeData <- function(spacetimeData) {
   }
   rasterList <- lapply(seq_along(unique(time(spacetimeData@time))), getTestRaster)
   stackedRasters <- raster::stack(rasterList)
-  raster::spplot(stackedRasters, scales = list(draw = TRUE),
+  raster::spplot(stackedRasters, scales = list(draw = FALSE),
          xlab = "Longitude", ylab = "Latitude",
-         names.attr = as.character(unique(time(spacetimeData))))
+         names.attr = as.character(unique(time(spacetimeData))),
+         par.settings=list(fontsize=list(text=fontsize)))
 }
