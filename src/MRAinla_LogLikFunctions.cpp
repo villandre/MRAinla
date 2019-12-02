@@ -24,6 +24,7 @@ List setupGridCpp(NumericVector responseValues, NumericMatrix spCoords, NumericM
   Array2d lonR = lonRinit.segment(0,2) ;
   Array2d latR = latRinit.segment(0,2) ;
   vec response = as<vec>(responseValues) ;
+  ArrayXd responseArray = as<Eigen::ArrayXd>(responseValues) ;
   ArrayXXd sp = as<ArrayXXd>(spCoords) ;
   ArrayXXd predSp = as<ArrayXXd>(predCoords) ;
   ArrayXd predTimeVec = as<ArrayXd>(predTime) ;
@@ -34,10 +35,24 @@ List setupGridCpp(NumericVector responseValues, NumericMatrix spCoords, NumericM
   unsigned long int seedForRNG = randomSeed ;
 
   ArrayXXd covariateMat = as<ArrayXXd>(covariateMatrix) ;
+  std::vector<double> timeAsVector = Rcpp::as<std::vector<double>>(obsTime) ;
+  std::sort(timeAsVector.begin(), timeAsVector.end()) ;
+  timeAsVector.erase(unique( timeAsVector.begin(), timeAsVector.end() ),
+                      timeAsVector.end() );
+  std::vector<AugTree *> MRAgridVector ;
+  for (auto & i : timeAsVector) {
+    Eigen::Array<bool, Eigen::Dynamic, 1> logicalTest = (time == i) ;
+    Eigen::ArrayXi timeIndices = find(logicalTest) ;
+    Eigen::ArrayXXd subObsSp = rows(sp, timeIndices) ;
+    Eigen::ArrayXXd subCovar = rows(covariateMat, timeIndices) ;
+    vec subResponse = elem(responseArray, timeIndices).matrix() ;
+    ArrayXd subTime = elem(time, timeIndices) ;
 
-  AugTree * MRAgrid = new AugTree(Mlon, Mlat, lonR, latR, response, sp, time, predCovariates, predSp, predTimeVec, seedForRNG, covariateMat, numKnotsRes0, J, dMethod) ;
+    AugTree * MRAgrid = new AugTree(Mlon, Mlat, lonR, latR, subResponse, subObsSp, subTime, predCovariates, predSp, predTimeVec, seedForRNG, subCovar, numKnotsRes0, J, dMethod) ;
+    MRAgridVector.push_back(MRAgrid) ;
+  }
 
-  XPtr<AugTree> p(MRAgrid, false) ; // Disabled automatic garbage collection.
+  XPtr<std::vector<AugTree *>> p(&MRAgridVector, false) ; // Disabled automatic garbage collection.
 
   return List::create(Named("gridPointer") = p) ;
 }
