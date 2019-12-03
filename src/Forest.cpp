@@ -398,13 +398,12 @@ void Forest::ComputeLogPriors() {
 
   priorCombinations.push_back(std::make_pair(m_MRAcovParasSpace.m_rho, m_maternParasGammaAlphaBetaSpace.m_rho)) ;
   priorCombinations.push_back(std::make_pair(m_MRAcovParasSpace.m_smoothness, m_maternParasGammaAlphaBetaSpace.m_smoothness)) ;
-
-  priorCombinations.push_back(std::make_pair(m_spacetimeScaling, m_maternSpacetimeScalingGammaAlphaBeta)) ;
+  priorCombinations.push_back(std::make_pair(m_MRAcovParasSpace.m_scale, m_maternParasGammaAlphaBetaSpace.m_scale)) ;
 
   priorCombinations.push_back(std::make_pair(m_fixedEffSD, m_fixedEffGammaAlphaBeta)) ;
   priorCombinations.push_back(std::make_pair(m_errorSD, m_errorGammaAlphaBeta)) ;
 
-  priorCombinations.push_back(std::make_pair(m_timeCovPara, m_timeCovParaGammaAlphaBeta)) ;
+  priorCombinations.push_back(std::make_pair(m_timeCovPara, m_timeCovParasGammaAlphaBeta)) ;
 
   double logPrior = 0 ;
 
@@ -515,13 +514,12 @@ void Forest::ComputeLogJointPsiMarginal() {
 
   // m_MRAcovParasSpace.print("Spatial parameters:") ;
   // m_MRAcovParasTime.print("Time parameters:") ;
-  // Rprintf("Scaling parameter: %.3e \n", m_spacetimeScaling) ;
 
   ComputeLogPriors() ;
 
   // if (m_recomputeMRAlogLik) {
   for (auto & tree : m_treeVector) {
-    tree.computeWmats(m_MRAcovParasSpace, m_spacetimeScaling, m_spaceNuggetSD, m_distMethod) ;
+    tree.computeWmats(m_MRAcovParasSpace, m_spaceNuggetSD, m_distMethod) ;
   }
   // }
 
@@ -539,7 +537,7 @@ void Forest::ComputeHpred() {
     for (auto & i : tipNodes) {
       ArrayXi predictionsInLeaf = i->GetPredIndices() ;
       if (predictionsInLeaf.size() > 0) {
-        i->computeUpred(m_MRAcovParasSpace, m_spacetimeScaling, m_predictData, m_spaceNuggetSD, m_distMethod) ;
+        i->computeUpred(m_MRAcovParasSpace, m_predictData, m_spaceNuggetSD, m_distMethod) ;
       }
     }
   }
@@ -569,14 +567,14 @@ vec Forest::ComputeEvar() {
 
 void Forest::SetMRAcovParas(const Rcpp::List & MRAcovParas) {
   List SpaceParas = Rcpp::as<List>(MRAcovParas["space"]) ;
-  double scalePara = Rcpp::as<double>(MRAcovParas["scale"]) ;
 
   double rhoSpace = Rcpp::as<double>(SpaceParas["rho"]) ;
   double smoothnessSpace = Rcpp::as<double>(SpaceParas["smoothness"]) ;
+  double scaleSpace = Rcpp::as<double>(SpaceParas["scale"]) ;
 
-  maternVec MRAcovParasSpace(rhoSpace, smoothnessSpace, 1) ;
+  maternVec MRAcovParasSpace(rhoSpace, smoothnessSpace, scaleSpace) ;
 
-  bool test = (fabs(m_spacetimeScaling - scalePara) < epsilon) && (m_MRAcovParasSpace == MRAcovParasSpace) ;
+  bool test = m_MRAcovParasSpace == MRAcovParasSpace ;
 
   if (test) {
     m_recomputeMRAlogLik = false ;
@@ -584,16 +582,18 @@ void Forest::SetMRAcovParas(const Rcpp::List & MRAcovParas) {
     m_recomputeMRAlogLik = true ;
   }
   m_MRAcovParasSpace = MRAcovParasSpace ;
-  m_spacetimeScaling = scalePara ;
 }
 
 void Forest::SetMRAcovParasGammaAlphaBeta(const Rcpp::List & MRAcovParasList) {
   Rcpp::List spaceParas = Rcpp::as<List>(MRAcovParasList["space"]) ;
-  Rcpp::List timeParas = Rcpp::as<List>(MRAcovParasList["time"]) ;
-  vec scaling = Rcpp::as<vec>(MRAcovParasList["scale"]) ;
-  m_maternSpacetimeScalingGammaAlphaBeta = scaling ;
-  m_maternParasGammaAlphaBetaSpace = maternGammaPriorParasWithoutScale(GammaHyperParas(Rcpp::as<vec>(spaceParas["rho"])),
-                                                                       GammaHyperParas(Rcpp::as<vec>(spaceParas["smoothness"]))) ;
+  m_maternParasGammaAlphaBetaSpace = maternGammaPriorParas(GammaHyperParas(Rcpp::as<vec>(spaceParas["rho"])),
+                                                            GammaHyperParas(Rcpp::as<vec>(spaceParas["smoothness"])),
+                                                            GammaHyperParas(Rcpp::as<vec>(spaceParas["scale"]))) ;
+}
+
+void Forest::SetTimeCovParaGammaAlphaBeta(const Rcpp::List & timeCovParasList) {
+  Rcpp::List timeParas = Rcpp::as<List>(timeCovParasList) ;
+  m_timeCovParasGammaAlphaBeta = GammaHyperParas(Rcpp::as<vec>(timeParas["scale"])) ; // Only a scale parameter for now.
 }
 
 void Forest::ComputeFullCondSDsFE() {

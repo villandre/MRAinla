@@ -18,8 +18,8 @@ public:
   void RemoveChildren() {}
   int GetM() {return m_depth ;}
 
-  void ComputeWmat(const maternVec & covParasSp, const double & scaling, const double & spaceNuggetSD, const std::string & distMethod) {
-    baseComputeWmat(covParasSp, scaling, spaceNuggetSD, distMethod) ;
+  void ComputeWmat(const maternVec & covParasSp, const double & spaceNuggetSD, const std::string & distMethod) {
+    baseComputeWmat(covParasSp, spaceNuggetSD, distMethod) ;
     m_SigmaInverse = GetSigma().selfadjointView<Eigen::Upper>().ldlt().solve(Eigen::MatrixXd::Identity(GetSigma().rows(), GetSigma().cols())) ;
   }
 
@@ -51,7 +51,7 @@ public:
 
   void SetPredictLocations(const inputdata &) ;
   Eigen::ArrayXi & GetPredIndices() { return m_predsInNode ;}
-  void computeUpred(const maternVec &, const double &, const spatialcoor &, const double &, const std::string &) ;
+  void computeUpred(const maternVec &, const spatialcoor &, const double &, const std::string &) ;
 
   void genKnotsOnSquare(const spatialcoor & dataCoor, int & numKnots, std::mt19937_64 & RNG, Eigen::Array<bool, Eigen::Dynamic, 1> &) {
     m_knotsCoor = spatialcoor(rows(dataCoor.spatialCoords, m_obsInNode)) ;

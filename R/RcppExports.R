@@ -5,8 +5,8 @@ setupGridCpp <- function(responseValues, spCoords, predCoords, obsTime, predTime
     .Call('_MRAinla_setupGridCpp', PACKAGE = 'MRAinla', responseValues, spCoords, predCoords, obsTime, predTime, covariateMatrix, predCovariateMatrix, Mlon, Mlat, lonRange, latRange, randomSeed, numKnotsRes0, J, distMethod)
 }
 
-LogJointHyperMarginalToWrap <- function(forestPointer, MRAhyperparas, timeCovPara, fixedEffSD, errorSD, MRAcovParasGammaAlphaBeta, FEmuVec, fixedEffGammaAlphaBeta, errorGammaAlphaBeta, timeGammaAlphaBeta, spaceNuggetSD, recordFullConditional, processPredictions) {
-    .Call('_MRAinla_LogJointHyperMarginalToWrap', PACKAGE = 'MRAinla', forestPointer, MRAhyperparas, timeCovPara, fixedEffSD, errorSD, MRAcovParasGammaAlphaBeta, FEmuVec, fixedEffGammaAlphaBeta, errorGammaAlphaBeta, timeGammaAlphaBeta, spaceNuggetSD, recordFullConditional, processPredictions)
+LogJointHyperMarginalToWrap <- function(forestPointer, MRAhyperparas, timeCovParas, fixedEffSD, errorSD, MRAcovParasGammaAlphaBeta, FEmuVec, fixedEffGammaAlphaBeta, errorGammaAlphaBeta, timeGammaAlphaBeta, spaceNuggetSD, recordFullConditional, processPredictions) {
+    .Call('_MRAinla_LogJointHyperMarginalToWrap', PACKAGE = 'MRAinla', forestPointer, MRAhyperparas, timeCovParas, fixedEffSD, errorSD, MRAcovParasGammaAlphaBeta, FEmuVec, fixedEffGammaAlphaBeta, errorGammaAlphaBeta, timeGammaAlphaBeta, spaceNuggetSD, recordFullConditional, processPredictions)
 }
 
 GetFullCondMean <- function(forestPointer) {

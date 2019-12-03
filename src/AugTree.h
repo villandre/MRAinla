@@ -27,6 +27,7 @@ struct maternGammaPriorParasWithoutScale{
 struct maternGammaPriorParas : public maternGammaPriorParasWithoutScale{
   GammaHyperParas m_scale ;
 
+  maternGammaPriorParas() { } ;
   maternGammaPriorParas(const GammaHyperParas & rho, const GammaHyperParas & smoothness, const GammaHyperParas & scale) : maternGammaPriorParasWithoutScale(rho, smoothness), m_scale(scale) { } ;
 };
 
@@ -54,7 +55,7 @@ public:
     for (auto & i : m_vertexVector) KmatrixInverseList.at(i->GetNodeId()) = i->GetKmatrixInverseAddress() ;
     return KmatrixInverseList ;
   }
-  void computeWmats(const maternVec &, const double &, const double &, const std::string &) ;
+  void computeWmats(const maternVec &, const double &, const std::string &) ;
   ~ AugTree() {
     deallocate_container(m_vertexVector) ;}
 

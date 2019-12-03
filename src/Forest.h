@@ -27,7 +27,7 @@ public:
   }
   void SetErrorGammaAlphaBeta(const GammaHyperParas & alphaBeta) {m_errorGammaAlphaBeta = alphaBeta ;}
   void SetFixedEffGammaAlphaBeta(const GammaHyperParas & alphaBeta) {m_fixedEffGammaAlphaBeta = alphaBeta ;}
-  void SetTimeCovParaGammaAlphaBeta(const GammaHyperParas & alphaBeta) {m_timeCovParaGammaAlphaBeta = alphaBeta ;}
+  void SetTimeCovParaGammaAlphaBeta(const Rcpp::List &) ;
   void SetMRAcovParasGammaAlphaBeta(const Rcpp::List &) ;
   void SetFEmu(const vec & muVec) {m_FEmu = muVec ;}
   void SetSpaceNuggetSD(const double & spaceNuggetSD) {
@@ -72,11 +72,10 @@ private:
   std::string m_distMethod ;
   double m_errorSD{ 0 } ;
   double m_fixedEffSD{ 0 } ;
-  maternGammaPriorParasWithoutScale m_maternParasGammaAlphaBetaSpace ;
-  GammaHyperParas m_maternSpacetimeScalingGammaAlphaBeta ;
+  maternGammaPriorParas m_maternParasGammaAlphaBetaSpace ;
   GammaHyperParas m_fixedEffGammaAlphaBeta ;
   GammaHyperParas m_errorGammaAlphaBeta ;
-  GammaHyperParas m_timeCovParaGammaAlphaBeta ;
+  GammaHyperParas m_timeCovParasGammaAlphaBeta ;
   maternVec m_MRAcovParasSpace ;
   spaceDimensions m_mapDimensions;
 
@@ -84,7 +83,6 @@ private:
 
   std::mt19937_64 m_randomNumGenerator ;
 
-  double m_spacetimeScaling{ 1e-5 } ;
   vec m_fixedEffParameters ;
   vec m_FEmu ;
   double m_timeCovPara{ 0 } ;

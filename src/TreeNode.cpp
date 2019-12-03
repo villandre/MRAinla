@@ -16,22 +16,21 @@ ArrayXi TreeNode::deriveObsInNode(const spatialcoor & dataset) {
 }
 
 double TreeNode::MaternCovFunction(const double & distance, const maternVec & covParasSpace,
-                                   const double & scaling, const double & spaceNuggetSD) {
-  // Matern covariance with smoothness 1 and scaling 1.
-  double spExp = maternCov(distance, covParasSpace.m_rho, covParasSpace.m_smoothness , 1,
+                                   const double & spaceNuggetSD) {
+  double spExp = maternCov(distance, covParasSpace.m_rho, covParasSpace.m_smoothness , covParasSpace.m_scale,
                            spaceNuggetSD) ;
 
-  return pow(scaling, 2) * spExp  ;
+  return spExp  ;
 }
 
-void TreeNode::baseComputeWmat(const maternVec & covParasSp, const double & scaling, const double & spaceNuggetSD, const string & distMethod) {
+void TreeNode::baseComputeWmat(const maternVec & covParasSp, const double & spaceNuggetSD, const string & distMethod) {
 
   std::vector<TreeNode *> brickList = getAncestors() ;
 
-  m_Wlist.at(0) = computeCovMat(m_knotsCoor, brickList.at(0)->GetKnotsCoor(), covParasSp, scaling, spaceNuggetSD, distMethod) ;
+  m_Wlist.at(0) = computeCovMat(m_knotsCoor, brickList.at(0)->GetKnotsCoor(), covParasSp, spaceNuggetSD, distMethod) ;
 
   for (uint l = 1; l <= m_depth; l++) {
-    mat firstMat = computeCovMat(m_knotsCoor, brickList.at(l)->GetKnotsCoor(), covParasSp, scaling, spaceNuggetSD, distMethod) ;
+    mat firstMat = computeCovMat(m_knotsCoor, brickList.at(l)->GetKnotsCoor(), covParasSp, spaceNuggetSD, distMethod) ;
     mat secondMat = mat::Zero(firstMat.rows(), firstMat.cols()) ;
     for (uint k = 0; k < l ; k++) {
       // if (k < m_depth) {
@@ -65,7 +64,7 @@ std::vector<TreeNode *> TreeNode::getAncestors() {
   return ancestorsList ;
 }
 
-mat TreeNode::computeCovMat(const spatialcoor & sp1, const spatialcoor & sp2, const maternVec & covParasSp, const double & scaling, const double & spaceNuggetSD, const string & distMethod) {
+mat TreeNode::computeCovMat(const spatialcoor & sp1, const spatialcoor & sp2, const maternVec & covParasSp, const double & spaceNuggetSD, const string & distMethod) {
 
   mat covMat = mat::Zero(sp1.spatialCoords.rows(), sp2.spatialCoords.rows()) ;
   for (uint rowIndex = 0; rowIndex < sp1.spatialCoords.rows() ; rowIndex++) {
@@ -74,7 +73,7 @@ mat TreeNode::computeCovMat(const spatialcoor & sp1, const spatialcoor & sp2, co
       ArrayXd space2 = sp2.spatialCoords.row(colIndex) ;
 
       double rangeValue = spDistance(space1, space2, distMethod) ;
-      covMat(rowIndex, colIndex) = MaternCovFunction(rangeValue, covParasSp, scaling, spaceNuggetSD) ;
+      covMat(rowIndex, colIndex) = MaternCovFunction(rangeValue, covParasSp, spaceNuggetSD) ;
     }
   }
   return covMat ;

@@ -44,11 +44,19 @@ List setupGridCpp(NumericVector responseValues, NumericMatrix spCoords, NumericM
 
 // [[Rcpp::export]]
 
-double LogJointHyperMarginalToWrap(SEXP forestPointer, Rcpp::List MRAhyperparas,
-         double timeCovPara, double fixedEffSD, double errorSD, Rcpp::List MRAcovParasGammaAlphaBeta,
-         Rcpp::NumericVector FEmuVec, NumericVector fixedEffGammaAlphaBeta,
-         NumericVector errorGammaAlphaBeta, NumericVector timeGammaAlphaBeta,
-         double spaceNuggetSD, bool recordFullConditional, bool processPredictions) {
+double LogJointHyperMarginalToWrap(SEXP forestPointer,
+         Rcpp::List MRAhyperparas,
+         Rcpp::List timeCovParas,
+         double fixedEffSD,
+         double errorSD,
+         Rcpp::List MRAcovParasGammaAlphaBeta,
+         Rcpp::NumericVector FEmuVec,
+         NumericVector fixedEffGammaAlphaBeta,
+         NumericVector errorGammaAlphaBeta,
+         Rcpp::List timeGammaAlphaBeta,
+         double spaceNuggetSD,
+         bool recordFullConditional,
+         bool processPredictions) {
   mat posteriorMatrix ;
   double outputValue = 0 ;
 
@@ -61,6 +69,7 @@ double LogJointHyperMarginalToWrap(SEXP forestPointer, Rcpp::List MRAhyperparas,
     if (!pointedForest->CheckMRAcovParasGammaAlphaBeta()) {
       pointedForest->ToggleGammaParasSet() ;
       pointedForest->SetMRAcovParasGammaAlphaBeta(MRAcovParasGammaAlphaBeta) ;
+      pointedForest->SetTimeCovParaGammaAlphaBeta(timeGammaAlphaBeta) ;
 
       vec fixedEffAlphaBeta = Rcpp::as<vec>(fixedEffGammaAlphaBeta) ;
       vec errorAlphaBeta = Rcpp::as<vec>(errorGammaAlphaBeta) ;
@@ -68,7 +77,7 @@ double LogJointHyperMarginalToWrap(SEXP forestPointer, Rcpp::List MRAhyperparas,
 
       pointedForest->SetFixedEffGammaAlphaBeta(GammaHyperParas(fixedEffAlphaBeta(0), fixedEffAlphaBeta(1))) ;
       pointedForest->SetErrorGammaAlphaBeta(GammaHyperParas(errorAlphaBeta(0), errorAlphaBeta(1))) ;
-      pointedForest->SetTimeCovParaGammaAlphaBeta(GammaHyperParas(timeGammaAlphaBeta(0), timeGammaAlphaBeta(1))) ;
+
       pointedForest->SetFEmu(FEmu) ;
       pointedForest->SetSpaceNuggetSD(spaceNuggetSD) ;
       // std::vector<TreeNode *> tipNodes = pointedForest->GetLevelNodes(pointedForest->GetM()) ;

@@ -205,8 +205,8 @@ void AugTree::generateKnots(TreeNode * node,
   }
 }
 
-void AugTree::computeWmats(const maternVec & MRAcovParasSpace, const double & spacetimeScaling, const double & spaceNuggetSD, const std::string & distMethod) {
-  m_vertexVector.at(0)->ComputeWmat(MRAcovParasSpace, spacetimeScaling, spaceNuggetSD, distMethod) ;
+void AugTree::computeWmats(const maternVec & MRAcovParasSpace, const double & spaceNuggetSD, const std::string & distMethod) {
+  m_vertexVector.at(0)->ComputeWmat(MRAcovParasSpace, spaceNuggetSD, distMethod) ;
   for (uint level = 1; level <= m_M; level++) {
     std::vector<TreeNode *> levelNodes = GetLevelNodes(level) ;
 
@@ -215,7 +215,7 @@ void AugTree::computeWmats(const maternVec & MRAcovParasSpace, const double & sp
 
     for (std::vector<TreeNode *>::iterator it = levelNodes.begin(); it < levelNodes.end(); it++)
     {
-      (*it)->ComputeWmat(MRAcovParasSpace, spacetimeScaling, spaceNuggetSD, distMethod) ;
+      (*it)->ComputeWmat(MRAcovParasSpace, spaceNuggetSD, distMethod) ;
     }
   }
 }

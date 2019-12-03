@@ -138,7 +138,7 @@ public:
     }
     return currentAddress->GetDepth() ;
   }
-  void ComputeWmat(const maternVec &, const double &, const double &, const std::string &) ;
+  void ComputeWmat(const maternVec &, const double &, const std::string &) ;
   void ComputeParasEtaDeltaTilde(const spatialcoor &, const inputdata &, const vec &) ;
 
   mat & GetB(const uint & l) { throw Rcpp::exception("Trying to get B matrix in internal node.\n") ;}
@@ -152,7 +152,7 @@ public:
   std::vector<mat> & GetUmatList() { throw Rcpp::exception("UmatList only available in tip nodes! \n") ;}
   void SetPredictLocations(const inputdata & data) { throw Rcpp::exception("Trying to attach predict locations to internal nodes! Predict locations should only be defined in the tips! \n") ;}
   Eigen::ArrayXi & GetPredIndices() { throw Rcpp::exception("Prediction locations not defined in internal nodes! \n");}
-  void computeUpred(const maternVec &, const double &, const spatialcoor &, const double &, const std::string &) {
+  void computeUpred(const maternVec &, const spatialcoor &, const double &, const std::string &) {
     throw Rcpp::exception("Upred matrices need not be computed in internal nodes! \n") ;
   }
 

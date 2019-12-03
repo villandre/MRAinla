@@ -151,8 +151,8 @@ void InternalNode::genKnotsOnSquare(const spatialcoor & dataCoor, int & numKnots
   m_knotsCoor = spatialcoor(mergedSpace) ;
 }
 
-void InternalNode::ComputeWmat(const maternVec & covParasSp, const double & scaling, const double & spaceNuggetSD, const string & distMethod) {
-  baseComputeWmat(covParasSp, scaling, spaceNuggetSD, distMethod) ;
+void InternalNode::ComputeWmat(const maternVec & covParasSp, const double & spaceNuggetSD, const string & distMethod) {
+  baseComputeWmat(covParasSp, spaceNuggetSD, distMethod) ;
 
   // m_Wlist.at(m_depth).triangularView<Upper>() = m_Wlist.at(m_depth).triangularView<Lower>() ; // Will this cause aliasing?
 

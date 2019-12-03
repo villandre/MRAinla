@@ -33,25 +33,25 @@ BEGIN_RCPP
 END_RCPP
 }
 // LogJointHyperMarginalToWrap
-double LogJointHyperMarginalToWrap(SEXP forestPointer, Rcpp::List MRAhyperparas, double timeCovPara, double fixedEffSD, double errorSD, Rcpp::List MRAcovParasGammaAlphaBeta, Rcpp::NumericVector FEmuVec, NumericVector fixedEffGammaAlphaBeta, NumericVector errorGammaAlphaBeta, NumericVector timeGammaAlphaBeta, double spaceNuggetSD, bool recordFullConditional, bool processPredictions);
-RcppExport SEXP _MRAinla_LogJointHyperMarginalToWrap(SEXP forestPointerSEXP, SEXP MRAhyperparasSEXP, SEXP timeCovParaSEXP, SEXP fixedEffSDSEXP, SEXP errorSDSEXP, SEXP MRAcovParasGammaAlphaBetaSEXP, SEXP FEmuVecSEXP, SEXP fixedEffGammaAlphaBetaSEXP, SEXP errorGammaAlphaBetaSEXP, SEXP timeGammaAlphaBetaSEXP, SEXP spaceNuggetSDSEXP, SEXP recordFullConditionalSEXP, SEXP processPredictionsSEXP) {
+double LogJointHyperMarginalToWrap(SEXP forestPointer, Rcpp::List MRAhyperparas, Rcpp::List timeCovParas, double fixedEffSD, double errorSD, Rcpp::List MRAcovParasGammaAlphaBeta, Rcpp::NumericVector FEmuVec, NumericVector fixedEffGammaAlphaBeta, NumericVector errorGammaAlphaBeta, Rcpp::List timeGammaAlphaBeta, double spaceNuggetSD, bool recordFullConditional, bool processPredictions);
+RcppExport SEXP _MRAinla_LogJointHyperMarginalToWrap(SEXP forestPointerSEXP, SEXP MRAhyperparasSEXP, SEXP timeCovParasSEXP, SEXP fixedEffSDSEXP, SEXP errorSDSEXP, SEXP MRAcovParasGammaAlphaBetaSEXP, SEXP FEmuVecSEXP, SEXP fixedEffGammaAlphaBetaSEXP, SEXP errorGammaAlphaBetaSEXP, SEXP timeGammaAlphaBetaSEXP, SEXP spaceNuggetSDSEXP, SEXP recordFullConditionalSEXP, SEXP processPredictionsSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
     Rcpp::traits::input_parameter< SEXP >::type forestPointer(forestPointerSEXP);
     Rcpp::traits::input_parameter< Rcpp::List >::type MRAhyperparas(MRAhyperparasSEXP);
-    Rcpp::traits::input_parameter< double >::type timeCovPara(timeCovParaSEXP);
+    Rcpp::traits::input_parameter< Rcpp::List >::type timeCovParas(timeCovParasSEXP);
     Rcpp::traits::input_parameter< double >::type fixedEffSD(fixedEffSDSEXP);
     Rcpp::traits::input_parameter< double >::type errorSD(errorSDSEXP);
     Rcpp::traits::input_parameter< Rcpp::List >::type MRAcovParasGammaAlphaBeta(MRAcovParasGammaAlphaBetaSEXP);
     Rcpp::traits::input_parameter< Rcpp::NumericVector >::type FEmuVec(FEmuVecSEXP);
     Rcpp::traits::input_parameter< NumericVector >::type fixedEffGammaAlphaBeta(fixedEffGammaAlphaBetaSEXP);
     Rcpp::traits::input_parameter< NumericVector >::type errorGammaAlphaBeta(errorGammaAlphaBetaSEXP);
-    Rcpp::traits::input_parameter< NumericVector >::type timeGammaAlphaBeta(timeGammaAlphaBetaSEXP);
+    Rcpp::traits::input_parameter< Rcpp::List >::type timeGammaAlphaBeta(timeGammaAlphaBetaSEXP);
     Rcpp::traits::input_parameter< double >::type spaceNuggetSD(spaceNuggetSDSEXP);
     Rcpp::traits::input_parameter< bool >::type recordFullConditional(recordFullConditionalSEXP);
     Rcpp::traits::input_parameter< bool >::type processPredictions(processPredictionsSEXP);
-    rcpp_result_gen = Rcpp::wrap(LogJointHyperMarginalToWrap(forestPointer, MRAhyperparas, timeCovPara, fixedEffSD, errorSD, MRAcovParasGammaAlphaBeta, FEmuVec, fixedEffGammaAlphaBeta, errorGammaAlphaBeta, timeGammaAlphaBeta, spaceNuggetSD, recordFullConditional, processPredictions));
+    rcpp_result_gen = Rcpp::wrap(LogJointHyperMarginalToWrap(forestPointer, MRAhyperparas, timeCovParas, fixedEffSD, errorSD, MRAcovParasGammaAlphaBeta, FEmuVec, fixedEffGammaAlphaBeta, errorGammaAlphaBeta, timeGammaAlphaBeta, spaceNuggetSD, recordFullConditional, processPredictions));
     return rcpp_result_gen;
 END_RCPP
 }
