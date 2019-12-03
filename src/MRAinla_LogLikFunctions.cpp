@@ -4,7 +4,7 @@
 #include <RcppEigen.h>
 // #include "gperftools/profiler.h"
 
-#include "AugTree.h"
+#include "Forest.h"
 
 using namespace Eigen;
 using namespace Rcpp;
@@ -35,31 +35,16 @@ List setupGridCpp(NumericVector responseValues, NumericMatrix spCoords, NumericM
   unsigned long int seedForRNG = randomSeed ;
 
   ArrayXXd covariateMat = as<ArrayXXd>(covariateMatrix) ;
-  std::vector<double> timeAsVector = Rcpp::as<std::vector<double>>(obsTime) ;
-  std::sort(timeAsVector.begin(), timeAsVector.end()) ;
-  timeAsVector.erase(unique( timeAsVector.begin(), timeAsVector.end() ),
-                      timeAsVector.end() );
-  std::vector<AugTree *> MRAgridVector ;
-  for (auto & i : timeAsVector) {
-    Eigen::Array<bool, Eigen::Dynamic, 1> logicalTest = (time == i) ;
-    Eigen::ArrayXi timeIndices = find(logicalTest) ;
-    Eigen::ArrayXXd subObsSp = rows(sp, timeIndices) ;
-    Eigen::ArrayXXd subCovar = rows(covariateMat, timeIndices) ;
-    vec subResponse = elem(responseArray, timeIndices).matrix() ;
-    ArrayXd subTime = elem(time, timeIndices) ;
 
-    AugTree * MRAgrid = new AugTree(Mlon, Mlat, lonR, latR, subResponse, subObsSp, subTime, predCovariates, predSp, predTimeVec, seedForRNG, subCovar, numKnotsRes0, J, dMethod) ;
-    MRAgridVector.push_back(MRAgrid) ;
-  }
-
-  XPtr<std::vector<AugTree *>> p(&MRAgridVector, false) ; // Disabled automatic garbage collection.
+  Forest * MRAgrids = new Forest(Mlon, Mlat, lonR, latR, response, sp, time, predCovariates, predSp, predTimeVec, seedForRNG, covariateMat, numKnotsRes0, J, dMethod) ;
+  XPtr<Forest *> p(&MRAgrids, false) ; // Disabled automatic garbage collection.
 
   return List::create(Named("gridPointer") = p) ;
 }
 
 // [[Rcpp::export]]
 
-double LogJointHyperMarginalToWrap(SEXP treePointer, Rcpp::List MRAhyperparas,
+double LogJointHyperMarginalToWrap(SEXP treePointers, Rcpp::List MRAhyperparas,
          double timeCovPara, double fixedEffSD, double errorSD, Rcpp::List MRAcovParasGammaAlphaBeta,
          Rcpp::NumericVector FEmuVec, NumericVector fixedEffGammaAlphaBeta,
          NumericVector errorGammaAlphaBeta, NumericVector timeGammaAlphaBeta,
@@ -69,10 +54,11 @@ double LogJointHyperMarginalToWrap(SEXP treePointer, Rcpp::List MRAhyperparas,
 
   // if (!(treePointer == NULL))
   // {
-    XPtr<AugTree> pointedTree(treePointer) ; // Becomes a regular pointer again.
+    XPtr<std::vector<AugTree *>> pointedTrees(treePointers) ; // Becomes a regular pointer again.
 
     // The alpha's and beta's for the gamma distribution of the hyperparameters do not change.
-    if (!pointedTree->CheckMRAcovParasGammaAlphaBeta()) {
+    for (auto & pointedTree : pointedTrees) {
+    if (!pointedTrees->CheckMRAcovParasGammaAlphaBeta()) {
       pointedTree->ToggleGammaParasSet() ;
       pointedTree->SetMRAcovParasGammaAlphaBeta(MRAcovParasGammaAlphaBeta) ;
 
@@ -96,6 +82,7 @@ double LogJointHyperMarginalToWrap(SEXP treePointer, Rcpp::List MRAhyperparas,
     pointedTree->SetMRAcovParas(MRAhyperparas) ;
     pointedTree->SetRecordFullConditional(recordFullConditional) ;
     pointedTree->SetProcessPredictions(processPredictions) ;
+    }
 
     pointedTree->ComputeLogJointPsiMarginal() ;
 
