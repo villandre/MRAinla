@@ -9,7 +9,7 @@ Forest::Forest(uint & Mlon,
                  uint & Mlat,
                  Array2d & lonRange,
                  Array2d & latRange,
-                 vec & observations,
+                 vec & responses,
                  ArrayXXd & obsSp,
                  ArrayXd & obsTime,
                  ArrayXXd & predCovariates,
@@ -22,11 +22,8 @@ Forest::Forest(uint & Mlon,
                  const string & distMethod)
   : m_distMethod(distMethod)
 {
-  m_M = Mlon + Mlat ;
-  m_Mlon = Mlon ;
-  m_Mlat = Mlat ;
   m_GammaParasSet = false ;
-  m_dataset = inputdata(observations, obsSp, obsTime, covariates) ;
+  m_dataset = inputdata(responses, obsSp, obsTime, covariates) ;
   m_mapDimensions = spaceDimensions(lonRange, latRange) ;
   std::random_device rd ;
   std::mt19937_64 generator(rd()) ;
@@ -39,38 +36,32 @@ Forest::Forest(uint & Mlon,
   m_fixedEffParameters = Eigen::VectorXd::Zero(m_dataset.covariateValues.cols() + 1);
 
   Rcout << "Building the grid..." << std::endl ;
-  std::vector<double> timeAsVector = Rcpp::as<std::vector<double>>(obsTime) ;
+  std::vector<double> timeAsVector;
+  timeAsVector.resize(obsTime.size());
+  ArrayXd::Map(&timeAsVector[0], obsTime.size()) = obsTime ;
   std::sort(timeAsVector.begin(), timeAsVector.end()) ;
   timeAsVector.erase(unique( timeAsVector.begin(), timeAsVector.end() ),
                      timeAsVector.end() );
   std::vector<AugTree *> MRAgridVector ;
 
   for (auto & i : timeAsVector) {
-    Eigen::Array<bool, Eigen::Dynamic, 1> logicalTest = (time == i) ;
-    Eigen::ArrayXi timeIndices = find(logicalTest) ;
-    Eigen::ArrayXXd subObsSp = rows(sp, timeIndices) ;
-    Eigen::ArrayXXd subCovar = rows(covariateMat, timeIndices) ;
-    vec subResponse = elem(responseArray, timeIndices).matrix() ;
-    ArrayXd subTime = elem(time, timeIndices) ;
-    m_treeVector.push_back(AugTree((Mlon, Mlat, lonR, latR, subResponse, subObsSp, subTime, predCovariates, predSp, predTimeVec, seedForRNG, subCovar, numKnotsRes0, J, dMethod))) ;
+    m_treeVector.push_back(AugTree(Mlon, Mlat, m_mapDimensions, m_dataset, m_predictData, numKnotsRes0, J, m_distMethod, m_randomNumGenerator)) ;
   }
-
-  m_numKnots = 0 ;
 
   for (auto & tree : m_treeVector) {
-    m_numKnots += tree->GetNumKnots() ;
+    m_numKnots += tree.GetNumKnots() ;
   }
 
-  m_FullCondMean = Eigen::VectorXd::Zero(m_numKnots + m_fixedEffParameters.size()) ;
-  m_FullCondSDs = Eigen::VectorXd::Zero(m_numKnots + m_fixedEffParameters.size()) ;
-  m_Vstar = Eigen::VectorXd::Zero(m_numKnots + m_dataset.covariateValues.cols() + 1) ;
+  m_FullCondMean = Eigen::VectorXd::Zero(m_numKnots + m_fixedEffParameters.size() + m_uniqueTimeValues.size()) ;
+  m_FullCondSDs = Eigen::VectorXd::Zero(m_numKnots + m_fixedEffParameters.size() + m_uniqueTimeValues.size()) ;
+  m_Vstar = Eigen::VectorXd::Zero(m_numKnots +  m_fixedEffParameters.size() + m_uniqueTimeValues.size()) ;
   m_Vstar.segment(0, m_FEmu.size()) = m_FEmu ;
 }
 
 void Forest::CreateSigmaBetaEtaInvMat() {
   std::vector<mat *> FEinvAndKinvMatrixList ;
   for (auto & tree : m_treeVector) {
-    std::vector<mat *> KinvVec = getKmatricesInversePointers() ;
+    std::vector<mat *> KinvVec = tree.getKmatricesInversePointers() ;
     FEinvAndKinvMatrixList.insert( FEinvAndKinvMatrixList.end(), KinvVec.begin(), KinvVec.end() );
   }
   mat timeMat = createTimePrecisionMatrix(m_timeCovPara, m_uniqueTimeValues) ;
@@ -88,8 +79,9 @@ void Forest::CreateSigmaBetaEtaInvMat() {
 }
 
 void Forest::UpdateSigmaBetaEtaInvMat() {
+  std::vector<mat *> FEinvAndKinvMatrixList ;
   for (auto & tree : m_treeVector) {
-    std::vector<mat *> KinvVec = getKmatricesInversePointers() ;
+    std::vector<mat *> KinvVec = tree.getKmatricesInversePointers() ;
     FEinvAndKinvMatrixList.insert( FEinvAndKinvMatrixList.end(), KinvVec.begin(), KinvVec.end() );
   }
   mat timeMat = createTimePrecisionMatrix(m_timeCovPara, m_uniqueTimeValues) ;
@@ -124,15 +116,16 @@ void Forest::UpdateSigmaBetaEtaInvMat() {
 
 void Forest::createHmatrix() {
   // int numObs = m_dataset.spatialCoords.rows() ;
-  Array2d HmatRowColOffset << {0, 0} ;
+  uint bigColOffset = 0 ;
   ArrayXi FmatObsOrder = ArrayXi::Zero(m_dataset.timeCoords.size()) ;
   int rowIndex = 0 ;
   // In this new scheme, we have columns representing time ;
   m_Hmat.resize(m_dataset.covariateValues.rows(), m_numKnots + m_uniqueTimeValues.size() + m_dataset.covariateValues.cols() + 1) ;
+  std::vector<Triplet> tripletList ;
 
   for (auto & tree : m_treeVector) {
-    std::vector<TreeNode *> tipNodes = tree->GetTipNodes() ;
-    int numObs = tree->GetNumObs() ;
+    std::vector<TreeNode *> tipNodes = tree.GetTipNodes() ;
+    int numObs = tree.GetNumObs() ;
     int numTips = tipNodes.size() ;
 
     std::vector<ArrayXi> ancestorIdsVec(numTips) ;
@@ -141,8 +134,6 @@ void Forest::createHmatrix() {
       ArrayXi idVec = tipNodes.at(i)->GetAncestorIds() ; // Last element is tip node.
       ancestorIdsVec.at(i) = idVec ;
     }
-
-    std::vector<Triplet> tripletList ;
 
     std::sort(tipNodes.begin(), tipNodes.end(), [] (TreeNode * first, TreeNode * second) {
       ArrayXi firstAncestorIds = first->GetAncestorIds() ;
@@ -158,21 +149,20 @@ void Forest::createHmatrix() {
       return firstSmallerThanSecond ;
     }) ; // This is supposed to reorder the tip nodes in such a way that the F matrix has contiguous blocks.
 
-    ArrayXi colIndexAtEachRes = ArrayXi::Zero(tree->GetM() + 1);
+    ArrayXi colIndexAtEachRes = ArrayXi::Zero(tree.GetM() + 1);
 
-    for (auto & node : tree->GetVertexVector()) {
-      if (node->GetDepth() < tree->GetM()) {
-        for (uint i = node->GetDepth() + 1; i <= tree->GetM(); i++) {
+    for (auto & node : tree.GetVertexVector()) {
+      if (node->GetDepth() < tree.GetM()) {
+        for (uint i = node->GetDepth() + 1; i <= tree.GetM(); i++) {
           colIndexAtEachRes(i) += node->GetNumKnots() ;
         }
       }
     } // Convoluted way of getting cumsum(c(0, Num knots at resolutions 0 to M-1))
 
-    colIndexAtEachRes += (m_dataset.covariateValues.cols() + 1) + HmatRowColOffset(0) ; // Covariate columns go before, the +1 is for the intercept.
+    colIndexAtEachRes += (m_dataset.covariateValues.cols() + 1) + bigColOffset + m_uniqueTimeValues.size() ; // Covariate columns go before, the +1 is for the intercept.
     std::vector<TreeNode *> previousBrickAncestors = tipNodes.at(0)->getAncestors() ;
 
     for (auto & nodeToProcess : tipNodes) {
-
       if (nodeToProcess->GetObsInNode().size() == 0 ) {
         continue ;
       }
@@ -180,7 +170,7 @@ void Forest::createHmatrix() {
       // The idea behind this section of the code is that the column index for producing the section
       // of the H matrix for a tip node at any given depth i should only change when a different ancestor for the
       // tip node is reached. The hierarchical structure of the tree explains this.
-      for (uint i = 1 ; i <= m_M; i++) { // The root node is shared by all tips, hence the 1.
+      for (uint i = 1 ; i <= tree.GetM(); i++) { // The root node is shared by all tips, hence the 1.
         if (previousBrickAncestors.at(i) != nodeToProcess->getAncestors().at(i)) {
           colIndexAtEachRes(i) += previousBrickAncestors.at(i)->GetNumKnots() ;
         }
@@ -189,7 +179,7 @@ void Forest::createHmatrix() {
 
       FmatObsOrder.segment(rowIndex, nodeToProcess->GetObsInNode().size()) = nodeToProcess->GetObsInNode() ;
 
-      for (uint depthIndex = 0; depthIndex <= m_M; depthIndex++) {
+      for (uint depthIndex = 0; depthIndex <= tree.GetM(); depthIndex++) {
         ArrayXi rowIndices = rep(uvec::LinSpaced(nodeToProcess->GetB(depthIndex).rows(), 0, nodeToProcess->GetB(depthIndex).rows() - 1).array(),
                                  nodeToProcess->GetB(depthIndex).cols()) + rowIndex  ;
         ArrayXi colIndices = rep_each(uvec::LinSpaced(nodeToProcess->GetB(depthIndex).cols(), 0, nodeToProcess->GetB(depthIndex).cols() - 1).array(),
@@ -202,17 +192,6 @@ void Forest::createHmatrix() {
       rowIndex += nodeToProcess->GetObsInNode().size() ; // The B matrices should have as many rows as observations in the node...
     }
 
-    // Adding in the intercept...
-    for (uint i = 0; i < m_dataset.covariateValues.rows(); i++) {
-      tripletList.push_back(Triplet(i, 0, 1)) ;
-    }
-    // Processing other covariate values
-    for (uint rowIndex = 0 ; rowIndex < m_dataset.covariateValues.rows() ; rowIndex++) {
-      for(uint colIndex = 0 ; colIndex < m_dataset.covariateValues.cols() ; colIndex++) {
-        tripletList.push_back(Triplet(rowIndex, colIndex + 1, m_dataset.covariateValues(m_obsOrderForFmat(rowIndex), colIndex))) ;
-      }
-    }
-
     // The idea behind this is to associate a memory location in the W matrices and a cell
     // in the H matrix. The memory location we get from calling .data() on a given W
     // matrix changes when the W values are updated, even when W is allocated on the
@@ -220,14 +199,14 @@ void Forest::createHmatrix() {
     // once the vector is fully populated. To get access to the value, all we need to do
     // is invoke *(pointer->data() + offset).
     // The odd nesting of the loops is due to the fact that m_Hmat is row-major.
-    // I made m_Hmat row-major to make the updating process, as all values on any
+    // I made m_Hmat row-major to make the updating process easier, as all values on any
     // given row are associated with the same tip.
     // Don't mind the four nested loops: all it does is traverse all the elements once.
 
     for (auto & tipNode : tipNodes) {
       uint numObs = tipNode->GetObsInNode().size() ;
       for (uint rowIndex = 0; rowIndex < numObs ; rowIndex++) {
-        for (uint depth = 0 ; depth <= m_M ; depth++) {
+        for (uint depth = 0 ; depth <= tree.GetM() ; depth++) {
           uint numKnotsAtDepth = tipNode->GetWlist().at(depth).cols() ;
           for (uint colIndex = 0; colIndex < numKnotsAtDepth; colIndex++) {
             pointerOffset elementToAdd = pointerOffset(&(tipNode->GetWlist().at(depth)), colIndex * numObs + rowIndex) ;
@@ -236,11 +215,28 @@ void Forest::createHmatrix() {
         }
       }
     }
-    m_Hmat.setFromTriplets(tripletList.begin(), tripletList.end()) ;
-    HmatRowColOffset(0) += tree->GetNumObs() ;
-    HmatRowColOffset(1) += tree->GetNumKnots() ;
+    bigColOffset += tree.GetNumKnots() ;
   }
   m_obsOrderForFmat = FmatObsOrder ;
+
+  // Adding in the intercept...
+  for (uint i = 0; i < m_dataset.covariateValues.rows(); i++) {
+    tripletList.push_back(Triplet(i, 0, 1)) ;
+  }
+  // Processing other covariate values
+  for (uint rowIndex = 0 ; rowIndex < m_dataset.covariateValues.rows() ; rowIndex++) {
+    for(uint colIndex = 0 ; colIndex < m_dataset.covariateValues.cols() ; colIndex++) {
+      tripletList.push_back(Triplet(rowIndex, colIndex + 1, m_dataset.covariateValues(m_obsOrderForFmat(rowIndex), colIndex))) ;
+    }
+  }
+  // Processing time
+  for (uint i = 0 ; i < m_dataset.responseValues.size(); i++) {
+    double timeValue = m_dataset.timeCoords(m_obsOrderForFmat(i)) ;
+    Array<bool, Dynamic, 1> forFindFun = (timeValue == m_uniqueTimeValues) ;
+    ArrayXi colIndex = find(forFindFun) ;
+    tripletList.push_back(Triplet(i, colIndex(0) + m_dataset.covariateValues.cols() + 1, timeValue)) ;
+  }
+  m_Hmat.setFromTriplets(tripletList.begin(), tripletList.end()) ;
 }
 
 void Forest::updateHmatrix() {
@@ -249,7 +245,7 @@ void Forest::updateHmatrix() {
   for (int k=0; k<m_Hmat.outerSize(); ++k) {
     for (sp_mat::InnerIterator it(m_Hmat, k); it; ++it)
     {
-      if (it.col() >= m_fixedEffParameters.size()) { // Covariates never change, only the elements in the F matrix change.
+      if (it.col() >= m_fixedEffParameters.size() + m_uniqueTimeValues.size()) { // Covariates and time values never change, only the elements in the F matrices change.
         it.valueRef() = *(m_pointerOffsetForHmat.at(loopIndex).matrixLocation->data() + m_pointerOffsetForHmat.at(loopIndex).offset) ;
         loopIndex += 1 ;
       }
@@ -263,7 +259,7 @@ void Forest::updateHmatrixPred() {
   for (int k = 0; k < m_HmatPred.outerSize(); ++k) {
     for (sp_mat::InnerIterator it(m_HmatPred, k); it; ++it)
     {
-      if (it.col() >= m_fixedEffParameters.size()) { // Covariates never change, only the elements in the F matrix change.
+      if (it.col() >= m_fixedEffParameters.size() + m_uniqueTimeValues.size()) { // Covariates and time values never change, only the elements in the F matrices change.
         it.valueRef() = *(m_pointerOffsetForHmatPred.at(loopIndex).matrixLocation->data() + m_pointerOffsetForHmatPred.at(loopIndex).offset) ;
         loopIndex += 1 ;
       }
@@ -274,85 +270,103 @@ void Forest::updateHmatrixPred() {
 void Forest::createHmatrixPred() {
   uint numObs = m_predictData.spatialCoords.rows() ;
   uint rowIndex = 0 ;
-
-  std::vector<TreeNode *> tipNodes = GetTipNodes() ;
-  int numTips = tipNodes.size() ;
-
-  std::vector<ArrayXi> ancestorIdsVec(numTips) ;
-
-  for (uint i = 0 ; i < tipNodes.size(); i++) {
-    ArrayXi idVec = tipNodes.at(i)->GetAncestorIds() ; // Last element is tip node.
-    ancestorIdsVec.at(i) = idVec ;
-  }
-
+  uint bigColOffset = 0 ;
   std::vector<Triplet> tripletList;
+  m_obsOrderForFpredMat = ArrayXi::Zero(m_predictData.timeCoords.size()) ;
 
-  std::sort(tipNodes.begin(), tipNodes.end(), [] (TreeNode * first, TreeNode * second) {
-    ArrayXi firstAncestorIds = first->GetAncestorIds() ;
-    ArrayXi secondAncestorIds = second->GetAncestorIds() ;
-    bool firstSmallerThanSecond = false ;
-    for (uint i = 1 ; i < firstAncestorIds.size() ; i++) { // The ultimate ancestor is always node 0, hence the loop starting at 1.
-      bool test = (firstAncestorIds(i) == secondAncestorIds(i)) ;
-      if (!test) {
-        firstSmallerThanSecond = (firstAncestorIds(i) < secondAncestorIds(i)) ;
-        break ;
+  for (auto & tree : m_treeVector) {
+    std::vector<TreeNode *> tipNodes = tree.GetTipNodes() ;
+    int numTips = tipNodes.size() ;
+
+    std::vector<ArrayXi> ancestorIdsVec(numTips) ;
+
+    for (uint i = 0 ; i < tipNodes.size(); i++) {
+      ArrayXi idVec = tipNodes.at(i)->GetAncestorIds() ; // Last element is tip node.
+      ancestorIdsVec.at(i) = idVec ;
+    }
+
+    std::sort(tipNodes.begin(), tipNodes.end(), [] (TreeNode * first, TreeNode * second) {
+      ArrayXi firstAncestorIds = first->GetAncestorIds() ;
+      ArrayXi secondAncestorIds = second->GetAncestorIds() ;
+      bool firstSmallerThanSecond = false ;
+      for (uint i = 1 ; i < firstAncestorIds.size() ; i++) { // The ultimate ancestor is always node 0, hence the loop starting at 1.
+        bool test = (firstAncestorIds(i) == secondAncestorIds(i)) ;
+        if (!test) {
+          firstSmallerThanSecond = (firstAncestorIds(i) < secondAncestorIds(i)) ;
+          break ;
+        }
+      }
+      return firstSmallerThanSecond ;
+    }) ; // This is supposed to reorder the tip nodes in such a way that the F matrix has contiguous blocks.
+
+    uint elementIndex = 0 ;
+    for (auto & i : tipNodes) {
+      uint numPredObsInNode = i->GetPredIndices().size() ;
+      if (numPredObsInNode > 0) {
+        m_obsOrderForFpredMat.segment(elementIndex, i->GetPredIndices().size()) = i->GetPredIndices() ;
+        elementIndex += i->GetPredIndices().size() ;
       }
     }
-    return firstSmallerThanSecond ;
-  }) ; // This is supposed to reorder the tip nodes in such a way that the F matrix has contiguous blocks.
 
-  m_obsOrderForHpredMat = ArrayXi::Zero(m_predictData.timeCoords.size()) ;
-  uint elementIndex = 0 ;
-  for (auto & i : tipNodes) {
-    uint numPredObsInNode = i->GetPredIndices().size() ;
-    if (numPredObsInNode > 0) {
-      m_obsOrderForHpredMat.segment(elementIndex, i->GetPredIndices().size()) = i->GetPredIndices() ;
-      elementIndex += i->GetPredIndices().size() ;
+    ArrayXi colIndexAtEachRes = ArrayXi::Zero(tree.GetM() + 1);
+
+    for (auto & node : tree.GetVertexVector()) {
+      if (node->GetDepth() < tree.GetM()) {
+        for (uint i = node->GetDepth() + 1; i <= tree.GetM(); i++) {
+          colIndexAtEachRes(i) += node->GetNumKnots() ;
+        }
+      }
+    } // Convoluted way of getting cumsum(c(0, Num knots at resolutions 0 to M-1))
+
+    colIndexAtEachRes += (m_dataset.covariateValues.cols() + 1 + m_uniqueTimeValues.size() + bigColOffset) ; // Covariate and time columns go before, the +1 is for the intercept.
+    std::vector<TreeNode *> previousBrickAncestors = tipNodes.at(0)->getAncestors() ;
+
+    for (auto & nodeToProcess : tipNodes) {
+
+      if (nodeToProcess->GetPredIndices().size() == 0 ) {
+        continue ;
+      }
+
+      // The idea behind this section of the code is that the column index for producing the section
+      // of the H matrix for a tip node at any given depth i should only change when a different ancestor for the
+      // tip node is reached. The hierarchical structure of the tree explains this.
+      for (uint i = 1 ; i <= tree.GetM(); i++) { // The root node is shared by all tips, hence the 1.
+        if (previousBrickAncestors.at(i) != nodeToProcess->getAncestors().at(i)) {
+          colIndexAtEachRes(i) += previousBrickAncestors.at(i)->GetNumKnots() ;
+        }
+      }
+      previousBrickAncestors = nodeToProcess->getAncestors() ;
+
+      for (uint depthIndex = 0; depthIndex <= tree.GetM(); depthIndex++) {
+        ArrayXi rowIndices = rep(uvec::LinSpaced(nodeToProcess->GetUpred(depthIndex).rows(), 0, nodeToProcess->GetUpred(depthIndex).rows() - 1).array(),
+                                 nodeToProcess->GetUpred(depthIndex).cols()) + rowIndex  ;
+        ArrayXi colIndices = rep_each(uvec::LinSpaced(nodeToProcess->GetUpred(depthIndex).cols(), 0, nodeToProcess->GetUpred(depthIndex).cols() - 1).array(),
+                                      nodeToProcess->GetUpred(depthIndex).rows()) + colIndexAtEachRes(depthIndex) ;
+
+        for (uint i = 0; i < rowIndices.size(); i++) {
+          tripletList.push_back(Triplet(rowIndices(i), colIndices(i), nodeToProcess->GetUpred(depthIndex)(rowIndices(i) - rowIndex, colIndices(i) - colIndexAtEachRes(depthIndex)))) ;
+        }
+      }
+      rowIndex += nodeToProcess->GetPredIndices().size() ; // The U matrices should have as many rows as prediction locations in the node...
     }
+
+    for (auto & tipNode : tipNodes) {
+      if (tipNode->GetPredIndices().size() > 0) {
+        std::vector<TreeNode *> ancestorsList = tipNode->getAncestors() ;
+        uint numObs = tipNode->GetPredIndices().size() ;
+        for (uint rowIndex = 0; rowIndex < numObs ; rowIndex++) {
+          for (uint depth = 0 ; depth <= tree.GetM() ; depth++) {
+            uint numKnotsAtDepth = ancestorsList.at(depth)->GetNumKnots() ;
+            for (uint colIndex = 0; colIndex < numKnotsAtDepth; colIndex++) {
+              pointerOffset elementToAdd = pointerOffset(&(tipNode->GetUmatList().at(depth)), colIndex * numObs + rowIndex) ;
+              m_pointerOffsetForHmatPred.push_back(elementToAdd) ;
+            }
+          }
+        }
+      }
+    }
+    bigColOffset += tree.GetNumKnots() ;
   }
-
-  ArrayXi colIndexAtEachRes = ArrayXi::Zero(m_M + 1);
-
-  for (auto & node : m_vertexVector) {
-    if (node->GetDepth() < m_M) {
-      for (uint i = node->GetDepth() + 1; i <= m_M; i++) {
-        colIndexAtEachRes(i) += node->GetNumKnots() ;
-      }
-    }
-  } // Convoluted way of getting cumsum(c(0, Num knots at resolutions 0 to M-1))
-
-  colIndexAtEachRes += (m_dataset.covariateValues.cols() + 1) ; // Covariate columns go before, the +1 is for the intercept.
-  std::vector<TreeNode *> previousBrickAncestors = tipNodes.at(0)->getAncestors() ;
-
-  for (auto & nodeToProcess : tipNodes) {
-
-    if (nodeToProcess->GetPredIndices().size() == 0 ) {
-      continue ;
-    }
-
-    // The idea behind this section of the code is that the column index for producing the section
-    // of the H matrix for a tip node at any given depth i should only change when a different ancestor for the
-    // tip node is reached. The hierarchical structure of the tree explains this.
-    for (uint i = 1 ; i <= m_M; i++) { // The root node is shared by all tips, hence the 1.
-      if (previousBrickAncestors.at(i) != nodeToProcess->getAncestors().at(i)) {
-        colIndexAtEachRes(i) += previousBrickAncestors.at(i)->GetNumKnots() ;
-      }
-    }
-    previousBrickAncestors = nodeToProcess->getAncestors() ;
-
-    for (uint depthIndex = 0; depthIndex <= m_M; depthIndex++) {
-      ArrayXi rowIndices = rep(uvec::LinSpaced(nodeToProcess->GetUpred(depthIndex).rows(), 0, nodeToProcess->GetUpred(depthIndex).rows() - 1).array(),
-                               nodeToProcess->GetUpred(depthIndex).cols()) + rowIndex  ;
-      ArrayXi colIndices = rep_each(uvec::LinSpaced(nodeToProcess->GetUpred(depthIndex).cols(), 0, nodeToProcess->GetUpred(depthIndex).cols() - 1).array(),
-                                    nodeToProcess->GetUpred(depthIndex).rows()) + colIndexAtEachRes(depthIndex) ;
-
-      for (uint i = 0; i < rowIndices.size(); i++) {
-        tripletList.push_back(Triplet(rowIndices(i), colIndices(i), nodeToProcess->GetUpred(depthIndex)(rowIndices(i) - rowIndex, colIndices(i) - colIndexAtEachRes(depthIndex)))) ;
-      }
-    }
-    rowIndex += nodeToProcess->GetPredIndices().size() ; // The U matrices should have as many rows as prediction locations in the node...
-  }
-
   // Adding in the intercept...
   for (uint i = 0; i < m_predictData.covariateValues.rows(); i++) {
     tripletList.push_back(Triplet(i, 0, 1)) ;
@@ -360,28 +374,20 @@ void Forest::createHmatrixPred() {
   // Processing other covariate values
   for (uint rowInd = 0 ; rowInd < m_predictData.covariateValues.rows() ; rowInd++) {
     for(uint colInd = 0 ; colInd < m_predictData.covariateValues.cols() ; colInd++) {
-      tripletList.push_back(Triplet(rowInd, colInd + 1, m_predictData.covariateValues(m_obsOrderForHpredMat(rowInd), colInd))) ;
+      tripletList.push_back(Triplet(rowInd, colInd + 1, m_predictData.covariateValues(m_obsOrderForFpredMat(rowInd), colInd))) ;
     }
+  }
+
+  // Processing time
+  for (uint i = 0 ; i < m_predictData.responseValues.size(); i++) {
+    double timeValue = m_predictData.timeCoords(m_obsOrderForFpredMat(i)) ;
+    Array<bool, Dynamic, 1> forFindFun = (timeValue == m_uniqueTimeValues) ;
+    ArrayXi colIndex = find(forFindFun) ;
+    tripletList.push_back(Triplet(i, colIndex(0) + m_dataset.covariateValues.cols() + 1, timeValue)) ;
   }
 
   m_HmatPred.resize(m_predictData.covariateValues.rows(), m_numKnots + m_predictData.covariateValues.cols() + 1) ;
   m_HmatPred.setFromTriplets(tripletList.begin(), tripletList.end()) ;
-
-  for (auto & tipNode : tipNodes) {
-    if (tipNode->GetPredIndices().size() > 0) {
-      std::vector<TreeNode *> ancestorsList = tipNode->getAncestors() ;
-      uint numObs = tipNode->GetPredIndices().size() ;
-      for (uint rowIndex = 0; rowIndex < numObs ; rowIndex++) {
-        for (uint depth = 0 ; depth <= m_M ; depth++) {
-          uint numKnotsAtDepth = ancestorsList.at(depth)->GetNumKnots() ;
-          for (uint colIndex = 0; colIndex < numKnotsAtDepth; colIndex++) {
-            pointerOffset elementToAdd = pointerOffset(&(tipNode->GetUmatList().at(depth)), colIndex * numObs + rowIndex) ;
-            m_pointerOffsetForHmatPred.push_back(elementToAdd) ;
-          }
-        }
-      }
-    }
-  }
 }
 
 // For now, we assume that all hyperpriors have an inverse gamma distribution with the same parameters.
@@ -514,7 +520,9 @@ void Forest::ComputeLogJointPsiMarginal() {
   ComputeLogPriors() ;
 
   // if (m_recomputeMRAlogLik) {
-  computeWmats() ;
+  for (auto & tree : m_treeVector) {
+    tree.computeWmats(m_MRAcovParasSpace, m_spacetimeScaling, m_spaceNuggetSD, m_distMethod) ;
+  }
   // }
 
   ComputeLogFCandLogCDandDataLL() ;
@@ -526,11 +534,13 @@ void Forest::ComputeLogJointPsiMarginal() {
 }
 
 void Forest::ComputeHpred() {
-  std::vector<TreeNode *> tipNodes = GetTipNodes() ;
-  for (auto & i : tipNodes) {
-    ArrayXi predictionsInLeaf = i->GetPredIndices() ;
-    if (predictionsInLeaf.size() > 0) {
-      i->computeUpred(m_MRAcovParasSpace, m_spacetimeScaling, m_predictData, m_spaceNuggetSD, m_distMethod) ;
+  for (auto & tree : m_treeVector) {
+    std::vector<TreeNode *> tipNodes = tree.GetTipNodes() ;
+    for (auto & i : tipNodes) {
+      ArrayXi predictionsInLeaf = i->GetPredIndices() ;
+      if (predictionsInLeaf.size() > 0) {
+        i->computeUpred(m_MRAcovParasSpace, m_spacetimeScaling, m_predictData, m_spaceNuggetSD, m_distMethod) ;
+      }
     }
   }
 
@@ -559,20 +569,14 @@ vec Forest::ComputeEvar() {
 
 void Forest::SetMRAcovParas(const Rcpp::List & MRAcovParas) {
   List SpaceParas = Rcpp::as<List>(MRAcovParas["space"]) ;
-  List TimeParas = Rcpp::as<List>(MRAcovParas["time"]) ;
   double scalePara = Rcpp::as<double>(MRAcovParas["scale"]) ;
 
   double rhoSpace = Rcpp::as<double>(SpaceParas["rho"]) ;
   double smoothnessSpace = Rcpp::as<double>(SpaceParas["smoothness"]) ;
 
-  double rhoTime = Rcpp::as<double>(TimeParas["rho"]) ;
-  double smoothnessTime = Rcpp::as<double>(TimeParas["smoothness"]) ;
-
-
   maternVec MRAcovParasSpace(rhoSpace, smoothnessSpace, 1) ;
-  maternVec MRAcovParasTime(rhoTime, smoothnessTime, 1) ;
 
-  bool test = (fabs(m_spacetimeScaling - scalePara) < epsilon) && (m_MRAcovParasSpace == MRAcovParasSpace) && (m_MRAcovParasTime == MRAcovParasTime) ;
+  bool test = (fabs(m_spacetimeScaling - scalePara) < epsilon) && (m_MRAcovParasSpace == MRAcovParasSpace) ;
 
   if (test) {
     m_recomputeMRAlogLik = false ;
@@ -580,7 +584,6 @@ void Forest::SetMRAcovParas(const Rcpp::List & MRAcovParas) {
     m_recomputeMRAlogLik = true ;
   }
   m_MRAcovParasSpace = MRAcovParasSpace ;
-  m_MRAcovParasTime = MRAcovParasTime ;
   m_spacetimeScaling = scalePara ;
 }
 

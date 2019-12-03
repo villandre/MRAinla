@@ -156,7 +156,7 @@ public:
     throw Rcpp::exception("Upred matrices need not be computed in internal nodes! \n") ;
   }
 
-  void genKnotsOnSquare(spatialcoor &, int &, std::mt19937_64 &, Eigen::Array<bool, Eigen::Dynamic, 1> &) ;
+  void genKnotsOnSquare(const spatialcoor &, int &, std::mt19937_64 &, Eigen::Array<bool, Eigen::Dynamic, 1> &) ;
   void genRandomKnots(spatialcoor &, int &, std::mt19937_64 &) ;
 
   InternalNode(const spaceDimensions & dims, const uint & depth, TreeNode * parent,

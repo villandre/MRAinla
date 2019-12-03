@@ -56,7 +56,7 @@ void InternalNode::genRandomKnots(spatialcoor & dataCoor, int & numKnots, std::m
   }
 }
 
-void InternalNode::genKnotsOnSquare(spatialcoor & dataCoor, int & numKnots, std::mt19937_64 & generator, Array<bool, Dynamic, 1> & assignedPredLocations) {
+void InternalNode::genKnotsOnSquare(const spatialcoor & dataCoor, int & numKnots, std::mt19937_64 & generator, Array<bool, Dynamic, 1> & assignedPredLocations) {
   numKnots = min(numKnots, int(m_obsInNode.size())) ;
   ArrayXi predObsInNode = deriveObsInNode(dataCoor) ;
 

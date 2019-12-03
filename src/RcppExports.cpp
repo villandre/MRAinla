@@ -33,12 +33,12 @@ BEGIN_RCPP
 END_RCPP
 }
 // LogJointHyperMarginalToWrap
-double LogJointHyperMarginalToWrap(SEXP treePointer, Rcpp::List MRAhyperparas, double timeCovPara, double fixedEffSD, double errorSD, Rcpp::List MRAcovParasGammaAlphaBeta, Rcpp::NumericVector FEmuVec, NumericVector fixedEffGammaAlphaBeta, NumericVector errorGammaAlphaBeta, NumericVector timeGammaAlphaBeta, double spaceNuggetSD, bool recordFullConditional, bool processPredictions);
-RcppExport SEXP _MRAinla_LogJointHyperMarginalToWrap(SEXP treePointerSEXP, SEXP MRAhyperparasSEXP, SEXP timeCovParaSEXP, SEXP fixedEffSDSEXP, SEXP errorSDSEXP, SEXP MRAcovParasGammaAlphaBetaSEXP, SEXP FEmuVecSEXP, SEXP fixedEffGammaAlphaBetaSEXP, SEXP errorGammaAlphaBetaSEXP, SEXP timeGammaAlphaBetaSEXP, SEXP spaceNuggetSDSEXP, SEXP recordFullConditionalSEXP, SEXP processPredictionsSEXP) {
+double LogJointHyperMarginalToWrap(SEXP forestPointer, Rcpp::List MRAhyperparas, double timeCovPara, double fixedEffSD, double errorSD, Rcpp::List MRAcovParasGammaAlphaBeta, Rcpp::NumericVector FEmuVec, NumericVector fixedEffGammaAlphaBeta, NumericVector errorGammaAlphaBeta, NumericVector timeGammaAlphaBeta, double spaceNuggetSD, bool recordFullConditional, bool processPredictions);
+RcppExport SEXP _MRAinla_LogJointHyperMarginalToWrap(SEXP forestPointerSEXP, SEXP MRAhyperparasSEXP, SEXP timeCovParaSEXP, SEXP fixedEffSDSEXP, SEXP errorSDSEXP, SEXP MRAcovParasGammaAlphaBetaSEXP, SEXP FEmuVecSEXP, SEXP fixedEffGammaAlphaBetaSEXP, SEXP errorGammaAlphaBetaSEXP, SEXP timeGammaAlphaBetaSEXP, SEXP spaceNuggetSDSEXP, SEXP recordFullConditionalSEXP, SEXP processPredictionsSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
-    Rcpp::traits::input_parameter< SEXP >::type treePointer(treePointerSEXP);
+    Rcpp::traits::input_parameter< SEXP >::type forestPointer(forestPointerSEXP);
     Rcpp::traits::input_parameter< Rcpp::List >::type MRAhyperparas(MRAhyperparasSEXP);
     Rcpp::traits::input_parameter< double >::type timeCovPara(timeCovParaSEXP);
     Rcpp::traits::input_parameter< double >::type fixedEffSD(fixedEffSDSEXP);
@@ -51,76 +51,76 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< double >::type spaceNuggetSD(spaceNuggetSDSEXP);
     Rcpp::traits::input_parameter< bool >::type recordFullConditional(recordFullConditionalSEXP);
     Rcpp::traits::input_parameter< bool >::type processPredictions(processPredictionsSEXP);
-    rcpp_result_gen = Rcpp::wrap(LogJointHyperMarginalToWrap(treePointer, MRAhyperparas, timeCovPara, fixedEffSD, errorSD, MRAcovParasGammaAlphaBeta, FEmuVec, fixedEffGammaAlphaBeta, errorGammaAlphaBeta, timeGammaAlphaBeta, spaceNuggetSD, recordFullConditional, processPredictions));
+    rcpp_result_gen = Rcpp::wrap(LogJointHyperMarginalToWrap(forestPointer, MRAhyperparas, timeCovPara, fixedEffSD, errorSD, MRAcovParasGammaAlphaBeta, FEmuVec, fixedEffGammaAlphaBeta, errorGammaAlphaBeta, timeGammaAlphaBeta, spaceNuggetSD, recordFullConditional, processPredictions));
     return rcpp_result_gen;
 END_RCPP
 }
 // GetFullCondMean
-Eigen::VectorXd GetFullCondMean(SEXP treePointer);
-RcppExport SEXP _MRAinla_GetFullCondMean(SEXP treePointerSEXP) {
+Eigen::VectorXd GetFullCondMean(SEXP forestPointer);
+RcppExport SEXP _MRAinla_GetFullCondMean(SEXP forestPointerSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
-    Rcpp::traits::input_parameter< SEXP >::type treePointer(treePointerSEXP);
-    rcpp_result_gen = Rcpp::wrap(GetFullCondMean(treePointer));
+    Rcpp::traits::input_parameter< SEXP >::type forestPointer(forestPointerSEXP);
+    rcpp_result_gen = Rcpp::wrap(GetFullCondMean(forestPointer));
     return rcpp_result_gen;
 END_RCPP
 }
 // GetFullCondSDs
-Eigen::VectorXd GetFullCondSDs(SEXP treePointer);
-RcppExport SEXP _MRAinla_GetFullCondSDs(SEXP treePointerSEXP) {
+Eigen::VectorXd GetFullCondSDs(SEXP forestPointer);
+RcppExport SEXP _MRAinla_GetFullCondSDs(SEXP forestPointerSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
-    Rcpp::traits::input_parameter< SEXP >::type treePointer(treePointerSEXP);
-    rcpp_result_gen = Rcpp::wrap(GetFullCondSDs(treePointer));
+    Rcpp::traits::input_parameter< SEXP >::type forestPointer(forestPointerSEXP);
+    rcpp_result_gen = Rcpp::wrap(GetFullCondSDs(forestPointer));
     return rcpp_result_gen;
 END_RCPP
 }
 // ComputeCondPredStats
-Rcpp::List ComputeCondPredStats(SEXP treePointer, NumericMatrix spCoordsForPredict, NumericVector timeForPredict, NumericMatrix covariateMatrixForPredict);
-RcppExport SEXP _MRAinla_ComputeCondPredStats(SEXP treePointerSEXP, SEXP spCoordsForPredictSEXP, SEXP timeForPredictSEXP, SEXP covariateMatrixForPredictSEXP) {
+Rcpp::List ComputeCondPredStats(SEXP forestPointer, NumericMatrix spCoordsForPredict, NumericVector timeForPredict, NumericMatrix covariateMatrixForPredict);
+RcppExport SEXP _MRAinla_ComputeCondPredStats(SEXP forestPointerSEXP, SEXP spCoordsForPredictSEXP, SEXP timeForPredictSEXP, SEXP covariateMatrixForPredictSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
-    Rcpp::traits::input_parameter< SEXP >::type treePointer(treePointerSEXP);
+    Rcpp::traits::input_parameter< SEXP >::type forestPointer(forestPointerSEXP);
     Rcpp::traits::input_parameter< NumericMatrix >::type spCoordsForPredict(spCoordsForPredictSEXP);
     Rcpp::traits::input_parameter< NumericVector >::type timeForPredict(timeForPredictSEXP);
     Rcpp::traits::input_parameter< NumericMatrix >::type covariateMatrixForPredict(covariateMatrixForPredictSEXP);
-    rcpp_result_gen = Rcpp::wrap(ComputeCondPredStats(treePointer, spCoordsForPredict, timeForPredict, covariateMatrixForPredict));
+    rcpp_result_gen = Rcpp::wrap(ComputeCondPredStats(forestPointer, spCoordsForPredict, timeForPredict, covariateMatrixForPredict));
     return rcpp_result_gen;
 END_RCPP
 }
 // GetNumTips
-int GetNumTips(SEXP treePointer);
-RcppExport SEXP _MRAinla_GetNumTips(SEXP treePointerSEXP) {
+int GetNumTips(SEXP forestPointer);
+RcppExport SEXP _MRAinla_GetNumTips(SEXP forestPointerSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
-    Rcpp::traits::input_parameter< SEXP >::type treePointer(treePointerSEXP);
-    rcpp_result_gen = Rcpp::wrap(GetNumTips(treePointer));
+    Rcpp::traits::input_parameter< SEXP >::type forestPointer(forestPointerSEXP);
+    rcpp_result_gen = Rcpp::wrap(GetNumTips(forestPointer));
     return rcpp_result_gen;
 END_RCPP
 }
 // GetPredObsOrder
-Eigen::VectorXi GetPredObsOrder(SEXP treePointer);
-RcppExport SEXP _MRAinla_GetPredObsOrder(SEXP treePointerSEXP) {
+Eigen::VectorXi GetPredObsOrder(SEXP forestPointer);
+RcppExport SEXP _MRAinla_GetPredObsOrder(SEXP forestPointerSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
-    Rcpp::traits::input_parameter< SEXP >::type treePointer(treePointerSEXP);
-    rcpp_result_gen = Rcpp::wrap(GetPredObsOrder(treePointer));
+    Rcpp::traits::input_parameter< SEXP >::type forestPointer(forestPointerSEXP);
+    rcpp_result_gen = Rcpp::wrap(GetPredObsOrder(forestPointer));
     return rcpp_result_gen;
 END_RCPP
 }
 // GetHmat
-Eigen::SparseMatrix<double> GetHmat(SEXP treePointer);
-RcppExport SEXP _MRAinla_GetHmat(SEXP treePointerSEXP) {
+Eigen::SparseMatrix<double> GetHmat(SEXP forestPointer);
+RcppExport SEXP _MRAinla_GetHmat(SEXP forestPointerSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
-    Rcpp::traits::input_parameter< SEXP >::type treePointer(treePointerSEXP);
-    rcpp_result_gen = Rcpp::wrap(GetHmat(treePointer));
+    Rcpp::traits::input_parameter< SEXP >::type forestPointer(forestPointerSEXP);
+    rcpp_result_gen = Rcpp::wrap(GetHmat(forestPointer));
     return rcpp_result_gen;
 END_RCPP
 }

@@ -169,7 +169,7 @@ public:
   virtual Eigen::ArrayXi & GetPredIndices()=0 ;
   virtual void computeUpred(const maternVec &, const double &, const spatialcoor &, const double &, const std::string &)=0 ;
 
-  virtual void genKnotsOnSquare(spatialcoor &, int &, std::mt19937_64 &, Eigen::Array<bool, Eigen::Dynamic, 1> &) = 0;
+  virtual void genKnotsOnSquare(const spatialcoor &, int &, std::mt19937_64 &, Eigen::Array<bool, Eigen::Dynamic, 1> &) = 0;
   virtual void genRandomKnots(spatialcoor &, int &, std::mt19937_64 &) = 0;
 
   void clearWmatrices() {

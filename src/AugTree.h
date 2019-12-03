@@ -36,7 +36,7 @@ namespace MRAinla {
 class AugTree
 {
 public:
-  AugTree(uint &, uint &, Eigen::Array2d &, Eigen::Array2d &, vec &, Eigen::ArrayXXd &, Eigen::ArrayXd &, Eigen::ArrayXXd &, Eigen::ArrayXXd &, Eigen::ArrayXd &, unsigned long int &, Eigen::ArrayXXd &, const unsigned int, double, const std::string &) ;
+  AugTree(uint &, uint &, const spaceDimensions &, inputdata &, inputdata &, const unsigned int, double, const std::string &, std::mt19937_64 &) ;
 
   std::vector<TreeNode *> GetVertexVector() {return m_vertexVector ;} ;
 
@@ -49,7 +49,12 @@ public:
   std::vector<TreeNode *> GetLevelNodes(const uint & level) ;
   std::vector<TreeNode *> GetTipNodes() { return GetLevelNodes(m_M) ;}
 
-
+  std::vector<mat *> getKmatricesInversePointers() {
+    std::vector<mat *> KmatrixInverseList(m_vertexVector.size()) ;
+    for (auto & i : m_vertexVector) KmatrixInverseList.at(i->GetNodeId()) = i->GetKmatrixInverseAddress() ;
+    return KmatrixInverseList ;
+  }
+  void computeWmats(const maternVec &, const double &, const double &, const std::string &) ;
   ~ AugTree() {
     deallocate_container(m_vertexVector) ;}
 
@@ -71,26 +76,20 @@ private:
   int m_Mlat{ 0 } ;
   int m_numTips{ 0 } ;
   int m_numKnots{ 0 } ;
+  spaceDimensions m_mapDimensions;
   std::string m_distMethod ;
 
   std::vector<TreeNode *> Descendants(std::vector<TreeNode *>) ;
   void diveAndUpdate(TreeNode *, std::vector<TreeNode *> *) ;
 
   // Tree construction functions //
-  void BuildTree(const unsigned int, double, const Eigen::ArrayXXd &) ;
-  void createLevels(TreeNode *, std::string, Eigen::ArrayXi) ;
-  void generateKnots(TreeNode *, const unsigned int, double) ;
+  void BuildTree(const unsigned int, double, const inputdata &, const inputdata &, std::mt19937_64 &) ;
+  void createLevels(TreeNode *, std::string, Eigen::ArrayXi, const inputdata &) ;
+  void generateKnots(TreeNode *, const unsigned int, double, std::mt19937_64 &, const inputdata &, const inputdata &) ;
   void numberNodes() ;
-  void computeWmats() ;
   std::vector<TreeNode *> GetLevel(const uint) ;
 
   Eigen::Array<bool, Eigen::Dynamic, 1> m_assignedPredToKnot ;
-
-  std::vector<mat *> getKmatricesInversePointers() {
-    std::vector<mat *> KmatrixInverseList(m_vertexVector.size()) ;
-    for (auto & i : m_vertexVector) KmatrixInverseList.at(i->GetNodeId()) = i->GetKmatrixInverseAddress() ;
-    return KmatrixInverseList ;
-  }
 };
 }
 #endif

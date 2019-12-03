@@ -37,14 +37,14 @@ List setupGridCpp(NumericVector responseValues, NumericMatrix spCoords, NumericM
   ArrayXXd covariateMat = as<ArrayXXd>(covariateMatrix) ;
 
   Forest * MRAgrids = new Forest(Mlon, Mlat, lonR, latR, response, sp, time, predCovariates, predSp, predTimeVec, seedForRNG, covariateMat, numKnotsRes0, J, dMethod) ;
-  XPtr<Forest *> p(&MRAgrids, false) ; // Disabled automatic garbage collection.
+  XPtr<Forest> p(MRAgrids, false) ; // Disabled automatic garbage collection.
 
   return List::create(Named("gridPointer") = p) ;
 }
 
 // [[Rcpp::export]]
 
-double LogJointHyperMarginalToWrap(SEXP treePointers, Rcpp::List MRAhyperparas,
+double LogJointHyperMarginalToWrap(SEXP forestPointer, Rcpp::List MRAhyperparas,
          double timeCovPara, double fixedEffSD, double errorSD, Rcpp::List MRAcovParasGammaAlphaBeta,
          Rcpp::NumericVector FEmuVec, NumericVector fixedEffGammaAlphaBeta,
          NumericVector errorGammaAlphaBeta, NumericVector timeGammaAlphaBeta,
@@ -52,42 +52,41 @@ double LogJointHyperMarginalToWrap(SEXP treePointers, Rcpp::List MRAhyperparas,
   mat posteriorMatrix ;
   double outputValue = 0 ;
 
-  // if (!(treePointer == NULL))
+  // if (!(forestPointer == NULL))
   // {
-    XPtr<std::vector<AugTree *>> pointedTrees(treePointers) ; // Becomes a regular pointer again.
+    XPtr<Forest> pointedForest(forestPointer) ; // Becomes a regular pointer again.
 
     // The alpha's and beta's for the gamma distribution of the hyperparameters do not change.
-    for (auto & pointedTree : pointedTrees) {
-    if (!pointedTrees->CheckMRAcovParasGammaAlphaBeta()) {
-      pointedTree->ToggleGammaParasSet() ;
-      pointedTree->SetMRAcovParasGammaAlphaBeta(MRAcovParasGammaAlphaBeta) ;
+
+    if (!pointedForest->CheckMRAcovParasGammaAlphaBeta()) {
+      pointedForest->ToggleGammaParasSet() ;
+      pointedForest->SetMRAcovParasGammaAlphaBeta(MRAcovParasGammaAlphaBeta) ;
 
       vec fixedEffAlphaBeta = Rcpp::as<vec>(fixedEffGammaAlphaBeta) ;
       vec errorAlphaBeta = Rcpp::as<vec>(errorGammaAlphaBeta) ;
       vec FEmu = Rcpp::as<vec>(FEmuVec) ;
 
-      pointedTree->SetFixedEffGammaAlphaBeta(GammaHyperParas(fixedEffAlphaBeta(0), fixedEffAlphaBeta(1))) ;
-      pointedTree->SetErrorGammaAlphaBeta(GammaHyperParas(errorAlphaBeta(0), errorAlphaBeta(1))) ;
-      pointedTree->SetTimeCovParaGammaAlphaBeta(GammaHyperParas(timeGammaAlphaBeta(0), timeGammaAlphaBeta(1))) ;
-      pointedTree->SetFEmu(FEmu) ;
-      pointedTree->SetSpaceNuggetSD(spaceNuggetSD) ;
-      std::vector<TreeNode *> tipNodes = pointedTree->GetLevelNodes(pointedTree->GetM()) ;
-      for (auto & i : tipNodes) {
-        i->SetUncorrSD(0.001) ; // Is this a nugget effect?
-      }
+      pointedForest->SetFixedEffGammaAlphaBeta(GammaHyperParas(fixedEffAlphaBeta(0), fixedEffAlphaBeta(1))) ;
+      pointedForest->SetErrorGammaAlphaBeta(GammaHyperParas(errorAlphaBeta(0), errorAlphaBeta(1))) ;
+      pointedForest->SetTimeCovParaGammaAlphaBeta(GammaHyperParas(timeGammaAlphaBeta(0), timeGammaAlphaBeta(1))) ;
+      pointedForest->SetFEmu(FEmu) ;
+      pointedForest->SetSpaceNuggetSD(spaceNuggetSD) ;
+      // std::vector<TreeNode *> tipNodes = pointedForest->GetLevelNodes(pointedForest->GetM()) ;
+      // for (auto & i : tipNodes) {
+      //   i->SetUncorrSD(0.001) ; // Is this a nugget effect?
+      // }
     }
-    pointedTree->SetErrorSD(errorSD) ;
-    pointedTree->SetFixedEffSD(fixedEffSD) ;
+    pointedForest->SetErrorSD(errorSD) ;
+    pointedForest->SetFixedEffSD(fixedEffSD) ;
 
-    pointedTree->SetMRAcovParas(MRAhyperparas) ;
-    pointedTree->SetRecordFullConditional(recordFullConditional) ;
-    pointedTree->SetProcessPredictions(processPredictions) ;
-    }
+    pointedForest->SetMRAcovParas(MRAhyperparas) ;
+    pointedForest->SetRecordFullConditional(recordFullConditional) ;
+    pointedForest->SetProcessPredictions(processPredictions) ;
 
-    pointedTree->ComputeLogJointPsiMarginal() ;
+    pointedForest->ComputeLogJointPsiMarginal() ;
 
-    outputValue = pointedTree->GetLogJointPsiMarginal() ;
-    // Rprintf("Marginal joint Psi: %.4e \n \n \n", pointedTree->GetLogJointPsiMarginal()) ;
+    outputValue = pointedForest->GetLogJointPsiMarginal() ;
+    // Rprintf("Marginal joint Psi: %.4e \n \n \n", pointedForest->GetLogJointPsiMarginal()) ;
   // }
   // else
   // {
@@ -98,12 +97,12 @@ double LogJointHyperMarginalToWrap(SEXP treePointers, Rcpp::List MRAhyperparas,
 
 // [[Rcpp::export]]
 
-Eigen::VectorXd GetFullCondMean(SEXP treePointer) {
+Eigen::VectorXd GetFullCondMean(SEXP forestPointer) {
   vec outputVec ;
-  if (!(treePointer == NULL))
+  if (!(forestPointer == NULL))
   {
-    XPtr<AugTree> pointedTree(treePointer) ; // Becomes a regular pointer again.
-    outputVec = pointedTree->GetFullCondMean() ;
+    XPtr<Forest> pointedForest(forestPointer) ; // Becomes a regular pointer again.
+    outputVec = pointedForest->GetFullCondMean() ;
   }
   else
   {
@@ -114,12 +113,12 @@ Eigen::VectorXd GetFullCondMean(SEXP treePointer) {
 
 // [[Rcpp::export]]
 
-Eigen::VectorXd GetFullCondSDs(SEXP treePointer) {
+Eigen::VectorXd GetFullCondSDs(SEXP forestPointer) {
   vec outputVec ;
-  if (!(treePointer == NULL))
+  if (!(forestPointer == NULL))
   {
-    XPtr<AugTree> pointedTree(treePointer) ; // Becomes a regular pointer again.
-    outputVec = pointedTree->GetFullCondSDs() ;
+    XPtr<Forest> pointedForest(forestPointer) ; // Becomes a regular pointer again.
+    outputVec = pointedForest->GetFullCondSDs() ;
   }
   else
   {
@@ -130,18 +129,18 @@ Eigen::VectorXd GetFullCondSDs(SEXP treePointer) {
 
 // [[Rcpp::export]]
 
-Rcpp::List ComputeCondPredStats(SEXP treePointer, NumericMatrix spCoordsForPredict, NumericVector timeForPredict,
+Rcpp::List ComputeCondPredStats(SEXP forestPointer, NumericMatrix spCoordsForPredict, NumericVector timeForPredict,
                                  NumericMatrix covariateMatrixForPredict) {
   vec Evar, Hmean ;
-  if (!(treePointer == NULL))
+  if (!(forestPointer == NULL))
   {
-    XPtr<AugTree> pointedTree(treePointer) ; // Becomes a regular pointer again.
+    XPtr<Forest> pointedForest(forestPointer) ; // Becomes a regular pointer again.
 
-    // pointedTree->ComputeHpred() ;
+    // pointedForest->ComputeHpred() ;
 
-    Hmean = pointedTree->GetHmatPred() * pointedTree->GetFullCondMean() ;
+    Hmean = pointedForest->GetHmatPred() * pointedForest->GetFullCondMean() ;
     Rcout << "Computing Evar..." << std::endl ;
-    Evar = pointedTree->ComputeEvar() ;
+    Evar = pointedForest->ComputeEvar() ;
     Rcout << "Done!" << std::endl ;
   }
   else
@@ -153,24 +152,24 @@ Rcpp::List ComputeCondPredStats(SEXP treePointer, NumericMatrix spCoordsForPredi
 
 // [[Rcpp::export]]
 
-int GetNumTips(SEXP treePointer) {
-  XPtr<AugTree> pointedTree(treePointer) ; // Becomes a regular pointer again.
-  int value = pointedTree->GetNumTips() ;
+int GetNumTips(SEXP forestPointer) {
+  XPtr<AugTree> pointedForest(forestPointer) ; // Becomes a regular pointer again.
+  int value = pointedForest->GetNumTips() ;
   return value ;
 }
 
 // [[Rcpp::export]]
 
-Eigen::VectorXi GetPredObsOrder(SEXP treePointer) {
-  XPtr<AugTree> pointedTree(treePointer) ; // Becomes a regular pointer again.
-  uvec value = pointedTree->GetObsOrderForHpredMat() ;
+Eigen::VectorXi GetPredObsOrder(SEXP forestPointer) {
+  XPtr<Forest> pointedForest(forestPointer) ; // Becomes a regular pointer again.
+  uvec value = pointedForest->GetObsOrderForFpredMat() ;
   return value ;
 }
 
 // [[Rcpp::export]]
 
-Eigen::SparseMatrix<double> GetHmat(SEXP treePointer) {
-  XPtr<AugTree> pointedTree(treePointer) ; // Becomes a regular pointer again.
-  Eigen::SparseMatrix<double> value = pointedTree->GetHmat() ;
+Eigen::SparseMatrix<double> GetHmat(SEXP forestPointer) {
+  XPtr<Forest> pointedForest(forestPointer) ; // Becomes a regular pointer again.
+  Eigen::SparseMatrix<double> value = pointedForest->GetHmat() ;
   return value ;
 }

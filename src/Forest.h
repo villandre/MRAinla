@@ -6,7 +6,7 @@
 namespace MRAinla {
 class Forest {
 public:
-  Forest(uint &, uint &, Eigen::Array2d &, Eigen::Array2d &, vec &, Eigen::ArrayXXd &, Eigen::ArrayXd &, Eigen::ArrayXXd &, Eigen::ArrayXXd &, Eigen::ArrayXd &, unsigned long int &, Eigen::ArrayXXd &, const unsigned int, double, const std::string &) { } ;
+  Forest(uint &, uint &, Eigen::Array2d &, Eigen::Array2d &, vec &, Eigen::ArrayXXd &, Eigen::ArrayXd &, Eigen::ArrayXXd &, Eigen::ArrayXXd &, Eigen::ArrayXd &, unsigned long int &, Eigen::ArrayXXd &, const unsigned int, double, const std::string &) ;
 
   void SetFixedEffParameters(vec & fixedParas) {
     if (fixedParas.isApprox(m_fixedEffParameters)) m_recomputeGlobalLogLik = true ;
@@ -100,6 +100,8 @@ private:
   Eigen::ArrayXi m_obsOrderForFpredMat ;
 
   sp_mat m_Hmat ;
+  Eigen::ArrayXi m_obsOrderForFmat ;
+  sp_mat m_SigmaFEandEtaInv ;
   Eigen::ArrayXi m_obsOrderForHmat ;
   std::vector<pointerOffset> m_pointerOffsetForHmat ;
   std::vector<pointerOffset> m_pointerOffsetForHmatPred ;
@@ -107,6 +109,9 @@ private:
   sp_mat m_HmatPred ;
   sp_mat m_SigmaBetaEtaInv ;
   Eigen::ArrayXd m_uniqueTimeValues ;
+  Eigen::Array<bool, Eigen::Dynamic, 1> m_assignedPredToKnot ;
+
+  uint m_numKnots{ 0 } ;
 
   vec ComputeFullConditionalMean(const vec &) ;
   void ComputeFullCondSDsFE() ;
@@ -123,7 +128,7 @@ private:
   void createHmatrix() ;
   void updateHmatrix() ;
   void updateHmatrixPred() ;
-  mat createTimePrecisionMatrix(const double, const Eigen::ArrayXd) ;
+  mat createTimePrecisionMatrix(const double, const Eigen::ArrayXd) { };
 };
 }
 #endif
