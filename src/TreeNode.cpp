@@ -6,12 +6,17 @@ using namespace Eigen ;
 using namespace MRAinla ;
 using namespace std ;
 
-ArrayXi TreeNode::deriveObsInNode(const spatialcoor & dataset) {
+ArrayXi TreeNode::deriveObsInNode(const spatiotempcoor & dataset) {
   Eigen::Array<bool, Dynamic, 1> lonCheck = (dataset.spatialCoords.col(0) > m_dimensions.longitude.matrix().minCoeff()) *
     (dataset.spatialCoords.col(0) <= m_dimensions.longitude.matrix().maxCoeff()) ; // Longitude check
   Eigen::Array<bool, Dynamic, 1> latCheck = (dataset.spatialCoords.col(1) > m_dimensions.latitude.matrix().minCoeff()) *
     (dataset.spatialCoords.col(1) <= m_dimensions.latitude.matrix().maxCoeff()) ; // Latitude check
-  ArrayXi output = find(lonCheck * latCheck) ;
+  Eigen::Array<bool, Dynamic, 1> timeCheck(dataset.timeCoords)
+  double timeValue = m_dimensions.timeValue ;
+  for (uint i = 0; i < dataset.timeCoords.size(); i++) {
+    timeCheck(i) = (dataset.timeCoords(i) == timeValue) ;
+  }
+  ArrayXi output = find(lonCheck * latCheck * timeCheck) ;
   return output ;
 }
 

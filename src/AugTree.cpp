@@ -37,28 +37,27 @@ struct MVN{
 AugTree::AugTree(uint & Mlon,
                  uint & Mlat,
                  const spaceDimensions & mapDimensions,
+                 const double & timeValue,
                  inputdata & dataset,
                  inputdata & predictData,
                  const unsigned int numKnotsRes0,
                  double J,
                  const string & distMethod,
-                 std::mt19937_64 & randomNumGenerator)
-  : m_distMethod(distMethod), m_mapDimensions(mapDimensions), m_Mlon(Mlon), m_Mlat(Mlat)
+                 std::mt19937_64 & randomNumGenerator,
+                 Eigen::Array<bool, Eigen::Dynamic, 1> assignedPredToKnot)
+  : m_distMethod(distMethod), m_Mlon(Mlon), m_Mlat(Mlat)
 {
   m_M = Mlon + Mlat ;
+  m_mapDimensionsWithTime = spacetimeDimensions(mapDimensions.longitude, mapDimensions.latitude, timeValue) ;
 
-  m_assignedPredToKnot = Array<bool, Dynamic, 1>(predictData.spatialCoords.rows()) ;
-  m_assignedPredToKnot.segment(0, m_assignedPredToKnot.size()) = false ;
+  BuildTree(numKnotsRes0, J, dataset, predictData, randomNumGenerator, assignedPredToKnot) ;
+  Rcout << "Grid built!" << std::endl ;
 
   std::vector<TreeNode *> tipNodes = GetTipNodes() ;
 
   for (auto & i : tipNodes) {
     i->SetPredictLocations(predictData) ;
   }
-
-  BuildTree(numKnotsRes0, J, dataset, predictData, randomNumGenerator) ;
-  Rcout << "Grid built!" << std::endl ;
-
   m_numKnots = 0 ;
 
   for (uint i = 0 ; i < m_vertexVector.size() ; i++) {
@@ -72,13 +71,13 @@ AugTree::AugTree(uint & Mlon,
 
 }
 
-void AugTree::BuildTree(const unsigned int numKnots0, double J, const inputdata & dataset, const inputdata & predictData, std::mt19937_64 & randomNumGenerator)
+void AugTree::BuildTree(const unsigned int numKnots0, double J, const inputdata & dataset, const inputdata & predictData, std::mt19937_64 & randomNumGenerator, Array<bool, Dynamic, 1> & assignedPredToKnot)
 {
   m_vertexVector.reserve(1) ;
 
   // We create the first internal node
 
-  InternalNode * topNode = new InternalNode(m_mapDimensions, dataset) ;
+  InternalNode * topNode = new InternalNode(m_mapDimensionsWithTime, dataset) ;
 
   m_vertexVector.push_back(topNode) ;
   ArrayXi numSplits(2) ;
@@ -86,7 +85,7 @@ void AugTree::BuildTree(const unsigned int numKnots0, double J, const inputdata 
   createLevels(topNode, "longitude", numSplits, dataset) ;
   numberNodes() ;
 
-  generateKnots(topNode, numKnots0, J, randomNumGenerator, dataset, predictData) ;
+  generateKnots(topNode, numKnots0, J, randomNumGenerator, dataset, predictData, assignedPredToKnot) ;
 }
 
 void AugTree::numberNodes() {
@@ -106,7 +105,7 @@ void AugTree::numberNodes() {
 void AugTree::createLevels(TreeNode * parent, std::string splitWhat, ArrayXi numSplitsLeft, const inputdata & dataset) {
   ArrayXi obsForMedian = parent->GetObsInNode() ;
   ArrayXi childMembership = ArrayXi::Zero(obsForMedian.size()) ;
-  std::vector<spaceDimensions> childDimensions ;
+  std::vector<spacetimeDimensions> childDimensions ;
   childDimensions.push_back(parent->GetDimensions()) ;
 
   if (obsForMedian.size() <= 1) {
@@ -125,7 +124,7 @@ void AugTree::createLevels(TreeNode * parent, std::string splitWhat, ArrayXi num
     ArrayXd newChildLongitude(2) ;
     newChildLongitude(0) = colMedian ;
     newChildLongitude(1) = childDimensions.at(0).longitude(1) ;
-    spaceDimensions newDimensions = childDimensions.at(0) ;
+    spacetimeDimensions newDimensions = childDimensions.at(0) ;
     newDimensions.longitude = newChildLongitude ;
     childDimensions.push_back(newDimensions) ;
     childDimensions.at(0).longitude = updatedLongitude ;
@@ -140,7 +139,7 @@ void AugTree::createLevels(TreeNode * parent, std::string splitWhat, ArrayXi num
     ArrayXd newChildLatitude(2) ;
     newChildLatitude(0) = colMedian ;
     newChildLatitude(1) = childDimensions.at(0).latitude(1) ;
-    spaceDimensions newDimensions = childDimensions.at(0) ;
+    spacetimeDimensions newDimensions = childDimensions.at(0) ;
     newDimensions.latitude = newChildLatitude ;
     childDimensions.push_back(newDimensions) ;
     childDimensions.at(0).latitude = updatedLatitude ;
@@ -188,19 +187,20 @@ void AugTree::generateKnots(TreeNode * node,
                             double J,
                             std::mt19937_64 & randomNumGenerator,
                             const inputdata & dataset,
-                            const inputdata & predictData) {
+                            const inputdata & predictData,
+                            Array<bool, Dynamic, 1> assignedPredToKnot) {
 
   int numNodesAtLevel = GetLevelNodes(node->GetDepth()).size() ;
   int numKnotsToGen = std::max(uint(std::ceil((numKnotsRes0 * pow(J, node->GetDepth()))/numNodesAtLevel)), uint(2)) ;
   // node->genRandomKnots(m_dataset, numKnotsToGen, m_randomNumGenerator) ;
   if (node->GetDepth() < m_M) {
-    node->genKnotsOnSquare(predictData, numKnotsToGen, randomNumGenerator, m_assignedPredToKnot) ;
+    node->genKnotsOnSquare(predictData, numKnotsToGen, randomNumGenerator, assignedPredToKnot) ;
   } else {
-    node->genKnotsOnSquare(dataset, numKnotsToGen, randomNumGenerator, m_assignedPredToKnot) ;
+    node->genKnotsOnSquare(dataset, numKnotsToGen, randomNumGenerator, assignedPredToKnot) ;
   }
   if (node->GetChildren().at(0) != NULL) {
     for (auto &i : node->GetChildren()) {
-      generateKnots(i, numKnotsRes0, J, randomNumGenerator, dataset, predictData) ;
+      generateKnots(i, numKnotsRes0, J, randomNumGenerator, dataset, predictData, assignedPredToKnot) ;
     }
   }
 }

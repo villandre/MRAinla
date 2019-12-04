@@ -157,18 +157,17 @@ public:
   }
 
   void genKnotsOnSquare(const spatialcoor &, int &, std::mt19937_64 &, Eigen::Array<bool, Eigen::Dynamic, 1> &) ;
-  void genRandomKnots(spatialcoor &, int &, std::mt19937_64 &) ;
+  void genRandomKnots(const spatialcoor &, int &, std::mt19937_64 &) ;
 
-  InternalNode(const spaceDimensions & dims, const uint & depth, TreeNode * parent,
+  InternalNode(const spacetimeDimensions & dims, const uint & depth, TreeNode * parent,
                const inputdata & dataset) {
     baseInitialise(dims, depth, parent, dataset) ;
     m_obsInNode = deriveObsInNode(dataset) ;
   }
 
-  InternalNode(const spaceDimensions & dims, const inputdata & dataset) {
+  InternalNode(const spacetimeDimensions & dims, const inputdata & dataset) {
     baseInitialise(dims, 0, this, dataset) ;
-    int numObs = dataset.responseValues.size() ;
-    m_obsInNode = Eigen::VectorXi::LinSpaced(numObs, 0, numObs - 1) ;
+    m_obsInNode = m_obsInNode = deriveObsInNode(dataset) ;
   }
 
 protected:

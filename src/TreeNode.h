@@ -140,6 +140,15 @@ struct spaceDimensions {
   } ;
 };
 
+struct spacetimeDimensions : public spaceDimensions {
+  double timeValue ;
+
+  spacetimeDimensions() : spaceDimensions(), timeValue(0) { } ;
+
+  spacetimeDimensions(Eigen::ArrayXd f_lon, Eigen::ArrayXd f_lat, double f_time) :
+    spaceDimensions(f_lon, f_lat), timeValue(f_time) {  } ;
+};
+
 struct GaussDistParas {
   Eigen::VectorXd meanPara ;
   Eigen::MatrixXd covPara ;
@@ -170,7 +179,7 @@ public:
   virtual void computeUpred(const maternVec &, const spatialcoor &, const double &, const std::string &)=0 ;
 
   virtual void genKnotsOnSquare(const spatialcoor &, int &, std::mt19937_64 &, Eigen::Array<bool, Eigen::Dynamic, 1> &) = 0;
-  virtual void genRandomKnots(spatialcoor &, int &, std::mt19937_64 &) = 0;
+  virtual void genRandomKnots(const spatialcoor &, int &, std::mt19937_64 &) = 0;
 
   void clearWmatrices() {
     for (auto & i : m_Wlist) {
@@ -179,7 +188,7 @@ public:
   }
 
   Eigen::ArrayXi & GetObsInNode() {return m_obsInNode ;}
-  spaceDimensions GetDimensions() {return m_dimensions;}
+  spacetimeDimensions GetDimensions() {return m_dimensions;}
   int GetDepth() {return m_depth ;}
 
   spatialcoor & GetKnotsCoor() {return m_knotsCoor;}
@@ -190,9 +199,9 @@ public:
 
   virtual ~ TreeNode() { } ;
 
-  void SetPredictLocations(const spatialcoor & predictLocations) ;
+  void SetPredictLocations(const spatiotempcoor & predictLocations) ;
 
-  Eigen::ArrayXi deriveObsInNode(const spatialcoor &) ;
+  Eigen::ArrayXi deriveObsInNode(const spatiotempcoor &) ;
 
   uvec GetAncestorIds() {
     std::vector<TreeNode *> ancestorsList = getAncestors() ;
@@ -222,7 +231,7 @@ protected:
   TreeNode * m_parent ;
   Eigen::ArrayXi m_obsInNode ;
   int m_depth{ -1 } ;
-  spaceDimensions m_dimensions ; // First dimension is longitude, second is latitude
+  spacetimeDimensions m_dimensions ; // First dimension is longitude, second is latitude
   spatialcoor m_knotsCoor ;
   int m_nodeId{ -1 } ;
 
@@ -234,7 +243,7 @@ protected:
   double MaternCovFunction(const double &, const maternVec &, const double &) ;
 
   mat computeCovMat(const spatialcoor &, const spatialcoor &, const maternVec &, const double &, const std::string &) ;
-  void baseInitialise(const spaceDimensions & dims, const uint & depth, TreeNode * parent, const inputdata & dataset) {
+  void baseInitialise(const spacetimeDimensions & dims, const uint & depth, TreeNode * parent, const inputdata & dataset) {
     m_dimensions = dims;
     m_depth = depth ;
     m_parent = parent ;

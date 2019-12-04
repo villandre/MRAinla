@@ -56,11 +56,11 @@ public:
   void genKnotsOnSquare(const spatialcoor & dataCoor, int & numKnots, std::mt19937_64 & RNG, Eigen::Array<bool, Eigen::Dynamic, 1> &) {
     m_knotsCoor = spatialcoor(rows(dataCoor.spatialCoords, m_obsInNode)) ;
   }
-  void genRandomKnots(spatialcoor & dataCoor, int & numKnots, std::mt19937_64 & generator) {
+  void genRandomKnots(const spatialcoor & dataCoor, int & numKnots, std::mt19937_64 & generator) {
     m_knotsCoor = spatialcoor(rows(dataCoor.spatialCoords, m_obsInNode)) ;
   }
 
-  TipNode(const spaceDimensions & dims, const uint & depth, TreeNode * parent,
+  TipNode(const spacetimeDimensions & dims, const uint & depth, TreeNode * parent,
           const inputdata & dataset) {
     baseInitialise(dims, depth, parent, dataset) ;
     m_UmatList.resize(m_depth + 1) ;

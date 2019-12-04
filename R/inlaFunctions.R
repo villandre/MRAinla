@@ -92,6 +92,7 @@ MRA_INLA <- function(spacetimeData, hyperStart, fixedHyperValues, hyperGammaAlph
   gridPointers <- lapply(1:control$numThreads, function(x) {
     setupGridCpp(responseValues = spacetimeData@data[, 1], spCoords = dataCoordinates, predCoords = predCoordinates, obsTime = timeValues, predTime = predTime, covariateMatrix = covariateMatrix, predCovariateMatrix = predCovariates, Mlon = control$Mlon, Mlat = control$Mlat, lonRange = control$lonRange, latRange = control$latRange, randomSeed = control$randomSeed, numKnotsRes0 = control$numKnotsRes0, J = control$J, distMethod = control$distMethod)$gridPointer
   })
+  stop("Stop now...")
 
   # First we compute values relating to the hyperprior marginal distribution...
 

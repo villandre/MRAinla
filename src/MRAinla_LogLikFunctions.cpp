@@ -24,7 +24,7 @@ List setupGridCpp(NumericVector responseValues, NumericMatrix spCoords, NumericM
   Array2d lonR = lonRinit.segment(0,2) ;
   Array2d latR = latRinit.segment(0,2) ;
   vec response = as<vec>(responseValues) ;
-  ArrayXd responseArray = as<Eigen::ArrayXd>(responseValues) ;
+
   ArrayXXd sp = as<ArrayXXd>(spCoords) ;
   ArrayXXd predSp = as<ArrayXXd>(predCoords) ;
   ArrayXd predTimeVec = as<ArrayXd>(predTime) ;

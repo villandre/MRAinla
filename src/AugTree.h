@@ -37,7 +37,17 @@ namespace MRAinla {
 class AugTree
 {
 public:
-  AugTree(uint &, uint &, const spaceDimensions &, inputdata &, inputdata &, const unsigned int, double, const std::string &, std::mt19937_64 &) ;
+  AugTree(uint &,
+          uint &,
+          const spaceDimensions &,
+          const double &,
+          inputdata &,
+          inputdata &,
+          const unsigned int,
+          double,
+          const std::string &,
+          std::mt19937_64 &,
+          Eigen::Array<bool, Eigen::Dynamic, 1>) ;
 
   std::vector<TreeNode *> GetVertexVector() {return m_vertexVector ;} ;
 
@@ -77,20 +87,18 @@ private:
   int m_Mlat{ 0 } ;
   int m_numTips{ 0 } ;
   int m_numKnots{ 0 } ;
-  spaceDimensions m_mapDimensions;
+  spacetimeDimensions m_mapDimensionsWithTime ;
   std::string m_distMethod ;
 
   std::vector<TreeNode *> Descendants(std::vector<TreeNode *>) ;
   void diveAndUpdate(TreeNode *, std::vector<TreeNode *> *) ;
 
   // Tree construction functions //
-  void BuildTree(const unsigned int, double, const inputdata &, const inputdata &, std::mt19937_64 &) ;
+  void BuildTree(const unsigned int, double, const inputdata &, const inputdata &, std::mt19937_64 &, Eigen::Array<bool, Eigen::Dynamic, 1> &) ;
   void createLevels(TreeNode *, std::string, Eigen::ArrayXi, const inputdata &) ;
-  void generateKnots(TreeNode *, const unsigned int, double, std::mt19937_64 &, const inputdata &, const inputdata &) ;
+  void generateKnots(TreeNode *, const unsigned int, double, std::mt19937_64 &, const inputdata &, const inputdata &, Eigen::Array<bool, Eigen::Dynamic, 1>) ;
   void numberNodes() ;
   std::vector<TreeNode *> GetLevel(const uint) ;
-
-  Eigen::Array<bool, Eigen::Dynamic, 1> m_assignedPredToKnot ;
 };
 }
 #endif

@@ -17,7 +17,7 @@ void InternalNode::RemoveChild(TreeNode * childToRemove)
   }
 }
 
-void InternalNode::genRandomKnots(spatialcoor & dataCoor, int & numKnots, std::mt19937_64 & generator) {
+void InternalNode::genRandomKnots(const spatialcoor & dataCoor, int & numKnots, std::mt19937_64 & generator) {
 
   if (m_depth == 0) {
     ArrayXXd spaceCoords(0, 2) ;

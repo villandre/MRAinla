@@ -45,7 +45,7 @@ Forest::Forest(uint & Mlon,
   std::vector<AugTree *> MRAgridVector ;
 
   for (auto & i : timeAsVector) {
-    m_treeVector.push_back(AugTree(Mlon, Mlat, m_mapDimensions, m_dataset, m_predictData, numKnotsRes0, J, m_distMethod, m_randomNumGenerator)) ;
+    m_treeVector.push_back(AugTree(Mlon, Mlat, m_mapDimensions, i, m_dataset, m_predictData, numKnotsRes0, J, m_distMethod, m_randomNumGenerator, m_assignedPredToKnot)) ;
   }
 
   for (auto & tree : m_treeVector) {
