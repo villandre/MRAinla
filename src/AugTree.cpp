@@ -249,12 +249,12 @@ void AugTree::generateKnots(TreeNode * node, const unsigned int numKnotsRes0, do
 
   int numNodesAtLevel = GetLevelNodes(node->GetDepth()).size() ;
   int numKnotsToGen = std::max(uint(std::ceil((numKnotsRes0 * pow(J, node->GetDepth()))/numNodesAtLevel)), uint(2)) ;
-  node->genRandomKnots(m_dataset, numKnotsToGen, m_randomNumGenerator) ;
-  // if (node->GetDepth() < m_M) {
-  //   node->genKnotsOnCube(m_predictData, numKnotsToGen, m_randomNumGenerator, m_assignedPredToKnot) ;
-  // } else {
-  //   node->genKnotsOnCube(m_dataset, numKnotsToGen, m_randomNumGenerator, m_assignedPredToKnot) ;
-  // }
+  // node->genRandomKnots(m_dataset, numKnotsToGen, m_randomNumGenerator) ;
+  if (node->GetDepth() < m_M) {
+    node->genKnotsOnCube(m_predictData, numKnotsToGen, m_randomNumGenerator, m_assignedPredToKnot) ;
+  } else {
+    node->genKnotsOnCube(m_dataset, numKnotsToGen, m_randomNumGenerator, m_assignedPredToKnot) ;
+  }
   if (node->GetChildren().at(0) != NULL) {
     for (auto &i : node->GetChildren()) {
       generateKnots(i, numKnotsRes0, J) ;
