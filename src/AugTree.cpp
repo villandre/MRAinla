@@ -249,12 +249,12 @@ void AugTree::generateKnots(TreeNode * node, const unsigned int numKnotsRes0, do
 
   int numNodesAtLevel = GetLevelNodes(node->GetDepth()).size() ;
   int numKnotsToGen = std::max(uint(std::ceil((numKnotsRes0 * pow(J, node->GetDepth()))/numNodesAtLevel)), uint(2)) ;
-  // node->genRandomKnots(m_dataset, numKnotsToGen, m_randomNumGenerator) ;
-  if (node->GetDepth() < m_M) {
-    node->genKnotsOnCube(m_predictData, numKnotsToGen, m_randomNumGenerator, m_assignedPredToKnot) ;
-  } else {
-    node->genKnotsOnCube(m_dataset, numKnotsToGen, m_randomNumGenerator, m_assignedPredToKnot) ;
-  }
+  node->genRandomKnots(m_dataset, numKnotsToGen, m_randomNumGenerator) ;
+  // if (node->GetDepth() < m_M) {
+  //   node->genKnotsOnCube(m_predictData, numKnotsToGen, m_randomNumGenerator, m_assignedPredToKnot) ;
+  // } else {
+  //   node->genKnotsOnCube(m_dataset, numKnotsToGen, m_randomNumGenerator, m_assignedPredToKnot) ;
+  // }
   if (node->GetChildren().at(0) != NULL) {
     for (auto &i : node->GetChildren()) {
       generateKnots(i, numKnotsRes0, J) ;
@@ -393,8 +393,8 @@ void AugTree::createHmatrix() {
   for (auto & nodeToProcess : tipNodes) {
 
     if (nodeToProcess->GetObsInNode().size() == 0 ) {
-      continue ;
-    }
+      Rcpp::stop("Why is there an empty node? This is not supposed to happen. \n\n") ;
+    } // Should not normally occur, as the tree-building scheme forbids empty nodes.
 
     // The idea behind this section of the code is that the column index for producing the section
     // of the H matrix for a tip node at any given depth i should only change when a different ancestor for the
@@ -544,10 +544,6 @@ void AugTree::createHmatrixPred() {
 
   for (auto & nodeToProcess : tipNodes) {
 
-    if (nodeToProcess->GetPredIndices().size() == 0 ) {
-      continue ;
-    }
-
     // The idea behind this section of the code is that the column index for producing the section
     // of the H matrix for a tip node at any given depth i should only change when a different ancestor for the
     // tip node is reached. The hierarchical structure of the tree explains this.
@@ -555,6 +551,10 @@ void AugTree::createHmatrixPred() {
       if (previousBrickAncestors.at(i) != nodeToProcess->getAncestors().at(i)) {
         colIndexAtEachRes(i) += previousBrickAncestors.at(i)->GetNumKnots() ;
       }
+    }
+
+    if (nodeToProcess->GetPredIndices().size() == 0 ) {
+      continue ;
     }
     previousBrickAncestors = nodeToProcess->getAncestors() ;
 
