@@ -552,11 +552,11 @@ void AugTree::createHmatrixPred() {
         colIndexAtEachRes(i) += previousBrickAncestors.at(i)->GetNumKnots() ;
       }
     }
+    previousBrickAncestors = nodeToProcess->getAncestors() ;
 
     if (nodeToProcess->GetPredIndices().size() == 0 ) {
       continue ;
     }
-    previousBrickAncestors = nodeToProcess->getAncestors() ;
 
     for (uint depthIndex = 0; depthIndex <= m_M; depthIndex++) {
       ArrayXi rowIndices = rep(uvec::LinSpaced(nodeToProcess->GetUpred(depthIndex).rows(), 0, nodeToProcess->GetUpred(depthIndex).rows() - 1).array(),
@@ -581,9 +581,10 @@ void AugTree::createHmatrixPred() {
       tripletList.push_back(Triplet(rowInd, colInd + 1, m_predictData.covariateValues(m_obsOrderForHpredMat(rowInd), colInd))) ;
     }
   }
-
-  m_HmatPred.resize(m_predictData.covariateValues.rows(), m_numKnots + m_predictData.covariateValues.cols() + 1) ;
+  Rcout << "Creating HmatPred! \n" ;
+  m_HmatPred.resize(m_predictData.covariateValues.rows(), m_numKnots + m_dataset.covariateValues.cols() + 1) ;
   m_HmatPred.setFromTriplets(tripletList.begin(), tripletList.end()) ;
+  Rcout << "Done! \n" ;
 
   for (auto & tipNode : tipNodes) {
     if (tipNode->GetPredIndices().size() > 0) {
