@@ -184,9 +184,10 @@ obtainGridValues <- function(gridPointers, hyperStart, hyperGammaAlphaBeta, fixe
     cat("Optimised values:", exp(opt$par))
   } else {
     load(control$fileToSaveOptOutput)
-    lastSlashPos <- tail(gregexpr(pattern = "/", text = control$fileToSaveOptOutput)[[1]], n = 1)
-    directoryName <- substr(control$fileToSaveOptOutput, start = 1, stop = lastSlashPos)
-    envirFilename <- list.files(path = directoryName, pattern = "_Envir.Rdata", full.names = TRUE)
+    # lastSlashPos <- tail(gregexpr(pattern = "/", text = control$fileToSaveOptOutput)[[1]], n = 1)
+    # directoryName <- substr(control$fileToSaveOptOutput, start = 1, stop = lastSlashPos)
+    # envirFilename <- list.files(path = directoryName, pattern = "_Envir.Rdata", full.names = TRUE)
+    envirFilename <- paste(substr(control$fileToSaveOptOutput, start = 1, stop = gregexpr(pattern = ".Rdata", text = control$fileToSaveOptOutput)[[1]] - 1), "_Envir.Rdata", sep = "")
     load(envirFilename) # Restores storageEnvir
   }
 
