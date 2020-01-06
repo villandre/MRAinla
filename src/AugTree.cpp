@@ -787,7 +787,7 @@ vec AugTree::ComputeEvar() {
   for (uint i = 0; i < m_HmatPred.rows(); i++) {
     vec HmatPredRow = m_HmatPred.row(i) ;
     vec solution = HmatPredRow.transpose() * m_FullCondPrecisionChol.solve(HmatPredRow) ;
-    EvarValues(i) = solution(0) ;
+    EvarValues(i) = solution(0) + errorVar ;
   }
   return EvarValues ;
 }

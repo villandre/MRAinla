@@ -38,7 +38,11 @@ SimulateSpacetimeData <- function(numObsPerTimeSlice = 225, covFunction, lonRang
   spacetimeObj
 }
 
-plotOutput <- function(inlaMRAoutput, trainingData, testData, realTestValues = NULL, filename = NULL, graphicsEngine = tiff, plotWhat = c("joint", "training", "SD", "fittedVsRealNoSp"), control = list()) {
+plotOutput <- function(inlaMRAoutput, trainingData, testData, realTestValues = NULL, filename = NULL, graphicsEngine = tiff, plotWhat = c("joint", "training", "SD", "fittedVsRealNoSp"), polygonsToOverlay = NULL, control = list()) {
+  if (!("fontScaling" %in% names(control))) {
+    control$fontScaling <- 1
+  }
+
   if (!("width" %in% names(control))) {
     control$width <- control$height <- 1600
   }
@@ -122,7 +126,7 @@ plotOutput <- function(inlaMRAoutput, trainingData, testData, realTestValues = N
       }
       FALSE
     })
-    stackedRasters <- raster::stack(lapply(dailyRasters, function(x) x[[dataName]])[!nullAndEmptyPos])
+    stackedRasters <- lapply(dailyRasters, function(x) x[[dataName]])[!nullAndEmptyPos]
     names(stackedRasters) <- paste(dataName, ":", as.character(uniqueTimeValues[!nullAndEmptyPos]), sep = "")
     stackedRasters
   }
@@ -134,18 +138,26 @@ plotOutput <- function(inlaMRAoutput, trainingData, testData, realTestValues = N
     graphicsEngine(filename, width = control$width, height = control$height)
   }
   if (plotWhat == "SD") {
-    stackedRasters <- raster::stack(stackedRastersList$SD)
+    stackedRasters <- stackedRastersList$SD
   } else if (plotWhat == "fittedVsRealNoSp") {
-    stackedRasters <- raster::stack(stackedRastersList$testNoSp, stackedRastersList$fittedNoSp)
+    stackedRasters <- c(stackedRastersList$testNoSp, stackedRastersList$fittedNoSp)
   } else if (plotWhat == "training") {
-    stackedRasters <- raster::stack(stackedRastersList$training)
+    stackedRasters <- stackedRastersList$training
   } else if (plotWhat == "joint") {
-    stackedRasters <- raster::stack(stackedRastersList$training, stackedRastersList$joint)
+    stackedRasters <- c(stackedRastersList$training, stackedRastersList$joint)
   } else {
     stop("Unrecognised plot type requested: please select one of: joint, training, SD, fittedVSrealNoSp.")
   }
-  rangeForScale <- range(raster::values(stackedRasters), na.rm = TRUE)
-  plot(stackedRasters, interpolate = FALSE, col = rev( rainbow( 20, start = 0, end = 1) ), breaks = seq(floor(rangeForScale[[1]]), ceiling(rangeForScale[[2]]), length.out = 19), cex = 2)
+  par(mfrow = c(2, 3), mai = rep(1.5, 4))
+  for (i in seq_along(stackedRasters)) {
+    raster::plot(stackedRasters[[i]], legend = FALSE, axes = FALSE)
+    if (!is.null(polygonsToOverlay)) {
+      raster::plot(polygonsToOverlay, add = TRUE)
+      mapmisc::scaleBar(crs = raster::crs(polygonsToOverlay), pos = "topleft", cex = 3, pt.cex = 2.2, title.cex = 3.5)
+    }
+    raster::plot(stackedRasters[[i]], legend.only = TRUE, legend.width = 5, axis.args = list(cex.axis = 4))
+  }
+  # plot(stackedRasters, interpolate = FALSE, col = rev( rainbow( 20, start = 0, end = 1) ), breaks = seq(floor(rangeForScale[[1]]), ceiling(rangeForScale[[2]]), length.out = 19), cex = control$fontScaling)
 
   if (!is.null(filename)) {
     dev.off()
