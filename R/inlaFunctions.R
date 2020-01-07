@@ -120,7 +120,7 @@ MRA_INLA <- function(spacetimeData, hyperStart, fixedHyperValues, hyperGammaAlph
   discreteLogJointValues <- sapply(computedValues$output, '[[', "logJointValue")
   logWeights <- discreteLogJointValues - weightModifs
   maxLogWeights <- max(logWeights)
-  logPropConstantIS <- maxLogWeights + log(sum(exp(logWeights - maxLogWeights)))
+  logPropConstantIS <- maxLogWeights + log(sum(exp(logWeights - maxLogWeights))) - log(length(logWeights))
   logStandardisedWeights <- logWeights - logPropConstantIS
   # Now, we obtain the marginal distribution of all mean parameters.
   cat("Computing moments for marginal posterior distributions...\n")
