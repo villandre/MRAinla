@@ -118,9 +118,9 @@ MRA_INLA <- function(spacetimeData, hyperStart, fixedHyperValues, hyperGammaAlph
   hyperparaVectors <- sapply(computedValues$output, function(element) element$x)
   weightModifs <- apply(hyperparaVectors, MARGIN = 2, mvtnorm::dmvnorm, mean = computedValues$ISdistParas$mu, sigma = computedValues$ISdistParas$cov, log = TRUE)
   discreteLogJointValues <- sapply(computedValues$output, '[[', "logJointValue")
-  logWeights <- discreteLogJointValues - weightModifs
+  logWeights <- discreteLogJointValues - weightModifs - log(length(discreteLogJointValues))
   maxLogWeights <- max(logWeights)
-  logPropConstantIS <- maxLogWeights + log(sum(exp(logWeights - maxLogWeights))) - log(length(logWeights))
+  logPropConstantIS <- maxLogWeights + log(sum(exp(logWeights - maxLogWeights)))
   logStandardisedWeights <- logWeights - logPropConstantIS
   # Now, we obtain the marginal distribution of all mean parameters.
   cat("Computing moments for marginal posterior distributions...\n")
