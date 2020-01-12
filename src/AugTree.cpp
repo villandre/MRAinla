@@ -850,7 +850,7 @@ void AugTree::ComputeFullCondSDsFE() {
   // vec varValues = identityForSolve * invertedDiag ;
   // m_FullCondSDs.segment(0, m_fixedEffParameters.size()) = varValues.array().pow(0.5) ;
 
-  m_FullCondSDs = vec::Zero(m_fixedEffParameters.size()) ;
+  m_FullCondSDs = vec::Zero(m_Hmat.cols()) ; // We only derive SDs for FEs to save time though.
   for (uint i = 0; i < m_fixedEffParameters.size(); i++) {
     vec solveVector = vec::Zero(m_Hmat.cols()) ;
     solveVector(i) = 1 ;
