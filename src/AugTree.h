@@ -187,7 +187,9 @@ private:
   vec m_Vstar ;
   vec m_FullCondMean ;
   vec m_FullCondSDs ;
-  Eigen::SimplicialLDLT<Eigen::SparseMatrix<double>> m_FullCondPrecisionChol ;
+  Eigen::SimplicialLDLT<Eigen::SparseMatrix<double>> m_FullCondPrecisionCmatChol ;
+  Eigen::LDLT<mat> m_FullCondPrecisionCschurChol ;
+  sp_mat m_BmatTrans ; // Since sparse matrices are row-major, it'll be faster to extract rows from the transpose.
 
   sp_mat m_Hmat ;
   std::vector<pointerOffset> m_pointerOffsetForHmat ;
@@ -211,7 +213,9 @@ private:
   void ComputeFullCondSDsFE() ;
   template <typename MatrixType>
   inline typename MatrixType::Scalar logdet(const MatrixType& M, bool use_cholesky = false) ;
-
+  std::vector<TreeNode *> orderTipNodes() ;
+  std::vector<mat> createBlockVec(const sp_mat & Cmat) ;
+  vec computeQinvVec(const vec &) ;
 };
 }
 #endif

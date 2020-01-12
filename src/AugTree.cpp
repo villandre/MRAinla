@@ -346,22 +346,14 @@ void AugTree::UpdateSigmaBetaEtaInvMat() {
   }
 }
 
-void AugTree::createHmatrix() {
-  int numObs = m_dataset.spatialCoords.rows() ;
-
+std::vector<TreeNode *> AugTree::orderTipNodes() {
   std::vector<TreeNode *> tipNodes = GetTipNodes() ;
-  int numTips = tipNodes.size() ;
-
-  ArrayXi FmatObsOrder = ArrayXi::Zero(numObs) ;
-  int rowIndex = 0 ;
-  std::vector<ArrayXi> ancestorIdsVec(numTips) ;
+  std::vector<ArrayXi> ancestorIdsVec(tipNodes.size()) ;
 
   for (uint i = 0 ; i < tipNodes.size(); i++) {
     ArrayXi idVec = tipNodes.at(i)->GetAncestorIds() ; // Last element is tip node.
     ancestorIdsVec.at(i) = idVec ;
   }
-
-  std::vector<Triplet> tripletList ;
 
   std::sort(tipNodes.begin(), tipNodes.end(), [] (TreeNode * first, TreeNode * second) {
     ArrayXi firstAncestorIds = first->GetAncestorIds() ;
@@ -376,6 +368,13 @@ void AugTree::createHmatrix() {
     }
     return firstSmallerThanSecond ;
   }) ; // This is supposed to reorder the tip nodes in such a way that the F matrix has contiguous blocks.
+  return tipNodes ;
+}
+
+void AugTree::createHmatrix() {
+  int numObs = m_dataset.spatialCoords.rows() ;
+
+  std::vector<TreeNode *> tipNodes = orderTipNodes() ;
 
   ArrayXi colIndexAtEachRes = ArrayXi::Zero(m_M + 1);
 
@@ -390,6 +389,9 @@ void AugTree::createHmatrix() {
   colIndexAtEachRes += (m_dataset.covariateValues.cols() + 1) ; // Covariate columns go before, the +1 is for the intercept.
   std::vector<TreeNode *> previousBrickAncestors = tipNodes.at(0)->getAncestors() ;
 
+  std::vector<Triplet> tripletList ;
+  int rowIndex = 0 ;
+  ArrayXi FmatObsOrder = ArrayXi::Zero(m_dataset.spatialCoords.rows()) ;
   for (auto & nodeToProcess : tipNodes) {
 
     if (nodeToProcess->GetObsInNode().size() == 0 ) {
@@ -492,32 +494,7 @@ void AugTree::updateHmatrixPred() {
 void AugTree::createHmatrixPred() {
   uint numObs = m_predictData.spatialCoords.rows() ;
   uint rowIndex = 0 ;
-
-  std::vector<TreeNode *> tipNodes = GetTipNodes() ;
-  int numTips = tipNodes.size() ;
-
-  std::vector<ArrayXi> ancestorIdsVec(numTips) ;
-
-  for (uint i = 0 ; i < tipNodes.size(); i++) {
-    ArrayXi idVec = tipNodes.at(i)->GetAncestorIds() ; // Last element is tip node.
-    ancestorIdsVec.at(i) = idVec ;
-  }
-
-  std::vector<Triplet> tripletList;
-
-  std::sort(tipNodes.begin(), tipNodes.end(), [] (TreeNode * first, TreeNode * second) {
-    ArrayXi firstAncestorIds = first->GetAncestorIds() ;
-    ArrayXi secondAncestorIds = second->GetAncestorIds() ;
-    bool firstSmallerThanSecond = false ;
-    for (uint i = 1 ; i < firstAncestorIds.size() ; i++) { // The ultimate ancestor is always node 0, hence the loop starting at 1.
-      bool test = (firstAncestorIds(i) == secondAncestorIds(i)) ;
-      if (!test) {
-        firstSmallerThanSecond = (firstAncestorIds(i) < secondAncestorIds(i)) ;
-        break ;
-      }
-    }
-    return firstSmallerThanSecond ;
-  }) ; // This is supposed to reorder the tip nodes in such a way that the F matrix has contiguous blocks.
+  std::vector<TreeNode *> tipNodes = orderTipNodes() ;
 
   m_obsOrderForHpredMat = ArrayXi::Zero(m_predictData.timeCoords.size()) ;
   uint elementIndex = 0 ;
@@ -530,6 +507,7 @@ void AugTree::createHmatrixPred() {
   }
 
   ArrayXi colIndexAtEachRes = ArrayXi::Zero(m_M + 1);
+  std::vector<Triplet> tripletList ;
 
   for (auto & node : m_vertexVector) {
     if (node->GetDepth() < m_M) {
@@ -682,42 +660,60 @@ void AugTree::ComputeLogFCandLogCDandDataLL() {
   mat scaledResponse = std::pow(m_errorSD, -2) * responsesReshuffled.transpose() * m_Hmat ;
   Rcout << "Done! Computing secondTerm..." << std::endl ;
   fflush(stdout)  ;
-  sp_mat secondTerm = std::pow(m_errorSD, -2) * (m_Hmat.transpose() * m_Hmat) ;
+  sp_mat Qmat(m_Hmat.cols(), m_Hmat.cols()) ;
+  Qmat.selfadjointView<Lower>().rankUpdate(m_Hmat);
+  Qmat = std::pow(m_errorSD, -2) * Qmat ;
+  // Qmat.triangularView<Upper>() = Qmat.transpose() ;
+  // sp_mat Qmat = std::pow(m_errorSD, -2) * (m_Hmat.transpose() * m_Hmat) ;
+  sp_mat SigmaFEandEtaInvLowerTri = m_SigmaFEandEtaInv.triangularView<Lower>() ;
+  Qmat += SigmaFEandEtaInvLowerTri ;
+
+  // Preparing components of the Q matrix (Chol(C), Chol(Schur(C)))
+
+  sp_mat Cmat = Qmat.bottomRightCorner(n, n) ;
+
+  uint diffNrows = Qmat.rows() - n ;
+  m_BmatTrans = Qmat.bottomLeftCorner(n, diffNrows) ;
+  std::vector<mat> CblocksVec = createBlockVec(Cmat) ;
+
+  mat schurComplement = Qmat.topLeftCorner(diffNrows, diffNrows) ;
+
+  uint BcolIndex = 0 ;
+  for (auto & Cblock : CblocksVec) {
+    mat subBmatrixTrans = m_BmatTrans.block(BcolIndex, 0, Cblock.rows(), m_BmatTrans.cols()) ;
+    schurComplement -= subBmatrixTrans.transpose() * Cblock.selfadjointView<Lower>() * subBmatrixTrans ;
+    BcolIndex += Cblock.rows() ;
+  }
+  m_FullCondPrecisionCschurChol.compute(schurComplement.selfadjointView<Lower>()) ;
 
   Rcout << "Done! analysing sparsity pattern..." << std::endl ;
   fflush(stdout) ;
   if (m_logFullCond == 0) { // This is the first iteration...
     try {
-      m_FullCondPrecisionChol.analyzePattern(m_SigmaFEandEtaInv + secondTerm) ;
+      m_FullCondPrecisionCmatChol.analyzePattern(Cmat.selfadjointView<Lower>()) ;
     } catch(std::bad_alloc& ex) {
       forward_exception_to_r(ex) ;
     }
   }
-  Rcout << "Done! Computing Full Cond. Chol..." << std::endl ;
+  Rcout << "Done! Computing C matrix Chol..." << std::endl ;
   fflush(stdout) ;
-  m_FullCondPrecisionChol.factorize(m_SigmaFEandEtaInv + secondTerm) ; // The sparsity pattern in matToInvert is always the same, notwithstand the hyperparameter values.
-  secondTerm.resize(0,0) ; // Making sure it doesn't clog the memory (although I suspect this is not necessary)
+  m_FullCondPrecisionCmatChol.factorize(Cmat.selfadjointView<Lower>()) ; // The sparsity pattern in matToInvert is always the same, notwithstand the hyperparameter values.
+  ////////////////
+  m_Vstar = computeQinvVec(scaledResponse.row(0)) ;
+  m_FullCondMean = m_Vstar ;
+
   Rcout << "Done! Computing Full Cond. SDs..." << std::endl ;
   fflush(stdout) ;
   ComputeFullCondSDsFE() ;
   Rcout << "Done! Computing updated means..." << std::endl ;
   fflush(stdout) ;
-  vec updatedMean = m_FullCondPrecisionChol.solve(scaledResponse.transpose()) ;
-  if(m_FullCondPrecisionChol.info()!=Success) {
-    // solving failed
-    Rcpp::Rcout << "Solving failed!!!! \n" ;
-    throw Rcpp::exception("Leave now... \n") ;
-  }
-
-  m_Vstar = updatedMean ; // Assuming there will be an implicit conversion to vec type.
-
-  m_FullCondMean = m_Vstar ;
 
   vec fixedEffMeans = m_Vstar.head(m_fixedEffParameters.size()) ;
   SetFixedEffParameters(fixedEffMeans) ;
   Rcout << "Done! Computing log-det Q..." << std::endl ;
   fflush(stdout) ;
-  double logDetQmat = m_FullCondPrecisionChol.vectorD().array().log().sum() ; // In LDLT, the L matrix has a diagonal with 1s, meaning that its determinant is 1. It follows that the determinant of the original matrix is simply the product of the elements in the D matrix.
+  // double logDetQmat = m_FullCondPrecisionCmatChol.vectorD().array().log().sum() ; // In LDLT, the L matrix has a diagonal with 1s, meaning that its determinant is 1. It follows that the determinant of the original matrix is simply the product of the elements in the D matrix.
+  double logDetQmat = m_FullCondPrecisionCmatChol.vectorD().array().log().sum() + m_FullCondPrecisionCschurChol.vectorD().array().log().sum() ;
 
   m_logFullCond = 0.5 * logDetQmat ; // Since we arbitrarily evaluate always at the full-conditional mean, the exponential part of the distribution reduces to 0.
 
@@ -738,6 +734,22 @@ void AugTree::ComputeLogFCandLogCDandDataLL() {
   vec globalLogLikExp ;
   globalLogLikExp.noalias() = -0.5 * std::pow(m_errorSD, -2) * recenteredY.transpose() * recenteredY ;
   m_globalLogLik = 0.5 * errorLogDet + globalLogLikExp(0) ;
+}
+
+std::vector<mat> AugTree::createBlockVec(const sp_mat & Cmat) {
+  std::vector<TreeNode *> tipNodes = orderTipNodes() ;
+  ArrayXi blockSizes(tipNodes.size()) ;
+
+  for (uint i = 0; i < blockSizes.size(); i++) {
+    blockSizes(i) = tipNodes.at(i)->GetNumObs() ;
+  }
+  std::vector<mat> blockVector ;
+  uint basicIndex = 0 ;
+  for (uint i = 0; i < blockSizes.size(); i++) {
+    blockVector.push_back(Cmat.block(basicIndex, basicIndex, blockSizes(i), blockSizes(i))) ;
+    basicIndex += blockSizes(i) ;
+  }
+  return blockVector ;
 }
 
 void AugTree::ComputeLogJointPsiMarginal() {
@@ -781,12 +793,10 @@ vec AugTree::ComputeEvar() {
   vec EvarValues = vec::Zero(m_HmatPred.rows()) ;
   int obsIndex = 0 ;
 
-  vec invertedDsqrt = 1/m_FullCondPrecisionChol.vectorD().array().pow(0.5) ;
-
   #pragma omp parallel for
   for (uint i = 0; i < m_HmatPred.rows(); i++) {
     vec HmatPredRow = m_HmatPred.row(i) ;
-    vec solution = HmatPredRow.transpose() * m_FullCondPrecisionChol.solve(HmatPredRow) ;
+    vec solution = HmatPredRow.transpose() * computeQinvVec(HmatPredRow) ;
     EvarValues(i) = solution(0) + errorVar ;
   }
   return EvarValues ;
@@ -802,7 +812,6 @@ void AugTree::SetMRAcovParas(const Rcpp::List & MRAcovParas) {
 
   double rhoTime = Rcpp::as<double>(TimeParas["rho"]) ;
   double smoothnessTime = Rcpp::as<double>(TimeParas["smoothness"]) ;
-
 
   maternVec MRAcovParasSpace(rhoSpace, smoothnessSpace, 1) ;
   maternVec MRAcovParasTime(rhoTime, smoothnessTime, 1) ;
@@ -831,13 +840,45 @@ void AugTree::SetMRAcovParasGammaAlphaBeta(const Rcpp::List & MRAcovParasList) {
 }
 
 void AugTree::ComputeFullCondSDsFE() {
-  mat identityForSolve = mat::Identity(m_FullCondPrecisionChol.vectorD().size(), m_fixedEffParameters.size()) ;
-  m_FullCondPrecisionChol.matrixL().solveInPlace(identityForSolve) ;
+  // mat identityForSolve = mat::Identity(m_FullCondPrecisionCmatChol.vectorD().size(), m_fixedEffParameters.size()) ;
+  // m_FullCondPrecisionCmatChol.matrixL().solveInPlace(identityForSolve) ;
+  //
+  // vec invertedDiag = m_FullCondPrecisionCmatChol.vectorD().array().pow(-1).matrix() ;
+  //
+  // m_FullCondSDs = vec::Zero(m_FullCondPrecisionCmatChol.vectorD().size()) ;
+  // identityForSolve.noalias() = identityForSolve.array().pow(2).matrix() ;
+  // vec varValues = identityForSolve * invertedDiag ;
+  // m_FullCondSDs.segment(0, m_fixedEffParameters.size()) = varValues.array().pow(0.5) ;
 
-  vec invertedDiag = m_FullCondPrecisionChol.vectorD().array().pow(-1).matrix() ;
+  m_FullCondSDs = vec::Zero(m_fixedEffParameters.size()) ;
+  for (uint i = 0; i < m_fixedEffParameters.size(); i++) {
+    vec solveVector = vec::Zero(m_Hmat.cols()) ;
+    solveVector(i) = 1 ;
+    vec matrixCol = computeQinvVec(solveVector) ;
+    m_FullCondSDs(i) = pow(matrixCol(i), 0.5) ;
+  }
+}
 
-  m_FullCondSDs = vec::Zero(m_FullCondPrecisionChol.vectorD().size()) ;
-  identityForSolve.noalias() = identityForSolve.array().pow(2).matrix() ;
-  vec varValues = identityForSolve * invertedDiag ;
-  m_FullCondSDs.segment(0, m_fixedEffParameters.size()) = varValues.array().pow(0.5) ;
+vec AugTree::computeQinvVec(const vec & inputVec) {
+  uint n = m_dataset.responseValues.size() ;
+  uint diffNrows = m_BmatTrans.cols() ;
+
+  vec xi_x = inputVec.head(diffNrows) ;
+  vec xi_y = inputVec.tail(n) ;
+
+  vec CinvXi_y = m_FullCondPrecisionCmatChol.solve(xi_y) ; // C^{-1}\xi_y
+  if (m_FullCondPrecisionCmatChol.info() != Success) {
+    // solving failed
+    Rcpp::Rcout << "Solving failed!!!! \n" ;
+    throw Rcpp::exception("Leave now... \n") ;
+  }
+
+  vec RHSforFirstPart = xi_x - m_BmatTrans.transpose() * CinvXi_y ; // \xi_x - B * C^{-1} * \xi_y
+
+  vec x = m_FullCondPrecisionCschurChol.solve(RHSforFirstPart) ;
+  vec RHSforSecondPart = xi_y - m_BmatTrans * x ; // \xi_y - B^T * x
+  vec y = m_FullCondPrecisionCmatChol.solve(RHSforSecondPart) ;
+  vec result(n + diffNrows) ;
+  result << x, y ;
+  return result ;
 }
