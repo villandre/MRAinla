@@ -658,15 +658,17 @@ void AugTree::ComputeLogFCandLogCDandDataLL() {
   fflush(stdout) ;
   vec responsesReshuffled = elem(m_dataset.responseValues.array(), m_obsOrderForFmat) ;
   mat scaledResponse = std::pow(m_errorSD, -2) * responsesReshuffled.transpose() * m_Hmat ;
-  Rcout << "Done! Computing secondTerm..." << std::endl ;
+  Rcout << "Done! Computing Qmat..." << std::endl ;
   fflush(stdout)  ;
-  sp_mat Qmat(m_Hmat.cols(), m_Hmat.cols()) ;
-  Qmat.selfadjointView<Lower>().rankUpdate(m_Hmat);
-  Qmat = std::pow(m_errorSD, -2) * Qmat ;
+  // sp_mat Qmat(m_Hmat.cols(), m_Hmat.cols()) ;
+  // Qmat.selfadjointView<Lower>().rankUpdate(m_Hmat);
+  // Qmat = std::pow(m_errorSD, -2) * Qmat ;
+
   // Qmat.triangularView<Upper>() = Qmat.transpose() ;
-  // sp_mat Qmat = std::pow(m_errorSD, -2) * (m_Hmat.transpose() * m_Hmat) ;
+  sp_mat Qmat = std::pow(m_errorSD, -2) * (m_Hmat.transpose() * m_Hmat) ;
   sp_mat SigmaFEandEtaInvLowerTri = m_SigmaFEandEtaInv.triangularView<Lower>() ;
   Qmat += SigmaFEandEtaInvLowerTri ;
+  Rcout << "Done! Computing Schur complement..." << std::endl ;
 
   // Preparing components of the Q matrix (Chol(C), Chol(Schur(C)))
 
@@ -675,7 +677,7 @@ void AugTree::ComputeLogFCandLogCDandDataLL() {
   uint diffNrows = Qmat.rows() - n ;
   m_BmatTrans = Qmat.bottomLeftCorner(n, diffNrows) ;
   std::vector<mat> CblocksVec = createBlockVec(Cmat) ;
-
+  printf("Schur complement matrix has %i rows, %i columns.\n\n", diffNrows, diffNrows) ;
   mat schurComplement = Qmat.topLeftCorner(diffNrows, diffNrows) ;
 
   uint BcolIndex = 0 ;
@@ -684,9 +686,10 @@ void AugTree::ComputeLogFCandLogCDandDataLL() {
     schurComplement -= subBmatrixTrans.transpose() * Cblock.selfadjointView<Lower>() * subBmatrixTrans ;
     BcolIndex += Cblock.rows() ;
   }
+  Rcout << "Done! Computing Cholesky for Schur complement..." << std::endl ;
   m_FullCondPrecisionCschurChol.compute(schurComplement.selfadjointView<Lower>()) ;
 
-  Rcout << "Done! analysing sparsity pattern..." << std::endl ;
+  Rcout << "Done! Computing Cholesky for C matrix..." << std::endl ;
   fflush(stdout) ;
   if (m_logFullCond == 0) { // This is the first iteration...
     try {
@@ -695,7 +698,6 @@ void AugTree::ComputeLogFCandLogCDandDataLL() {
       forward_exception_to_r(ex) ;
     }
   }
-  Rcout << "Done! Computing C matrix Chol..." << std::endl ;
   fflush(stdout) ;
   m_FullCondPrecisionCmatChol.factorize(Cmat.selfadjointView<Lower>()) ; // The sparsity pattern in matToInvert is always the same, notwithstand the hyperparameter values.
   ////////////////
@@ -860,6 +862,7 @@ void AugTree::ComputeFullCondSDsFE() {
 }
 
 vec AugTree::computeQinvVec(const vec & inputVec) {
+  cout << "Entered solve function! \n" ;
   uint n = m_dataset.responseValues.size() ;
   uint diffNrows = m_BmatTrans.cols() ;
 
@@ -880,5 +883,6 @@ vec AugTree::computeQinvVec(const vec & inputVec) {
   vec y = m_FullCondPrecisionCmatChol.solve(RHSforSecondPart) ;
   vec result(n + diffNrows) ;
   result << x, y ;
+  cout << "Leaving solve function! \n \n" ;
   return result ;
 }
