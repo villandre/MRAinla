@@ -832,6 +832,7 @@ void AugTree::SetMRAcovParasGammaAlphaBeta(const Rcpp::List & MRAcovParasList) {
 
 void AugTree::ComputeFullCondSDsFE() {
   m_FullCondSDs = vec::Zero(m_Hmat.cols()) ; // We only derive SDs for FEs to save time though.
+  #pragma omp parallel for
   for (uint i = 0; i < m_fixedEffParameters.size(); i++) {
     vec solveVector = vec::Zero(m_Hmat.cols()) ;
     solveVector(i) = 1 ;
