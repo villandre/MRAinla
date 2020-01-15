@@ -831,13 +831,11 @@ void AugTree::SetMRAcovParasGammaAlphaBeta(const Rcpp::List & MRAcovParasList) {
 }
 
 void AugTree::ComputeFullCondSDsFE() {
-  mat identityForSolve = mat::Identity(m_FullCondPrecisionChol.vectorD().size(), m_fixedEffParameters.size()) ;
-  m_FullCondPrecisionChol.matrixL().solveInPlace(identityForSolve) ;
-
-  vec invertedDiag = m_FullCondPrecisionChol.vectorD().array().pow(-1).matrix() ;
-
-  m_FullCondSDs = vec::Zero(m_FullCondPrecisionChol.vectorD().size()) ;
-  identityForSolve.noalias() = identityForSolve.array().pow(2).matrix() ;
-  vec varValues = identityForSolve * invertedDiag ;
-  m_FullCondSDs.segment(0, m_fixedEffParameters.size()) = varValues.array().pow(0.5) ;
+  m_FullCondSDs = vec::Zero(m_Hmat.cols()) ; // We only derive SDs for FEs to save time though.
+  for (uint i = 0; i < m_fixedEffParameters.size(); i++) {
+    vec solveVector = vec::Zero(m_Hmat.cols()) ;
+    solveVector(i) = 1 ;
+    vec matrixCol = m_FullCondPrecisionChol.solve(solveVector) ;
+    m_FullCondSDs(i) = pow(matrixCol(i), 0.5) ;
+  }
 }
