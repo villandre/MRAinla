@@ -679,7 +679,7 @@ void AugTree::ComputeLogFCandLogCDandDataLL() {
   Rcout << "Done! Scaling responses..." << std::endl ;
   fflush(stdout) ;
   vec responsesReshuffled = elem(m_dataset.responseValues.array(), m_obsOrderForFmat) ;
-  mat scaledResponse = std::pow(m_errorSD, -2) * responsesReshuffled.transpose() * m_Hmat ;
+  mat scaledResponse = std::pow(m_errorSD, -2) * m_Hmat.transpose() * responsesReshuffled ;
   Rcout << "Done! Computing secondTerm..." << std::endl ;
   fflush(stdout)  ;
   sp_mat secondTerm = std::pow(m_errorSD, -2) * (m_Hmat.transpose() * m_Hmat) ;
@@ -702,7 +702,7 @@ void AugTree::ComputeLogFCandLogCDandDataLL() {
   ComputeFullCondSDsFE() ;
   Rcout << "Done! Computing updated means..." << std::endl ;
   fflush(stdout) ;
-  vec updatedMean = m_FullCondPrecisionChol.solve(scaledResponse.transpose()) ;
+  vec updatedMean = m_FullCondPrecisionChol.solve(scaledResponse) ;
   if(m_FullCondPrecisionChol.info()!=Success) {
     // solving failed
     Rcpp::Rcout << "Solving failed!!!! \n" ;
