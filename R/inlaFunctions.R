@@ -323,7 +323,6 @@ ComputeMeanMarginalMoments <- function(hyperparaList, logISmodProbWeights) {
     sum(meanVector * exp(logISmodProbWeights))
   })
   marginalSecondMoments <- sapply(1:numMeanParas, function(paraIndex) {
-    browser()
     meanVector <- sapply(hyperparaList, function(x) x$FullCondMean[[paraIndex]])
     sdVector <- sapply(hyperparaList, function(x) x$FullCondSDs[[paraIndex]])
     secondMomentVec <- sdVector^2 + meanVector^2
