@@ -29,7 +29,7 @@
 #' }
 #' @export
 
-MRA_INLA <- function(spacetimeData, hyperStart, fixedHyperValues, hyperGammaAlphaBeta, FEmuVec, predictionData = NULL,  maximiseOnly = FALSE, control) {
+MRA_INLA <- function(spacetimeData, hyperStart, fixedHyperValues, hyperparsHyperpars, FEmuVec, predictionData = NULL,  maximiseOnly = FALSE, control) {
   # CHECKS #########################
   if (!is.null(predictionData)) {
     if (!identical(colnames(spacetimeData@data)[-1], colnames(predictionData@data))) {
@@ -109,11 +109,11 @@ MRA_INLA <- function(spacetimeData, hyperStart, fixedHyperValues, hyperGammaAlph
 
   covariateMatrix <- as.matrix(spacetimeData@data[, -1, drop = FALSE])
 
-  gridPointer <- setupGridCpp(responseValues = spacetimeData@data[, 1], spCoords = dataCoordinates, predCoords = predCoordinates, obsTime = timeValues, predTime = predTime, covariateMatrix = covariateMatrix, predCovariateMatrix = predCovariates, Mlon = control$Mlon, Mlat = control$Mlat, Mtime = control$Mtime, lonRange = control$lonRange, latRange = control$latRange, timeRange = timeRangeReshaped, randomSeed = control$randomSeed, cutForTimeSplit = control$cutForTimeSplit, splitTime = control$splitTime, numKnotsRes0 = control$numKnotsRes0, J = control$J, distMethod = control$distMethod, MaternParsHyperpars = hyperGammaAlphaBeta["space", "time", "scale"], fixedEffParsHyperpars = hyperGammaAlphaBeta$fixedEffSD, errorParsHyperpars = hyperGammaAlphaBeta$errorSD, FEmuVec = FEmuVec, nuggetSD = control$nuggetSD, normalPrior = control$normalPrior)$gridPointer
+  gridPointer <- setupGridCpp(responseValues = spacetimeData@data[, 1], spCoords = dataCoordinates, predCoords = predCoordinates, obsTime = timeValues, predTime = predTime, covariateMatrix = covariateMatrix, predCovariateMatrix = predCovariates, Mlon = control$Mlon, Mlat = control$Mlat, Mtime = control$Mtime, lonRange = control$lonRange, latRange = control$latRange, timeRange = timeRangeReshaped, randomSeed = control$randomSeed, cutForTimeSplit = control$cutForTimeSplit, splitTime = control$splitTime, numKnotsRes0 = control$numKnotsRes0, J = control$J, distMethod = control$distMethod, MaternParsHyperpars = hyperparsHyperpars["space", "time", "scale"], fixedEffParsHyperpars = hyperparsHyperpars$fixedEffSD, errorParsHyperpars = hyperparsHyperpars$errorSD, FEmuVec = FEmuVec, nuggetSD = control$nuggetSD, normalPrior = control$normalPrior)$gridPointer
 
   # First we compute values relating to the hyperprior marginal distribution...
 
-  computedValues <- obtainGridValues(gridPointer = gridPointer, hyperStart = hyperStart, hyperGammaAlphaBeta = hyperGammaAlphaBeta, fixedHyperValues = fixedHyperValues, FEmuVec = FEmuVec, predictionData = predictionData, timeBaseline = timeBaseline, maximiseOnly = maximiseOnly, control = control)
+  computedValues <- .obtainGridValues(gridPointer = gridPointer, hyperStart = hyperStart, fixedHyperValues = fixedHyperValues, predictionData = predictionData, timeBaseline = timeBaseline, maximiseOnly = maximiseOnly, control = control)
   if (maximiseOnly) {
     return(computedValues$output)
   }
@@ -143,32 +143,33 @@ MRA_INLA <- function(spacetimeData, hyperStart, fixedHyperValues, hyperGammaAlph
   outputList
 }
 
-obtainGridValues <- function(gridPointer, hyperStart, hyperGammaAlphaBeta, fixedHyperValues, FEmuVec, predictionData, timeBaseline, maximiseOnly = FALSE, control) {
+.obtainGridValues <- function(gridPointer, hyperStart, fixedHyperValues, predictionData, timeBaseline, maximiseOnly = FALSE, control) {
+  iterCounter <- 0
+  funForOptim <- function(xOnLogScale, envirToSaveValues, namesXstartValues) {
+    iterCounter <<- iterCounter + 1
+    cat("Performing evaluation ", iterCounter, ".\n")
+    names(xOnLogScale) <- namesXstartValues
+    xTrans <- exp(xOnLogScale)
+    hyperList <- .prepareHyperList(xTrans, fixedHyperValuesUnlisted = unlist(fixedHyperValues))
+    returnedValue <- -LogJointHyperMarginal(treePointer = gridPointer, hyperparaValues = hyperList, recordFullConditional = FALSE, processPredictions = FALSE)
+    returnX <- xOnLogScale
+    if (!control$normalPrior) returnX <- exp(xOnLogScale)
+    assign(x = "x", value = cbind(get(x = "x", envir = envirToSaveValues), returnX), envir = envirToSaveValues)
+    assign(x = "value", value = c(get(x = "value", envir = envirToSaveValues), -returnedValue), envir = envirToSaveValues)
+    returnedValue
+  }
 
+  gradForOptim <- function(x, envirToSaveValues, namesXstartValues) {
+    names(x) <- namesXstartValues
+    numDeriv::grad(func = funForOptim, x = x, method = "simple", envirToSaveValues = envirToSaveValues)
+  }
   # A short optimisation first...
   storageEnvir <- new.env()
   assign(x = "x", value = NULL, envir = storageEnvir)
   assign(x = "value", value = NULL, envir = storageEnvir)
-  iterCounter <- 0
+
+  # Remember that if the priors for hyperparameters are normal, starting values are given on the log-scale.
   xStartValues <- unlist(hyperStart)
-  fixedHyperValuesUnlisted <- unlist(fixedHyperValues)
-  funForOptim <- function(xOnLogScale, envirToSaveValues) {
-    iterCounter <<- iterCounter + 1
-    cat("Performing evaluation ", iterCounter, ".\n")
-    names(xOnLogScale) <- names(xStartValues)
-    xTrans <- exp(xOnLogScale)
-
-    hyperList <- .prepareHyperList(xTrans, fixedHyperValuesUnlisted = fixedHyperValuesUnlisted)
-
-    returnedValue <- -LogJointHyperMarginal(treePointer = gridPointer, hyperparaValues = hyperList, recordFullConditional = FALSE, processPredictions = FALSE)
-    assign(x = "x", value = cbind(get(x = "x", envir = envirToSaveValues), xTrans), envir = envirToSaveValues)
-    assign(x = "value", value = c(get(x = "value", envir = envirToSaveValues), -returnedValue), envir = envirToSaveValues)
-    returnedValue
-  }
-  gradForOptim <- function(x, envirToSaveValues) {
-    names(x) <- names(xStartValues)
-    numDeriv::grad(func = funForOptim, x = x, method = "simple", envirToSaveValues = envirToSaveValues)
-  }
 
   upperBound <- rep(Inf, length(xStartValues))
 
@@ -178,18 +179,27 @@ obtainGridValues <- function(gridPointer, hyperStart, hyperGammaAlphaBeta, fixed
   names(upperBound) <- names(xStartValues)
   cat("Optimising... \n")
   if (!tryCatch(file.exists(control$fileToSaveOptOutput), error = function(e) FALSE)) { # The tryCatch is necessary to ensure that an error does not occur if control$fileToSaveOptOutput is NULL. If it is undefined, we want the optimisation to take place.
-    opt <- nloptr::lbfgs(x0 = log(xStartValues), lower = rep(-10, length(xStartValues)), upper = upperBound, fn = funForOptim, gr = gradForOptim, control = list(xtol_rel = 1e-3, maxeval = control$numIterOptim), envirToSaveValues = storageEnvir)
+    x0val <- xStartValues
+    if (!control$normalPrior) {
+      x0val <- log(xStartValues)
+    }
+    opt <- nloptr::lbfgs(x0 = x0val, lower = rep(-10, length(xStartValues)), upper = upperBound, fn = funForOptim, gr = gradForOptim, control = list(xtol_rel = 1e-3, maxeval = control$numIterOptim), envirToSaveValues = storageEnvir, namesXstartValues = names(xStartValues))
+    solution <- opt$par
+    if (!control$normalPrior) {
+      solution <- exp(opt$par)
+    }
+    cat("Computing precision matrix at mode... \n")
+    precisionMat <- numDeriv::hessian(func = funForOptim, x = solution)
+    varCovar <- solve(precisionMat)
     if (!is.null(control$fileToSaveOptOutput)) {
       save(opt, file = control$fileToSaveOptOutput)
       filenameForEnvir <- paste(substr(control$fileToSaveOptOutput, start = 1, stop = gregexpr(pattern = ".Rdata", text = control$fileToSaveOptOutput)[[1]] - 1), "_Envir.Rdata", sep = "")
       save(storageEnvir, file = filenameForEnvir, compress = TRUE)
     }
-    cat("Optimised values:", exp(opt$par))
+    cat("Optimised values:", solution)
   } else {
     load(control$fileToSaveOptOutput)
-    # lastSlashPos <- tail(gregexpr(pattern = "/", text = control$fileToSaveOptOutput)[[1]], n = 1)
-    # directoryName <- substr(control$fileToSaveOptOutput, start = 1, stop = lastSlashPos)
-    # envirFilename <- list.files(path = directoryName, pattern = "_Envir.Rdata", full.names = TRUE)
+
     envirFilename <- paste(substr(control$fileToSaveOptOutput, start = 1, stop = gregexpr(pattern = ".Rdata", text = control$fileToSaveOptOutput)[[1]] - 1), "_Envir.Rdata", sep = "")
     load(envirFilename) # Restores storageEnvir
   }
@@ -199,64 +209,20 @@ obtainGridValues <- function(gridPointer, hyperStart, hyperGammaAlphaBeta, fixed
   }
 
   opt$value <- -opt$value # Correcting for the inversion used to maximise instead of minimise
-  sampleWeights <- exp(storageEnvir$value - max(storageEnvir$value, na.rm = TRUE))
-  sampleWeights <- sampleWeights/sum(sampleWeights, na.rm = TRUE)
-  if (any(is.na(sampleWeights))) {
-    warning("Warning: Optimiser recovered after producing NA values (probably after visiting a parameter combination on the boundaries. \n")
-  }
-  varCovar <- cov.wt(x = t(storageEnvir$x[, !is.na(sampleWeights)]), wt = sampleWeights[!is.na(sampleWeights)])$cov
-  solution <- exp(opt$par)
+  # sampleWeights <- exp(storageEnvir$value - max(storageEnvir$value, na.rm = TRUE))
+  # sampleWeights <- sampleWeights/sum(sampleWeights, na.rm = TRUE)
+  # if (any(is.na(sampleWeights))) {
+  #   warning("Warning: Optimiser recovered after producing NA values (probably after visiting a parameter combination on the boundaries. \n")
+  # }
+  # varCovar <- cov.wt(x = t(storageEnvir$x[, !is.na(sampleWeights)]), wt = sampleWeights[!is.na(sampleWeights)])$cov
+
   if (maximiseOnly) {
     names(solution) <- names(xStartValues)
     return(solution)
   }
 
-  gridFct <- function() {
-    smallMVR <- function() {
-      container <- NULL
-      repeat {
-        container <- drop(mvtnorm::rmvnorm(n = 1, mean = exp(opt$par), sigma = varCovar))
-        if (all(container > 0)) break
-      }
-      container
-    }
-    paraGrid <- t(replicate(n = control$numValuesForIS, expr = smallMVR()))
-    colnames(paraGrid) <- names(xStartValues)
-    output <- vector("list", length = nrow(paraGrid))
-    startAtIter <- 1
-    if (tryCatch(dir.exists(control$folderToSaveISpoints), error = function(e) FALSE)) {
-      cat("Loading previously processed IS points... \n")
-      loadResult <- lapply(list.files(control$folderToSaveISpoints, full.names = TRUE, pattern = "ISoutput"), function(x) get(load(x)))
-      output[1:length(loadResult)] <- loadResult
-      if (identical(control$IScompleted, TRUE)) { # If we indicate that the IS is completed, the function will simply stop sampling points and use saved points only.
-        output <- output[1:length(loadResult)]
-      }
-      startAtIter <- length(loadResult) + 1
-    }
-    if (startAtIter <= length(output)) {
-      for (i in startAtIter:length(output)) {
-        cat("Processing grid value ", i, "... \n")
-        output[[i]] <- funForGridEst(index = i, paraGrid = paraGrid, treePointer = gridPointer, hyperGammaAlphaBeta = hyperGammaAlphaBeta, fixedHyperValues = fixedHyperValues, FEmuVec = FEmuVec, predictionData = predictionData, timeBaseline = timeBaseline, computePrediction = TRUE, control = control)
-        if (!is.null(control$folderToSaveISpoints)) {
-          if (!dir.exists(control$folderToSaveISpoints)) {
-            dir.create(path = control$folderToSaveISpoints)
-          }
-          if (i == 1) { # On the first iteration, the vector to restore the order of predictions must be saved to allow for the predicted values to be re-ordered after a resume in which CreateHmatrixPred is not called. This situation occurs when we specify control$IScompleted=TRUE.
-            predOrder <- GetPredObsOrder(gridPointer)
-            filenameForPredOrder <- paste(control$folderToSaveISpoint, "/predObsOrder.Rdata", sep = "")
-            save(predOrder, file = filenameForPredOrder, compress = TRUE)
-          }
-          objectToSave <- output[[i]]
-          filename <- paste(control$folderToSaveISpoints, "/", "ISoutput", i, ".Rdata", sep = "")
-          save(objectToSave, file = filename, compress = TRUE)
-        }
-      }
-    }
-    # list(output = output, optimPoints = list(x = storageEnvir$x, value = storageEnvir$value))
-    list(output = output)
-  }
   cat("Running IS algorithm... \n")
-  valuesOnGrid <- gridFct()
+  valuesOnGrid <- .gridFct(distMode = solution, propVarCovar = varCovar, control = control, gridPointer = gridPointer, namesXstartValues = names(xStartValues), fixedHyperValues = fixedHyperValues, timeBaseline = timeBaseline)
   cat("IS algorithm completed... \n")
 
   keepIndices <- sapply(valuesOnGrid$output, function(x) class(x$logJointValue) == "numeric")
@@ -279,17 +245,64 @@ obtainGridValues <- function(gridPointer, hyperStart, hyperGammaAlphaBeta, fixed
   list(space = c(rho = paraValues[["space.rho"]], smoothness = paraValues[["space.smoothness"]]), time = c(rho = paraValues[["time.rho"]], smoothness = paraValues[["time.smoothness"]]), scale = paraValues[["scale"]], errorSD = paraValues[["error"]], fixedEffSD = paraValues[["fixed"]])
 }
 
-funForGridEst <- function(index, paraGrid, treePointer, predictionData, hyperGammaAlphaBeta, fixedHyperValues, FEmuVec, timeBaseline, computePrediction, control) {
-  x <- unlist(paraGrid[index, ])
+.gridFct <- function(distMode, propVarCovar, control, gridPointer, namesXstartValues, fixedHyperValues, timeBaseline) {
+  if (!control$normalPrior) {
+    smallMVR <- function() {
+      container <- NULL
+      repeat {
+        container <- drop(mvtnorm::rmvnorm(n = 1, mean = distMode, sigma = propVarCovar))
+        if (all(container > 0)) break
+      }
+      container
+    }
+    paraGrid <- t(replicate(n = control$numValuesForIS, expr = smallMVR()))
+  } else {
+    paraGrid <- mvtnorm::rmvnorm(n = control$numValuesForIS, mean = distMode, sigma = propVarCovar)
+  }
+  colnames(paraGrid) <- namesXstartValues
+  output <- vector("list", length = nrow(paraGrid))
+  startAtIter <- 1
+  if (tryCatch(dir.exists(control$folderToSaveISpoints), error = function(e) FALSE)) {
+    cat("Loading previously processed IS points... \n")
+    loadResult <- lapply(list.files(control$folderToSaveISpoints, full.names = TRUE, pattern = "ISoutput"), function(x) get(load(x)))
+    output[1:length(loadResult)] <- loadResult
+    if (identical(control$IScompleted, TRUE)) { # If we indicate that the IS is completed, the function will simply stop sampling points and use saved points only.
+      output <- output[1:length(loadResult)]
+    }
+    startAtIter <- length(loadResult) + 1
+  }
+  if (startAtIter <= length(output)) {
+    for (i in startAtIter:length(output)) {
+      cat("Processing grid value ", i, "... \n")
+      output[[i]] <- .funForGridEst(x = unlist(paraGrid[i, ]), treePointer = gridPointer, fixedHyperValues = fixedHyperValues, computePrediction = TRUE)
+      if (!is.null(control$folderToSaveISpoints)) {
+        if (!dir.exists(control$folderToSaveISpoints)) {
+          dir.create(path = control$folderToSaveISpoints)
+        }
+        if (i == 1) { # On the first iteration, the vector to restore the order of predictions must be saved to allow for the predicted values to be re-ordered after a resume in which CreateHmatrixPred is not called. This situation occurs when we specify control$IScompleted=TRUE.
+          predOrder <- GetPredObsOrder(gridPointer)
+          filenameForPredOrder <- paste(control$folderToSaveISpoint, "/predObsOrder.Rdata", sep = "")
+          save(predOrder, file = filenameForPredOrder, compress = TRUE)
+        }
+        objectToSave <- output[[i]]
+        filename <- paste(control$folderToSaveISpoints, "/", "ISoutput", i, ".Rdata", sep = "")
+        save(objectToSave, file = filename, compress = TRUE)
+      }
+    }
+  }
+  # list(output = output, optimPoints = list(x = storageEnvir$x, value = storageEnvir$value))
+  list(output = output)
+}
+
+.funForGridEst <- function(x, treePointer, fixedHyperValues, computePrediction) {
   fixedHyperValuesUnlisted <- unlist(fixedHyperValues)
   hyperList <- .prepareHyperList(hyperStartUnlisted = x, fixedHyperValuesUnlisted = fixedHyperValuesUnlisted)
 
   logJointValue <- tryCatch(expr = LogJointHyperMarginal(treePointer = treePointer, hyperparaValues = hyperList, recordFullConditional = FALSE, processPredictions = TRUE), error = function(e) e)
 
   aList <- list(x = x, errorSD = hyperList$errorSD, fixedEffSD = hyperList$fixedEffSD, MRAhyperparas = hyperList[c("space", "time", "scale")], logJointValue = logJointValue)
-  if (!is.null(predictionData) & computePrediction) {
-    timeValues <- as.integer(time(predictionData@time))/(3600*24) - timeBaseline # The division is to obtain values in days.
-    aList$CondPredStats <- ComputeCondPredStats(treePointer, predictionData@sp@coords, timeValues, as.matrix(predictionData@data))
+  if (computePrediction) {
+    aList$CondPredStats <- ComputeCondPredStats(treePointer)
   }
   # Running LogJointHyperMarginal stores in the tree pointed by gridPointer the full conditional mean and SDs when recordFullConditional = TRUE. We can get them with the simple functions I call now.
   aList$FullCondMean <- GetFullCondMean(treePointer)

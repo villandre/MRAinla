@@ -81,16 +81,13 @@ BEGIN_RCPP
 END_RCPP
 }
 // ComputeCondPredStats
-Rcpp::List ComputeCondPredStats(SEXP treePointer, NumericMatrix spCoordsForPredict, NumericVector timeForPredict, NumericMatrix covariateMatrixForPredict);
-RcppExport SEXP _MRAinla_ComputeCondPredStats(SEXP treePointerSEXP, SEXP spCoordsForPredictSEXP, SEXP timeForPredictSEXP, SEXP covariateMatrixForPredictSEXP) {
+Rcpp::List ComputeCondPredStats(SEXP treePointer);
+RcppExport SEXP _MRAinla_ComputeCondPredStats(SEXP treePointerSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
     Rcpp::traits::input_parameter< SEXP >::type treePointer(treePointerSEXP);
-    Rcpp::traits::input_parameter< NumericMatrix >::type spCoordsForPredict(spCoordsForPredictSEXP);
-    Rcpp::traits::input_parameter< NumericVector >::type timeForPredict(timeForPredictSEXP);
-    Rcpp::traits::input_parameter< NumericMatrix >::type covariateMatrixForPredict(covariateMatrixForPredictSEXP);
-    rcpp_result_gen = Rcpp::wrap(ComputeCondPredStats(treePointer, spCoordsForPredict, timeForPredict, covariateMatrixForPredict));
+    rcpp_result_gen = Rcpp::wrap(ComputeCondPredStats(treePointer));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -133,7 +130,7 @@ static const R_CallMethodDef CallEntries[] = {
     {"_MRAinla_LogJointHyperMarginalToWrap", (DL_FUNC) &_MRAinla_LogJointHyperMarginalToWrap, 6},
     {"_MRAinla_GetFullCondMean", (DL_FUNC) &_MRAinla_GetFullCondMean, 1},
     {"_MRAinla_GetFullCondSDs", (DL_FUNC) &_MRAinla_GetFullCondSDs, 1},
-    {"_MRAinla_ComputeCondPredStats", (DL_FUNC) &_MRAinla_ComputeCondPredStats, 4},
+    {"_MRAinla_ComputeCondPredStats", (DL_FUNC) &_MRAinla_ComputeCondPredStats, 1},
     {"_MRAinla_GetNumTips", (DL_FUNC) &_MRAinla_GetNumTips, 1},
     {"_MRAinla_GetPredObsOrder", (DL_FUNC) &_MRAinla_GetPredObsOrder, 1},
     {"_MRAinla_GetHmat", (DL_FUNC) &_MRAinla_GetHmat, 1},

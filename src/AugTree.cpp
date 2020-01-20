@@ -53,7 +53,8 @@ AugTree::AugTree(const uint & Mlon,
                  const double & nuggetSD,
                  const bool & normalPrior)
   : m_distMethod(distMethod), m_nuggetSD(nuggetSD),
-    m_Mlon(Mlon), m_Mlat(Mlat), m_Mtime(Mtime)
+    m_Mlon(Mlon), m_Mlat(Mlat), m_Mtime(Mtime),
+    m_normalPrior(normalPrior)
 {
   m_M = Mlon + Mlat + Mtime ;
   m_dataset = inputdata(observations, obsSp, obsTime, covariates) ;
@@ -640,6 +641,8 @@ void AugTree::ComputeLogPriors() {
   double logPrior = 0 ;
 
   for (auto & i : priorCombinations) {
+    double coef = i.first ;
+    if (m_normalPrior) coef = log(i.first) ; // The normal prior is applicable to log-hyperparameters.
     logPrior += i.second->computeLogDensity(i.first) ;
   }
 

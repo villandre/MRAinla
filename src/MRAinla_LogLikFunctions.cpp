@@ -130,8 +130,7 @@ Eigen::VectorXd GetFullCondSDs(SEXP treePointer) {
 
 // [[Rcpp::export]]
 
-Rcpp::List ComputeCondPredStats(SEXP treePointer, NumericMatrix spCoordsForPredict, NumericVector timeForPredict,
-                                 NumericMatrix covariateMatrixForPredict) {
+Rcpp::List ComputeCondPredStats(SEXP treePointer) {
   vec Evar, Hmean ;
   if (!(treePointer == NULL))
   {
