@@ -183,7 +183,7 @@ private:
   int m_numTips{ 0 } ;
   double m_errorSD{ 0 } ;
   double m_fixedEffSD{ 0 } ;
-  bool m_normalPrior{ false } ;
+  bool m_normalHyperprior{ false } ;
 
   std::unique_ptr<TwoParsProbDist> m_MaternParsHyperparsRhoSpace ;
   std::unique_ptr<TwoParsProbDist> m_MaternParsHyperparsSmoothnessSpace ;

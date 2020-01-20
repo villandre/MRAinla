@@ -51,10 +51,10 @@ AugTree::AugTree(const uint & Mlon,
                  const Rcpp::NumericVector & errorParsHyperpars,
                  const Rcpp::NumericVector & FEmuVec,
                  const double & nuggetSD,
-                 const bool & normalPrior)
+                 const bool & normalHyperprior)
   : m_distMethod(distMethod), m_nuggetSD(nuggetSD),
     m_Mlon(Mlon), m_Mlat(Mlat), m_Mtime(Mtime),
-    m_normalPrior(normalPrior)
+    m_normalHyperprior(normalHyperprior)
 {
   m_M = Mlon + Mlat + Mtime ;
   m_dataset = inputdata(observations, obsSp, obsTime, covariates) ;
@@ -88,7 +88,7 @@ AugTree::AugTree(const uint & Mlon,
     i->SetPredictLocations(m_predictData) ;
   }
 
-  SetParsHyperpars(STparsHyperpars, fixedEffParsHyperpars, errorParsHyperpars, normalPrior) ;
+  SetParsHyperpars(STparsHyperpars, fixedEffParsHyperpars, errorParsHyperpars, normalHyperprior) ;
 
   m_FEmu = Rcpp::as<vec>(FEmuVec) ;
   // for (auto & i : m_vertexVector) {
@@ -642,7 +642,7 @@ void AugTree::ComputeLogPriors() {
 
   for (auto & i : priorCombinations) {
     double coef = i.first ;
-    if (m_normalPrior) coef = log(i.first) ; // The normal prior is applicable to log-hyperparameters.
+    if (m_normalHyperprior) coef = log(i.first) ; // The normal prior is applicable to log-hyperparameters.
     logPrior += i.second->computeLogDensity(i.first) ;
   }
 
@@ -837,11 +837,11 @@ void AugTree::ComputeFullCondSDsFE() {
 void AugTree::SetParsHyperpars(const Rcpp::List & MaternParsHyperparsList,
                                const Rcpp::NumericVector & fixedEffsParsHyperpars,
                                const Rcpp::NumericVector & errorParsHyperpars,
-                               const bool normalPrior) {
+                               const bool normalHyperprior) {
   Rcpp::List spaceParas = Rcpp::as<Rcpp::List>(MaternParsHyperparsList["space"]) ;
   Rcpp::List timeParas = Rcpp::as<Rcpp::List>(MaternParsHyperparsList["time"]) ;
 
-  if (normalPrior) { // How can this be improved? Very redundant...
+  if (normalHyperprior) { // How can this be improved? Very redundant...
     m_MaternParsHyperparsScaling = std::unique_ptr<NormalDist>(new NormalDist(Rcpp::as<vec>(MaternParsHyperparsList["scale"]))) ;
     m_MaternParsHyperparsRhoSpace = std::unique_ptr<NormalDist>(new NormalDist(Rcpp::as<vec>(spaceParas["rho"]))) ;
     m_MaternParsHyperparsSmoothnessSpace = std::unique_ptr<NormalDist>(new NormalDist(Rcpp::as<vec>(spaceParas["smoothness"]))) ;

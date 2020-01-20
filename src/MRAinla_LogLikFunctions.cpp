@@ -22,7 +22,7 @@ List setupGridCpp(NumericVector responseValues, NumericMatrix spCoords, NumericM
                   Rcpp::List MaternParsHyperpars, Rcpp::NumericVector fixedEffParsHyperpars,
                   NumericVector errorParsHyperpars,
                   Rcpp::NumericVector FEmuVec,
-                  double nuggetSD, bool normalPrior)
+                  double nuggetSD, bool normalHyperprior)
 {
   ArrayXd lonRinit = as<ArrayXd>(lonRange) ;
   ArrayXd latRinit = as<ArrayXd>(latRange) ;
@@ -54,7 +54,7 @@ List setupGridCpp(NumericVector responseValues, NumericMatrix spCoords, NumericM
                                   MaternParsHyperpars, fixedEffParsHyperpars, errorParsHyperpars,
                                   FEmuVec,
                                   nuggetSD,
-                                  normalPrior) ;
+                                  normalHyperprior) ;
   XPtr<AugTree> p(MRAgrid, false) ; // Disabled automatic garbage collection.
   return List::create(Named("gridPointer") = p) ;
 }

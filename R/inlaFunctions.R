@@ -29,7 +29,7 @@
 #' }
 #' @export
 
-MRA_INLA <- function(spacetimeData, hyperStart, fixedHyperValues, hyperparsHyperpars, FEmuVec, predictionData = NULL,  maximiseOnly = FALSE, control) {
+MRA_INLA <- function(spacetimeData, hyperStart, fixedHyperValues, hyperpriorPars, FEmuVec, predictionData = NULL,  maximiseOnly = FALSE, control) {
   # CHECKS #########################
   if (!is.null(predictionData)) {
     if (!identical(colnames(spacetimeData@data)[-1], colnames(predictionData@data))) {
@@ -38,7 +38,7 @@ MRA_INLA <- function(spacetimeData, hyperStart, fixedHyperValues, hyperparsHyper
   }
   ##################################
   # DEFINING CONTROL PARA.##########
-  defaultControl <- list(Mlon = 1, Mlat = 1, Mtime = 1, randomSeed = 24,  cutForTimeSplit = 400, nuggetSD = 0.00001, splitTime = FALSE, numKnotsRes0 = 20L, J = 4L, numValuesForIS = 200, numIterOptim = 200L, distMethod = "haversine", normalPrior = FALSE)
+  defaultControl <- list(Mlon = 1, Mlat = 1, Mtime = 1, randomSeed = 24,  cutForTimeSplit = 400, nuggetSD = 0.00001, splitTime = FALSE, numKnotsRes0 = 20L, J = 4L, numValuesForIS = 200, numIterOptim = 200L, distMethod = "haversine", normalHyperprior = FALSE)
   if (length(position <- grep(colnames(spacetimeData@sp@coords), pattern = "lon")) >= 1) {
     colnames(spacetimeData@sp@coords)[[position[[1]]]] <- "x"
     if (!is.null(predictionData)) {
@@ -109,7 +109,7 @@ MRA_INLA <- function(spacetimeData, hyperStart, fixedHyperValues, hyperparsHyper
 
   covariateMatrix <- as.matrix(spacetimeData@data[, -1, drop = FALSE])
 
-  gridPointer <- setupGridCpp(responseValues = spacetimeData@data[, 1], spCoords = dataCoordinates, predCoords = predCoordinates, obsTime = timeValues, predTime = predTime, covariateMatrix = covariateMatrix, predCovariateMatrix = predCovariates, Mlon = control$Mlon, Mlat = control$Mlat, Mtime = control$Mtime, lonRange = control$lonRange, latRange = control$latRange, timeRange = timeRangeReshaped, randomSeed = control$randomSeed, cutForTimeSplit = control$cutForTimeSplit, splitTime = control$splitTime, numKnotsRes0 = control$numKnotsRes0, J = control$J, distMethod = control$distMethod, MaternParsHyperpars = hyperparsHyperpars["space", "time", "scale"], fixedEffParsHyperpars = hyperparsHyperpars$fixedEffSD, errorParsHyperpars = hyperparsHyperpars$errorSD, FEmuVec = FEmuVec, nuggetSD = control$nuggetSD, normalPrior = control$normalPrior)$gridPointer
+  gridPointer <- setupGridCpp(responseValues = spacetimeData@data[, 1], spCoords = dataCoordinates, predCoords = predCoordinates, obsTime = timeValues, predTime = predTime, covariateMatrix = covariateMatrix, predCovariateMatrix = predCovariates, Mlon = control$Mlon, Mlat = control$Mlat, Mtime = control$Mtime, lonRange = control$lonRange, latRange = control$latRange, timeRange = timeRangeReshaped, randomSeed = control$randomSeed, cutForTimeSplit = control$cutForTimeSplit, splitTime = control$splitTime, numKnotsRes0 = control$numKnotsRes0, J = control$J, distMethod = control$distMethod, MaternParsHyperpars = hyperpriorPars["space", "time", "scale"], fixedEffParsHyperpars = hyperpriorPars$fixedEffSD, errorParsHyperpars = hyperpriorPars$errorSD, FEmuVec = FEmuVec, nuggetSD = control$nuggetSD, normalHyperprior = control$normalHyperprior)$gridPointer
 
   # First we compute values relating to the hyperprior marginal distribution...
 
@@ -150,10 +150,14 @@ MRA_INLA <- function(spacetimeData, hyperStart, fixedHyperValues, hyperparsHyper
     cat("Performing evaluation ", iterCounter, ".\n")
     names(xOnLogScale) <- namesXstartValues
     xTrans <- exp(xOnLogScale)
-    hyperList <- .prepareHyperList(xTrans, fixedHyperValuesUnlisted = unlist(fixedHyperValues))
+    unlistedFixedHyperValues <- unlist(fixedHyperValues)
+    if (control$normalHyperprior) {
+      unlistedFixedHyperValues <- exp(unlistedFixedHyperValues)
+    }
+    hyperList <- .prepareHyperList(xTrans, fixedHyperValuesUnlisted = unlistedFixedHyperValues)
     returnedValue <- -LogJointHyperMarginal(treePointer = gridPointer, hyperparaValues = hyperList, recordFullConditional = FALSE, processPredictions = FALSE)
     returnX <- xOnLogScale
-    if (!control$normalPrior) returnX <- exp(xOnLogScale)
+    if (!control$normalHyperprior) returnX <- exp(xOnLogScale)
     assign(x = "x", value = cbind(get(x = "x", envir = envirToSaveValues), returnX), envir = envirToSaveValues)
     assign(x = "value", value = c(get(x = "value", envir = envirToSaveValues), -returnedValue), envir = envirToSaveValues)
     returnedValue
@@ -180,12 +184,12 @@ MRA_INLA <- function(spacetimeData, hyperStart, fixedHyperValues, hyperparsHyper
   cat("Optimising... \n")
   if (!tryCatch(file.exists(control$fileToSaveOptOutput), error = function(e) FALSE)) { # The tryCatch is necessary to ensure that an error does not occur if control$fileToSaveOptOutput is NULL. If it is undefined, we want the optimisation to take place.
     x0val <- xStartValues
-    if (!control$normalPrior) {
+    if (!control$normalHyperprior) {
       x0val <- log(xStartValues)
     }
     opt <- nloptr::lbfgs(x0 = x0val, lower = rep(-10, length(xStartValues)), upper = upperBound, fn = funForOptim, gr = gradForOptim, control = list(xtol_rel = 1e-3, maxeval = control$numIterOptim), envirToSaveValues = storageEnvir, namesXstartValues = names(xStartValues))
     solution <- opt$par
-    if (!control$normalPrior) {
+    if (!control$normalHyperprior) {
       solution <- exp(opt$par)
     }
     cat("Computing precision matrix at mode... \n")
@@ -246,7 +250,7 @@ MRA_INLA <- function(spacetimeData, hyperStart, fixedHyperValues, hyperparsHyper
 }
 
 .gridFct <- function(distMode, ISvarCovar, gridPointer, namesXstartValues, fixedHyperValues, control) {
-  if (!control$normalPrior) {
+  if (!control$normalHyperprior) {
     smallMVR <- function() {
       container <- NULL
       repeat {
@@ -276,7 +280,7 @@ MRA_INLA <- function(spacetimeData, hyperStart, fixedHyperValues, hyperparsHyper
       cat("Processing grid value ", i, "... \n")
       xVec <- do.call("c", unlist(paraGrid[i ,]))
       names(xVec) <- colnames(paraGrid)
-      if (control$normalPrior) {
+      if (control$normalHyperprior) {
         xVec <- exp(xVec)
       }
       output[[i]] <- .funForGridEst(xNonLogScale = xVec, treePointer = gridPointer, fixedHyperValues = fixedHyperValues, computePrediction = TRUE)
@@ -301,11 +305,14 @@ MRA_INLA <- function(spacetimeData, hyperStart, fixedHyperValues, hyperparsHyper
 
 .funForGridEst <- function(xNonLogScale, treePointer, fixedHyperValues, computePrediction, control) {
   fixedHyperValuesUnlisted <- unlist(fixedHyperValues)
+  if (control$normalHyperprior) {
+    fixedHyperValuesUnlisted <- exp(fixedHyperValuesUnlisted)
+  }
   hyperList <- .prepareHyperList(hyperStartUnlisted = xNonLogScale, fixedHyperValuesUnlisted = fixedHyperValuesUnlisted)
 
   logJointValue <- tryCatch(expr = LogJointHyperMarginal(treePointer = treePointer, hyperparaValues = hyperList, recordFullConditional = FALSE, processPredictions = TRUE), error = function(e) e)
   x <- xNonLogScale
-  if (control$normalPrior) {
+  if (control$normalHyperprior) {
     x <- log(xNonLogScale)
     hyperList$fixedEffSD <- log(hyperList$fixedEffSD)
     hyperList$errorSD <- log(hyperList$errorSD)
