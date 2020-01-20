@@ -38,7 +38,7 @@ MRA_INLA <- function(spacetimeData, hyperStart, fixedHyperValues, hyperGammaAlph
   }
   ##################################
   # DEFINING CONTROL PARA.##########
-  defaultControl <- list(Mlon = 1, Mlat = 1, Mtime = 1, randomSeed = 24,  cutForTimeSplit = 400, nuggetSD = 0.00001, splitTime = FALSE, numKnotsRes0 = 20L, J = 4L, numValuesForIS = 200, numIterOptim = 200L, distMethod = "haversine")
+  defaultControl <- list(Mlon = 1, Mlat = 1, Mtime = 1, randomSeed = 24,  cutForTimeSplit = 400, nuggetSD = 0.00001, splitTime = FALSE, numKnotsRes0 = 20L, J = 4L, numValuesForIS = 200, numIterOptim = 200L, distMethod = "haversine", normalPrior = FALSE)
   if (length(position <- grep(colnames(spacetimeData@sp@coords), pattern = "lon")) >= 1) {
     colnames(spacetimeData@sp@coords)[[position[[1]]]] <- "x"
     if (!is.null(predictionData)) {
@@ -109,7 +109,7 @@ MRA_INLA <- function(spacetimeData, hyperStart, fixedHyperValues, hyperGammaAlph
 
   covariateMatrix <- as.matrix(spacetimeData@data[, -1, drop = FALSE])
 
-  gridPointer <- setupGridCpp(responseValues = spacetimeData@data[, 1], spCoords = dataCoordinates, predCoords = predCoordinates, obsTime = timeValues, predTime = predTime, covariateMatrix = covariateMatrix, predCovariateMatrix = predCovariates, Mlon = control$Mlon, Mlat = control$Mlat, Mtime = control$Mtime, lonRange = control$lonRange, latRange = control$latRange, timeRange = timeRangeReshaped, randomSeed = control$randomSeed, cutForTimeSplit = control$cutForTimeSplit, splitTime = control$splitTime, numKnotsRes0 = control$numKnotsRes0, J = control$J, distMethod = control$distMethod)$gridPointer
+  gridPointer <- setupGridCpp(responseValues = spacetimeData@data[, 1], spCoords = dataCoordinates, predCoords = predCoordinates, obsTime = timeValues, predTime = predTime, covariateMatrix = covariateMatrix, predCovariateMatrix = predCovariates, Mlon = control$Mlon, Mlat = control$Mlat, Mtime = control$Mtime, lonRange = control$lonRange, latRange = control$latRange, timeRange = timeRangeReshaped, randomSeed = control$randomSeed, cutForTimeSplit = control$cutForTimeSplit, splitTime = control$splitTime, numKnotsRes0 = control$numKnotsRes0, J = control$J, distMethod = control$distMethod, STparsHyperpars = hyperGammaAlphaBeta["space", "time", "scale"], fixedEffParsHyperpars = hyperGammaAlphaBeta$fixedEffSD, errorParsHyperpars = hyperGammaAlphaBeta$errorSD, FEmuVec = FEmuVec, nuggetSD = control$nuggetSD, normalPrior = control$normalPrior)$gridPointer
 
   # First we compute values relating to the hyperprior marginal distribution...
 
@@ -160,7 +160,7 @@ obtainGridValues <- function(gridPointer, hyperStart, hyperGammaAlphaBeta, fixed
 
     hyperList <- .prepareHyperList(xTrans, fixedHyperValuesUnlisted = fixedHyperValuesUnlisted)
 
-    returnedValue <- -LogJointHyperMarginal(treePointer = gridPointer, hyperparaValues = hyperList, hyperGammaAlphaBeta = hyperGammaAlphaBeta, FEmuVec = FEmuVec, spaceNuggetSD = control$nuggetSD, timeNuggetSD = control$nuggetSD, recordFullConditional = FALSE, processPredictions = FALSE)
+    returnedValue <- -LogJointHyperMarginal(treePointer = gridPointer, hyperparaValues = hyperList, hyperGammaAlphaBeta = hyperGammaAlphaBeta, recordFullConditional = FALSE, processPredictions = FALSE)
     assign(x = "x", value = cbind(get(x = "x", envir = envirToSaveValues), xTrans), envir = envirToSaveValues)
     assign(x = "value", value = c(get(x = "value", envir = envirToSaveValues), -returnedValue), envir = envirToSaveValues)
     returnedValue
@@ -284,7 +284,7 @@ funForGridEst <- function(index, paraGrid, treePointer, predictionData, hyperGam
   fixedHyperValuesUnlisted <- unlist(fixedHyperValues)
   hyperList <- .prepareHyperList(hyperStartUnlisted = x, fixedHyperValuesUnlisted = fixedHyperValuesUnlisted)
 
-  logJointValue <- tryCatch(expr = LogJointHyperMarginal(treePointer = treePointer, hyperparaValues = hyperList, hyperGammaAlphaBeta = hyperGammaAlphaBeta, FEmuVec = FEmuVec, spaceNuggetSD = control$nuggetSD, timeNuggetSD = control$nuggetSD, recordFullConditional = FALSE, processPredictions = TRUE), error = function(e) e)
+  logJointValue <- tryCatch(expr = LogJointHyperMarginal(treePointer = treePointer, hyperparaValues = hyperList, hyperGammaAlphaBeta = hyperGammaAlphaBeta, recordFullConditional = FALSE, processPredictions = TRUE), error = function(e) e)
 
   aList <- list(x = x, errorSD = hyperList$errorSD, fixedEffSD = hyperList$fixedEffSD, MRAhyperparas = hyperList[c("space", "time", "scale")], logJointValue = logJointValue)
   if (!is.null(predictionData) & computePrediction) {
@@ -375,6 +375,6 @@ maternCov <- function(d, rho, smoothness, scale) {
   con * dScaled^smoothness * besselK(dScaled, smoothness)
 }
 
-LogJointHyperMarginal <- function(treePointer, hyperparaValues, hyperGammaAlphaBeta, FEmuVec, spaceNuggetSD, timeNuggetSD, recordFullConditional, processPredictions = FALSE) {
-  LogJointHyperMarginalToWrap(treePointer = treePointer, MRAhyperparas = hyperparaValues[c("space", "time", "scale")], fixedEffSD = hyperparaValues$fixedEffSD, errorSD = hyperparaValues$errorSD, MRAcovParasGammaAlphaBeta = hyperGammaAlphaBeta[c("space", "time", "scale")], FEmuVec = FEmuVec, fixedEffGammaAlphaBeta = hyperGammaAlphaBeta$fixedEffSD, errorGammaAlphaBeta = hyperGammaAlphaBeta$errorSD, spaceNuggetSD = spaceNuggetSD, timeNuggetSD = timeNuggetSD, recordFullConditional = TRUE, processPredictions = processPredictions)
+LogJointHyperMarginal <- function(treePointer, hyperparaValues, hyperGammaAlphaBeta, FEmuVec, recordFullConditional, processPredictions = FALSE) {
+  LogJointHyperMarginalToWrap(treePointer = treePointer, MRAhyperparas = hyperparaValues[c("space", "time", "scale")], fixedEffSD = hyperparaValues$fixedEffSD, errorSD = hyperparaValues$errorSD, recordFullConditional = TRUE, processPredictions = processPredictions)
 }

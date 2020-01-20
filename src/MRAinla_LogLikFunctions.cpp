@@ -18,7 +18,11 @@ List setupGridCpp(NumericVector responseValues, NumericMatrix spCoords, NumericM
                   NumericMatrix predCovariateMatrix, uint Mlon, uint Mlat, uint Mtime,
                   NumericVector lonRange, NumericVector latRange, NumericVector timeRange,
                   uint randomSeed, uint cutForTimeSplit, bool splitTime,
-                  int numKnotsRes0, double J, String distMethod)
+                  int numKnotsRes0, double J, String distMethod,
+                  Rcpp::List STparsHyperpars, Rcpp::NumericVector fixedEffParsHyperpars,
+                  NumericVector errorParsHyperpars,
+                  Rcpp::NumericVector FEmuVec,
+                  double nuggetSD, bool normalPrior)
 {
   ArrayXd lonRinit = as<ArrayXd>(lonRange) ;
   ArrayXd latRinit = as<ArrayXd>(latRange) ;
@@ -38,56 +42,52 @@ List setupGridCpp(NumericVector responseValues, NumericMatrix spCoords, NumericM
 
   ArrayXXd covariateMat = as<ArrayXXd>(covariateMatrix) ;
 
-  AugTree * MRAgrid = new AugTree(Mlon, Mlat, Mtime, lonR, latR, timeR, response, sp, time, predCovariates, predSp, predTimeVec, cutForTimeSplit, seedForRNG, covariateMat, splitTime, numKnotsRes0, J, dMethod) ;
-
+  AugTree * MRAgrid = new AugTree(Mlon, Mlat, Mtime,
+                                  lonR, latR, timeR,
+                                  response, sp, time,
+                                  predCovariates, predSp, predTimeVec,
+                                  cutForTimeSplit,
+                                  seedForRNG,
+                                  covariateMat,
+                                  splitTime, numKnotsRes0, J,
+                                  dMethod,
+                                  STparsHyperpars, fixedEffParsHyperpars, errorParsHyperpars,
+                                  FEmuVec,
+                                  nuggetSD,
+                                  normalPrior) ;
   XPtr<AugTree> p(MRAgrid, false) ; // Disabled automatic garbage collection.
-
   return List::create(Named("gridPointer") = p) ;
 }
 
 // [[Rcpp::export]]
 
 double LogJointHyperMarginalToWrap(SEXP treePointer, Rcpp::List MRAhyperparas,
-         double fixedEffSD, double errorSD, Rcpp::List MRAcovParasGammaAlphaBeta,
-         Rcpp::NumericVector FEmuVec, NumericVector fixedEffGammaAlphaBeta,
-         NumericVector errorGammaAlphaBeta, double spaceNuggetSD,
-         double timeNuggetSD, bool recordFullConditional, bool processPredictions) {
+         double fixedEffSD, double errorSD, bool recordFullConditional,
+         bool processPredictions) {
   mat posteriorMatrix ;
   double outputValue = 0 ;
 
   // if (!(treePointer == NULL))
   // {
-    XPtr<AugTree> pointedTree(treePointer) ; // Becomes a regular pointer again.
 
-    // The alpha's and beta's for the gamma distribution of the hyperparameters do not change.
-    if (!pointedTree->CheckMRAcovParasGammaAlphaBeta()) {
-      pointedTree->ToggleGammaParasSet() ;
-      pointedTree->SetMRAcovParasGammaAlphaBeta(MRAcovParasGammaAlphaBeta) ;
+  XPtr<AugTree> pointedTree(treePointer) ; // Becomes a regular pointer again.
 
-      vec fixedEffAlphaBeta = Rcpp::as<vec>(fixedEffGammaAlphaBeta) ;
-      vec errorAlphaBeta = Rcpp::as<vec>(errorGammaAlphaBeta) ;
-      vec FEmu = Rcpp::as<vec>(FEmuVec) ;
+  std::vector<TreeNode *> tipNodes = pointedTree->GetLevelNodes(pointedTree->GetM()) ;
 
-      pointedTree->SetFixedEffGammaAlphaBeta(GammaHyperParas(fixedEffAlphaBeta(0), fixedEffAlphaBeta(1))) ;
-      pointedTree->SetErrorGammaAlphaBeta(GammaHyperParas(errorAlphaBeta(0), errorAlphaBeta(1))) ;
-      pointedTree->SetFEmu(FEmu) ;
-      pointedTree->SetSpaceAndTimeNuggetSD(spaceNuggetSD, timeNuggetSD) ;
-      std::vector<TreeNode *> tipNodes = pointedTree->GetLevelNodes(pointedTree->GetM()) ;
-      for (auto & i : tipNodes) {
-        i->SetUncorrSD(0.001) ; // Is this a nugget effect?
-      }
-    }
-    pointedTree->SetErrorSD(errorSD) ;
-    pointedTree->SetFixedEffSD(fixedEffSD) ;
+  for (auto & i : tipNodes) {
+    i->SetUncorrSD(0.001) ; // Is this a nugget effect?
+  }
 
-    pointedTree->SetMRAcovParas(MRAhyperparas) ;
-    pointedTree->SetRecordFullConditional(recordFullConditional) ;
-    pointedTree->SetProcessPredictions(processPredictions) ;
+  pointedTree->SetErrorSD(errorSD) ;
+  pointedTree->SetFixedEffSD(fixedEffSD) ;
 
-    pointedTree->ComputeLogJointPsiMarginal() ;
+  pointedTree->SetRecordFullConditional(recordFullConditional) ;
+  pointedTree->SetProcessPredictions(processPredictions) ;
 
-    outputValue = pointedTree->GetLogJointPsiMarginal() ;
-    // Rprintf("Marginal joint Psi: %.4e \n \n \n", pointedTree->GetLogJointPsiMarginal()) ;
+  pointedTree->ComputeLogJointPsiMarginal() ;
+
+  outputValue = pointedTree->GetLogJointPsiMarginal() ;
+  // Rprintf("Marginal joint Psi: %.4e \n \n \n", pointedTree->GetLogJointPsiMarginal()) ;
   // }
   // else
   // {

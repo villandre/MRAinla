@@ -3,44 +3,86 @@
 #ifndef MYPROJECT_AUGTREE_H
 #define MYPROJECT_AUGTREE_H
 
-struct GammaHyperParas{
-  // Default IG mean is 1 (mean = beta/(alpha - 1)), var is beta^2/[(alpha-1)^2(alpha-2)]
-  // If alpha <= 2, variance is infinite,
-  double m_alpha = 3;
-  double m_beta = 2;
-  GammaHyperParas() {}
-  GammaHyperParas(double alpha, double beta) : m_alpha(alpha), m_beta(beta) { }
-  GammaHyperParas(const Eigen::VectorXd & alphaBeta) {
-    m_alpha = alphaBeta(0) ;
-    m_beta = alphaBeta(1) ;
+struct TwoParsProbDist{
+  double m_firstPar ;
+  double m_secondPar ;
+
+  void baseInitialise(const Eigen::ArrayXd & twoParsArray) {
+    m_firstPar = twoParsArray(0) ;
+    m_secondPar = twoParsArray(1) ;
+  }
+  void baseInitialise(const double & a, const double & b) {
+    m_firstPar = a ;
+    m_secondPar = b ;
+  }
+  virtual double computeLogDensity(const double x) const = 0;
+
+  virtual ~ TwoParsProbDist() { } ;
+};
+
+struct GammaDist : public TwoParsProbDist {
+  GammaDist() { }
+  GammaDist(double alpha, double beta) {
+    baseInitialise(alpha, beta) ;
+  }
+
+  GammaDist(const Eigen::ArrayXd & alphaBeta) {
+    baseInitialise(alphaBeta) ;
+  }
+
+  double computeLogDensity(const double x)  const override {
+    double value = (m_firstPar - 1) * log(x) - x * m_secondPar + m_firstPar * log(m_secondPar) - lgamma(m_firstPar) ;
+    return value ;
   }
 };
 
-struct maternGammaPriorParasWithoutScale{
-  GammaHyperParas m_rho ;
-  GammaHyperParas m_smoothness ;
+struct NormalDist : public TwoParsProbDist {
+  NormalDist() { }
+  NormalDist(double mu, double sigma) {
+    baseInitialise(mu, sigma) ;
+  }
+  NormalDist(const Eigen::ArrayXd & muSigma) {
+    baseInitialise(muSigma) ;
+  }
 
-  maternGammaPriorParasWithoutScale() { }
-  maternGammaPriorParasWithoutScale(const GammaHyperParas & rho, const GammaHyperParas & smoothness) : m_rho(rho), m_smoothness(smoothness) { }
+  double computeLogDensity(const double x) const override {
+    double value = -log(m_secondPar) - 0.5 * (log(2) + log(PI)) - 0.5 * pow(x - m_firstPar, 2) * pow(m_secondPar, -2) ;
+    return value ;
+  }
 };
-
-struct maternGammaPriorParas : public maternGammaPriorParasWithoutScale{
-  GammaHyperParas m_scale ;
-
-  maternGammaPriorParas(const GammaHyperParas & rho, const GammaHyperParas & smoothness, const GammaHyperParas & scale) : maternGammaPriorParasWithoutScale(rho, smoothness), m_scale(scale) { } ;
-};
-
 
 namespace MRAinla {
 
 class AugTree
 {
 public:
-  AugTree(uint &, uint &, uint &, Eigen::Array2d &, Eigen::Array2d &, Eigen::Array2d &, vec &, Eigen::ArrayXXd &, Eigen::ArrayXd &, Eigen::ArrayXXd &, Eigen::ArrayXXd &, Eigen::ArrayXd &, uint &, unsigned long int &, Eigen::ArrayXXd &, const bool, const unsigned int, double, const std::string &) ;
+  AugTree(const uint &,
+          const uint &,
+          const uint &,
+          const Eigen::Array2d &,
+          const Eigen::Array2d &,
+          const Eigen::Array2d &,
+          const vec &,
+          const Eigen::ArrayXXd &,
+          const Eigen::ArrayXd &,
+          const Eigen::ArrayXXd &,
+          const Eigen::ArrayXXd &,
+          const Eigen::ArrayXd &,
+          const uint &,
+          const unsigned long int &,
+          const Eigen::ArrayXXd &,
+          const bool &,
+          const unsigned int &,
+          const double &,
+          const std::string &,
+          const Rcpp::List &,
+          const Rcpp::NumericVector &,
+          const Rcpp::NumericVector &,
+          const Rcpp::NumericVector &,
+          const double &,
+          const bool &) ;
 
   std::vector<TreeNode *> GetVertexVector() {return m_vertexVector ;} ;
-
-  std::vector<GaussDistParas> ComputeConditionalPrediction(const inputdata &) ;
 
   void ComputeLogFCandLogCDandDataLL() ;
   void ComputeLogPriors() ;
@@ -69,7 +111,8 @@ public:
     }
     m_errorSD = errorSD ;
   }
-  void SetMRAcovParas(const Rcpp::List &) ;
+  void SetMaternPars(const Rcpp::List &) ;
+
   void SetProcessPredictions(bool processPredictions) {
     m_processPredictions = processPredictions ;
   }
@@ -77,13 +120,11 @@ public:
   std::vector<TreeNode *> GetLevelNodes(const uint & level) ;
   std::vector<TreeNode *> GetTipNodes() { return GetLevelNodes(m_M) ;}
 
-  void SetErrorGammaAlphaBeta(const GammaHyperParas & alphaBeta) {m_errorGammaAlphaBeta = alphaBeta ;}
-  void SetFixedEffGammaAlphaBeta(const GammaHyperParas & alphaBeta) {m_fixedEffGammaAlphaBeta = alphaBeta ;}
-  void SetMRAcovParasGammaAlphaBeta(const Rcpp::List &) ;
+  void SetParsHyperpars(const Rcpp::List &, const Rcpp::NumericVector &, const Rcpp::NumericVector &, const bool) ;
+
   void SetFEmu(const vec & muVec) {m_FEmu = muVec ;}
-  void SetSpaceAndTimeNuggetSD(const double & spaceNuggetSD, const double & timeNuggetSD) {
-    m_spaceNuggetSD = spaceNuggetSD ;
-    m_timeNuggetSD = timeNuggetSD ;
+  void SetNuggetSD(const double & nuggetSD) {
+    m_nuggetSD = nuggetSD ;
   }
   void SetRecordFullConditional(const bool recordIt) { m_recordFullConditional = recordIt ;}
 
@@ -91,11 +132,6 @@ public:
     vec placeholder(covariates.rows()) ;
     inputdata dataObject(placeholder, spCoords, timeValues, covariates) ;
     m_predictData = dataObject ;
-  }
-  void ToggleGammaParasSet() { m_GammaParasSet = true ;}
-
-  bool CheckMRAcovParasGammaAlphaBeta() {
-    return m_GammaParasSet ;
   }
 
   void CleanPredictionComponents() ;
@@ -137,8 +173,7 @@ private:
   double m_logFullCond{ 0 } ;
   double m_logJointPsiMarginal{ 0 } ;
   int m_numKnots{ 0 } ;
-  double m_spaceNuggetSD{ 1e-6 };
-  double m_timeNuggetSD{ 1e-6 } ;
+  double m_nuggetSD{ 1e-6 };
   std::string m_distMethod ;
 
   int m_M{ 0 } ;
@@ -149,14 +184,16 @@ private:
   double m_errorSD{ 0 } ;
   double m_fixedEffSD{ 0 } ;
 
-  maternGammaPriorParasWithoutScale m_maternParasGammaAlphaBetaSpace ;
-  maternGammaPriorParasWithoutScale m_maternParasGammaAlphaBetaTime ;
-  GammaHyperParas m_maternSpacetimeScalingGammaAlphaBeta ;
-  GammaHyperParas m_fixedEffGammaAlphaBeta ;
-  GammaHyperParas m_errorGammaAlphaBeta ;
+  std::unique_ptr<TwoParsProbDist> m_MaternParsHyperparsRhoSpace ;
+  std::unique_ptr<TwoParsProbDist> m_MaternParsHyperparsSmoothnessSpace ;
+  std::unique_ptr<TwoParsProbDist> m_MaternParsHyperparsRhoTime ;
+  std::unique_ptr<TwoParsProbDist> m_MaternParsHyperparsSmoothnessTime ;
+  std::unique_ptr<TwoParsProbDist> m_MaternParsHyperparsScaling ;
+  std::unique_ptr<TwoParsProbDist> m_ParsHyperparsFixedEffsSD ;
+  std::unique_ptr<TwoParsProbDist> m_ParsHyperparsErrorSD ;
 
-  maternVec m_MRAcovParasSpace ;
-  maternVec m_MRAcovParasTime ;
+  maternVec m_MaternParsSpace ;
+  maternVec m_MaternParsTime ;
   double m_spacetimeScaling{ 1e-5 } ;
   vec m_fixedEffParameters ;
   vec m_FEmu ;
@@ -196,7 +233,6 @@ private:
   sp_mat m_HmatPred ;
   sp_mat m_SigmaFEandEtaInv ;
   bool m_recordFullConditional{ false } ;
-  bool m_GammaParasSet{ false } ;
 
   std::vector<mat *> getKmatricesInversePointers() {
     std::vector<mat *> KmatrixInverseList(m_vertexVector.size()) ;

@@ -151,7 +151,7 @@ public:
   virtual std::vector<TreeNode *> GetChildren()=0;
   virtual void RemoveChildren()=0;
   virtual int GetM()=0;
-  virtual void ComputeWmat(const maternVec &, const maternVec &, const double &, const double &, const double &, const std::string &)=0 ;
+  virtual void ComputeWmat(const maternVec &, const maternVec &, const double &, const double &, const std::string &)=0 ;
   virtual mat & GetB(const uint & l)=0 ;
   virtual mat GetSigma()=0 ;
   virtual mat & GetKmatrix()=0 ;
@@ -163,7 +163,7 @@ public:
   virtual std::vector<mat> & GetUmatList()=0 ;
   virtual void SetPredictLocations(const inputdata &)=0 ;
   virtual Eigen::ArrayXi & GetPredIndices()=0 ;
-  virtual void computeUpred(const maternVec &, const maternVec &, const double &, const spatialcoor &, const double &, const double &, const std::string &)=0 ;
+  virtual void computeUpred(const maternVec &, const maternVec &, const double &, const spatialcoor &, const double &, const std::string &)=0 ;
 
   virtual void genKnotsOnCube(spatialcoor &, int &, std::mt19937_64 &, Eigen::Array<bool, Eigen::Dynamic, 1> &) = 0;
   virtual void genRandomKnots(spatialcoor &, int &, std::mt19937_64 &) = 0;
@@ -222,14 +222,14 @@ protected:
   spatialcoor m_knotsCoor ;  // First element is spatial coordinates (longitude, latitude), second is time.
   int m_nodeId{ -1 } ;
 
-  void baseComputeWmat(const maternVec &, const maternVec &, const double &, const double &, const double &, const std::string &) ;
+  void baseComputeWmat(const maternVec &, const maternVec &, const double &, const double &, const std::string &) ;
   void SetParent(TreeNode * vertexParentPoint) {m_parent = vertexParentPoint ;}
 
   std::vector<mat> m_Wlist ;
 
-  double MaternCovFunction(const Spatiotemprange &, const maternVec &, const maternVec &, const double &, const double &, const double &) ;
+  double MaternCovFunction(const Spatiotemprange &, const maternVec &, const maternVec &, const double &, const double &) ;
 
-  mat computeCovMat(const spatialcoor &, const spatialcoor &, const maternVec &, const maternVec &, const double &, const double &, const double &, const std::string &) ;
+  mat computeCovMat(const spatialcoor &, const spatialcoor &, const maternVec &, const maternVec &, const double &, const double &, const std::string &) ;
   void baseInitialise(const dimensions & dims, const uint & depth, TreeNode * parent, const inputdata & dataset) {
     m_dimensions = dims;
     m_depth = depth ;

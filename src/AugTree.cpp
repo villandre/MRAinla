@@ -14,13 +14,6 @@ using namespace MRAinla ;
 using namespace Eigen ;
 using namespace std ;
 
-struct gridPair{
-  AugTree * grid ;
-  vec vector ;
-  gridPair() { } ;
-  gridPair(AugTree * gridArg, vec vectorArg) : grid(gridArg), vector(vectorArg) { } ;
-};
-
 struct MVN{
   vec mu ;
   sp_mat precision ;
@@ -34,32 +27,35 @@ struct MVN{
   }
 };
 
-AugTree::AugTree(uint & Mlon,
-                 uint & Mlat,
-                 uint & Mtime,
-                 Array2d & lonRange,
-                 Array2d & latRange,
-                 Array2d & timeRange,
-                 vec & observations,
-                 ArrayXXd & obsSp,
-                 ArrayXd & obsTime,
-                 ArrayXXd & predCovariates,
-                 ArrayXXd & predSp,
-                 ArrayXd & predTime,
-                 uint & minObsForTimeSplit,
-                 unsigned long int & seed,
-                 ArrayXXd & covariates,
-                 const bool splitTime,
-                 const unsigned int numKnotsRes0,
-                 double J,
-                 const string & distMethod)
-  : m_distMethod(distMethod)
+AugTree::AugTree(const uint & Mlon,
+                 const uint & Mlat,
+                 const uint & Mtime,
+                 const Array2d & lonRange,
+                 const Array2d & latRange,
+                 const Array2d & timeRange,
+                 const vec & observations,
+                 const ArrayXXd & obsSp,
+                 const ArrayXd & obsTime,
+                 const ArrayXXd & predCovariates,
+                 const ArrayXXd & predSp,
+                 const ArrayXd & predTime,
+                 const uint & minObsForTimeSplit,
+                 const unsigned long int & seed,
+                 const ArrayXXd & covariates,
+                 const bool & splitTime,
+                 const unsigned int & numKnotsRes0,
+                 const double & J,
+                 const string & distMethod,
+                 const Rcpp::List & STparsHyperpars,
+                 const Rcpp::NumericVector & fixedEffParsHyperpars,
+                 const Rcpp::NumericVector & errorParsHyperpars,
+                 const Rcpp::NumericVector & FEmuVec,
+                 const double & nuggetSD,
+                 const bool & normalPrior)
+  : m_distMethod(distMethod), m_nuggetSD(nuggetSD),
+    m_Mlon(Mlon), m_Mlat(Mlat), m_Mtime(Mtime)
 {
   m_M = Mlon + Mlat + Mtime ;
-  m_Mlon = Mlon ;
-  m_Mlat = Mlat ;
-  m_Mtime = Mtime ;
-  m_GammaParasSet = false ;
   m_dataset = inputdata(observations, obsSp, obsTime, covariates) ;
   m_mapDimensions = dimensions(lonRange, latRange, timeRange) ;
   std::random_device rd ;
@@ -90,6 +86,10 @@ AugTree::AugTree(uint & Mlon,
   for (auto & i : tipNodes) {
     i->SetPredictLocations(m_predictData) ;
   }
+
+  SetParsHyperpars(STparsHyperpars, fixedEffParsHyperpars, errorParsHyperpars, normalPrior) ;
+
+  m_FEmu = Rcpp::as<vec>(FEmuVec) ;
   // for (auto & i : m_vertexVector) {
   //   Rprintf("This is node %i. I contain %i knots and %i observations. \n", i->GetNodeId(), i->GetNumKnots(), i->GetNumObs()) ;
   // }
@@ -126,6 +126,7 @@ void AugTree::numberNodes() {
 
 // We make sure that splits don't result in empty regions
 // numObsForTimeSplit still does nothing
+
 void AugTree::createLevels(TreeNode * parent, std::string splitWhat, ArrayXi numSplitsLeft) {
   ArrayXi obsForMedian = parent->GetObsInNode() ;
   ArrayXi childMembership = ArrayXi::Zero(obsForMedian.size()) ;
@@ -263,7 +264,7 @@ void AugTree::generateKnots(TreeNode * node, const unsigned int numKnotsRes0, do
 }
 
 void AugTree::computeWmats() {
-  m_vertexVector.at(0)->ComputeWmat(m_MRAcovParasSpace, m_MRAcovParasTime, m_spacetimeScaling, m_spaceNuggetSD, m_timeNuggetSD, m_distMethod) ;
+  m_vertexVector.at(0)->ComputeWmat(m_MaternParsSpace, m_MaternParsTime, m_spacetimeScaling, m_nuggetSD, m_distMethod) ;
 
   for (uint level = 1; level <= m_M; level++) {
     std::vector<TreeNode *> levelNodes = GetLevelNodes(level) ;
@@ -273,7 +274,7 @@ void AugTree::computeWmats() {
 
     for (std::vector<TreeNode *>::iterator it = levelNodes.begin(); it < levelNodes.end(); it++)
     {
-      (*it)->ComputeWmat(m_MRAcovParasSpace, m_MRAcovParasTime, m_spacetimeScaling, m_spaceNuggetSD, m_timeNuggetSD, m_distMethod) ;
+      (*it)->ComputeWmat(m_MaternParsSpace, m_MaternParsTime, m_spacetimeScaling, m_nuggetSD, m_distMethod) ;
     }
   }
 }
@@ -618,27 +619,25 @@ void AugTree::diveAndUpdate(TreeNode * nodePointer, std::vector<TreeNode *> * de
   }
 }
 
-// For now, we assume that all hyperpriors have an inverse gamma distribution with the same parameters.
-
 void AugTree::ComputeLogPriors() {
 
-  std::vector<std::pair<double, GammaHyperParas>> priorCombinations ;
+  std::vector<std::pair<double, TwoParsProbDist *>> priorCombinations ;
 
-  priorCombinations.push_back(std::make_pair(m_MRAcovParasSpace.m_rho, m_maternParasGammaAlphaBetaSpace.m_rho)) ;
-  priorCombinations.push_back(std::make_pair(m_MRAcovParasSpace.m_smoothness, m_maternParasGammaAlphaBetaSpace.m_smoothness)) ;
+  priorCombinations.push_back(std::make_pair(m_MaternParsSpace.m_rho, m_MaternParsHyperparsRhoSpace.get())) ;
+  priorCombinations.push_back(std::make_pair(m_MaternParsSpace.m_smoothness, m_MaternParsHyperparsSmoothnessSpace.get())) ;
 
-  priorCombinations.push_back(std::make_pair(m_MRAcovParasTime.m_rho, m_maternParasGammaAlphaBetaTime.m_rho)) ;
-  priorCombinations.push_back(std::make_pair(m_MRAcovParasTime.m_smoothness, m_maternParasGammaAlphaBetaTime.m_smoothness)) ;
+  priorCombinations.push_back(std::make_pair(m_MaternParsTime.m_rho, m_MaternParsHyperparsRhoTime.get())) ;
+  priorCombinations.push_back(std::make_pair(m_MaternParsTime.m_smoothness, m_MaternParsHyperparsSmoothnessTime.get())) ;
 
-  priorCombinations.push_back(std::make_pair(m_spacetimeScaling, m_maternSpacetimeScalingGammaAlphaBeta)) ;
+  priorCombinations.push_back(std::make_pair(m_spacetimeScaling, m_MaternParsHyperparsScaling.get())) ;
 
-  priorCombinations.push_back(std::make_pair(m_fixedEffSD, m_fixedEffGammaAlphaBeta)) ;
-  priorCombinations.push_back(std::make_pair(m_errorSD, m_errorGammaAlphaBeta)) ;
+  priorCombinations.push_back(std::make_pair(m_fixedEffSD, m_ParsHyperparsFixedEffsSD.get())) ;
+  priorCombinations.push_back(std::make_pair(m_errorSD, m_ParsHyperparsErrorSD.get())) ;
 
   double logPrior = 0 ;
 
   for (auto & i : priorCombinations) {
-    logPrior += (i.second.m_alpha - 1) * log(i.first) - i.second.m_beta * i.first ;
+    logPrior += i.second->computeLogDensity(i.first) ;
   }
 
   m_logPrior = logPrior ;
@@ -742,8 +741,8 @@ void AugTree::ComputeLogFCandLogCDandDataLL() {
 
 void AugTree::ComputeLogJointPsiMarginal() {
 
-  // m_MRAcovParasSpace.print("Spatial parameters:") ;
-  // m_MRAcovParasTime.print("Time parameters:") ;
+  // m_MaternParsSpace.print("Spatial parameters:") ;
+  // m_MaternParsTime.print("Time parameters:") ;
   // Rprintf("Scaling parameter: %.3e \n", m_spacetimeScaling) ;
 
   ComputeLogPriors() ;
@@ -765,7 +764,7 @@ void AugTree::ComputeHpred() {
   for (auto & i : tipNodes) {
     ArrayXi predictionsInLeaf = i->GetPredIndices() ;
     if (predictionsInLeaf.size() > 0) {
-      i->computeUpred(m_MRAcovParasSpace, m_MRAcovParasTime, m_spacetimeScaling, m_predictData, m_spaceNuggetSD, m_timeNuggetSD, m_distMethod) ;
+      i->computeUpred(m_MaternParsSpace, m_MaternParsTime, m_spacetimeScaling, m_predictData, m_nuggetSD, m_distMethod) ;
     }
   }
 
@@ -792,10 +791,10 @@ vec AugTree::ComputeEvar() {
   return EvarValues ;
 }
 
-void AugTree::SetMRAcovParas(const Rcpp::List & MRAcovParas) {
-  List SpaceParas = Rcpp::as<List>(MRAcovParas["space"]) ;
-  List TimeParas = Rcpp::as<List>(MRAcovParas["time"]) ;
-  double scalePara = Rcpp::as<double>(MRAcovParas["scale"]) ;
+void AugTree::SetMaternPars(const Rcpp::List & MaternPars) {
+  List SpaceParas = Rcpp::as<List>(MaternPars["space"]) ;
+  List TimeParas = Rcpp::as<List>(MaternPars["time"]) ;
+  double scalePara = Rcpp::as<double>(MaternPars["scale"]) ;
 
   double rhoSpace = Rcpp::as<double>(SpaceParas["rho"]) ;
   double smoothnessSpace = Rcpp::as<double>(SpaceParas["smoothness"]) ;
@@ -803,31 +802,19 @@ void AugTree::SetMRAcovParas(const Rcpp::List & MRAcovParas) {
   double rhoTime = Rcpp::as<double>(TimeParas["rho"]) ;
   double smoothnessTime = Rcpp::as<double>(TimeParas["smoothness"]) ;
 
+  maternVec MaternParsSpace(rhoSpace, smoothnessSpace, 1) ;
+  maternVec MaternParsTime(rhoTime, smoothnessTime, 1) ;
 
-  maternVec MRAcovParasSpace(rhoSpace, smoothnessSpace, 1) ;
-  maternVec MRAcovParasTime(rhoTime, smoothnessTime, 1) ;
-
-  bool test = (fabs(m_spacetimeScaling - scalePara) < epsilon) && (m_MRAcovParasSpace == MRAcovParasSpace) && (m_MRAcovParasTime == MRAcovParasTime) ;
+  bool test = (fabs(m_spacetimeScaling - scalePara) < epsilon) && (m_MaternParsSpace == MaternParsSpace) && (m_MaternParsTime == MaternParsTime) ;
 
   if (test) {
     m_recomputeMRAlogLik = false ;
   } else {
     m_recomputeMRAlogLik = true ;
   }
-  m_MRAcovParasSpace = MRAcovParasSpace ;
-  m_MRAcovParasTime = MRAcovParasTime ;
+  m_MaternParsSpace = MaternParsSpace ;
+  m_MaternParsTime = MaternParsTime ;
   m_spacetimeScaling = scalePara ;
-}
-
-void AugTree::SetMRAcovParasGammaAlphaBeta(const Rcpp::List & MRAcovParasList) {
-  Rcpp::List spaceParas = Rcpp::as<List>(MRAcovParasList["space"]) ;
-  Rcpp::List timeParas = Rcpp::as<List>(MRAcovParasList["time"]) ;
-  vec scaling = Rcpp::as<vec>(MRAcovParasList["scale"]) ;
-  m_maternSpacetimeScalingGammaAlphaBeta = scaling ;
-  m_maternParasGammaAlphaBetaSpace = maternGammaPriorParasWithoutScale(GammaHyperParas(Rcpp::as<vec>(spaceParas["rho"])),
-                                            GammaHyperParas(Rcpp::as<vec>(spaceParas["smoothness"]))) ;
-  m_maternParasGammaAlphaBetaTime = maternGammaPriorParasWithoutScale(GammaHyperParas(Rcpp::as<vec>(timeParas["rho"])),
-                                            GammaHyperParas(Rcpp::as<vec>(timeParas["smoothness"]))) ;
 }
 
 void AugTree::ComputeFullCondSDsFE() {
@@ -840,3 +827,30 @@ void AugTree::ComputeFullCondSDsFE() {
     m_FullCondSDs(i) = pow(matrixCol(i), 0.5) ;
   }
 }
+
+void AugTree::SetParsHyperpars(const Rcpp::List & MaternParsHyperparsList,
+                               const Rcpp::NumericVector & fixedEffsParsHyperpars,
+                               const Rcpp::NumericVector & errorParsHyperpars,
+                               const bool normalPrior) {
+  Rcpp::List spaceParas = Rcpp::as<Rcpp::List>(MaternParsHyperparsList["space"]) ;
+  Rcpp::List timeParas = Rcpp::as<Rcpp::List>(MaternParsHyperparsList["time"]) ;
+
+  if (normalPrior) { // How can this be improved? Very redundant...
+    m_MaternParsHyperparsScaling = std::unique_ptr<NormalDist>(new NormalDist(Rcpp::as<vec>(MaternParsHyperparsList["scale"]))) ;
+    m_MaternParsHyperparsRhoSpace = std::unique_ptr<NormalDist>(new NormalDist(Rcpp::as<vec>(spaceParas["rho"]))) ;
+    m_MaternParsHyperparsSmoothnessSpace = std::unique_ptr<NormalDist>(new NormalDist(Rcpp::as<vec>(spaceParas["smoothness"]))) ;
+    m_MaternParsHyperparsRhoTime = std::unique_ptr<NormalDist>(new NormalDist(Rcpp::as<vec>(timeParas["rho"]))) ;
+    m_MaternParsHyperparsSmoothnessTime = std::unique_ptr<NormalDist>(new NormalDist(Rcpp::as<vec>(timeParas["smoothness"]))) ;
+    m_ParsHyperparsFixedEffsSD = std::unique_ptr<NormalDist>(new NormalDist(Rcpp::as<vec>(fixedEffsParsHyperpars))) ;
+    m_ParsHyperparsErrorSD = std::unique_ptr<NormalDist>(new NormalDist(Rcpp::as<vec>(errorParsHyperpars))) ;
+  } else {
+    m_MaternParsHyperparsScaling = std::unique_ptr<GammaDist>(new GammaDist(Rcpp::as<vec>(MaternParsHyperparsList["scale"]))) ;
+    m_MaternParsHyperparsRhoSpace = std::unique_ptr<GammaDist>(new GammaDist(Rcpp::as<vec>(spaceParas["rho"]))) ;
+    m_MaternParsHyperparsSmoothnessSpace = std::unique_ptr<GammaDist>(new GammaDist(Rcpp::as<vec>(spaceParas["smoothness"]))) ;
+    m_MaternParsHyperparsRhoTime = std::unique_ptr<GammaDist>(new GammaDist(Rcpp::as<vec>(timeParas["rho"]))) ;
+    m_MaternParsHyperparsSmoothnessTime = std::unique_ptr<GammaDist>(new GammaDist(Rcpp::as<vec>(timeParas["smoothness"]))) ;
+    m_ParsHyperparsFixedEffsSD = std::unique_ptr<GammaDist>(new GammaDist(Rcpp::as<vec>(fixedEffsParsHyperpars))) ;
+    m_ParsHyperparsErrorSD = std::unique_ptr<GammaDist>(new GammaDist(Rcpp::as<vec>(errorParsHyperpars))) ;
+  }
+}
+
