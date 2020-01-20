@@ -222,12 +222,12 @@ MRA_INLA <- function(spacetimeData, hyperStart, fixedHyperValues, hyperparsHyper
   }
 
   cat("Running IS algorithm... \n")
-  valuesOnGrid <- .gridFct(distMode = solution, propVarCovar = varCovar, control = control, gridPointer = gridPointer, namesXstartValues = names(xStartValues), fixedHyperValues = fixedHyperValues, timeBaseline = timeBaseline)
+  valuesOnGrid <- .gridFct(distMode = solution, ISvarCovar = varCovar, gridPointer = gridPointer, namesXstartValues = names(xStartValues), fixedHyperValues = fixedHyperValues, control = control)
   cat("IS algorithm completed... \n")
 
   keepIndices <- sapply(valuesOnGrid$output, function(x) class(x$logJointValue) == "numeric")
   valuesOnGrid$output <- valuesOnGrid$output[keepIndices]
-  valuesOnGrid$ISdistParas <- list(mu = exp(opt$par), cov = varCovar)
+  valuesOnGrid$ISdistParas <- list(mu = solution, cov = varCovar)
   valuesOnGrid
 }
 
@@ -245,19 +245,19 @@ MRA_INLA <- function(spacetimeData, hyperStart, fixedHyperValues, hyperparsHyper
   list(space = c(rho = paraValues[["space.rho"]], smoothness = paraValues[["space.smoothness"]]), time = c(rho = paraValues[["time.rho"]], smoothness = paraValues[["time.smoothness"]]), scale = paraValues[["scale"]], errorSD = paraValues[["error"]], fixedEffSD = paraValues[["fixed"]])
 }
 
-.gridFct <- function(distMode, propVarCovar, control, gridPointer, namesXstartValues, fixedHyperValues, timeBaseline) {
+.gridFct <- function(distMode, ISvarCovar, gridPointer, namesXstartValues, fixedHyperValues, control) {
   if (!control$normalPrior) {
     smallMVR <- function() {
       container <- NULL
       repeat {
-        container <- drop(mvtnorm::rmvnorm(n = 1, mean = distMode, sigma = propVarCovar))
+        container <- drop(mvtnorm::rmvnorm(n = 1, mean = distMode, sigma = ISvarCovar))
         if (all(container > 0)) break
       }
       container
     }
     paraGrid <- t(replicate(n = control$numValuesForIS, expr = smallMVR()))
   } else {
-    paraGrid <- mvtnorm::rmvnorm(n = control$numValuesForIS, mean = distMode, sigma = propVarCovar)
+    paraGrid <- mvtnorm::rmvnorm(n = control$numValuesForIS, mean = distMode, sigma = ISvarCovar)
   }
   colnames(paraGrid) <- namesXstartValues
   output <- vector("list", length = nrow(paraGrid))
@@ -274,7 +274,12 @@ MRA_INLA <- function(spacetimeData, hyperStart, fixedHyperValues, hyperparsHyper
   if (startAtIter <= length(output)) {
     for (i in startAtIter:length(output)) {
       cat("Processing grid value ", i, "... \n")
-      output[[i]] <- .funForGridEst(x = unlist(paraGrid[i, ]), treePointer = gridPointer, fixedHyperValues = fixedHyperValues, computePrediction = TRUE)
+      xVec <- do.call("c", unlist(paraGrid[i ,]))
+      names(xVec) <- colnames(paraGrid)
+      if (control$normalPrior) {
+        xVec <- exp(xVec)
+      }
+      output[[i]] <- .funForGridEst(xNonLogScale = xVec, treePointer = gridPointer, fixedHyperValues = fixedHyperValues, computePrediction = TRUE)
       if (!is.null(control$folderToSaveISpoints)) {
         if (!dir.exists(control$folderToSaveISpoints)) {
           dir.create(path = control$folderToSaveISpoints)
@@ -294,13 +299,21 @@ MRA_INLA <- function(spacetimeData, hyperStart, fixedHyperValues, hyperparsHyper
   list(output = output)
 }
 
-.funForGridEst <- function(x, treePointer, fixedHyperValues, computePrediction) {
+.funForGridEst <- function(xNonLogScale, treePointer, fixedHyperValues, computePrediction, control) {
   fixedHyperValuesUnlisted <- unlist(fixedHyperValues)
-  hyperList <- .prepareHyperList(hyperStartUnlisted = x, fixedHyperValuesUnlisted = fixedHyperValuesUnlisted)
+  hyperList <- .prepareHyperList(hyperStartUnlisted = xNonLogScale, fixedHyperValuesUnlisted = fixedHyperValuesUnlisted)
 
   logJointValue <- tryCatch(expr = LogJointHyperMarginal(treePointer = treePointer, hyperparaValues = hyperList, recordFullConditional = FALSE, processPredictions = TRUE), error = function(e) e)
-
-  aList <- list(x = x, errorSD = hyperList$errorSD, fixedEffSD = hyperList$fixedEffSD, MRAhyperparas = hyperList[c("space", "time", "scale")], logJointValue = logJointValue)
+  x <- xNonLogScale
+  if (control$normalPrior) {
+    x <- log(xNonLogScale)
+    hyperList$fixedEffSD <- log(hyperList$fixedEffSD)
+    hyperList$errorSD <- log(hyperList$errorSD)
+    hyperList$space <- log(hyperList$space)
+    hyperList$time <- log(hyperList$time)
+    hyperList$scale <- log(hyperList$scale)
+  }
+  aList <- list(x = x, fixedEffSD = hyperList$fixedEffSD , errorSD = hyperList$errorSD, MaternHyperpars = hyperList[c("space", "time", "scale")], logJointValue = logJointValue)
   if (computePrediction) {
     aList$CondPredStats <- ComputeCondPredStats(treePointer)
   }
@@ -313,7 +326,7 @@ MRA_INLA <- function(spacetimeData, hyperStart, fixedHyperValues, hyperparsHyper
 ComputeHyperMarginalMoments <- function(hyperparaList, logISmodProbWeights) {
   domainCheck <- sapply(hyperparaList, function(x) x$logJointValue > -Inf)
   hyperparaList <- hyperparaList[domainCheck]
-  psiAndMargDistMatrix <- t(sapply(seq_along(hyperparaList), function(hyperparaIndex) c(unlist(hyperparaList[[hyperparaIndex]]$MRAhyperparas), fixedEffSD = hyperparaList[[hyperparaIndex]]$fixedEffSD, errorSD = hyperparaList[[hyperparaIndex]]$errorSD, jointValue = exp(logISmodProbWeights[hyperparaIndex]))))
+  psiAndMargDistMatrix <- t(sapply(seq_along(hyperparaList), function(hyperparaIndex) c(unlist(hyperparaList[[hyperparaIndex]]$MaternHyperpars), fixedEffSD = hyperparaList[[hyperparaIndex]]$fixedEffSD, errorSD = hyperparaList[[hyperparaIndex]]$errorSD, jointValue = exp(logISmodProbWeights[hyperparaIndex]))))
   rownames(psiAndMargDistMatrix) <- NULL
   funToGetParaMoments <- function(hyperparaIndex) {
     meanValue <- sum(psiAndMargDistMatrix[, hyperparaIndex] * psiAndMargDistMatrix[, ncol(psiAndMargDistMatrix)])
