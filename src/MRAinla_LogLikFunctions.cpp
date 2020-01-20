@@ -19,7 +19,7 @@ List setupGridCpp(NumericVector responseValues, NumericMatrix spCoords, NumericM
                   NumericVector lonRange, NumericVector latRange, NumericVector timeRange,
                   uint randomSeed, uint cutForTimeSplit, bool splitTime,
                   int numKnotsRes0, double J, String distMethod,
-                  Rcpp::List STparsHyperpars, Rcpp::NumericVector fixedEffParsHyperpars,
+                  Rcpp::List MaternParsHyperpars, Rcpp::NumericVector fixedEffParsHyperpars,
                   NumericVector errorParsHyperpars,
                   Rcpp::NumericVector FEmuVec,
                   double nuggetSD, bool normalPrior)
@@ -51,7 +51,7 @@ List setupGridCpp(NumericVector responseValues, NumericMatrix spCoords, NumericM
                                   covariateMat,
                                   splitTime, numKnotsRes0, J,
                                   dMethod,
-                                  STparsHyperpars, fixedEffParsHyperpars, errorParsHyperpars,
+                                  MaternParsHyperpars, fixedEffParsHyperpars, errorParsHyperpars,
                                   FEmuVec,
                                   nuggetSD,
                                   normalPrior) ;
@@ -61,7 +61,7 @@ List setupGridCpp(NumericVector responseValues, NumericMatrix spCoords, NumericM
 
 // [[Rcpp::export]]
 
-double LogJointHyperMarginalToWrap(SEXP treePointer, Rcpp::List MRAhyperparas,
+double LogJointHyperMarginalToWrap(SEXP treePointer, Rcpp::List MaternHyperpars,
          double fixedEffSD, double errorSD, bool recordFullConditional,
          bool processPredictions) {
   mat posteriorMatrix ;
@@ -77,7 +77,7 @@ double LogJointHyperMarginalToWrap(SEXP treePointer, Rcpp::List MRAhyperparas,
   for (auto & i : tipNodes) {
     i->SetUncorrSD(0.001) ; // Is this a nugget effect?
   }
-
+  pointedTree->SetMaternPars(MaternHyperpars) ;
   pointedTree->SetErrorSD(errorSD) ;
   pointedTree->SetFixedEffSD(fixedEffSD) ;
 
