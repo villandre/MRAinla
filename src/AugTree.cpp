@@ -14,19 +14,6 @@ using namespace MRAinla ;
 using namespace Eigen ;
 using namespace std ;
 
-struct MVN{
-  vec mu ;
-  sp_mat precision ;
-
-  MVN() { } ;
-  MVN(const vec & mu, const sp_mat & precision): mu(mu), precision(precision) {} ;
-
-  double ComputeExpTerm(const vec & coordinate) {
-    vec output = -0.5 * (coordinate - mu).transpose() * precision * (coordinate - mu) ;
-    return output(0) ;
-  }
-};
-
 AugTree::AugTree(const uint & Mlon,
                  const uint & Mlat,
                  const uint & Mtime,
@@ -624,7 +611,8 @@ void AugTree::diveAndUpdate(TreeNode * nodePointer, std::vector<TreeNode *> * de
 // Since I create this vector of pairs only to simplify the syntax of the
 // final evaluation, maybe it's ok? There might be a better way to go about it though.
 void AugTree::ComputeLogPriors() {
-
+  Rcout << "Computing log(p(Psi))..." << std::endl ;
+  fflush(stdout) ;
   std::vector<std::pair<double, TwoParsProbDist *>> priorCombinations ;
 
   priorCombinations.push_back(std::make_pair(m_MaternParsSpace.m_rho, m_MaternParsHyperparsRhoSpace.get())) ;
@@ -647,18 +635,20 @@ void AugTree::ComputeLogPriors() {
   }
 
   m_logPrior = logPrior ;
+  Rcout << "Done!" << std::endl ;
 }
 
 void AugTree::ComputeLogFCandLogCDandDataLL() {
-
+  Rcout << "Computing log(p(v | y, Psi))..." << std::endl ;
+  fflush(stdout) ;
   int n = m_dataset.responseValues.size() ;
-  Rcout << "Creating SigmaBetaEtaInv..." << std::endl ;
+
   if (m_SigmaFEandEtaInv.rows() == 0) {
     CreateSigmaBetaEtaInvMat() ;
   } else {
     UpdateSigmaBetaEtaInvMat() ;
   }
-  Rcout << "Done! Creating Hpred..." << std::endl ;
+
   if (m_processPredictions) {
     ComputeHpred() ;
   }
@@ -668,12 +658,10 @@ void AugTree::ComputeLogFCandLogCDandDataLL() {
   //     i->clearWmatrices() ;
   //   }
   // }
-  Rcout << "Done! Computing Chol. SigmaFEeta..." << std::endl ;
-  fflush(stdout) ;
   Eigen::SimplicialLDLT<sp_mat> blockChol(m_SigmaFEandEtaInv) ;
 
   double logDetSigmaKFEinv = blockChol.vectorD().array().log().sum() ;
-  Rcout << "Done! Creating H matrix..." << std::endl ;
+
   if (m_recomputeMRAlogLik) {
     if (m_Hmat.size() == 0) {
       createHmatrix() ;
@@ -681,15 +669,11 @@ void AugTree::ComputeLogFCandLogCDandDataLL() {
       updateHmatrix() ;
     }
   }
-  Rcout << "Done! Scaling responses..." << std::endl ;
-  fflush(stdout) ;
   vec responsesReshuffled = elem(m_dataset.responseValues.array(), m_obsOrderForFmat) ;
   mat scaledResponse = std::pow(m_errorSD, -2) * m_Hmat.transpose() * responsesReshuffled ;
-  Rcout << "Done! Computing secondTerm..." << std::endl ;
-  fflush(stdout)  ;
+
   sp_mat secondTerm = std::pow(m_errorSD, -2) * (m_Hmat.transpose() * m_Hmat) ;
 
-  Rcout << "Done! analysing sparsity pattern..." << std::endl ;
   fflush(stdout) ;
   if (m_logFullCond == 0) { // This is the first iteration...
     try {
@@ -698,15 +682,13 @@ void AugTree::ComputeLogFCandLogCDandDataLL() {
       forward_exception_to_r(ex) ;
     }
   }
-  Rcout << "Done! Computing Full Cond. Chol..." << std::endl ;
+
   fflush(stdout) ;
   m_FullCondPrecisionChol.factorize(m_SigmaFEandEtaInv + secondTerm) ; // The sparsity pattern in matToInvert is always the same, notwithstand the hyperparameter values.
   secondTerm.resize(0,0) ; // Making sure it doesn't clog the memory (although I suspect this is not necessary)
-  Rcout << "Done! Computing Full Cond. SDs..." << std::endl ;
-  fflush(stdout) ;
+
   ComputeFullCondSDsFE() ;
-  Rcout << "Done! Computing updated means..." << std::endl ;
-  fflush(stdout) ;
+
   vec updatedMean = m_FullCondPrecisionChol.solve(scaledResponse) ;
   if(m_FullCondPrecisionChol.info()!=Success) {
     // solving failed
@@ -720,22 +702,20 @@ void AugTree::ComputeLogFCandLogCDandDataLL() {
 
   vec fixedEffMeans = m_Vstar.head(m_fixedEffParameters.size()) ;
   SetFixedEffParameters(fixedEffMeans) ;
-  Rcout << "Done! Computing log-det Q..." << std::endl ;
-  fflush(stdout) ;
+
   double logDetQmat = m_FullCondPrecisionChol.vectorD().array().log().sum() ; // In LDLT, the L matrix has a diagonal with 1s, meaning that its determinant is 1. It follows that the determinant of the original matrix is simply the product of the elements in the D matrix.
 
   m_logFullCond = 0.5 * logDetQmat ; // Since we arbitrarily evaluate always at the full-conditional mean, the exponential part of the distribution reduces to 0.
 
   // Computing p(v* | Psi)
   mat logLikTerm ;
-  Rcout << "Done! Computing log-lik..." << std::endl ;
+  Rcout << "Done! Computing log(p(v | Psi))..." << std::endl ;
   fflush(stdout) ;
   logLikTerm.noalias() = -0.5 * m_Vstar.transpose() * m_SigmaFEandEtaInv.selfadjointView<Upper>() * m_Vstar ;
-  Rcout << "Done! Finalising..." << std::endl ;
-  fflush(stdout) ;
+
   m_logCondDist = logLikTerm(0,0) + 0.5 * logDetSigmaKFEinv ;
 
-  // Computing p(y | v*, Psi)
+  Rcout << "Done! Computing p(y | v, Psi)" << std::endl ;
   double errorLogDet = -2 * n * log(m_errorSD) ;
   vec recenteredY ;
   recenteredY.noalias() = responsesReshuffled - m_Hmat * m_Vstar ;
@@ -743,13 +723,14 @@ void AugTree::ComputeLogFCandLogCDandDataLL() {
   vec globalLogLikExp ;
   globalLogLikExp.noalias() = -0.5 * std::pow(m_errorSD, -2) * recenteredY.transpose() * recenteredY ;
   m_globalLogLik = 0.5 * errorLogDet + globalLogLikExp(0) ;
+  Rcout << "Done!" << std::endl ;
 }
 
 void AugTree::ComputeLogJointPsiMarginal() {
 
-  // m_MaternParsSpace.print("Spatial parameters:") ;
-  // m_MaternParsTime.print("Time parameters:") ;
-  // Rprintf("Scaling parameter: %.3e \n", m_spacetimeScaling) ;
+  m_MaternParsSpace.print("Spatial parameters:") ;
+  m_MaternParsTime.print("Time parameters:") ;
+  Rprintf("Scaling parameter: %.3e \n", m_spacetimeScaling) ;
 
   ComputeLogPriors() ;
 
@@ -759,10 +740,10 @@ void AugTree::ComputeLogJointPsiMarginal() {
 
   ComputeLogFCandLogCDandDataLL() ;
 
-  // Rprintf("Observations log-lik: %.4e \n Log-prior: %.4e \n Log-Cond. dist.: %.4e \n Log-full cond.: %.4e \n \n \n",
-  //  m_globalLogLik, m_logPrior, m_logCondDist, m_logFullCond) ;
+  Rprintf("Observations log-lik: %.4e \n Log-prior: %.4e \n Log-Cond. dist.: %.4e \n Log-full cond.: %.4e \n \n \n",
+   m_globalLogLik, m_logPrior, m_logCondDist, m_logFullCond) ;
   m_logJointPsiMarginal = m_globalLogLik + m_logPrior + m_logCondDist - m_logFullCond ;
-   // Rprintf("Joint value: %.4e \n \n", m_logJointPsiMarginal) ;
+   Rprintf("Joint value: %.4e \n \n", m_logJointPsiMarginal) ;
 }
 
 void AugTree::ComputeHpred() {

@@ -3,6 +3,7 @@
 #ifndef MYPROJECT_AUGTREE_H
 #define MYPROJECT_AUGTREE_H
 
+namespace MRAinla {
 struct TwoParsProbDist{
   double m_firstPar ;
   double m_secondPar ;
@@ -50,8 +51,6 @@ struct NormalDist : public TwoParsProbDist {
     return value ;
   }
 };
-
-namespace MRAinla {
 
 class AugTree
 {

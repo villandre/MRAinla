@@ -109,7 +109,7 @@ MRA_INLA <- function(spacetimeData, hyperStart, fixedHyperValues, hyperpriorPars
 
   covariateMatrix <- as.matrix(spacetimeData@data[, -1, drop = FALSE])
 
-  gridPointer <- setupGridCpp(responseValues = spacetimeData@data[, 1], spCoords = dataCoordinates, predCoords = predCoordinates, obsTime = timeValues, predTime = predTime, covariateMatrix = covariateMatrix, predCovariateMatrix = predCovariates, Mlon = control$Mlon, Mlat = control$Mlat, Mtime = control$Mtime, lonRange = control$lonRange, latRange = control$latRange, timeRange = timeRangeReshaped, randomSeed = control$randomSeed, cutForTimeSplit = control$cutForTimeSplit, splitTime = control$splitTime, numKnotsRes0 = control$numKnotsRes0, J = control$J, distMethod = control$distMethod, MaternParsHyperpars = hyperpriorPars["space", "time", "scale"], fixedEffParsHyperpars = hyperpriorPars$fixedEffSD, errorParsHyperpars = hyperpriorPars$errorSD, FEmuVec = FEmuVec, nuggetSD = control$nuggetSD, normalHyperprior = control$normalHyperprior)$gridPointer
+  gridPointer <- setupGridCpp(responseValues = spacetimeData@data[, 1], spCoords = dataCoordinates, predCoords = predCoordinates, obsTime = timeValues, predTime = predTime, covariateMatrix = covariateMatrix, predCovariateMatrix = predCovariates, Mlon = control$Mlon, Mlat = control$Mlat, Mtime = control$Mtime, lonRange = control$lonRange, latRange = control$latRange, timeRange = timeRangeReshaped, randomSeed = control$randomSeed, cutForTimeSplit = control$cutForTimeSplit, splitTime = control$splitTime, numKnotsRes0 = control$numKnotsRes0, J = control$J, distMethod = control$distMethod, MaternParsHyperpars = hyperpriorPars[c("space", "time", "scale")], fixedEffParsHyperpars = hyperpriorPars$fixedEffSD, errorParsHyperpars = hyperpriorPars$errorSD, FEmuVec = FEmuVec, nuggetSD = control$nuggetSD, normalHyperprior = control$normalHyperprior)$gridPointer
 
   # First we compute values relating to the hyperprior marginal distribution...
 
@@ -163,9 +163,9 @@ MRA_INLA <- function(spacetimeData, hyperStart, fixedHyperValues, hyperpriorPars
     returnedValue
   }
 
-  gradForOptim <- function(x, envirToSaveValues, namesXstartValues) {
-    names(x) <- namesXstartValues
-    numDeriv::grad(func = funForOptim, x = x, method = "simple", envirToSaveValues = envirToSaveValues)
+  gradForOptim <- function(xOnLogScale, envirToSaveValues, namesXstartValues) {
+    names(xOnLogScale) <- namesXstartValues
+    numDeriv::grad(func = funForOptim, x = xOnLogScale, method = "simple", envirToSaveValues = envirToSaveValues, namesXstartValues = namesXstartValues)
   }
   # A short optimisation first...
   storageEnvir <- new.env()
@@ -175,25 +175,28 @@ MRA_INLA <- function(spacetimeData, hyperStart, fixedHyperValues, hyperpriorPars
   # Remember that if the priors for hyperparameters are normal, starting values are given on the log-scale.
   xStartValues <- unlist(hyperStart)
 
-  upperBound <- rep(Inf, length(xStartValues))
-
-  if (!is.null(control$upperBound)) {
-    upperBound <- log(unlist(control$upperBound))
+  lowerBound <- rep(1e-10, length(xStartValues))
+  if (control$normalHyperprior) {
+    lowerBound <- log(lowerBound)
   }
-  names(upperBound) <- names(xStartValues)
+  upperBound <- rep(Inf, length(xStartValues))
+  if (!is.null(control$upperBound)) {
+    upperBound <- unlist(control$upperBound)
+  }
+  names(upperBound) <- names(lowerBound) <- names(xStartValues)
   cat("Optimising... \n")
   if (!tryCatch(file.exists(control$fileToSaveOptOutput), error = function(e) FALSE)) { # The tryCatch is necessary to ensure that an error does not occur if control$fileToSaveOptOutput is NULL. If it is undefined, we want the optimisation to take place.
     x0val <- xStartValues
     if (!control$normalHyperprior) {
       x0val <- log(xStartValues)
     }
-    opt <- nloptr::lbfgs(x0 = x0val, lower = rep(-10, length(xStartValues)), upper = upperBound, fn = funForOptim, gr = gradForOptim, control = list(xtol_rel = 1e-3, maxeval = control$numIterOptim), envirToSaveValues = storageEnvir, namesXstartValues = names(xStartValues))
+    opt <- nloptr::lbfgs(x0 = x0val, lower = lowerBound, upper = upperBound, fn = funForOptim, gr = gradForOptim, control = list(xtol_rel = 1e-3, maxeval = control$numIterOptim), envirToSaveValues = storageEnvir, namesXstartValues = names(xStartValues))
     solution <- opt$par
     if (!control$normalHyperprior) {
       solution <- exp(opt$par)
     }
     cat("Computing precision matrix at mode... \n")
-    precisionMat <- numDeriv::hessian(func = funForOptim, x = solution)
+    precisionMat <- numDeriv::hessian(func = funForOptim, x = solution, namesXstartValues = names(xStartValues), envirToSaveValues = storageEnvir)
     varCovar <- solve(precisionMat)
     if (!is.null(control$fileToSaveOptOutput)) {
       save(opt, file = control$fileToSaveOptOutput)
