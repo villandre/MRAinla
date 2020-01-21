@@ -201,7 +201,10 @@ MRA_INLA <- function(spacetimeData, hyperStart, fixedHyperValues, hyperpriorPars
     cat("Optimised values:", solution)
   } else {
     load(control$fileToSaveOptOutput)
-
+    solution <- opt$par
+    if (!control$normalHyperprior) {
+      solution <- exp(opt$par)
+    }
     varCovarFilename <- paste(substr(control$fileToSaveOptOutput, start = 1, stop = gregexpr(pattern = ".Rdata", text = control$fileToSaveOptOutput)[[1]] - 1), "_ISvarCovar.Rdata", sep = "")
     load(varCovarFilename) # Restores varCovar
   }
@@ -270,12 +273,12 @@ MRA_INLA <- function(spacetimeData, hyperStart, fixedHyperValues, hyperpriorPars
   if (startAtIter <= length(output)) {
     for (i in startAtIter:length(output)) {
       cat("Processing grid value ", i, "... \n")
-      xVec <- do.call("c", unlist(paraGrid[i, ]))
+      xVec <- paraGrid[i, ]
       names(xVec) <- colnames(paraGrid)
       if (control$normalHyperprior) {
         xVec <- exp(xVec)
       }
-      output[[i]] <- .funForGridEst(xNonLogScale = xVec, treePointer = gridPointer, fixedHyperValues = fixedHyperValues, computePrediction = TRUE)
+      output[[i]] <- .funForGridEst(xNonLogScale = xVec, treePointer = gridPointer, fixedHyperValues = fixedHyperValues, computePrediction = TRUE, control = control)
       if (!is.null(control$folderToSaveISpoints)) {
         if (!dir.exists(control$folderToSaveISpoints)) {
           dir.create(path = control$folderToSaveISpoints)
