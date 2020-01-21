@@ -145,7 +145,7 @@ MRA_INLA <- function(spacetimeData, hyperStart, fixedHyperValues, hyperpriorPars
 
 .obtainGridValues <- function(gridPointer, hyperStart, fixedHyperValues, predictionData, timeBaseline, maximiseOnly = FALSE, control) {
   iterCounter <- 0
-  funForOptim <- function(xOnLogScale, envirToSaveValues, namesXstartValues) {
+  funForOptim <- function(xOnLogScale, namesXstartValues) {
     iterCounter <<- iterCounter + 1
     cat("Performing evaluation ", iterCounter, ".\n")
     names(xOnLogScale) <- namesXstartValues
@@ -158,19 +158,14 @@ MRA_INLA <- function(spacetimeData, hyperStart, fixedHyperValues, hyperpriorPars
     returnedValue <- -LogJointHyperMarginal(treePointer = gridPointer, hyperparaValues = hyperList, recordFullConditional = FALSE, processPredictions = FALSE)
     returnX <- xOnLogScale
     if (!control$normalHyperprior) returnX <- exp(xOnLogScale)
-    assign(x = "x", value = cbind(get(x = "x", envir = envirToSaveValues), returnX), envir = envirToSaveValues)
-    assign(x = "value", value = c(get(x = "value", envir = envirToSaveValues), -returnedValue), envir = envirToSaveValues)
     returnedValue
   }
 
-  gradForOptim <- function(xOnLogScale, envirToSaveValues, namesXstartValues) {
+  gradForOptim <- function(xOnLogScale, namesXstartValues) {
     names(xOnLogScale) <- namesXstartValues
-    numDeriv::grad(func = funForOptim, x = xOnLogScale, method = "simple", envirToSaveValues = envirToSaveValues, namesXstartValues = namesXstartValues)
+    numDeriv::grad(func = funForOptim, x = xOnLogScale, method = "simple", namesXstartValues = namesXstartValues)
   }
   # A short optimisation first...
-  storageEnvir <- new.env()
-  assign(x = "x", value = NULL, envir = storageEnvir)
-  assign(x = "value", value = NULL, envir = storageEnvir)
 
   # Remember that if the priors for hyperparameters are normal, starting values are given on the log-scale.
   xStartValues <- unlist(hyperStart)
@@ -190,25 +185,25 @@ MRA_INLA <- function(spacetimeData, hyperStart, fixedHyperValues, hyperpriorPars
     if (!control$normalHyperprior) {
       x0val <- log(xStartValues)
     }
-    opt <- nloptr::lbfgs(x0 = x0val, lower = lowerBound, upper = upperBound, fn = funForOptim, gr = gradForOptim, control = list(xtol_rel = 1e-3, maxeval = control$numIterOptim), envirToSaveValues = storageEnvir, namesXstartValues = names(xStartValues))
+    opt <- nloptr::lbfgs(x0 = x0val, lower = lowerBound, upper = upperBound, fn = funForOptim, gr = gradForOptim, control = list(xtol_rel = 1e-3, maxeval = control$numIterOptim), namesXstartValues = names(xStartValues))
     solution <- opt$par
     if (!control$normalHyperprior) {
       solution <- exp(opt$par)
     }
     cat("Computing precision matrix at mode... \n")
-    precisionMat <- numDeriv::hessian(func = funForOptim, x = solution, namesXstartValues = names(xStartValues), envirToSaveValues = storageEnvir)
+    precisionMat <- numDeriv::hessian(func = funForOptim, x = solution, namesXstartValues = names(xStartValues))
     varCovar <- solve(precisionMat)
     if (!is.null(control$fileToSaveOptOutput)) {
       save(opt, file = control$fileToSaveOptOutput)
-      filenameForEnvir <- paste(substr(control$fileToSaveOptOutput, start = 1, stop = gregexpr(pattern = ".Rdata", text = control$fileToSaveOptOutput)[[1]] - 1), "_Envir.Rdata", sep = "")
-      save(storageEnvir, file = filenameForEnvir, compress = TRUE)
+      filenameForVarCovar <- paste(substr(control$fileToSaveOptOutput, start = 1, stop = gregexpr(pattern = ".Rdata", text = control$fileToSaveOptOutput)[[1]] - 1), "_ISvarCovar.Rdata", sep = "")
+      save(varCovar, file = filenameForVarCovar)
     }
     cat("Optimised values:", solution)
   } else {
     load(control$fileToSaveOptOutput)
 
-    envirFilename <- paste(substr(control$fileToSaveOptOutput, start = 1, stop = gregexpr(pattern = ".Rdata", text = control$fileToSaveOptOutput)[[1]] - 1), "_Envir.Rdata", sep = "")
-    load(envirFilename) # Restores storageEnvir
+    varCovarFilename <- paste(substr(control$fileToSaveOptOutput, start = 1, stop = gregexpr(pattern = ".Rdata", text = control$fileToSaveOptOutput)[[1]] - 1), "_ISvarCovar.Rdata", sep = "")
+    load(varCovarFilename) # Restores varCovar
   }
 
   if (!is.null(control$envirForTest)) {
@@ -216,12 +211,6 @@ MRA_INLA <- function(spacetimeData, hyperStart, fixedHyperValues, hyperpriorPars
   }
 
   opt$value <- -opt$value # Correcting for the inversion used to maximise instead of minimise
-  # sampleWeights <- exp(storageEnvir$value - max(storageEnvir$value, na.rm = TRUE))
-  # sampleWeights <- sampleWeights/sum(sampleWeights, na.rm = TRUE)
-  # if (any(is.na(sampleWeights))) {
-  #   warning("Warning: Optimiser recovered after producing NA values (probably after visiting a parameter combination on the boundaries. \n")
-  # }
-  # varCovar <- cov.wt(x = t(storageEnvir$x[, !is.na(sampleWeights)]), wt = sampleWeights[!is.na(sampleWeights)])$cov
 
   if (maximiseOnly) {
     names(solution) <- names(xStartValues)
@@ -281,7 +270,7 @@ MRA_INLA <- function(spacetimeData, hyperStart, fixedHyperValues, hyperpriorPars
   if (startAtIter <= length(output)) {
     for (i in startAtIter:length(output)) {
       cat("Processing grid value ", i, "... \n")
-      xVec <- do.call("c", unlist(paraGrid[i ,]))
+      xVec <- do.call("c", unlist(paraGrid[i, ]))
       names(xVec) <- colnames(paraGrid)
       if (control$normalHyperprior) {
         xVec <- exp(xVec)
@@ -302,7 +291,7 @@ MRA_INLA <- function(spacetimeData, hyperStart, fixedHyperValues, hyperpriorPars
       }
     }
   }
-  # list(output = output, optimPoints = list(x = storageEnvir$x, value = storageEnvir$value))
+
   list(output = output)
 }
 
