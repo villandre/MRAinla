@@ -33,8 +33,6 @@ Spatiotemprange sptimeDistance(const Eigen::ArrayXd & spCoor1, const double & ti
 };
 
 sp_mat createBlockMatrix(std::vector<mat *> listOfMatrices) {
-  uint numRows = 0 ;
-  uint numCols = 0 ;
 
   std::vector<Triplet> tripletList;
 
@@ -47,6 +45,27 @@ sp_mat createBlockMatrix(std::vector<mat *> listOfMatrices) {
       }
     }
     offset += aMatrix->rows() ;
+  }
+  sp_mat X(offset, offset);
+
+  X.setFromTriplets(tripletList.begin(), tripletList.end()) ;
+
+  return X ;
+}
+
+sp_mat createBlockMatrix(std::vector<mat> listOfMatrices) {
+
+  std::vector<Triplet> tripletList;
+
+  int offset = 0 ;
+
+  for (auto & aMatrix : listOfMatrices) {
+    for (uint i = 0; i < aMatrix.rows() ; i++) {
+      for (uint j = 0; j < aMatrix.cols(); j++) {
+        tripletList.push_back(Triplet(i + offset, j + offset, aMatrix(i, j))) ;
+      }
+    }
+    offset += aMatrix.rows() ;
   }
   sp_mat X(offset, offset);
 

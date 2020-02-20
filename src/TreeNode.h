@@ -4,9 +4,9 @@
 
 #include <algorithm>
 #include <vector>
-#include <cstdio>
+// #include <cstdio>
 #include <cstdlib>
-#include <iostream>
+// #include <iostream>
 #include <random>
 
 #include <assert.h>
@@ -153,16 +153,18 @@ public:
   virtual int GetM()=0;
   virtual void ComputeWmat(const maternVec &, const maternVec &, const double &, const double &, const std::string &)=0 ;
   virtual mat & GetB(const uint & l)=0 ;
-  virtual mat GetSigma()=0 ;
-  virtual mat & GetKmatrix()=0 ;
-  virtual mat * GetKmatrixAddress()=0 ;
-  virtual mat * GetKmatrixInverseAddress()=0 ;
-  virtual mat GetKmatrixInverse()=0 ;
+  virtual double GetBelement(const uint & l, const uint & row, const uint & col)=0 ;
+
+  mat & GetKmatrix() {return m_K ;}
+
+  virtual mat GetKmatrixInverse() = 0 ;
   virtual void SetUncorrSD(const double &)=0 ;
-  virtual mat & GetUpred(const uint & l)=0 ;
+  // virtual mat & GetUpred(const uint & l)=0 ;
+  virtual double & GetUpredElement(const uint & l, const uint & row, const uint & col)=0;
   virtual std::vector<mat> & GetUmatList()=0 ;
   virtual void SetPredictLocations(const inputdata &)=0 ;
   virtual Eigen::ArrayXi & GetPredIndices()=0 ;
+  virtual int GetNumPreds() { throw Rcpp::exception("Can only get number of predictions in tip nodes! \n") ; }
   virtual void computeUpred(const maternVec &, const maternVec &, const double &, const spatialcoor &, const double &, const std::string &)=0 ;
 
   virtual void genKnotsOnCube(spatialcoor &, int &, std::mt19937_64 &, Eigen::Array<bool, Eigen::Dynamic, 1> &) = 0;
@@ -209,7 +211,12 @@ public:
     }
     return siblingVec ;
   }
-  int GetNumKnots() {return m_knotsCoor.timeCoords.size() ;}
+  virtual int GetNumKnots() {return GetKeepKnotIndices().size() ;}
+  virtual Eigen::ArrayXi GetKeepKnotIndices() {
+    Eigen::ArrayXi result = Eigen::VectorXi::LinSpaced(m_knotsCoor.timeCoords.size(), 0, m_knotsCoor.timeCoords.size() - 1).array() ;
+    return result ;
+  }
+
   std::vector<TreeNode *> getAncestors() ;
   int GetNumObs() {return m_obsInNode.size() ;}
 
@@ -241,6 +248,7 @@ protected:
   void computeBknots() ;
 
   std::vector<mat> m_bKnots ;
+  mat m_K ;
 };
 }
 #endif /* TREENODE_H */

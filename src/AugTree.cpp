@@ -7,6 +7,7 @@
 #include "AugTree.h"
 #include "TipNode.h"
 #include "InternalNode.h"
+// #include <unsupported/Eigen/SparseExtra>
 // #include "gperftools/profiler.h"
 
 using namespace Rcpp ;
@@ -38,7 +39,8 @@ AugTree::AugTree(const uint & Mlon,
                  const Rcpp::NumericVector & errorParsHyperpars,
                  const Rcpp::NumericVector & FEmuVec,
                  const double & nuggetSD,
-                 const bool & normalHyperprior)
+                 const bool & normalHyperprior,
+                 const double & tipKnotsThinningRate)
   : m_distMethod(distMethod), m_nuggetSD(nuggetSD),
     m_Mlon(Mlon), m_Mlat(Mlat), m_Mtime(Mtime),
     m_normalHyperprior(normalHyperprior)
@@ -56,13 +58,13 @@ AugTree::AugTree(const uint & Mlon,
 
   m_fixedEffParameters = Eigen::VectorXd::Zero(m_dataset.covariateValues.cols() + 1);
   Rcout << "Building the grid..." << std::endl ;
-  BuildTree(minObsForTimeSplit, splitTime, numKnotsRes0, J) ;
+  BuildTree(minObsForTimeSplit, splitTime, numKnotsRes0, J, tipKnotsThinningRate) ;
   Rcout << "Grid built!" << std::endl ;
 
   m_numKnots = 0 ;
 
   for (uint i = 0 ; i < m_vertexVector.size() ; i++) {
-    m_numKnots += m_vertexVector.at(i)->GetKnotsCoor().timeCoords.size() ;
+    m_numKnots += m_vertexVector.at(i)->GetNumKnots() ;
   }
   m_FullCondMean = Eigen::VectorXd::Zero(m_numKnots + m_fixedEffParameters.size()) ;
   m_FullCondSDs = Eigen::VectorXd::Zero(m_numKnots + m_fixedEffParameters.size()) ;
@@ -83,7 +85,7 @@ AugTree::AugTree(const uint & Mlon,
   // }
 }
 
-void AugTree::BuildTree(const uint & minObsForTimeSplit, const bool splitTime, const unsigned int numKnots0, double J)
+void AugTree::BuildTree(const uint & minObsForTimeSplit, const bool splitTime, const unsigned int numKnots0, double J, double tipKnotsThinningRate)
 {
   m_vertexVector.reserve(1) ;
 
@@ -94,7 +96,7 @@ void AugTree::BuildTree(const uint & minObsForTimeSplit, const bool splitTime, c
   m_vertexVector.push_back(topNode) ;
   ArrayXi numSplits(3) ;
   numSplits << m_Mlon, m_Mlat, m_Mtime;
-  createLevels(topNode, "longitude", numSplits) ;
+  createLevels(topNode, "longitude", numSplits, tipKnotsThinningRate) ;
   numberNodes() ;
 
   generateKnots(topNode, numKnots0, J) ;
@@ -115,7 +117,7 @@ void AugTree::numberNodes() {
 // We make sure that splits don't result in empty regions
 // numObsForTimeSplit still does nothing
 
-void AugTree::createLevels(TreeNode * parent, std::string splitWhat, ArrayXi numSplitsLeft) {
+void AugTree::createLevels(TreeNode * parent, std::string splitWhat, ArrayXi numSplitsLeft, double tipKnotsThinningRate) {
   ArrayXi obsForMedian = parent->GetObsInNode() ;
   ArrayXi childMembership = ArrayXi::Zero(obsForMedian.size()) ;
   std::vector<dimensions> childDimensions ;
@@ -188,7 +190,7 @@ void AugTree::createLevels(TreeNode * parent, std::string splitWhat, ArrayXi num
       m_vertexVector.push_back(newNode) ;
       parent->AddChild(newNode) ;
     } else {
-      TipNode * newNode = new TipNode(i, incrementedDepth, parent, m_dataset) ;
+      TipNode * newNode = new TipNode(i, incrementedDepth, parent, m_dataset, tipKnotsThinningRate) ;
       m_numTips = m_numTips+1 ;
       m_vertexVector.push_back(newNode) ;
       parent->AddChild(newNode) ;
@@ -229,7 +231,7 @@ void AugTree::createLevels(TreeNode * parent, std::string splitWhat, ArrayXi num
       }
     }
     for (auto && i : parent->GetChildren()) {
-      createLevels(i, splitWhat, numSplitsLeft) ;
+      createLevels(i, splitWhat, numSplitsLeft, tipKnotsThinningRate) ;
     }
   }
 }
@@ -292,66 +294,210 @@ std::vector<TreeNode *> AugTree::GetLevel(const uint level) {
 }
 
 void AugTree::CreateSigmaBetaEtaInvMat() {
-  std::vector<mat *> FEinvAndKinvMatrixList = getKmatricesInversePointers() ;
-  // We have to use that loop instead of creating an identity matrix, else, it will be assumed in the updating function
-  // that the zeros in the identity matrix are not ALWAYS 0 in the sparse matrix, and the iterating across
-  // non-zero elements will cover those zeros too!
-  mat FEinvMatrix(1,1) ;
-  FEinvMatrix(0,0) = pow(m_fixedEffSD, -2) ;
-  for (uint i = 0; i < m_fixedEffParameters.size(); i++) {
-    FEinvAndKinvMatrixList.insert(FEinvAndKinvMatrixList.begin(), &FEinvMatrix) ;
-  }
-
+  std::vector<mat> FEinvAndKinvMatrixList = populateFEinvAndKinvMatrixList() ;
   m_SigmaFEandEtaInv = createBlockMatrix(FEinvAndKinvMatrixList) ;
 }
 
-void AugTree::UpdateSigmaBetaEtaInvMat() {
-  std::vector<mat *> FEinvAndKinvMatrixList = getKmatricesInversePointers() ;
+std::vector<mat> AugTree::populateFEinvAndKinvMatrixList() {
+  std::vector<mat> FEinvAndKinvMatrixList ;
+  mat FEinvMatrix(1,1) ;
+  FEinvMatrix(0,0) = pow(m_fixedEffSD, -2) ;
   // We have to use that loop instead of creating an identity matrix, else, it will be assumed in the updating function
   // that the zeros in the identity matrix are not ALWAYS 0 in the sparse matrix, and the iterating across
   // non-zero elements will cover those zeros too!
-  mat FEinvMatrix(1,1) ;
-  FEinvMatrix(0,0) = pow(m_fixedEffSD, -2) ;
   for (uint i = 0; i < m_fixedEffParameters.size(); i++) {
-    FEinvAndKinvMatrixList.insert(FEinvAndKinvMatrixList.begin(), &FEinvMatrix) ;
+    FEinvAndKinvMatrixList.push_back(FEinvMatrix) ;
   }
+
+  for (auto & node : m_vertexVector) { // Is this the right ordering? Does it matter?
+    FEinvAndKinvMatrixList.push_back(node->GetKmatrixInverse()) ;
+  }
+  return FEinvAndKinvMatrixList ;
+}
+
+void AugTree::UpdateSigmaBetaEtaInvMat() {
+  std::vector<mat> FEinvAndKinvMatrixList = populateFEinvAndKinvMatrixList() ;
 
   sp_mat::InnerIterator it(m_SigmaFEandEtaInv, 0) ;
   int k = 0 ;
 
-  for (auto & matrixPointer : FEinvAndKinvMatrixList) {
-    int colIndex = 0 ;
-    for (uint elementIndex = 0 ; elementIndex < matrixPointer->size(); elementIndex++) {
-      it.valueRef() = (*matrixPointer)(elementIndex) ;
-      colIndex += 1 ;
-      if (colIndex == matrixPointer->cols()) {
-        it = sp_mat::InnerIterator(m_SigmaFEandEtaInv, k + 1) ;
-        k += 1 ;
-        colIndex = 0 ;
-      } else {
-        it = ++it ;
+  // for (auto & matrix : FEinvAndKinvMatrixList) {
+  //   int colIndex = 0 ;
+  //   for (uint elementIndex = 0 ; elementIndex < matrix.size(); elementIndex++) {
+  //     it.valueRef() = matrix(elementIndex) ;
+  //     colIndex += 1 ;
+  //     if (colIndex == matrix.cols()) {
+  //       it = sp_mat::InnerIterator(m_SigmaFEandEtaInv, k + 1) ;
+  //       k += 1 ;
+  //       colIndex = 0 ;
+  //     } else {
+  //       it = ++it ;
+  //     }
+  //   }
+  // }
+  // The following ignores that the K matrices are column-major, unlike m_SigmaFEandEtaInv.
+  // It doesn't matter however, as the K matrices are symmetrical.
+  uint currentMatrixIndex = 0 ;
+  uint innerMatrixIndex = 0 ;
+  for (int k=0; k<m_SigmaFEandEtaInv.outerSize(); ++k) {
+    for (sp_mat::InnerIterator it(m_SigmaFEandEtaInv, k); it; ++it) {
+      it.valueRef() = FEinvAndKinvMatrixList.at(currentMatrixIndex)(innerMatrixIndex) ;
+      innerMatrixIndex += 1 ;
+      if (innerMatrixIndex == FEinvAndKinvMatrixList.at(currentMatrixIndex).size()) {
+        currentMatrixIndex += 1;
+        innerMatrixIndex = 0 ;
       }
     }
   }
 }
 
 void AugTree::createHmatrix() {
-  int numObs = m_dataset.spatialCoords.rows() ;
 
   std::vector<TreeNode *> tipNodes = GetTipNodes() ;
-  int numTips = tipNodes.size() ;
 
-  ArrayXi FmatObsOrder = ArrayXi::Zero(numObs) ;
+  orderTipNodesForHmat(tipNodes) ;
+
+  std::vector<Triplet> tripletList = populateTripletList(tipNodes, false) ;
+  m_Hmat.resize(m_dataset.covariateValues.rows(), m_numKnots + m_dataset.covariateValues.cols() + 1) ;
+  Rprintf("Hmat size: %i %i \n", m_Hmat.rows(), m_Hmat.cols()) ;
+  Rcout << "Populating H matrix..." << std::endl ;
+  m_Hmat.setFromTriplets(tripletList.begin(), tripletList.end()) ;
+  Rcout << "Done! \n" ;
+  // The idea behind this is to associate a memory location in the W matrices and a cell
+  // in the H matrix. The memory location we get from calling .data() on a given W
+  // matrix changes when the W values are updated, even when W is allocated on the
+  // heap, i.e. with 'new', but the memory location of the vector element is constant
+  // once the vector is fully populated. To get access to the value, all we need to do
+  // is invoke *(pointer->data() + offset).
+  // The odd nesting of the loops is due to the fact that m_Hmat is row-major.
+  // I made m_Hmat row-major to make the updating process faster, as all values on any
+  // given row are associated with the same observation, which belongs to a single tip node.
+  // Don't mind the four nested loops: all it does is traverse all the elements once.
+  Rcout << "Preparing offset vector... " << std::endl ;
+  for (auto & tipNode : tipNodes) {
+    std::vector<TreeNode *> tipNodeAncestors = tipNode->getAncestors() ;
+    uint numObs = tipNode->GetObsInNode().size() ;
+    for (uint rowIndex = 0; rowIndex < numObs ; rowIndex++) {
+      for (uint depth = 0 ; depth <= m_M ; depth++) {
+        ArrayXi colIndicesArray = tipNodeAncestors.at(depth)->GetKeepKnotIndices() ;
+        for (uint colIndexIndex = 0 ; colIndexIndex < colIndicesArray.size(); colIndexIndex++) {
+        // for (auto & BcolIndex : colIndicesArray) {
+          pointerOffset elementToAdd =
+            pointerOffset(
+              &(tipNode->GetWlist().at(depth)),
+              colIndicesArray(colIndexIndex) * numObs + rowIndex
+            ) ; // Remember that the W matrices are column-major, unlike the sparse matrices.
+          m_pointerOffsetForHmat.push_back(elementToAdd) ;
+        }
+      }
+    }
+  }
+  Rcout << "Offset vector ready!" << std::endl ;
+}
+
+std::vector<Eigen::Triplet<double>> AugTree::populateTripletList(const std::vector<TreeNode *> & tipNodes,
+                                                  const bool forPredictions) {
   int rowIndex = 0 ;
-  std::vector<ArrayXi> ancestorIdsVec(numTips) ;
+  uint elementIndex = 0 ;
 
-  for (uint i = 0 ; i < tipNodes.size(); i++) {
-    ArrayXi idVec = tipNodes.at(i)->GetAncestorIds() ; // Last element is tip node.
-    ancestorIdsVec.at(i) = idVec ;
+  if (forPredictions) {
+    m_obsOrderForHpredMat = ArrayXi::Zero(m_predictData.timeCoords.size()) ;
+    for (auto & i : tipNodes) {
+      if (i->GetNumPreds() > 0) {
+        m_obsOrderForHpredMat.segment(elementIndex, i->GetNumPreds()) = i->GetPredIndices() ;
+        elementIndex += i->GetNumPreds() ;
+      }
+    }
+  } else {
+    m_obsOrderForHmat = ArrayXi::Zero(m_dataset.timeCoords.size()) ;
+    for (auto & i : tipNodes) {
+      uint numObsInNode = i->GetNumObs() ;
+      if (numObsInNode > 0) {
+        m_obsOrderForHmat.segment(elementIndex, numObsInNode) = i->GetObsInNode() ;
+        elementIndex += numObsInNode ;
+      }
+    }
   }
 
+  std::vector<TreeNode *> previousBrickAncestors = tipNodes.at(0)->getAncestors() ;
+  ArrayXi colIndexAtEachRes = initialiseColIndexAtEachRes() ;
   std::vector<Triplet> tripletList ;
 
+  for (auto & tipNode : tipNodes) {
+    // The idea behind this section of the code is that the column index for producing the section
+    // of the H matrix for a tip node at any given depth i should only change when a different ancestor for the
+    // tip node is reached. The hierarchical structure of the tree explains this.
+    for (uint i = 1 ; i <= m_M; i++) { // The root node is shared by all tips, hence the 1.
+      if (previousBrickAncestors.at(i) != tipNode->getAncestors().at(i)) {
+        colIndexAtEachRes(i) += previousBrickAncestors.at(i)->GetNumKnots() ;
+      }
+    }
+    previousBrickAncestors = tipNode->getAncestors() ;
+
+    if (forPredictions and (tipNode->GetNumPreds() == 0)) {
+      continue ;
+    }
+    uint numRowsInBorU = forPredictions? tipNode->GetNumPreds() : tipNode->GetNumObs() ;
+
+    // std::vector<TreeNode *> tipNodeAncestors = tipNode->getAncestors() ;
+    for (uint depthIndex = 0; depthIndex <= m_M; depthIndex++) {
+      // This is necessary because the B matrices in storage are actually the W matrices, which have too many columns in the tip nodes.
+      // tipNode->GetB(depthIndex).cols() would give us too many columns for depthIndex = m_M when we exclude some of the knots at the finest resolution.
+      // uint numColumnsInB =  previousBrickAncestors.at(depthIndex)->GetNumKnots() ;
+
+      // ArrayXi rowIndicesForW = rep(uvec::LinSpaced(numRowsInB, 0, numRowsInB - 1).array(),
+      //                              numColumnsInB) ;
+      // ArrayXi colIndicesForW = rep_each(
+      //   uvec::LinSpaced(numColumnsInB, 0, numColumnsInB - 1).array(),
+      //   numRowsInB
+      // ) ;
+      // ArrayXi rowIndicesForF = rowIndicesForW + rowIndex ;
+      // ArrayXi colIndicesForF = colIndicesForW + colIndexAtEachRes(depthIndex) ;
+      //
+      // if (depthIndex == m_M) {
+      //   colIndicesForW = rep_each(tipNode->GetKeepKnotIndices(), numRowsInB) ;
+      // }
+      uint numRows = forPredictions? tipNode->GetNumPreds() : tipNode->GetNumObs() ;
+      uint numCols = previousBrickAncestors.at(depthIndex)->GetNumKnots() ;
+
+      for (uint i = 0; i < numRows; i++) {
+        for (uint j = 0; j < numCols; j++) {
+          double valueToAdd = forPredictions?
+          tipNode->GetUpredElement(depthIndex, i, j) :
+          tipNode->GetBelement(depthIndex, i, j) ;
+          tripletList.push_back(Triplet(rowIndex + i, colIndexAtEachRes(depthIndex) + j, valueToAdd)) ;
+        }
+      }
+    }
+    rowIndex += numRowsInBorU ;
+  }
+
+  int numRowsForList, numColsForList ;
+  inputdata * datasetPointer ;
+  ArrayXi * orderPointer ;
+  // Processing other covariate values
+  if (forPredictions) {
+    datasetPointer = &m_predictData ;
+    orderPointer = &m_obsOrderForHpredMat ;
+  } else {
+    datasetPointer = &m_dataset ;
+    orderPointer = &m_obsOrderForHmat ;
+  }
+  // Adding in the intercept...
+  for (uint i = 0; i < datasetPointer->covariateValues.rows(); i++) {
+    tripletList.push_back(Triplet(i, 0, 1)) ;
+  }
+
+  for (uint rowInd = 0 ; rowInd < datasetPointer->covariateValues.rows() ; rowInd++) {
+    for(uint colInd = 0 ; colInd < datasetPointer->covariateValues.cols() ; colInd++) {
+      tripletList.push_back(Triplet(rowInd, colInd + 1,datasetPointer->covariateValues((*orderPointer)(rowInd), colInd))) ;
+    }
+  }
+
+  return tripletList ;
+}
+
+void AugTree::orderTipNodesForHmat(std::vector<TreeNode *> & tipNodes) {
   std::sort(tipNodes.begin(), tipNodes.end(), [] (TreeNode * first, TreeNode * second) {
     ArrayXi firstAncestorIds = first->GetAncestorIds() ;
     ArrayXi secondAncestorIds = second->GetAncestorIds() ;
@@ -364,8 +510,10 @@ void AugTree::createHmatrix() {
       }
     }
     return firstSmallerThanSecond ;
-  }) ; // This is supposed to reorder the tip nodes in such a way that the F matrix has contiguous blocks.
+  }) ; // This reorders the tip nodes in such a way that the F matrix has contiguous blocks.
+}
 
+ArrayXi AugTree::initialiseColIndexAtEachRes() {
   ArrayXi colIndexAtEachRes = ArrayXi::Zero(m_M + 1);
 
   for (auto & node : m_vertexVector) {
@@ -375,80 +523,10 @@ void AugTree::createHmatrix() {
       }
     }
   } // Convoluted way of getting cumsum(c(0, Num knots at resolutions 0 to M-1))
-
   colIndexAtEachRes += (m_dataset.covariateValues.cols() + 1) ; // Covariate columns go before, the +1 is for the intercept.
-  std::vector<TreeNode *> previousBrickAncestors = tipNodes.at(0)->getAncestors() ;
-
-  for (auto & nodeToProcess : tipNodes) {
-
-    if (nodeToProcess->GetObsInNode().size() == 0 ) {
-      Rcpp::stop("Why is there an empty node? This is not supposed to happen. \n\n") ;
-    } // Should not normally occur, as the tree-building scheme forbids empty nodes.
-
-    // The idea behind this section of the code is that the column index for producing the section
-    // of the H matrix for a tip node at any given depth i should only change when a different ancestor for the
-    // tip node is reached. The hierarchical structure of the tree explains this.
-    for (uint i = 1 ; i <= m_M; i++) { // The root node is shared by all tips, hence the 1.
-      if (previousBrickAncestors.at(i) != nodeToProcess->getAncestors().at(i)) {
-        colIndexAtEachRes(i) += previousBrickAncestors.at(i)->GetNumKnots() ;
-      }
-    }
-    previousBrickAncestors = nodeToProcess->getAncestors() ;
-
-    FmatObsOrder.segment(rowIndex, nodeToProcess->GetObsInNode().size()) = nodeToProcess->GetObsInNode() ;
-
-    for (uint depthIndex = 0; depthIndex <= m_M; depthIndex++) {
-      ArrayXi rowIndices = rep(uvec::LinSpaced(nodeToProcess->GetB(depthIndex).rows(), 0, nodeToProcess->GetB(depthIndex).rows() - 1).array(),
-          nodeToProcess->GetB(depthIndex).cols()) + rowIndex  ;
-      ArrayXi colIndices = rep_each(uvec::LinSpaced(nodeToProcess->GetB(depthIndex).cols(), 0, nodeToProcess->GetB(depthIndex).cols() - 1).array(),
-          nodeToProcess->GetB(depthIndex).rows()) + colIndexAtEachRes(depthIndex) ;
-
-      for (uint i = 0; i < rowIndices.size(); i++) {
-        tripletList.push_back(Triplet(rowIndices(i), colIndices(i), nodeToProcess->GetB(depthIndex)(rowIndices(i) - rowIndex, colIndices(i) - colIndexAtEachRes(depthIndex)))) ;
-      }
-    }
-    rowIndex += nodeToProcess->GetObsInNode().size() ; // The B matrices should have as many rows as observations in the node...
-  }
-  m_obsOrderForFmat = FmatObsOrder ;
-
-  // Adding in the intercept...
-  for (uint i = 0; i < m_dataset.covariateValues.rows(); i++) {
-    tripletList.push_back(Triplet(i, 0, 1)) ;
-  }
-  // Processing other covariate values
-  for (uint rowIndex = 0 ; rowIndex < m_dataset.covariateValues.rows() ; rowIndex++) {
-    for(uint colIndex = 0 ; colIndex < m_dataset.covariateValues.cols() ; colIndex++) {
-      tripletList.push_back(Triplet(rowIndex, colIndex + 1, m_dataset.covariateValues(m_obsOrderForFmat(rowIndex), colIndex))) ;
-    }
-  }
-
-  // The idea behind this is to associate a memory location in the W matrices and a cell
-  // in the H matrix. The memory location we get from calling .data() on a given W
-  // matrix changes when the W values are updated, even when W is allocated on the
-  // heap, i.e. with 'new', but the memory location of the vector element is constant
-  // once the vector is fully populated. To get access to the value, all we need to do
-  // is invoke *(pointer->data() + offset).
-  // The odd nesting of the loops is due to the fact that m_Hmat is row-major.
-  // I made m_Hmat row-major to make the updating process, as all values on any
-  // given row are associated with the same tip.
-  // Don't mind the four nested loops: all it does is traverse all the elements once.
-
-  for (auto & tipNode : tipNodes) {
-    uint numObs = tipNode->GetObsInNode().size() ;
-    for (uint rowIndex = 0; rowIndex < numObs ; rowIndex++) {
-      for (uint depth = 0 ; depth <= m_M ; depth++) {
-        uint numKnotsAtDepth = tipNode->GetWlist().at(depth).cols() ;
-        for (uint colIndex = 0; colIndex < numKnotsAtDepth; colIndex++) {
-          pointerOffset elementToAdd = pointerOffset(&(tipNode->GetWlist().at(depth)), colIndex * numObs + rowIndex) ;
-          m_pointerOffsetForHmat.push_back(elementToAdd) ;
-        }
-      }
-    }
-  }
-  m_Hmat.resize(m_dataset.covariateValues.rows(), m_numKnots + m_dataset.covariateValues.cols() + 1) ;
-
-  m_Hmat.setFromTriplets(tripletList.begin(), tripletList.end()) ;
+  return colIndexAtEachRes ;
 }
+
 
 void AugTree::updateHmatrix() {
   int loopIndex = 0 ;
@@ -479,97 +557,13 @@ void AugTree::updateHmatrixPred() {
 }
 
 void AugTree::createHmatrixPred() {
-  uint numObs = m_predictData.spatialCoords.rows() ;
-  uint rowIndex = 0 ;
 
   std::vector<TreeNode *> tipNodes = GetTipNodes() ;
-  int numTips = tipNodes.size() ;
 
-  std::vector<ArrayXi> ancestorIdsVec(numTips) ;
+  orderTipNodesForHmat(tipNodes) ;
 
-  for (uint i = 0 ; i < tipNodes.size(); i++) {
-    ArrayXi idVec = tipNodes.at(i)->GetAncestorIds() ; // Last element is tip node.
-    ancestorIdsVec.at(i) = idVec ;
-  }
+  std::vector<Triplet> tripletList = populateTripletList(tipNodes, true) ;
 
-  std::vector<Triplet> tripletList;
-
-  std::sort(tipNodes.begin(), tipNodes.end(), [] (TreeNode * first, TreeNode * second) {
-    ArrayXi firstAncestorIds = first->GetAncestorIds() ;
-    ArrayXi secondAncestorIds = second->GetAncestorIds() ;
-    bool firstSmallerThanSecond = false ;
-    for (uint i = 1 ; i < firstAncestorIds.size() ; i++) { // The ultimate ancestor is always node 0, hence the loop starting at 1.
-      bool test = (firstAncestorIds(i) == secondAncestorIds(i)) ;
-      if (!test) {
-        firstSmallerThanSecond = (firstAncestorIds(i) < secondAncestorIds(i)) ;
-        break ;
-      }
-    }
-    return firstSmallerThanSecond ;
-  }) ; // This is supposed to reorder the tip nodes in such a way that the F matrix has contiguous blocks.
-
-  m_obsOrderForHpredMat = ArrayXi::Zero(m_predictData.timeCoords.size()) ;
-  uint elementIndex = 0 ;
-  for (auto & i : tipNodes) {
-    uint numPredObsInNode = i->GetPredIndices().size() ;
-    if (numPredObsInNode > 0) {
-      m_obsOrderForHpredMat.segment(elementIndex, i->GetPredIndices().size()) = i->GetPredIndices() ;
-      elementIndex += i->GetPredIndices().size() ;
-    }
-  }
-
-  ArrayXi colIndexAtEachRes = ArrayXi::Zero(m_M + 1);
-
-  for (auto & node : m_vertexVector) {
-    if (node->GetDepth() < m_M) {
-      for (uint i = node->GetDepth() + 1; i <= m_M; i++) {
-        colIndexAtEachRes(i) += node->GetNumKnots() ;
-      }
-    }
-  } // Convoluted way of getting cumsum(c(0, Num knots at resolutions 0 to M-1))
-
-  colIndexAtEachRes += (m_dataset.covariateValues.cols() + 1) ; // Covariate columns go before, the +1 is for the intercept.
-  std::vector<TreeNode *> previousBrickAncestors = tipNodes.at(0)->getAncestors() ;
-
-  for (auto & nodeToProcess : tipNodes) {
-
-    // The idea behind this section of the code is that the column index for producing the section
-    // of the H matrix for a tip node at any given depth i should only change when a different ancestor for the
-    // tip node is reached. The hierarchical structure of the tree explains this.
-    for (uint i = 1 ; i <= m_M; i++) { // The root node is shared by all tips, hence the 1.
-      if (previousBrickAncestors.at(i) != nodeToProcess->getAncestors().at(i)) {
-        colIndexAtEachRes(i) += previousBrickAncestors.at(i)->GetNumKnots() ;
-      }
-    }
-    previousBrickAncestors = nodeToProcess->getAncestors() ;
-
-    if (nodeToProcess->GetPredIndices().size() == 0 ) {
-      continue ;
-    }
-
-    for (uint depthIndex = 0; depthIndex <= m_M; depthIndex++) {
-      ArrayXi rowIndices = rep(uvec::LinSpaced(nodeToProcess->GetUpred(depthIndex).rows(), 0, nodeToProcess->GetUpred(depthIndex).rows() - 1).array(),
-                               nodeToProcess->GetUpred(depthIndex).cols()) + rowIndex  ;
-      ArrayXi colIndices = rep_each(uvec::LinSpaced(nodeToProcess->GetUpred(depthIndex).cols(), 0, nodeToProcess->GetUpred(depthIndex).cols() - 1).array(),
-                                    nodeToProcess->GetUpred(depthIndex).rows()) + colIndexAtEachRes(depthIndex) ;
-
-      for (uint i = 0; i < rowIndices.size(); i++) {
-        tripletList.push_back(Triplet(rowIndices(i), colIndices(i), nodeToProcess->GetUpred(depthIndex)(rowIndices(i) - rowIndex, colIndices(i) - colIndexAtEachRes(depthIndex)))) ;
-      }
-    }
-    rowIndex += nodeToProcess->GetPredIndices().size() ; // The U matrices should have as many rows as prediction locations in the node...
-  }
-
-  // Adding in the intercept...
-  for (uint i = 0; i < m_predictData.covariateValues.rows(); i++) {
-    tripletList.push_back(Triplet(i, 0, 1)) ;
-  }
-  // Processing other covariate values
-  for (uint rowInd = 0 ; rowInd < m_predictData.covariateValues.rows() ; rowInd++) {
-    for(uint colInd = 0 ; colInd < m_predictData.covariateValues.cols() ; colInd++) {
-      tripletList.push_back(Triplet(rowInd, colInd + 1, m_predictData.covariateValues(m_obsOrderForHpredMat(rowInd), colInd))) ;
-    }
-  }
   Rcout << "Creating HmatPred! \n" ;
   m_HmatPred.resize(m_predictData.covariateValues.rows(), m_numKnots + m_dataset.covariateValues.cols() + 1) ;
   m_HmatPred.setFromTriplets(tripletList.begin(), tripletList.end()) ;
@@ -581,9 +575,11 @@ void AugTree::createHmatrixPred() {
       uint numObs = tipNode->GetPredIndices().size() ;
       for (uint rowIndex = 0; rowIndex < numObs ; rowIndex++) {
         for (uint depth = 0 ; depth <= m_M ; depth++) {
-          uint numKnotsAtDepth = ancestorsList.at(depth)->GetNumKnots() ;
-          for (uint colIndex = 0; colIndex < numKnotsAtDepth; colIndex++) {
-            pointerOffset elementToAdd = pointerOffset(&(tipNode->GetUmatList().at(depth)), colIndex * numObs + rowIndex) ;
+          ArrayXi colIndicesArray = ancestorsList.at(depth)->GetKeepKnotIndices() ;
+          for (uint colIndexIndex = 0 ; colIndexIndex < colIndicesArray.size(); colIndexIndex++) {
+            pointerOffset elementToAdd = pointerOffset(
+              &(tipNode->GetUmatList().at(depth)),
+              colIndicesArray(colIndexIndex) * numObs + rowIndex) ;
             m_pointerOffsetForHmatPred.push_back(elementToAdd) ;
           }
         }
@@ -613,28 +609,15 @@ void AugTree::diveAndUpdate(TreeNode * nodePointer, std::vector<TreeNode *> * de
 void AugTree::ComputeLogPriors() {
   Rcout << "Computing log(p(Psi))..." << std::endl ;
   fflush(stdout) ;
-  std::vector<std::pair<double, TwoParsProbDist *>> priorCombinations ;
 
-  priorCombinations.push_back(std::make_pair(m_MaternParsSpace.m_rho, m_MaternParsHyperparsRhoSpace.get())) ;
-  priorCombinations.push_back(std::make_pair(m_MaternParsSpace.m_smoothness, m_MaternParsHyperparsSmoothnessSpace.get())) ;
+    m_logPrior = m_MaternParsHyperparsRhoSpace->computeLogDensity(m_normalHyperprior? log(m_MaternParsSpace.m_rho) : m_MaternParsSpace.m_rho)
+      + m_MaternParsHyperparsSmoothnessSpace->computeLogDensity(m_normalHyperprior? log(m_MaternParsSpace.m_smoothness) : m_MaternParsSpace.m_smoothness)
+      + m_MaternParsHyperparsRhoTime->computeLogDensity(m_normalHyperprior? log(m_MaternParsTime.m_rho) : m_MaternParsTime.m_rho)
+      + m_MaternParsHyperparsSmoothnessTime->computeLogDensity(m_normalHyperprior? log(m_MaternParsTime.m_smoothness) : m_MaternParsTime.m_smoothness)
+      + m_MaternParsHyperparsScaling->computeLogDensity(m_normalHyperprior? log(m_spacetimeScaling) : m_spacetimeScaling)
+      + m_ParsHyperparsFixedEffsSD->computeLogDensity(m_normalHyperprior? log(m_fixedEffSD) : m_fixedEffSD)
+      + m_ParsHyperparsErrorSD->computeLogDensity(m_normalHyperprior? log(m_errorSD) : m_errorSD) ;
 
-  priorCombinations.push_back(std::make_pair(m_MaternParsTime.m_rho, m_MaternParsHyperparsRhoTime.get())) ;
-  priorCombinations.push_back(std::make_pair(m_MaternParsTime.m_smoothness, m_MaternParsHyperparsSmoothnessTime.get())) ;
-
-  priorCombinations.push_back(std::make_pair(m_spacetimeScaling, m_MaternParsHyperparsScaling.get())) ;
-
-  priorCombinations.push_back(std::make_pair(m_fixedEffSD, m_ParsHyperparsFixedEffsSD.get())) ;
-  priorCombinations.push_back(std::make_pair(m_errorSD, m_ParsHyperparsErrorSD.get())) ;
-
-  double logPrior = 0 ;
-
-  for (auto & i : priorCombinations) {
-    double coef = i.first ;
-    if (m_normalHyperprior) coef = log(i.first) ; // The normal prior is applicable to log-hyperparameters.
-    logPrior += i.second->computeLogDensity(i.first) ;
-  }
-
-  m_logPrior = logPrior ;
   Rcout << "Done!" << std::endl ;
 }
 
@@ -647,10 +630,6 @@ void AugTree::ComputeLogFCandLogCDandDataLL() {
     CreateSigmaBetaEtaInvMat() ;
   } else {
     UpdateSigmaBetaEtaInvMat() ;
-  }
-
-  if (m_processPredictions) {
-    ComputeHpred() ;
   }
 
   // for (auto & i: m_vertexVector) {
@@ -669,11 +648,14 @@ void AugTree::ComputeLogFCandLogCDandDataLL() {
       updateHmatrix() ;
     }
   }
-  vec responsesReshuffled = elem(m_dataset.responseValues.array(), m_obsOrderForFmat) ;
+
+  vec responsesReshuffled = elem(m_dataset.responseValues.array(), m_obsOrderForHmat) ;
   mat scaledResponse = std::pow(m_errorSD, -2) * m_Hmat.transpose() * responsesReshuffled ;
 
+  Rcout << "Computing secondTerm... " << std::endl ;
   sp_mat secondTerm = std::pow(m_errorSD, -2) * (m_Hmat.transpose() * m_Hmat) ;
 
+  Rcout << "Computing Cholesky... " << std::endl ;
   fflush(stdout) ;
   if (m_logFullCond == 0) { // This is the first iteration...
     try {
@@ -685,6 +667,7 @@ void AugTree::ComputeLogFCandLogCDandDataLL() {
 
   fflush(stdout) ;
   m_FullCondPrecisionChol.factorize(m_SigmaFEandEtaInv + secondTerm) ; // The sparsity pattern in matToInvert is always the same, notwithstand the hyperparameter values.
+  Rcout << "Done computing Cholesky! " << std::endl ;
   secondTerm.resize(0,0) ; // Making sure it doesn't clog the memory (although I suspect this is not necessary)
 
   ComputeFullCondSDsFE() ;
@@ -740,6 +723,10 @@ void AugTree::ComputeLogJointPsiMarginal() {
 
   ComputeLogFCandLogCDandDataLL() ;
 
+  if (m_processPredictions) {
+    ComputeHpred() ;
+  }
+
   Rprintf("Observations log-lik: %.4e \n Log-prior: %.4e \n Log-Cond. dist.: %.4e \n Log-full cond.: %.4e \n \n \n",
    m_globalLogLik, m_logPrior, m_logCondDist, m_logFullCond) ;
   m_logJointPsiMarginal = m_globalLogLik + m_logPrior + m_logCondDist - m_logFullCond ;
@@ -751,7 +738,12 @@ void AugTree::ComputeHpred() {
   for (auto & i : tipNodes) {
     ArrayXi predictionsInLeaf = i->GetPredIndices() ;
     if (predictionsInLeaf.size() > 0) {
-      i->computeUpred(m_MaternParsSpace, m_MaternParsTime, m_spacetimeScaling, m_predictData, m_nuggetSD, m_distMethod) ;
+      i->computeUpred(m_MaternParsSpace,
+                      m_MaternParsTime,
+                      m_spacetimeScaling,
+                      m_predictData,
+                      m_nuggetSD,
+                      m_distMethod) ;
     }
   }
 

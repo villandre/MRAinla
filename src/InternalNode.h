@@ -93,22 +93,23 @@ public:
     return currentAddress->GetDepth() ;
   }
   void ComputeWmat(const maternVec &, const maternVec &, const double &, const double &, const std::string &) ;
+
   void ComputeParasEtaDeltaTilde(const spatialcoor &, const inputdata &, const vec &) ;
 
   mat & GetB(const uint & l) { throw Rcpp::exception("Trying to get B matrix in internal node.\n") ;}
-  mat GetSigma() { throw Rcpp::exception("Trying to get Sigma matrix in internal node.\n") ;}
-  mat & GetKmatrix() {return m_K ;}
-  mat * GetKmatrixAddress() {return &m_K ;}
-  mat * GetKmatrixInverseAddress() { return &(m_Wlist.back()) ;}
-  mat GetKmatrixInverse() {return m_Wlist.back() ;}
+  double GetBelement(const uint & l, const uint & row, const uint & col) { throw Rcpp::exception("Trying to get elements of B matrix from internal node.\n") ;}
   void SetUncorrSD(const double &) {throw Rcpp::exception("Trying to add uncorrelated error for internal nodes! \n") ;}
-  mat & GetUpred(const uint & l) { throw Rcpp::exception("Upred matrices only computed for tip nodes! \n") ;}
+  // mat & GetUpred(const uint & l) { throw Rcpp::exception("Upred matrices only computed for tip nodes! \n") ;}
+  double & GetUpredElement(const uint & l, const uint & row, const uint & col) { throw Rcpp::exception("Upred matrices only computed for tip nodes! \n") ; }
   std::vector<mat> & GetUmatList() { throw Rcpp::exception("UmatList only available in tip nodes! \n") ;}
   void SetPredictLocations(const inputdata & data) { throw Rcpp::exception("Trying to attach predict locations to internal nodes! Predict locations should only be defined in the tips! \n") ;}
   Eigen::ArrayXi & GetPredIndices() { throw Rcpp::exception("Prediction locations not defined in internal nodes! \n");}
   void computeUpred(const maternVec &, const maternVec &, const double &, const spatialcoor &, const double &, const std::string &) {
     throw Rcpp::exception("Upred matrices need not be computed in internal nodes! \n") ;
   }
+  mat GetKmatrixInverse() {
+    return m_Wlist.at(m_depth) ;
+  };
 
   void genKnotsOnCube(spatialcoor &, int &, std::mt19937_64 &, Eigen::Array<bool, Eigen::Dynamic, 1> &) ;
   void genRandomKnots(spatialcoor &, int &, std::mt19937_64 &) ;
@@ -128,7 +129,6 @@ public:
 protected:
 
   std::vector<TreeNode *> m_children ;
-  mat m_K ;
 };
 }
 #endif /* INTERMEDIATENODE_H */

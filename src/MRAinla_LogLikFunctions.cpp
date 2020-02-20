@@ -2,6 +2,7 @@
 #include <string>
 #include <algorithm>
 #include <RcppEigen.h>
+// #include <unsupported/Eigen/SparseExtra>
 // #include "gperftools/profiler.h"
 
 #include "AugTree.h"
@@ -22,7 +23,7 @@ List setupGridCpp(NumericVector responseValues, NumericMatrix spCoords, NumericM
                   Rcpp::List MaternParsHyperpars, Rcpp::NumericVector fixedEffParsHyperpars,
                   NumericVector errorParsHyperpars,
                   Rcpp::NumericVector FEmuVec,
-                  double nuggetSD, bool normalHyperprior)
+                  double nuggetSD, bool normalHyperprior, double tipKnotsThinningRate)
 {
   ArrayXd lonRinit = as<ArrayXd>(lonRange) ;
   ArrayXd latRinit = as<ArrayXd>(latRange) ;
@@ -54,7 +55,8 @@ List setupGridCpp(NumericVector responseValues, NumericMatrix spCoords, NumericM
                                   MaternParsHyperpars, fixedEffParsHyperpars, errorParsHyperpars,
                                   FEmuVec,
                                   nuggetSD,
-                                  normalHyperprior) ;
+                                  normalHyperprior,
+                                  tipKnotsThinningRate) ;
   XPtr<AugTree> p(MRAgrid, false) ; // Disabled automatic garbage collection.
   return List::create(Named("gridPointer") = p) ;
 }
@@ -136,8 +138,6 @@ Rcpp::List ComputeCondPredStats(SEXP treePointer) {
   {
     XPtr<AugTree> pointedTree(treePointer) ; // Becomes a regular pointer again.
 
-    // pointedTree->ComputeHpred() ;
-
     Hmean = pointedTree->GetHmatPred() * pointedTree->GetFullCondMean() ;
     Rcout << "Computing Evar..." << std::endl ;
     Evar = pointedTree->ComputeEvar() ;
@@ -145,7 +145,7 @@ Rcpp::List ComputeCondPredStats(SEXP treePointer) {
   }
   else
   {
-    throw Rcpp::exception("Pointer to MRA grid is null." ) ;
+    throw Rcpp::exception("Pointer to MRA grid is null.") ;
   }
   return Rcpp::List::create(Named("Hmean") = Hmean, Named("Evar") = Evar) ;
 }

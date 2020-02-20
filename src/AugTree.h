@@ -79,7 +79,8 @@ public:
           const Rcpp::NumericVector &,
           const Rcpp::NumericVector &,
           const double &,
-          const bool &) ;
+          const bool &,
+          const double &) ;
 
   std::vector<TreeNode *> GetVertexVector() {return m_vertexVector ;} ;
 
@@ -89,7 +90,6 @@ public:
   // double GetMRAlogLik() const {return m_MRAlogLik ;}
   inputdata GetDataset() {return m_dataset;}
   int GetNumTips() {return m_numTips ;}
-  int GetNumKnots() {return m_numKnots ;}
   sp_mat & GetHmatPred() {return m_HmatPred ;}
   sp_mat & GetHmat() {return m_Hmat ;}
 
@@ -138,7 +138,7 @@ public:
   void createHmatrixPred() ;
   void CreateSigmaBetaEtaInvMat() ;
   void UpdateSigmaBetaEtaInvMat() ;
-  // sp_mat createQ() ;
+  std::vector<mat> populateFEinvAndKinvMatrixList() ;
 
   void ComputeLogJointPsiMarginal() ;
   vec GetFullCondMean() { return m_FullCondMean ;}
@@ -208,14 +208,14 @@ private:
   void diveAndUpdate(TreeNode *, std::vector<TreeNode *> *) ;
 
   // Tree construction functions //
-  void BuildTree(const uint &, const bool, const unsigned int, double) ;
-  void createLevels(TreeNode *, std::string, Eigen::ArrayXi) ;
+  void BuildTree(const uint &, const bool, const unsigned int, double, double) ;
+  void createLevels(TreeNode *, std::string, Eigen::ArrayXi, double) ;
   void generateKnots(TreeNode *, const unsigned int, double) ;
 
   void numberNodes() ;
   void computeWmats() ;
   std::vector<TreeNode *> GetLevel(const uint) ;
-  Eigen::ArrayXi m_obsOrderForFmat ;
+  Eigen::ArrayXi m_obsOrderForHmat ;
 
   Eigen::Array<bool, Eigen::Dynamic, 1> m_assignedPredToKnot ;
 
@@ -234,14 +234,11 @@ private:
   sp_mat m_SigmaFEandEtaInv ;
   bool m_recordFullConditional{ false } ;
 
-  std::vector<mat *> getKmatricesInversePointers() {
-    std::vector<mat *> KmatrixInverseList(m_vertexVector.size()) ;
-    for (auto & i : m_vertexVector) KmatrixInverseList.at(i->GetNodeId()) = i->GetKmatrixInverseAddress() ;
-    return KmatrixInverseList ;
-  }
-
   void createHmatrix() ;
   void updateHmatrix() ;
+  void orderTipNodesForHmat(std::vector<TreeNode *> &) ;
+  std::vector<Triplet> populateTripletList(const std::vector<TreeNode *> &, const bool) ;
+  Eigen::ArrayXi initialiseColIndexAtEachRes() ;
   void updateHmatrixPred() ;
   vec ComputeFullConditionalMean(const vec &) ;
   void ComputeFullCondSDsFE() ;

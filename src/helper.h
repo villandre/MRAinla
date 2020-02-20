@@ -1,5 +1,6 @@
 #include<RcppEigen.h>
 #include<string.h>
+#include <random>
 
 #ifndef HELPER_H
 #define HELPER_H
@@ -21,7 +22,7 @@ Spatiotemprange sptimeDistance(const Eigen::ArrayXd &, const double &, const Eig
                                const double &, const std::string &) ;
 
 Eigen::SparseMatrix<double, Eigen::RowMajor> createBlockMatrix(std::vector<Eigen::MatrixXd *>) ;
-
+Eigen::SparseMatrix<double, Eigen::RowMajor> createBlockMatrix(std::vector<Eigen::MatrixXd>) ;
 // double logDetBlockMatrix(const Eigen::SparseMatrix<double> &, const Eigen::VectorXi &) ;
 double logNormPDF(const Eigen::VectorXd &, const Eigen::VectorXd &, const Eigen::VectorXd &) ;
 double maternCov(const double &, const double &, const double &, const double &, const double &) ;
@@ -72,7 +73,11 @@ double median(const Eigen::ArrayBase<Derived> & EigenVec) {
 }
 
 template<typename Derived>
-Eigen::Array<typename Derived::Scalar, Eigen::Dynamic, 1> elem(const Eigen::ArrayBase<Derived> & vector, const Eigen::Ref<const Eigen::ArrayXi> & indices) {
+Eigen::Array<typename Derived::Scalar, Eigen::Dynamic, 1>
+  elem(
+    const Eigen::ArrayBase<Derived> & vector,
+    const Eigen::Ref<const Eigen::ArrayXi> & indices
+  ) {
   Eigen::Matrix<typename Derived::Scalar, Eigen::Dynamic, 1> subVector(indices.size(), 1) ;
   for (uint i = 0; i < indices.size(); i++) {
     subVector(i, 1) = vector(indices(i)) ;
@@ -97,8 +102,6 @@ Eigen::Matrix<bool, Eigen::Dynamic, 1> operator<=(const Eigen::MatrixBase<Derive
   }
   return container ;
 }
-
-Eigen::ArrayXi find(const Eigen::Ref<const Eigen::Array<bool, Eigen::Dynamic, 1>> &) ;
 
 template<typename Derived>
 Eigen::Array<typename Derived::Scalar, Eigen::Dynamic, Eigen::Dynamic> join_rows(const Eigen::ArrayBase<Derived> & mat1, const Eigen::ArrayBase<Derived> & mat2) {
@@ -139,5 +142,47 @@ Eigen::Array<typename Derived::Scalar, Eigen::Dynamic, Eigen::Dynamic> rows(cons
 double deg2rad(double) ;
 double haversine_distance(double, double, double, double) ;
 double vincenty_distance(double, double, double, double) ;
+
+template<typename Derived>
+Eigen::Array<typename Derived::Scalar, Eigen::Dynamic, 1>
+  sampleWithoutReplacement(
+    const Eigen::ArrayBase<Derived> & vecToSampleFrom,
+    const int & numElements,
+    const bool & sorted,
+    std::mt19937_64 & RNG) {
+  std::vector<int> aVector ;
+  for (uint i = 0; i < vecToSampleFrom.size(); i++) {
+    aVector.push_back(i) ;
+  }
+  std::shuffle(aVector.begin(), aVector.end(), RNG) ;
+  aVector.erase(aVector.begin() + numElements, aVector.end()) ;
+  if (sorted) {
+    std::sort(aVector.begin(), aVector.end()) ;
+  }
+  Eigen::Array<typename Derived::Scalar, Eigen::Dynamic, 1> subVec(numElements) ;
+  for (uint i = 0; i < subVec.size(); i++) {
+    subVec(i) = vecToSampleFrom(aVector.at(i)) ;
+  }
+  return subVec ;
+}
+
+Eigen::ArrayXi find(const Eigen::Ref<const Eigen::Array<bool, Eigen::Dynamic, 1>>&) ;
+
+template<typename Derived>
+Eigen::ArrayXi
+  find(const Eigen::ArrayBase<Derived> & vectorToSearch,
+       const Eigen::ArrayBase<Derived> & valuesToFind) {
+    std::vector<int> indicesVector ;
+    for (uint i = 0; i < valuesToFind.size(); i++) {
+      for (uint j = 0; j < vectorToSearch.size(); j++) {
+        if (i == vectorToSearch(j)) {
+          indicesVector.push_back(j) ;
+        }
+      }
+    }
+    std::sort(indicesVector.begin(), indicesVector.end()) ;
+    Eigen::ArrayXi indicesArray = Eigen::ArrayXi::Map(&indicesVector[0], indicesVector.size()) ;
+    return indicesArray ;
+}
 
 #endif /* HELPER_H */

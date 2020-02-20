@@ -38,7 +38,7 @@ MRA_INLA <- function(spacetimeData, hyperStart, fixedHyperValues, hyperpriorPars
   }
   ##################################
   # DEFINING CONTROL PARA.##########
-  defaultControl <- list(Mlon = 1, Mlat = 1, Mtime = 1, randomSeed = 24,  cutForTimeSplit = 400, nuggetSD = 0.00001, splitTime = FALSE, numKnotsRes0 = 20L, J = 4L, numValuesForIS = 200, numIterOptim = 200L, distMethod = "haversine", normalHyperprior = FALSE, numISpropDistUpdates = 4)
+  defaultControl <- list(Mlon = 1, Mlat = 1, Mtime = 1, randomSeed = 24,  cutForTimeSplit = 400, nuggetSD = 0.00001, splitTime = FALSE, numKnotsRes0 = 20L, J = 4L, numValuesForIS = 200, numIterOptim = 200L, distMethod = "haversine", normalHyperprior = FALSE, numISpropDistUpdates = 4, tipKnotsThinningRate = 1)
   if (length(position <- grep(colnames(spacetimeData@sp@coords), pattern = "lon")) >= 1) {
     colnames(spacetimeData@sp@coords)[[position[[1]]]] <- "x"
     if (!is.null(predictionData)) {
@@ -109,7 +109,7 @@ MRA_INLA <- function(spacetimeData, hyperStart, fixedHyperValues, hyperpriorPars
 
   covariateMatrix <- as.matrix(spacetimeData@data[, -1, drop = FALSE])
 
-  gridPointer <- setupGridCpp(responseValues = spacetimeData@data[, 1], spCoords = dataCoordinates, predCoords = predCoordinates, obsTime = timeValues, predTime = predTime, covariateMatrix = covariateMatrix, predCovariateMatrix = predCovariates, Mlon = control$Mlon, Mlat = control$Mlat, Mtime = control$Mtime, lonRange = control$lonRange, latRange = control$latRange, timeRange = timeRangeReshaped, randomSeed = control$randomSeed, cutForTimeSplit = control$cutForTimeSplit, splitTime = control$splitTime, numKnotsRes0 = control$numKnotsRes0, J = control$J, distMethod = control$distMethod, MaternParsHyperpars = hyperpriorPars[c("space", "time", "scale")], fixedEffParsHyperpars = hyperpriorPars$fixedEffSD, errorParsHyperpars = hyperpriorPars$errorSD, FEmuVec = FEmuVec, nuggetSD = control$nuggetSD, normalHyperprior = control$normalHyperprior)$gridPointer
+  gridPointer <- setupGridCpp(responseValues = spacetimeData@data[, 1], spCoords = dataCoordinates, predCoords = predCoordinates, obsTime = timeValues, predTime = predTime, covariateMatrix = covariateMatrix, predCovariateMatrix = predCovariates, Mlon = control$Mlon, Mlat = control$Mlat, Mtime = control$Mtime, lonRange = control$lonRange, latRange = control$latRange, timeRange = timeRangeReshaped, randomSeed = control$randomSeed, cutForTimeSplit = control$cutForTimeSplit, splitTime = control$splitTime, numKnotsRes0 = control$numKnotsRes0, J = control$J, distMethod = control$distMethod, MaternParsHyperpars = hyperpriorPars[c("space", "time", "scale")], fixedEffParsHyperpars = hyperpriorPars$fixedEffSD, errorParsHyperpars = hyperpriorPars$errorSD, FEmuVec = FEmuVec, nuggetSD = control$nuggetSD, normalHyperprior = control$normalHyperprior, tipKnotsThinningRate = control$tipKnotsThinningRate)$gridPointer
 
   # First we compute values relating to the hyperprior marginal distribution...
 
@@ -118,7 +118,7 @@ MRA_INLA <- function(spacetimeData, hyperStart, fixedHyperValues, hyperpriorPars
     return(computedValues$output)
   }
 
-  hyperparaVectors <- sapply(computedValues$output, function(element) element$x)
+  # hyperparaVectors <- sapply(computedValues$output, function(element) element$x)
   # weightModifs <- apply(hyperparaVectors, MARGIN = 2, mvtnorm::dmvnorm, mean = computedValues$ISdistParas$mu, sigma = computedValues$ISdistParas$cov, log = TRUE)
   # discreteLogJointValues <- sapply(computedValues$output, '[[', "logJointValue")
   # logWeights <- discreteLogJointValues - weightModifs - log(length(discreteLogJointValues))
@@ -127,7 +127,7 @@ MRA_INLA <- function(spacetimeData, hyperStart, fixedHyperValues, hyperpriorPars
   # logStandardisedWeights <- logWeights - logPropConstantIS
   # Now, we obtain the marginal distribution of all mean parameters.
   cat("Computing moments for marginal posterior distributions...\n")
-
+  computedValues$output <- .AddLogISweight(output = computedValues$output, distMode = computedValues$ISdistParas$mu, control = control)
   hyperMarginalMoments <- ComputeHyperMarginalMoments(computedValues$output, control = control)
   meanMarginalMoments <- ComputeMeanMarginalMoments(computedValues$output, control = control)
   outputList <- list(hyperMarginalMoments = hyperMarginalMoments$paraMoments, meanMarginalMoments = meanMarginalMoments, psiAndMargDistMatrix = hyperMarginalMoments$psiAndMargDistMatrix)
@@ -141,6 +141,25 @@ MRA_INLA <- function(spacetimeData, hyperStart, fixedHyperValues, hyperpriorPars
   }
   cat("Returning results... \n")
   outputList
+}
+
+.AddLogISweight <- function(output, distMode, control) {
+  adaptiveISphaseVector <- rep(1:(control$numISpropDistUpdates + 1), each = ceiling(control$numValuesForIS / (control$numISpropDistUpdates + 1)))[1:min(control$numValuesForIS, length(output))]
+  for (phase in 1:max(adaptiveISphaseVector)) {
+    itersInPhase <- which(adaptiveISphaseVector == phase)
+    weightModifs <- sapply(output[itersInPhase], FUN = function(outputElement) {
+      mvtnorm::dmvnorm(x = outputElement$x, mean = distMode, sigma = outputElement$varCovar, log = TRUE)
+    })
+    discreteLogJointValues <- sapply(output[itersInPhase], '[[', "logJointValue")
+    logWeights <- discreteLogJointValues - weightModifs - log(length(discreteLogJointValues))
+    maxLogWeights <- max(logWeights)
+    logPropConstantIS <- maxLogWeights + log(sum(exp(logWeights - maxLogWeights)))
+    logStandardisedWeights <- logWeights - logPropConstantIS
+    for (j in seq_along(itersInPhase)) {
+      output[[itersInPhase[[j]]]]$logISweight <- logStandardisedWeights[[j]]
+    }
+  }
+  output
 }
 
 .obtainGridValues <- function(gridPointer, hyperStart, fixedHyperValues, predictionData, timeBaseline, maximiseOnly = FALSE, control) {
@@ -192,7 +211,18 @@ MRA_INLA <- function(spacetimeData, hyperStart, fixedHyperValues, hyperpriorPars
     }
     cat("Computing precision matrix at mode... \n")
     precisionMat <- numDeriv::hessian(func = funForOptim, x = solution, namesXstartValues = names(xStartValues))
-    varCovar <- solve(precisionMat)
+    varCovar <- tryCatch(expr = solve(precisionMat), error = function(e) e)
+
+    if ("error" %in% class(varCovar)) {
+      warning("Hessian is singular! Adding nugget along diagonal to correct...", immediate. = TRUE)
+      varCovar <- solve(precisionMat + 1e-10 * diag(nrow(precisionMat)))
+    }
+    eigenVarCovar <- eigen(varCovar)
+    if (any(eigenVarCovar$values < 0)) {
+      warning("Covariance matrix for proposal distribution is not positive definite! Correcting with Matrix::nearPD.", immediate. = TRUE)
+      varCovar <- as.matrix(Matrix::nearPD(x = varCovar, ensureSymmetry = TRUE)$mat)
+    }
+
     if (!is.null(control$fileToSaveOptOutput)) {
       save(opt, file = control$fileToSaveOptOutput)
       filenameForVarCovar <- paste(substr(control$fileToSaveOptOutput, start = 1, stop = gregexpr(pattern = ".Rdata", text = control$fileToSaveOptOutput)[[1]] - 1), "_ISvarCovar.Rdata", sep = "")
@@ -254,14 +284,28 @@ MRA_INLA <- function(spacetimeData, hyperStart, fixedHyperValues, hyperpriorPars
   numItersInPhaseVec[length(numItersInPhaseVec)] <- control$numValuesForIS - baseNumItersInPhase * (numPhases - 1)
   generalCounter <- 0
   output <- vector("list", length = control$numValuesForIS)
-
+  startingPhase <- currentIterInPhase <- 1
   if (tryCatch(dir.exists(control$folderToSaveISpoints), error = function(e) FALSE)) {
     cat("Loading previously processed IS points... \n")
     loadResult <- lapply(1:numPhases, function(phaseNumber) {
       lapply(list.files(control$folderToSaveISpoints, full.names = TRUE, pattern = paste("ISoutputPhase", phaseNumber, sep = "")), function(x) get(load(x)))
     })
+
+    phaseIndices <- sapply(1:numPhases, function(phaseNumber) {
+      filesToLoad <- list.files(control$folderToSaveISpoints, full.names = TRUE, pattern = paste("ISoutputPhase", phaseNumber, sep = ""))
+      length(filesToLoad)
+    })
+
+    if (numPhases > 1) {
+      startingPhase <- max(match(0, phaseIndices) - 1, 1)
+    }
+    currentIterInPhase <- phaseIndices[[startingPhase]] + 1
+
     numLoadedResults <- sum(sapply(loadResult, FUN = length))
-    output[1:numLoadedResults] <- unlist(loadResult, recursive = FALSE)
+
+    if (numLoadedResults > 0) {
+      output[1:numLoadedResults] <- unlist(loadResult, recursive = FALSE)
+    }
     if (identical(control$IScompleted, TRUE) | (numLoadedResults == control$numValuesForIS)) { # If we indicate that the IS is completed, the function will simply stop sampling points and use saved points only.
       output <- output[1:numLoadedResults]
       return(list(output = output))
@@ -269,8 +313,9 @@ MRA_INLA <- function(spacetimeData, hyperStart, fixedHyperValues, hyperpriorPars
     generalCounter <- numLoadedResults
   }
 
-  for (phase in 1:numPhases) {
+  for (phase in startingPhase:numPhases) {
     numItersInPhase <- numItersInPhaseVec[[phase]]
+
     if (!control$normalHyperprior) {
       smallMVR <- function() {
         container <- NULL
@@ -280,13 +325,13 @@ MRA_INLA <- function(spacetimeData, hyperStart, fixedHyperValues, hyperpriorPars
         }
         container
       }
-      paraGrid <- t(replicate(n = numItersInPhase, expr = smallMVR()))
+      paraGrid <- t(replicate(n = numItersInPhase - currentIterInPhase + 1, expr = smallMVR()))
     } else {
-      paraGrid <- mvtnorm::rmvnorm(n = numItersInPhase, mean = distMode, sigma = updatedISvarCovar)
+      paraGrid <- mvtnorm::rmvnorm(n = numItersInPhase - currentIterInPhase + 1, mean = distMode, sigma = updatedISvarCovar)
     }
     colnames(paraGrid) <- namesXstartValues
 
-    for (i in 1:numItersInPhase) {
+    for (i in seq_along(currentIterInPhase:numItersInPhase)) {
       generalCounter <- generalCounter + 1
       cat("Processing grid value ", generalCounter, "... \n")
       xVec <- paraGrid[i, ]
@@ -295,10 +340,15 @@ MRA_INLA <- function(spacetimeData, hyperStart, fixedHyperValues, hyperpriorPars
         xVec <- exp(xVec)
       }
       output[[generalCounter]] <- .funForGridEst(xNonLogScale = xVec, treePointer = gridPointer, fixedHyperValues = fixedHyperValues, computePrediction = TRUE, control = control)
+      output[[generalCounter]]$varCovar <- updatedISvarCovar
       if (!is.null(control$folderToSaveISpoints)) {
         if (!dir.exists(control$folderToSaveISpoints)) {
           dir.create(path = control$folderToSaveISpoints)
         }
+        filename <- paste(control$folderToSaveISpoints, "/", "ISoutputPhase", phase,"_iter", generalCounter, ".Rdata", sep = "")
+        objectToSave <- output[[generalCounter]]
+        save(objectToSave, file = filename, compress = TRUE)
+
         if (generalCounter == 1) { # On the first iteration, the vector to restore the order of predictions must be saved to allow for the predicted values to be re-ordered after a resume in which CreateHmatrixPred is not called. This situation occurs when we specify control$IScompleted=TRUE.
           predOrder <- GetPredObsOrder(gridPointer)
           filenameForPredOrder <- paste(control$folderToSaveISpoint, "/predObsOrder.Rdata", sep = "")
@@ -306,23 +356,29 @@ MRA_INLA <- function(spacetimeData, hyperStart, fixedHyperValues, hyperpriorPars
         }
       }
     }
-    weightModifs <- apply(paraGrid, MARGIN = 1, mvtnorm::dmvnorm, mean = distMode, sigma = updatedISvarCovar, log = TRUE)
-    outputIndices <- ((phase - 1) * numItersInPhase + 1):(min(control$numValuesForIS, phase * numItersInPhase))
-    discreteLogJointValues <- sapply(output[outputIndices], '[[', "logJointValue")
-    logWeights <- discreteLogJointValues - weightModifs - log(length(discreteLogJointValues))
-    maxLogWeights <- max(logWeights)
-    logPropConstantIS <- maxLogWeights + log(sum(exp(logWeights - maxLogWeights)))
-    logStandardisedWeights <- logWeights - logPropConstantIS
-    updatedISvarCovar <- cov.wt(x = paraGrid, wt = exp(logStandardisedWeights), center = distMode)$cov
-    if (!is.null(control$fileToSaveOptOutput)) {
-      varCovarFilename <- paste(substr(control$fileToSaveOptOutput, start = 1, stop = gregexpr(pattern = ".Rdata", text = control$fileToSaveOptOutput)[[1]] - 1), "_ISvarCovar.Rdata", sep = "")
-      save(updatedISvarCovar, file = varCovarFilename) # We update the matrix in memory. If the function is restarted, it will resume with the last matrix saved, which is what we want.
-    }
-    for (index in seq_along(outputIndices)) {
-      output[[outputIndices[index]]]$logISweight <- logStandardisedWeights[[index]]
-      objectToSave <- output[[outputIndices[index]]]
-      filename <- paste(control$folderToSaveISpoints, "/", "ISoutputPhase", phase,"_iter", index, ".Rdata", sep = "")
-      save(objectToSave, file = filename, compress = TRUE)
+    currentIterInPhase <- 1 # currentIterInPhase is there to allow the function to resume after interruption
+    if (control$numISpropDistUpdates > 0) {
+      outputIndices <- ((phase - 1) * numItersInPhase + 1):(min(control$numValuesForIS, phase * numItersInPhase))
+      weightModifs <- sapply(output[outputIndices], MARGIN = 1, FUN = function(outputElement) {
+        mvtnorm::dmvnorm(x = outputElement$x, mean = distMode, sigma = updatedISvarCovar, log = TRUE)
+      })
+      discreteLogJointValues <- sapply(output[outputIndices], '[[', "logJointValue")
+      logWeights <- discreteLogJointValues - weightModifs - log(length(discreteLogJointValues))
+      maxLogWeights <- max(logWeights)
+      logPropConstantIS <- maxLogWeights + log(sum(exp(logWeights - maxLogWeights)))
+      logStandardisedWeights <- logWeights - logPropConstantIS
+      updatedISvarCovar <- cov.wt(x = paraGrid, wt = exp(logStandardisedWeights), center = distMode)$cov
+
+      if (any(eigen(updatedISvarCovar)$values < 0)) {
+        updatedISvarCovar <- as.matrix(Matrix::nearPD(x = updatedISvarCovar, ensureSymmetry = TRUE)$mat)
+      }
+      if (Inf %in% updatedISvarCovar) {
+        stop("Only one weight for the estimation of the covariance matrix. Stop here for now.")
+      }
+      if (!is.null(control$fileToSaveOptOutput)) {
+        varCovarFilename <- paste(substr(control$fileToSaveOptOutput, start = 1, stop = gregexpr(pattern = ".Rdata", text = control$fileToSaveOptOutput)[[1]] - 1), "_ISvarCovar.Rdata", sep = "")
+        save(updatedISvarCovar, file = varCovarFilename) # We update the matrix in memory. If the function is restarted, it will resume with the last matrix saved, which is what we want.
+      }
     }
   }
 
@@ -336,7 +392,10 @@ MRA_INLA <- function(spacetimeData, hyperStart, fixedHyperValues, hyperpriorPars
   }
   hyperList <- .prepareHyperList(hyperStartUnlisted = xNonLogScale, fixedHyperValuesUnlisted = fixedHyperValuesUnlisted)
 
-  logJointValue <- tryCatch(expr = LogJointHyperMarginal(treePointer = treePointer, hyperparaValues = hyperList, recordFullConditional = FALSE, processPredictions = TRUE), error = function(e) e)
+  # logJointValue <- tryCatch(expr = LogJointHyperMarginal(treePointer = treePointer, hyperparaValues = hyperList, recordFullConditional = FALSE, processPredictions = TRUE), error = function(e) e)
+  cat("Processed value: \n")
+  print(hyperList)
+  logJointValue <- LogJointHyperMarginal(treePointer = treePointer, hyperparaValues = hyperList, recordFullConditional = FALSE, processPredictions = TRUE)
   x <- xNonLogScale
   if (control$normalHyperprior) {
     x <- log(xNonLogScale)
@@ -361,7 +420,7 @@ ComputeHyperMarginalMoments <- function(hyperparaList, control) {
   hyperparaList <- hyperparaList[domainCheck]
   psiAndMargDistMatrix <- t(sapply(seq_along(hyperparaList), function(hyperparaIndex) c(unlist(hyperparaList[[hyperparaIndex]]$MaternHyperpars), fixedEffSD = hyperparaList[[hyperparaIndex]]$fixedEffSD, errorSD = hyperparaList[[hyperparaIndex]]$errorSD, ISweight = exp(hyperparaList[[hyperparaIndex]]$logISweight))))
   rownames(psiAndMargDistMatrix) <- NULL
-  adaptiveISphaseVector <- rep(1:(control$numISpropDistUpdates + 1), each = ceiling(control$numValuesForIS / (control$numISpropDistUpdates + 1)))[1:control$numValuesForIS]
+  adaptiveISphaseVector <- rep(1:(control$numISpropDistUpdates + 1), each = ceiling(control$numValuesForIS / (control$numISpropDistUpdates + 1)))[1:min(control$numValuesForIS, length(hyperparaList))]
   funToGetParaMoments <- function(hyperparaIndex) {
     # meanValue <- sum(psiAndMargDistMatrix[, hyperparaIndex] * psiAndMargDistMatrix[, ncol(psiAndMargDistMatrix)])
     # sdValue <- sqrt(sum(psiAndMargDistMatrix[, hyperparaIndex]^2 * psiAndMargDistMatrix[, ncol(psiAndMargDistMatrix)]) - meanValue^2)
@@ -379,7 +438,7 @@ ComputeHyperMarginalMoments <- function(hyperparaList, control) {
 }
 
 ComputeMeanMarginalMoments <- function(hyperparaList, control) {
-  adaptiveISphaseVector <- rep(1:(control$numISpropDistUpdates + 1), each = ceiling(control$numValuesForIS / (control$numISpropDistUpdates + 1)))[1:control$numValuesForIS]
+  adaptiveISphaseVector <- rep(1:(control$numISpropDistUpdates + 1), each = ceiling(control$numValuesForIS / (control$numISpropDistUpdates + 1)))[1:min(control$numValuesForIS, length(hyperparaList))]
   numMeanParas <- length(hyperparaList[[1]]$FullCondMean)
   logISweightVector <- sapply(hyperparaList, function(x) x$logISweight)
   marginalMeans <- sapply(1:numMeanParas, function(paraIndex) {
@@ -397,7 +456,7 @@ ComputeMeanMarginalMoments <- function(hyperparaList, control) {
 }
 
 ComputeKrigingMoments <- function(hyperparaList, treePointer, control) {
-  adaptiveISphaseVector <- rep(1:(control$numISpropDistUpdates + 1), each = ceiling(control$numValuesForIS / (control$numISpropDistUpdates + 1)))[1:control$numValuesForIS]
+  adaptiveISphaseVector <- rep(1:(control$numISpropDistUpdates + 1), each = ceiling(control$numValuesForIS / (control$numISpropDistUpdates + 1)))[1:min(control$numValuesForIS, length(hyperparaList))]
   logISweightVector <- sapply(hyperparaList, function(x) x$logISweight)
   krigingMeans <- sapply(1:length(hyperparaList[[1]]$CondPredStats$Hmean), function(predObsIndex) {
     predVector <- sapply(hyperparaList, function(x) x$CondPredStats$Hmean[[predObsIndex]])
@@ -536,8 +595,6 @@ ComputeLogJointHyperMarginal <- function(hyperparaMatrix, spacetimeData, predict
     }
     hyperList <- MRAinla:::.prepareHyperList(xTrans, fixedHyperValuesUnlisted = unlistedFixedHyperValues)
     returnedValue <- -LogJointHyperMarginal(treePointer = gridPointer, hyperparaValues = hyperList, recordFullConditional = FALSE, processPredictions = FALSE)
-    returnX <- xOnLogScale
-    if (!control$normalHyperprior) returnX <- exp(xOnLogScale)
     returnedValue
   }
 

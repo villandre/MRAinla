@@ -17,7 +17,7 @@ void InternalNode::RemoveChild(TreeNode * childToRemove)
   }
 }
 
-void InternalNode::genRandomKnots(spatialcoor & dataCoor, int & numKnots, std::mt19937_64 & generator) {
+void InternalNode::genRandomKnots(spatialcoor & dataCoor, int & numKnots, std::mt19937_64 & RNG) {
 
   if (m_depth == 0) {
     ArrayXXd spaceCoords(0, 2) ;
@@ -29,7 +29,7 @@ void InternalNode::genRandomKnots(spatialcoor & dataCoor, int & numKnots, std::m
       obsInNodeVec.push_back(m_obsInNode(i)) ;
     }
 
-    std::shuffle(obsInNodeVec.begin(), obsInNodeVec.end(), generator) ;
+    std::shuffle(obsInNodeVec.begin(), obsInNodeVec.end(), RNG) ;
 
     ArrayXi shuffledIndices(numKnots) ;
     for (uint i = 0 ; i < numKnots; i++) {
@@ -56,14 +56,14 @@ void InternalNode::genRandomKnots(spatialcoor & dataCoor, int & numKnots, std::m
 
   std::uniform_real_distribution<double> distribution(0, 1);
   for (uint i = 0; i < m_knotsCoor.spatialCoords.rows(); i++) {
-    m_knotsCoor.spatialCoords(i,0) =  distribution(generator) * (maxLon - minLon) + minLon ;
-    m_knotsCoor.spatialCoords(i,1) =  distribution(generator) * (maxLat - minLat) + minLat ;
-    m_knotsCoor.timeCoords(i) =  distribution(generator) * (maxTime - minTime) + minTime ;
+    m_knotsCoor.spatialCoords(i,0) =  distribution(RNG) * (maxLon - minLon) + minLon ;
+    m_knotsCoor.spatialCoords(i,1) =  distribution(RNG) * (maxLat - minLat) + minLat ;
+    m_knotsCoor.timeCoords(i) =  distribution(RNG) * (maxTime - minTime) + minTime ;
   }
 }
 
 
-void InternalNode::genKnotsOnCube(spatialcoor & dataCoor, int & numKnots, std::mt19937_64 & generator, Array<bool, Dynamic, 1> & assignedPredLocations) {
+void InternalNode::genKnotsOnCube(spatialcoor & dataCoor, int & numKnots, std::mt19937_64 & RNG, Array<bool, Dynamic, 1> & assignedPredLocations) {
   numKnots = min(numKnots, int(m_obsInNode.size())) ;
   ArrayXi predObsInNode = deriveObsInNode(dataCoor) ;
 
@@ -84,7 +84,7 @@ void InternalNode::genKnotsOnCube(spatialcoor & dataCoor, int & numKnots, std::m
   if (numUnassignedPreds > 0) {
     numKnotsFromPred = min(numKnots, numUnassignedPreds) ;
 
-    std::shuffle(unassignedPredObsInNode.begin(), unassignedPredObsInNode.end(), generator) ;
+    std::shuffle(unassignedPredObsInNode.begin(), unassignedPredObsInNode.end(), RNG) ;
     ArrayXi shuffledPredIndices(numKnotsFromPred) ;
     for (uint i = 0 ; i < numKnotsFromPred; i++) {
       shuffledPredIndices(i) = unassignedPredObsInNode.at(i) ;
@@ -163,17 +163,15 @@ void InternalNode::genKnotsOnCube(spatialcoor & dataCoor, int & numKnots, std::m
 
   std::uniform_real_distribution<double> distribution(-1e-6, 1e-6);
   for (uint i = 0; i < mergedTime.size(); i++) {
-    mergedTime(i) += distribution(generator) ;
-    mergedSpace(i) += distribution(generator) ;
-    mergedSpace(i + mergedSpace.rows()) += distribution(generator) ;
+    mergedTime(i) += distribution(RNG) ;
+    mergedSpace(i) += distribution(RNG) ;
+    mergedSpace(i + mergedSpace.rows()) += distribution(RNG) ;
   }
   m_knotsCoor = spatialcoor(mergedSpace, mergedTime) ;
 }
 
-void InternalNode::ComputeWmat(const maternVec & covParasSp, const maternVec & covParasTime, const double & scaling, const double & nuggetSD, const string & distMethod) {
+void InternalNode::ComputeWmat(const maternVec & covParasSp, const maternVec & covParasTime, const double & scaling, const double & nuggetSD, const std::string & distMethod) {
   baseComputeWmat(covParasSp, covParasTime, scaling, nuggetSD, distMethod) ;
-
   // m_Wlist.at(m_depth).triangularView<Upper>() = m_Wlist.at(m_depth).triangularView<Lower>() ; // Will this cause aliasing?
-
   m_K = GetKmatrixInverse().selfadjointView<Upper>().ldlt().solve(mat::Identity(GetKmatrixInverse().rows(), GetKmatrixInverse().cols())) ; // The K matrix is some sort of covariance matrix, so it should always be symmetrical..
 }
