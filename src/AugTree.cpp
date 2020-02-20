@@ -607,35 +607,19 @@ void AugTree::diveAndUpdate(TreeNode * nodePointer, std::vector<TreeNode *> * de
   }
 }
 
-// Am I betraying the concept of unique pointers here?
-// Since I create this vector of pairs only to simplify the syntax of the
-// final evaluation, maybe it's ok? There might be a better way to go about it though.
 void AugTree::ComputeLogPriors() {
   Rcout << "Computing log(p(Psi))..." << std::endl ;
   fflush(stdout) ;
-  std::vector<std::pair<double, TwoParsProbDist *>> priorCombinations ;
 
-  priorCombinations.push_back(std::make_pair(m_MaternParsSpace.m_rho, m_MaternParsHyperparsRhoSpace.get())) ;
-  priorCombinations.push_back(std::make_pair(m_MaternParsSpace.m_smoothness, m_MaternParsHyperparsSmoothnessSpace.get())) ;
+  m_logPrior = m_MaternParsHyperparsRhoSpace->computeLogDensity(m_normalHyperprior? log(m_MaternParsSpace.m_rho) : m_MaternParsSpace.m_rho)
+    + m_MaternParsHyperparsSmoothnessSpace->computeLogDensity(m_normalHyperprior? log(m_MaternParsSpace.m_smoothness) : m_MaternParsSpace.m_smoothness)
+    + m_MaternParsHyperparsRhoTime->computeLogDensity(m_normalHyperprior? log(m_MaternParsTime.m_rho) : m_MaternParsTime.m_rho)
+    + m_MaternParsHyperparsSmoothnessTime->computeLogDensity(m_normalHyperprior? log(m_MaternParsTime.m_smoothness) : m_MaternParsTime.m_smoothness)
+    + m_MaternParsHyperparsScaling->computeLogDensity(m_normalHyperprior? log(m_spacetimeScaling) : m_spacetimeScaling)
+    + m_ParsHyperparsFixedEffsSD->computeLogDensity(m_normalHyperprior? log(m_fixedEffSD) : m_fixedEffSD)
+    + m_ParsHyperparsErrorSD->computeLogDensity(m_normalHyperprior? log(m_errorSD) : m_errorSD) ;
 
-  priorCombinations.push_back(std::make_pair(m_MaternParsTime.m_rho, m_MaternParsHyperparsRhoTime.get())) ;
-  priorCombinations.push_back(std::make_pair(m_MaternParsTime.m_smoothness, m_MaternParsHyperparsSmoothnessTime.get())) ;
-
-  priorCombinations.push_back(std::make_pair(m_spacetimeScaling, m_MaternParsHyperparsScaling.get())) ;
-
-  priorCombinations.push_back(std::make_pair(m_fixedEffSD, m_ParsHyperparsFixedEffsSD.get())) ;
-  priorCombinations.push_back(std::make_pair(m_errorSD, m_ParsHyperparsErrorSD.get())) ;
-
-  double logPrior = 0 ;
-
-  for (auto & i : priorCombinations) {
-    double coef = i.first ;
-    if (m_normalHyperprior) coef = log(i.first) ; // The normal prior is applicable to log-hyperparameters.
-    logPrior += i.second->computeLogDensity(i.first) ;
-  }
-
-  m_logPrior = logPrior ;
-  Rcout << "Done!" << std::endl ;
+    Rcout << "Done!" << std::endl ;
 }
 
 void AugTree::ComputeLogFCandLogCDandDataLL() {
