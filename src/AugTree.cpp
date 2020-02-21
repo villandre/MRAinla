@@ -299,18 +299,18 @@ void AugTree::CreateSigmaBetaEtaInvMat() {
 }
 
 std::vector<mat> AugTree::populateFEinvAndKinvMatrixList() {
-  std::vector<mat> FEinvAndKinvMatrixList ;
+  std::vector<mat> FEinvAndKinvMatrixList(m_fixedEffParameters.size() + m_vertexVector.size()) ; ;
   mat FEinvMatrix(1,1) ;
   FEinvMatrix(0,0) = pow(m_fixedEffSD, -2) ;
   // We have to use that loop instead of creating an identity matrix, else, it will be assumed in the updating function
   // that the zeros in the identity matrix are not ALWAYS 0 in the sparse matrix, and the iterating across
   // non-zero elements will cover those zeros too!
   for (uint i = 0; i < m_fixedEffParameters.size(); i++) {
-    FEinvAndKinvMatrixList.push_back(FEinvMatrix) ;
+    FEinvAndKinvMatrixList.at(i) = FEinvMatrix ;
   }
 
-  for (auto & node : m_vertexVector) { // Is this the right ordering? Does it matter?
-    FEinvAndKinvMatrixList.push_back(node->GetKmatrixInverse()) ;
+  for (auto & node : m_vertexVector) { // Is this the right ordering?
+    FEinvAndKinvMatrixList.at(node->GetNodeId() + m_fixedEffParameters.size()) = node->GetKmatrixInverse() ;
   }
   return FEinvAndKinvMatrixList ;
 }
