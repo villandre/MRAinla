@@ -14,7 +14,7 @@ using namespace std;
 
 // [[Rcpp::export]]
 
-List setupGridCpp(NumericVector responseValues, NumericMatrix spCoords, NumericMatrix predCoords,
+List setupNestedGrids(NumericVector responseValues, NumericMatrix spCoords, NumericMatrix predCoords,
                   NumericVector obsTime,  NumericVector predTime, NumericMatrix covariateMatrix,
                   NumericMatrix predCovariateMatrix, uint Mlon, uint Mlat, uint Mtime,
                   NumericVector lonRange, NumericVector latRange, NumericVector timeRange,
@@ -33,9 +33,13 @@ List setupGridCpp(NumericVector responseValues, NumericMatrix spCoords, NumericM
   Array2d timeR = timeRinit.segment(0,2) ;
   vec response = as<vec>(responseValues) ;
   ArrayXXd sp = as<ArrayXXd>(spCoords) ;
-  ArrayXXd predSp = as<ArrayXXd>(predCoords) ;
-  ArrayXd predTimeVec = as<ArrayXd>(predTime) ;
-  ArrayXXd predCovariates = as<ArrayXXd>(predCovariateMatrix) ;
+  ArrayXXd predSp, predCovariates ;
+  ArrayXd predTimeVec ;
+  if (!(predCoords == R_NilValue)) {
+    ArrayXXd predSp = as<ArrayXXd>(predCoords) ;
+    ArrayXd predTimeVec = as<ArrayXd>(predTime) ;
+    ArrayXXd predCovariates = as<ArrayXXd>(predCovariateMatrix) ;
+  }
   ArrayXd time = as<ArrayXd>(obsTime) ;
   string dMethod = as<std::string>(Rcpp::wrap(distMethod)) ;
 
@@ -58,7 +62,7 @@ List setupGridCpp(NumericVector responseValues, NumericMatrix spCoords, NumericM
                                   normalHyperprior,
                                   tipKnotsThinningRate) ;
   XPtr<AugTree> p(MRAgrid, false) ; // Disabled automatic garbage collection.
-  return List::create(Named("gridPointer") = p) ;
+  return List::create(Named("nestedGridsPointer") = p) ;
 }
 
 // [[Rcpp::export]]
@@ -68,9 +72,6 @@ double LogJointHyperMarginalToWrap(SEXP treePointer, Rcpp::List MaternHyperpars,
          bool processPredictions) {
   mat posteriorMatrix ;
   double outputValue = 0 ;
-
-  // if (!(treePointer == NULL))
-  // {
 
   XPtr<AugTree> pointedTree(treePointer) ; // Becomes a regular pointer again.
 
@@ -90,11 +91,7 @@ double LogJointHyperMarginalToWrap(SEXP treePointer, Rcpp::List MaternHyperpars,
 
   outputValue = pointedTree->GetLogJointPsiMarginal() ;
   // Rprintf("Marginal joint Psi: %.4e \n \n \n", pointedTree->GetLogJointPsiMarginal()) ;
-  // }
-  // else
-  // {
-  //   throw Rcpp::exception("Pointer to MRA grid is null." ) ;
-  // }
+
   return outputValue ;
 }
 

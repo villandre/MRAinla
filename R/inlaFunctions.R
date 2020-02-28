@@ -1,26 +1,32 @@
-#' Fit the MRA model for spatiotemporal data
+#' INLA-MRA model for inference and prediction in spatiotemporal data
 #'
-#' Implementation of the spatiotemporal of Villandre et al. 2018.
+#' The function fits the INLA-MRA model to a spatiotemporal dataset and outputs posterior predictive distributions. INLA-MRA assumes a multiplicative form for spatiotemporal covariance, with each component expressed with the Matérn formula.
 #'
-#' @param spaceTimeList list of SpatialPointsDataFrame objects
-#' @param spaceTimeCovFct function with at least two arguments, spacetimeCoord1 and spacetimeCoord2
-#' @param M number of embedded resolutions
-#' used in proposing transitions in the space of between-cluster phylogenies
-#' @param gridRasterList list of rasters splitting the domain into embedded resolutions
-#' @param numKnots either the number of knots in all elements of the grids, or a vector of size equal to
-#' the length of gridRasterList giving the number of knots for each resolution, or a list of vectors giving
-#' the number of knots in each region of the grid for each resolution
-#' @param hyperPriorFunList named list of functions with one argument specifying the hyperprior distributions
+#' @param responseVec A numeric vector with response values.
+#' @param covariateFrame A data.frame containing covariate values in the order of elements in responseVec
+#' @param spatialCoordMat A matrix or data.frame with two columns with the *first corresponding to longitude*, and the *second to latitude*; can also be x and y if the sinusoidal projection is used (default for satellite imagery data)
+#' @param timePOSIXctVec A vector of time values in POSIXct format
+#' @param predCovariateFrame A data.frame containing covariate values for the prediction datasets
+#' @param predSpatialCoordMat Like spatialCoordMat, but for the prediction data
+#' @param predTimePOSIXctVec Like timePOSIXctVec, but for prediction data
+#' @param sinusoidalProjection Logical value indicating whether the provided coordinates are in the sinusoidal projection
+#' @param spatialRangeList List with two elements: a starting value for the *spatial range* hyperparameter, and a two element vector giving the mean and standard deviation of the normal hyperprior (second element must be omitted if hyperparameter is fixed)
+#' @param spatialSmoothnessList List with two elements: a starting value for the *spatial smoothness* hyperparameter, and a length-two vector giving the mean and standard deviation of the associated normal hyperprior (second element must be omitted if hyperparameter is fixed)
+#' @param timeRangeList List with two elements: a starting value for the *temporal range* hyperparameter, and a length-two vector giving the mean and standard deviation of the associated normal hyperprior (second element must be omitted if hyperparameter is fixed)
+#' @param timeSmoothnessList List with two elements: a starting value for the *temporal smoothness* hyperparameter, and a length-two vector giving the mean and standard deviation of the associated normal hyperprior (second element must be omitted if hyperparameter is fixed)
+#' @param scaleList List with two elements: a starting value for the *scale* hyperparameter, and a length-two vector giving the mean and standard deviation of the associated normal hyperprior (second element must be omitted if hyperparameter is fixed)
+#' @param errorSDlist List with two elements: a starting value for the *uncorrelated error standard deviation* hyperparameter, and a length-two vector giving the mean and standard deviation of the associated normal hyperprior (second element must be omitted if hyperparameter is fixed)
+#' @param fixedEffSDlist List with two elements: a starting value for the *uncorrelated fixed effects standard deviation* hyperparameter, and a length-two vector giving the mean and standard deviation of the associated normal hyperprior (second element must be omitted if hyperparameter is fixed)
+#' @param FEmuVec Vector with the mean value of the priors for the fixed effects. Its length must match the number of columns in covariateFrame
+#' @param control List with control parameters. See details.
 #'
+#' @details Some of the control parameters should be tuned to ensure better computational or predictive performance.
 #'
-#' @details Nothing to say for now.
-#'
-#' @return A list with two components:
+#' @return A list with three components:
 #' \itemize{
-#'  \item{chain:} {list with each element itself a list giving the sampled parameter values.
-#' betweenTransMatListIndex and withinTransMatListIndex correspond to the index of the assumed mean
-#' branch length in meanBetweenBranchVec and meanWithinBranchVec, respectively}
-#'  \item{MAPestimate:}{ vector giving the maximum posterior probability cluster membership indices estimate}
+#'  \item{hyperMarginalMoments} {A data.frame giving the mean, and standard deviation of the marginal hyperparameter posteriors, as well as the related 95\% credibility intervals.}
+#'  \item{FEmarginalMoments}{A data.frame giving the mean, and standard deviation of the marginal fixed effects posteriors, as well as 95\% credibility intervals.}
+#'  \item{predictionMoments}{A data.frame with two columns, predictMeans and predictSDs. The order of the predictions matches the one in predCovariateFrame.}
 #' }
 #'
 #' @examples
@@ -29,67 +35,53 @@
 #' }
 #' @export
 
-MRA_INLA <- function(spacetimeData, hyperStart, fixedHyperValues, hyperpriorPars, FEmuVec, predictionData = NULL,  maximiseOnly = FALSE, control) {
-  # CHECKS #########################
-  if (!is.null(predictionData)) {
-    if (!identical(colnames(spacetimeData@data)[-1], colnames(predictionData@data))) {
-      stop("Mismatch between covariates in training and test data. \n")
-    }
+MRA_INLA <- function(responseVec, covariateFrame, spatialCoordMat, timePOSIXctVec, predCovariateFrame = NULL, predSpatialCoordMat = NULL, predTimePOSIXctVec = NULL, sinusoidalProjection = FALSE,  spatialRangeList = NULL, spatialSmoothnessList = list(start = log(1.5)), timeRangeList = NULL, timeSmoothnessList = list(start = log(0.5)), scaleList = list(start = 0, hyperpars = c(0, 2)), errorSDlist = list(start = 0), fixedEffSDlist = list(start = log(10)), FEmuVec = rep(0, ncol(covariateFrame)), control) {
+
+  noPredictionFlag <- is.null(predCovariateFrame) | is.null(predSpatialCoordMat) | is.null(predTimePOSIXctVec)
+
+  .checkInputConsistency(responseVec, covariateFrame, spatialCoordMat, timePOSIXctVec, predCovariateFrame, predSpatialCoordMat, predTimePOSIXctVec)
+
+  # .checkInputConsistency has already ensured that column names match. This line ensures that covariates are presented in the exact same order in predictions as in observations.
+  if (!noPredictionFlag) predCovariateFrame <- predCovariateFrame[colnames(covariateFrame)]
+  ##################################
+  lonLatProjString <- "+proj=longlat +datum=WGS84 +no_defs +ellps=WGS84 +towgs84=0,0,0"
+  crsString <- ifelse(sinusoidalProjection, yes = "+proj=sinu +lon_0=0 +x_0=0 +y_0=0 +R=6371007.181 +units=m +no_defs", no = lonLatProjString)
+  spObject <- sp::SpatialPoints(coords = spatialCoordMat, proj4string = crsString)
+  spObjectPred <- NULL
+  if (!noPredictionFlag) spObjectPred <- sp::SpatialPoints(coords = predSpatialCoordMat, proj4string = crsString)
+  if (sinusoidalProjection) {
+    spObject <- sp::spTransform(x = spObject, CRSobj = lonLatProjString)
+    if (!noPredictionFlag) spObjectPred <- sp::spTransform(x = spObjectPred, CRSobj = lonLatProjString)
   }
+
   ##################################
   # DEFINING CONTROL PARA.##########
-  defaultControl <- list(Mlon = 1, Mlat = 1, Mtime = 1, randomSeed = 24,  cutForTimeSplit = 400, nuggetSD = 0.00001, splitTime = FALSE, numKnotsRes0 = 20L, J = 4L, numValuesForIS = 200, numIterOptim = 200L, distMethod = "haversine", normalHyperprior = FALSE, numISpropDistUpdates = 4, tipKnotsThinningRate = 1)
-  if (length(position <- grep(colnames(spacetimeData@sp@coords), pattern = "lon")) >= 1) {
-    colnames(spacetimeData@sp@coords)[[position[[1]]]] <- "x"
-    if (!is.null(predictionData)) {
-      colnames(predictionData@sp@coords)[[position[[1]]]] <- "x"
-    }
-  }
-  if (length(position <- grep(colnames(spacetimeData@sp@coords), pattern = "lat")) >= 1) {
-    colnames(spacetimeData@sp@coords)[[position[[1]]]] <- "y"
-    if (!is.null(predictionData)) {
-      colnames(predictionData@sp@coords)[[position[[1]]]] <- "y"
-    }
-  }
-
-  coordRanges <- mapply(dimName = c("lonRange", "latRange", "timeRange"), code = c("x", "y", "time"), function(dimName, code) {
-    predCoordinates <- c()
-    if (code != "time") {
-      bufferSize <- 0.01
-      coordinates <- spacetimeData@sp@coords[, code]
-      if (!is.null(predictionData)) {
-        predCoordinates <- predictionData@sp@coords[, code]
-      }
-    } else {
-      bufferSize <- 10
-      coordinates <- time(spacetimeData@time)
-      if (!is.null(predictionData)) {
-        predCoordinates <- time(predictionData@time)
-      }
-    }
-    combinedRange <- range(c(coordinates, predCoordinates))
-    combinedRange + c(-bufferSize, bufferSize)
-  }, SIMPLIFY = FALSE)
+  defaultControl <- list(Mlon = 1, Mlat = 1, Mtime = 1, randomSeed = 24,  cutForTimeSplit = 400, nuggetSD = 0.00001, splitTime = FALSE, numKnotsRes0 = 20L, J = 4L, numValuesForIS = 200, numIterOptim = 25L, distMethod = "haversine", normalHyperprior = TRUE, numISpropDistUpdates = 4, tipKnotsThinningRate = 1, credIntervalPercs = c(0.025, 0.975))
+  coordRanges <- .prepareCoordRanges(spObject, spObjectPred)
   defaultControl <- c(defaultControl, coordRanges)
-  ##################################
-  # 1e5 is used as a substitute for infinity, which is not understood by the C++ code.
-  if ("smoothness" %in% names(hyperStart$space)) {
-    if (hyperStart$space[["smoothness"]] > 1e5) hyperStart$space[["smoothness"]] <- 1e5
-  } else {
-    if (fixedHyperValues$space[["smoothness"]] > 1e5) fixedHyperValues$space[["smoothness"]] <- 1e5
-  }
-
-  if ("smoothness" %in% names(hyperStart$time)) {
-    if (hyperStart$time[["smoothness"]] > 1e5) hyperStart$time[["smoothness"]] <- 1e5
-  } else {
-    if (fixedHyperValues$time[["smoothness"]] > 1e5) fixedHyperValues$time[["smoothness"]] <- 1e5
-  }
 
   for (i in names(control)) {
     defaultControl[[i]] <- control[[i]]
   }
-
   control <- defaultControl
+  ##################################
+  if (is.null(spatialRangeList)) {
+    warning("Did not provide a starting value for the spatial range parameter. Using a fifth of the length of the training data bounding box, and setting hyperparameters mu = 'default starting value' and sigma = 'default starting value').")
+    lowerLeftCorner <- c(control$lonRange[[1]], control$latRange[[1]])
+    upperRightCorner <- c(control$lonRange[[2]], control$latRange[[2]])
+    diagLengthInKm <- geosphere::distHaversine(p1 = lowerLeftCorner, p2 = upperRightCorner, r = 6378.137) # Distances are in kilometers.
+    logRangePara <- log(diagLengthInKm/5)
+    spatialRangeList <- list(start = logRangePara,
+                             hyperpars = c(mu = logRangePara,
+                                           sigma = logRangePara)
+    )
+  }
+
+  if (is.null(timeRangeList)) {
+    warning("Did not provide a starting value for the temporal range parameter. Using a fifth of the length of the time range (expressed in days), and setting hyperparameters mu = 'default starting value'  and sigma = 'default starting value'.")
+    timeRangeList <- list(start = diff(control$timeRange)/5)
+    timeRangeList$hyperpars <- c(mu = timeRangeList$start, sigma = timeRangeList$start)
+  }
 
   if (!is.null(control$folderToSaveISpoints)) {
     numPoints <- length(list.files(path = control$folderToSaveISpoints, pattern = "ISoutput"))
@@ -97,50 +89,168 @@ MRA_INLA <- function(spacetimeData, hyperStart, fixedHyperValues, hyperpriorPars
       control$IScompleted <- TRUE
     }
   }
-  dataCoordinates <- spacetimeData@sp@coords
-  predCoordinates <- predictionData@sp@coords
-  predCovariates <- as.matrix(predictionData@data)
 
-  timeRangeReshaped <- as.integer(control$timeRange)/(3600*24)
-  timeBaseline <- min(timeRangeReshaped)
-  timeValues <- as.integer(time(spacetimeData@time))/(3600*24) - timeBaseline # The division is to obtain values in days.
-  predTime <- as.integer(time(predictionData))/(3600*24) - timeBaseline
-  timeRangeReshaped <- timeRangeReshaped - timeBaseline
+  timeValues <- .ConvertPOSIXctInDays(timePOSIXctVec, min(control$timeRange))
 
-  covariateMatrix <- as.matrix(spacetimeData@data[, -1, drop = FALSE])
+  predTime <- NULL
+  if (!noPredictionFlag) {
+    predTime <- .ConvertPOSIXctInDays(predTimePOSIXctVec, min(control$timeRange))
+    predCovariateFrame <- as.matrix(predCovariateFrame) # setupGridCpp requires a matrix
+    predCoords <- spObjectPred@coords
+  } else {
+    predCoords <- NULL
+  }
 
-  gridPointer <- setupGridCpp(responseValues = spacetimeData@data[, 1], spCoords = dataCoordinates, predCoords = predCoordinates, obsTime = timeValues, predTime = predTime, covariateMatrix = covariateMatrix, predCovariateMatrix = predCovariates, Mlon = control$Mlon, Mlat = control$Mlat, Mtime = control$Mtime, lonRange = control$lonRange, latRange = control$latRange, timeRange = timeRangeReshaped, randomSeed = control$randomSeed, cutForTimeSplit = control$cutForTimeSplit, splitTime = control$splitTime, numKnotsRes0 = control$numKnotsRes0, J = control$J, distMethod = control$distMethod, MaternParsHyperpars = hyperpriorPars[c("space", "time", "scale")], fixedEffParsHyperpars = hyperpriorPars$fixedEffSD, errorParsHyperpars = hyperpriorPars$errorSD, FEmuVec = FEmuVec, nuggetSD = control$nuggetSD, normalHyperprior = control$normalHyperprior, tipKnotsThinningRate = control$tipKnotsThinningRate)$gridPointer
+  hyperStart <- .makeHyperStart(spatialRangeList, spatialSmoothnessList, timeRangeList, timeSmoothnessList, errorSDlist, fixedEffSDlist, scaleList)
+  fixedHyperValues <- .makeFixedHyperValues(spatialRangeList, spatialSmoothnessList, timeRangeList, timeSmoothnessList, errorSDlist, fixedEffSDlist, scaleList)
+  hyperpriorPars <- .makeHyperpriorPars(spatialRangeList, spatialSmoothnessList, timeRangeList, timeSmoothnessList, errorSDlist, fixedEffSDlist, scaleList)
+
+  nestedGridsPointer <- setupNestedGrids(responseValues = responseVec, spCoords = spObject@coords, predCoords = predCoords, obsTime = timeValues, predTime = predTime, covariateMatrix = as.matrix(covariateFrame), predCovariateMatrix = predCovariateFrame, Mlon = control$Mlon, Mlat = control$Mlat, Mtime = control$Mtime, lonRange = control$lonRange, latRange = control$latRange, timeRange = control$timeRange, randomSeed = control$randomSeed, cutForTimeSplit = control$cutForTimeSplit, splitTime = control$splitTime, numKnotsRes0 = control$numKnotsRes0, J = control$J, distMethod = control$distMethod, MaternParsHyperpars = hyperpriorPars[c("space", "time", "scale")], fixedEffParsHyperpars = hyperpriorPars$fixedEffSD, errorParsHyperpars = hyperpriorPars$errorSD, FEmuVec = FEmuVec, nuggetSD = control$nuggetSD, normalHyperprior = control$normalHyperprior, tipKnotsThinningRate = control$tipKnotsThinningRate)$nestedGridsPointer
 
   # First we compute values relating to the hyperprior marginal distribution...
 
-  computedValues <- .obtainGridValues(gridPointer = gridPointer, hyperStart = hyperStart, fixedHyperValues = fixedHyperValues, predictionData = predictionData, timeBaseline = timeBaseline, maximiseOnly = maximiseOnly, control = control)
-  if (maximiseOnly) {
-    return(computedValues$output)
-  }
+  computedValues <- .obtainISvalues(nestedGridsPointer = nestedGridsPointer, hyperStart = hyperStart, fixedHyperValues = fixedHyperValues, control = control)
 
-  # hyperparaVectors <- sapply(computedValues$output, function(element) element$x)
-  # weightModifs <- apply(hyperparaVectors, MARGIN = 2, mvtnorm::dmvnorm, mean = computedValues$ISdistParas$mu, sigma = computedValues$ISdistParas$cov, log = TRUE)
-  # discreteLogJointValues <- sapply(computedValues$output, '[[', "logJointValue")
-  # logWeights <- discreteLogJointValues - weightModifs - log(length(discreteLogJointValues))
-  # maxLogWeights <- max(logWeights)
-  # logPropConstantIS <- maxLogWeights + log(sum(exp(logWeights - maxLogWeights)))
-  # logStandardisedWeights <- logWeights - logPropConstantIS
   # Now, we obtain the marginal distribution of all mean parameters.
   cat("Computing moments for marginal posterior distributions...\n")
   computedValues$output <- .AddLogISweight(output = computedValues$output, distMode = computedValues$ISdistParas$mu, control = control)
-  hyperMarginalMoments <- ComputeHyperMarginalMoments(computedValues$output, control = control)
-  meanMarginalMoments <- ComputeMeanMarginalMoments(computedValues$output, control = control)
-  outputList <- list(hyperMarginalMoments = hyperMarginalMoments$paraMoments, meanMarginalMoments = meanMarginalMoments, psiAndMargDistMatrix = hyperMarginalMoments$psiAndMargDistMatrix)
-  cat("Computing prediction moments... \n")
-  if (!is.null(predictionData)) {
-    outputList$predictionMoments <- ComputeKrigingMoments(computedValues$output, gridPointer, control = control)
-    outputList$predObsOrder <- GetPredObsOrder(gridPointer) # I picked the first one, since the grids are all copies of each other, created to ensure that there is no problem with multiple reads/writes in parallel.
-    if (identical(control$IScompleted, TRUE)) { # m_predObsOrder needs to be obtained from the hard drive, as CreateHmatrixPred was not run.
-      outputList$predObsOrder <- get(load(paste(control$folderToSaveISpoints, "/predObsOrder.Rdata", sep = "")))
-    }
+  hyperMarginalMoments <- .ComputeHyperMarginalMoments(computedValues$output, control = control)
+  FEmarginalMoments <- .ComputeFEmarginalMoments(computedValues$output, covNames = c("Intercept", colnames(covariateFrame)), control = control)
+
+  outputList <- list(hyperMarginalMoments = hyperMarginalMoments$paraMoments, FEmarginalMoments = FEmarginalMoments, psiAndMargDistMatrix = hyperMarginalMoments$psiAndMargDistMatrix)
+
+  if (!noPredictionFlag) {
+    cat("Computing prediction moments... \n")
+    outputList$predictionMoments <- .ComputeKrigingMoments(computedValues$output, nestedGridsPointer, control = control)
   }
+
   cat("Returning results... \n")
   outputList
+}
+
+.ConvertPOSIXctInDays <- function(POSIXctVec, baselineDay = 0) {
+  as.integer(POSIXctVec)/(3600 * 24) - baselineDay
+}
+
+.checkInputConsistency <- function(responseVec, covariateFrame, spatialCoordMat, timePOSIXctVec, predCovariateFrame, predSpatialCoordMat, predTimePOSIXctVec) {
+  noPredictionFlag <- is.null(predCovariateFrame) | is.null(predSpatialCoordMat) | is.null(predTimePOSIXctVec)
+  if (noPredictionFlag) {
+    warning("Missing component for predictions: the model will be fitted, but no predictions will be produced.")
+  }
+
+  if (!identical(NULL, predCovariateFrame) | !identical(colnames(covariateFrame), colnames(predCovariateFrame))) {
+    if (!identical(sort(colnames(covariateFrame)), sort(colnames(predCovariateFrame)))) {
+      stop("Mismatch between covariates in training and test data. \n")
+    }
+  }
+  if (!all(duplicated(c(length(responseVec), nrow(covariateFrame), nrow(spatialCoordMat), length(timePOSIXctVec)))[-1])) stop("Mismatch in the dimensions of responseVec, covariateFrame, spatialCoordMat, and/or timePOSIXctVec.")
+  if (!noPredictionFlag) {
+    if (!all(duplicated(c(nrow(predCovariateFrame), nrow(predSpatialCoordMat), length(predTimePOSIXctVec)))[-1])) stop("Mismatch in the dimensions of predCovariateFrame, predSpatialCoordMat, and/or predTimePOSIXctVec.")
+  }
+  NULL
+}
+
+.prepareCoordRanges <- function(spObject, spObjectPred, timePOSIXctVec, predTimePOSIXctVec) {
+  spCoordRanges <- lapply(1:2, function(coordColIndex) {
+    bufferSize <- 0.01
+    coordinates <- spObject@coord[ , coordColIndex]
+    combinedRangeNoBuffer <- range(coordinates)
+    if (!is.null(spObjectPred)) {
+      predCoordinates <- spObjectPred[, coordColIndex]
+      combinedRangeNoBuffer <- range(c(coordinates, predCoordinates))
+    }
+    combinedRangeNoBuffer + c(-bufferSize, bufferSize)
+  })
+  names(spCoordRanges) <- c("lonRange", "latRange")
+
+  timeValuesRangesNoBuffer <- range(timePOSIXctVec)
+  if (!is.null(spObjectPred)) timeValuesRangesNoBuffer <- range(c(timePOSIXctVec, predTimePOSIXctVec))
+  timeBufferSize <- 10 # In seconds
+  timeValuesRange <- timeValuesRangesNoBuffer + c(-timeBufferSize, timeBufferSize)
+  timeRangeReshaped <- as.integer(timeValuesRange)/(3600 * 24) # Converts time range in days
+  timeBaseline <- min(timeRangeReshaped)
+  timeRangeReshaped <- timeRangeReshaped - timeBaseline
+  c(spCoordRanges, list(timeRange = timeRangeReshaped))
+}
+
+.makeFixedHyperValues <- function(spatialRangeList, spatialSmoothnessList, timeRangeList, timeSmoothnessList, errorSDlist, fixedEffSD, scaleList) {
+  fixedHyper <- list()
+  if (is.null(spatialRangeList[[2]])) {
+    fixedHyper$space <- c(rho = spatialRangeList[[1]])
+  }
+  if (is.null(spatialSmoothnessList[[2]])) {
+    fixedHyper$space <- c(fixedHyper$space["rho"], smoothness = spatialSmoothnessList[[1]])
+    # 1e5 is used as a substitute for infinity, which is not understood by the C++ code.
+    if (fixedHyper$space[["smoothness"]] > 1e5) fixedHyper$space[["smoothness"]] <- 1e5
+  }
+  if (is.null(timeRangeList[[2]])) {
+    fixedHyper$time <- c(rho = timeRangeList[[1]])
+  }
+  if (is.null(timeSmoothnessList[[2]])) {
+    fixedHyper$time <- c(fixedHyper$time["rho"], smoothness = timeSmoothnessList[[1]])
+    if (fixedHyper$time[["smoothness"]] > 1e5) fixedHyper$time[["smoothness"]] <- 1e5
+  }
+
+  for (paraName in c("errorSD", "fixedEffSD", "scale")) {
+    if (is.null(get(paraName)[[2]])) {
+      fixedHyper[[paraName]] <- get(paraName)[[1]]
+    }
+  }
+  fixedHyper
+}
+
+.makeHyperStart <- function(spatialRangeList, spatialSmoothnessList, timeRangeList, timeSmoothnessList, errorSDlist, fixedEffSD, scaleList) {
+  hyperStart <- list()
+  if (!is.null(spatialRangeList[[2]])) {
+    hyperStart$space <- c(rho = spatialRangeList[[1]])
+  }
+  if (!is.null(spatialSmoothnessList[[2]])) {
+    hyperStart$space <- c(hyperStart$space["rho"], smoothness = spatialSmoothnessList[[1]])
+    if (hyperStart$space[["smoothness"]] > 1e5) hyperStart$space[["smoothness"]] <- 1e5
+  }
+  if (!is.null(timeRangeList[[2]])) {
+    hyperStart$time <- c(rho = timeRangeList[[1]])
+  }
+  if (!is.null(timeSmoothnessList[[2]])) {
+    hyperStart$time <- c(hyperStart$time["rho"], smoothness = timeSmoothnessList[[1]])
+    if (hyperStart$time[["smoothness"]] > 1e5) hyperStart$time[["smoothness"]] <- 1e5
+  }
+
+  for (paraName in c("errorSD", "fixedEffSD", "scale")) {
+    if (!is.null(get(paraName)[[2]])) {
+      hyperStart[[paraName]] <- get(paraName)[[1]]
+    }
+  }
+  hyperStart
+}
+
+.makeHyperpriorPars <- function(spatialRangeList, spatialSmoothnessList, timeRangeList, timeSmoothnessList, errorSDlist, fixedEffSD, scaleList) {
+  hyperpriorPars <- list(
+    space = list(rho = c(mu = 0, sigma = 0), smoothness = c(mu = 0, sigma = 0)),
+    time = list(rho = c(mu = 0, sigma = 0), smoothness = c(mu = 0, sigma = 0)),
+    errorSD = c(mu = 0, sigma = 0),
+    fixedEffSD = c(mu = 0, sigma = 0),
+    scale = c(mu = 0, sigma = 0)
+  )
+  if (!is.null(spatialRangeList[[2]])) {
+    hyperpriorPars$space$rho <- spatialRangeList[[2]]
+  }
+  if (!is.null(spatialSmoothnessList[[2]])) {
+    hyperpriorPars$space$smoothness <- spatialSmoothnessList[[2]]
+  }
+  if (!is.null(timeRangeList[[2]])) {
+    hyperpriorPars$time$rho <- timeRangeList[[2]]
+  }
+  if (!is.null(timeSmoothnessList[[2]])) {
+    hyperpriorPars$time$smoothness <- timeSmoothnessList[[2]]
+  }
+
+  for (paraName in c("errorSD", "fixedEffSD", "scale")) {
+    if (!is.null(get(paraName)[[2]])) {
+      hyperpriorPars[[paraName]] <- get(paraName)[[2]]
+    }
+  }
+  hyperpriorPars
 }
 
 .AddLogISweight <- function(output, distMode, control) {
@@ -162,7 +272,7 @@ MRA_INLA <- function(spacetimeData, hyperStart, fixedHyperValues, hyperpriorPars
   output
 }
 
-.obtainGridValues <- function(gridPointer, hyperStart, fixedHyperValues, predictionData, timeBaseline, maximiseOnly = FALSE, control) {
+.obtainISvalues <- function(nestedGridsPointer, hyperStart, fixedHyperValues, control) {
   iterCounter <- 0
   funForOptim <- function(xOnLogScale, namesXstartValues) {
     iterCounter <<- iterCounter + 1
@@ -174,7 +284,7 @@ MRA_INLA <- function(spacetimeData, hyperStart, fixedHyperValues, hyperpriorPars
       unlistedFixedHyperValues <- exp(unlistedFixedHyperValues)
     }
     hyperList <- .prepareHyperList(xTrans, fixedHyperValuesUnlisted = unlistedFixedHyperValues)
-    returnedValue <- -LogJointHyperMarginal(treePointer = gridPointer, hyperparaValues = hyperList, recordFullConditional = FALSE, processPredictions = FALSE)
+    returnedValue <- -.LogJointHyperMarginal(treePointer = nestedGridsPointer, hyperparaValues = hyperList, recordFullConditional = FALSE, processPredictions = FALSE)
     returnX <- xOnLogScale
     if (!control$normalHyperprior) returnX <- exp(xOnLogScale)
     returnedValue
@@ -242,24 +352,19 @@ MRA_INLA <- function(spacetimeData, hyperStart, fixedHyperValues, hyperpriorPars
   }
 
   if (!is.null(control$envirForTest)) {
-    assign(x = "Hmat", value = GetHmat(gridPointer), envir = control$envirForTest)
+    assign(x = "Hmat", value = GetHmat(nestedGridsPointer), envir = control$envirForTest)
   }
 
   opt$value <- -opt$value # Correcting for the inversion used to maximise instead of minimise
 
-  if (maximiseOnly) {
-    names(solution) <- names(xStartValues)
-    return(solution)
-  }
-
   cat("Running IS algorithm... \n")
-  valuesOnGrid <- .gridFct(distMode = solution, ISvarCovar = varCovar, gridPointer = gridPointer, namesXstartValues = names(xStartValues), fixedHyperValues = fixedHyperValues,  control = control)
+  ISvaluesList <- .ISfct(distMode = solution, ISvarCovar = varCovar, nestedGridsPointer = nestedGridsPointer, namesXstartValues = names(xStartValues), fixedHyperValues = fixedHyperValues,  control = control)
   cat("IS algorithm completed... \n")
 
-  keepIndices <- sapply(valuesOnGrid$output, function(x) class(x$logJointValue) == "numeric")
-  valuesOnGrid$output <- valuesOnGrid$output[keepIndices]
-  valuesOnGrid$ISdistParas <- list(mu = solution, cov = varCovar)
-  valuesOnGrid
+  keepIndices <- sapply(ISvaluesList$output, function(x) class(x$logJointValue) == "numeric")
+  ISvaluesList$output <- ISvaluesList$output[keepIndices]
+  ISvaluesList$ISdistParas <- list(mu = solution, cov = varCovar)
+  ISvaluesList
 }
 
 .prepareHyperList <- function(hyperStartUnlisted, fixedHyperValuesUnlisted) {
@@ -276,7 +381,7 @@ MRA_INLA <- function(spacetimeData, hyperStart, fixedHyperValues, hyperpriorPars
   list(space = c(rho = paraValues[["space.rho"]], smoothness = paraValues[["space.smoothness"]]), time = c(rho = paraValues[["time.rho"]], smoothness = paraValues[["time.smoothness"]]), scale = paraValues[["scale"]], errorSD = paraValues[["error"]], fixedEffSD = paraValues[["fixed"]])
 }
 
-.gridFct <- function(distMode, ISvarCovar, gridPointer, namesXstartValues, fixedHyperValues, control) {
+.ISfct <- function(distMode, ISvarCovar, nestedGridsPointer, namesXstartValues, fixedHyperValues, control) {
   updatedISvarCovar <- ISvarCovar # Cov. matrix which was updated with adaptive IS.
   baseNumItersInPhase <- ceiling(control$numValuesForIS/(control$numISpropDistUpdates + 1))
   numPhases <- control$numISpropDistUpdates + 1
@@ -339,7 +444,7 @@ MRA_INLA <- function(spacetimeData, hyperStart, fixedHyperValues, hyperpriorPars
       if (control$normalHyperprior) {
         xVec <- exp(xVec)
       }
-      output[[generalCounter]] <- .funForGridEst(xNonLogScale = xVec, treePointer = gridPointer, fixedHyperValues = fixedHyperValues, computePrediction = TRUE, control = control)
+      output[[generalCounter]] <- .funForGridEst(xNonLogScale = xVec, treePointer = nestedGridsPointer, fixedHyperValues = fixedHyperValues, computePrediction = TRUE, control = control)
       output[[generalCounter]]$varCovar <- updatedISvarCovar
       if (!is.null(control$folderToSaveISpoints)) {
         if (!dir.exists(control$folderToSaveISpoints)) {
@@ -350,7 +455,7 @@ MRA_INLA <- function(spacetimeData, hyperStart, fixedHyperValues, hyperpriorPars
         save(objectToSave, file = filename, compress = TRUE)
 
         if (generalCounter == 1) { # On the first iteration, the vector to restore the order of predictions must be saved to allow for the predicted values to be re-ordered after a resume in which CreateHmatrixPred is not called. This situation occurs when we specify control$IScompleted=TRUE.
-          predOrder <- GetPredObsOrder(gridPointer)
+          predOrder <- GetPredObsOrder(nestedGridsPointer)
           filenameForPredOrder <- paste(control$folderToSaveISpoint, "/predObsOrder.Rdata", sep = "")
           save(predOrder, file = filenameForPredOrder, compress = TRUE)
         }
@@ -392,10 +497,10 @@ MRA_INLA <- function(spacetimeData, hyperStart, fixedHyperValues, hyperpriorPars
   }
   hyperList <- .prepareHyperList(hyperStartUnlisted = xNonLogScale, fixedHyperValuesUnlisted = fixedHyperValuesUnlisted)
 
-  # logJointValue <- tryCatch(expr = LogJointHyperMarginal(treePointer = treePointer, hyperparaValues = hyperList, recordFullConditional = FALSE, processPredictions = TRUE), error = function(e) e)
+  # logJointValue <- tryCatch(expr = .LogJointHyperMarginal(treePointer = treePointer, hyperparaValues = hyperList, recordFullConditional = FALSE, processPredictions = TRUE), error = function(e) e)
   cat("Processed value: \n")
   print(hyperList)
-  logJointValue <- LogJointHyperMarginal(treePointer = treePointer, hyperparaValues = hyperList, recordFullConditional = FALSE, processPredictions = TRUE)
+  logJointValue <- .LogJointHyperMarginal(treePointer = treePointer, hyperparaValues = hyperList, recordFullConditional = FALSE, processPredictions = TRUE)
   x <- xNonLogScale
   if (control$normalHyperprior) {
     x <- log(xNonLogScale)
@@ -409,103 +514,130 @@ MRA_INLA <- function(spacetimeData, hyperStart, fixedHyperValues, hyperpriorPars
   if (computePrediction) {
     aList$CondPredStats <- ComputeCondPredStats(treePointer)
   }
-  # Running LogJointHyperMarginal stores in the tree pointed by gridPointer the full conditional mean and SDs when recordFullConditional = TRUE. We can get them with the simple functions I call now.
+  # Running .LogJointHyperMarginal stores in the tree pointed by nestedGridsPointer the full conditional mean and SDs when recordFullConditional = TRUE. We can get them with the simple functions I call now.
   aList$FullCondMean <- GetFullCondMean(treePointer)
   aList$FullCondSDs <- GetFullCondSDs(treePointer)
   aList
 }
 
-ComputeHyperMarginalMoments <- function(hyperparaList, control) {
+.ComputeHyperMarginalMoments <- function(hyperparaList, control) {
   domainCheck <- sapply(hyperparaList, function(x) x$logJointValue > -Inf)
   hyperparaList <- hyperparaList[domainCheck]
-  psiAndMargDistMatrix <- t(sapply(seq_along(hyperparaList), function(hyperparaIndex) c(unlist(hyperparaList[[hyperparaIndex]]$MaternHyperpars), fixedEffSD = hyperparaList[[hyperparaIndex]]$fixedEffSD, errorSD = hyperparaList[[hyperparaIndex]]$errorSD, ISweight = exp(hyperparaList[[hyperparaIndex]]$logISweight))))
+  psiAndMargDistMatrix <- t(sapply(seq_along(hyperparaList), function(hyperparaIndex) c(unlist(hyperparaList[[hyperparaIndex]]$MaternHyperpars), fixedEffSD = hyperparaList[[hyperparaIndex]]$fixedEffSD, errorSD = hyperparaList[[hyperparaIndex]]$errorSD, logJointValue = hyperparaList[[hyperparaIndex]]$logJointValue, ISweight = exp(hyperparaList[[hyperparaIndex]]$logISweight))))
   rownames(psiAndMargDistMatrix) <- NULL
   adaptiveISphaseVector <- rep(1:(control$numISpropDistUpdates + 1), each = ceiling(control$numValuesForIS / (control$numISpropDistUpdates + 1)))[1:min(control$numValuesForIS, length(hyperparaList))]
   funToGetParaMoments <- function(hyperparaIndex) {
     # meanValue <- sum(psiAndMargDistMatrix[, hyperparaIndex] * psiAndMargDistMatrix[, ncol(psiAndMargDistMatrix)])
     # sdValue <- sqrt(sum(psiAndMargDistMatrix[, hyperparaIndex]^2 * psiAndMargDistMatrix[, ncol(psiAndMargDistMatrix)]) - meanValue^2)
-    meanValue <- adaptiveIS(x = psiAndMargDistMatrix[, hyperparaIndex], ISweights = psiAndMargDistMatrix[, "ISweight"], phaseVector = adaptiveISphaseVector)
+    meanValue <- .adaptiveIS(x = psiAndMargDistMatrix[, hyperparaIndex], ISweights = psiAndMargDistMatrix[, "ISweight"], phaseVector = adaptiveISphaseVector)
 
-    sdValue <- sqrt(adaptiveIS(x = psiAndMargDistMatrix[, hyperparaIndex]^2, ISweights = psiAndMargDistMatrix[, "ISweight"], phaseVector = adaptiveISphaseVector) - meanValue^2)
+    sdValue <- sqrt(.adaptiveIS(x = psiAndMargDistMatrix[, hyperparaIndex]^2, ISweights = psiAndMargDistMatrix[, "ISweight"], phaseVector = adaptiveISphaseVector) - meanValue^2)
 
-    c(mean = meanValue, StdDev = sdValue)
+    skewnessValue <- .adaptiveIS(x = (psiAndMargDistMatrix[, hyperparaIndex] - meanValue)^3/sdValue^2, ISweights = psiAndMargDistMatrix[, "ISweight"], phaseVector = adaptiveISphaseVector)
+    credIntBounds <- list(bounds = c(NA, NA), alpha = NA, omega = NA , xi = NA, delta = NA)
+    if (!((sdValue == 0) | is.na(sdValue))) {
+      credIntBounds <- .ComputeCredIntervalSkewNorm(control$credIntervalPercs, meanValue = meanValue, sdValue = sdValue, skewnessValue = skewnessValue)
+    }
+    c(mean = meanValue, StdDev = sdValue, skewness = skewnessValue, credIntBounds$bounds)
   }
-  paraMoments <- t(sapply(1:(ncol(psiAndMargDistMatrix) - 1), FUN = funToGetParaMoments))
-
-  colnames(paraMoments) <- c("Mean", "StdDev")
-  rownames(paraMoments) <- head(colnames(psiAndMargDistMatrix), n = -1)
+  paraMoments <- t(sapply(1:(ncol(psiAndMargDistMatrix) - 2), FUN = funToGetParaMoments))
+  CInames <- paste("CredInt_", round(control$credIntervalPercs, 3)*100, "%", sep = "")
+  colnames(paraMoments) <- c("Mean", "StdDev", "Skewness", CInames)
+  rownames(paraMoments) <- head(colnames(psiAndMargDistMatrix), n = -2)
   list(paraMoments = as.data.frame(paraMoments), psiAndMargDistMatrix = psiAndMargDistMatrix)
 }
 
-ComputeMeanMarginalMoments <- function(hyperparaList, control) {
+.ComputeCredIntervalSkewNorm <- function(p = c(0.025, 0.975), meanValue, sdValue, skewnessValue) {
+  skewNormalDelta <- sign(skewnessValue) * sqrt(
+    pi/2 * abs(skewnessValue)^(2/3) /
+      (abs(skewnessValue)^(2/3) + ((4 - pi)/2)^(2/3))
+  )
+  skewNormalAlpha <- skewNormalDelta/sqrt(1 - skewNormalDelta^2)
+  skewNormalOmega <- sdValue / sqrt(1 - 2 * skewNormalDelta^2/pi)
+  skewNormalXi <- meanValue - skewNormalOmega * skewNormalDelta * sqrt(2/pi)
+  bounds <- sn::qsn(p = p, xi = skewNormalXi, omega = skewNormalOmega, alpha = skewNormalAlpha)
+  names(bounds) <- paste("CredInt_", round(p, 3)*100, "%", sep = "")
+  list(bounds = bounds, alpha = skewNormalAlpha, omega = skewNormalOmega, xi = skewNormalXi, delta = skewNormalDelta)
+}
+
+.ComputeFEmarginalMoments <- function(hyperparaList, covNames, control) {
   adaptiveISphaseVector <- rep(1:(control$numISpropDistUpdates + 1), each = ceiling(control$numValuesForIS / (control$numISpropDistUpdates + 1)))[1:min(control$numValuesForIS, length(hyperparaList))]
-  numMeanParas <- length(hyperparaList[[1]]$FullCondMean)
   logISweightVector <- sapply(hyperparaList, function(x) x$logISweight)
-  marginalMeans <- sapply(1:numMeanParas, function(paraIndex) {
+  marginalMeans <- sapply(1:length(covNames), function(paraIndex) {
     meanVector <- sapply(hyperparaList, function(x) x$FullCondMean[[paraIndex]])
-    adaptiveIS(x = meanVector, ISweights = exp(logISweightVector), phaseVector = adaptiveISphaseVector)
+    .adaptiveIS(x = meanVector, ISweights = exp(logISweightVector), phaseVector = adaptiveISphaseVector)
   })
-  marginalSecondMoments <- sapply(1:numMeanParas, function(paraIndex) {
+  marginalSecondMoments <- sapply(1:length(covNames), function(paraIndex) {
     meanVector <- sapply(hyperparaList, function(x) x$FullCondMean[[paraIndex]])
     sdVector <- sapply(hyperparaList, function(x) x$FullCondSDs[[paraIndex]])
     secondMomentVec <- sdVector^2 + meanVector^2
-    adaptiveIS(x = secondMomentVec, ISweights = exp(logISweightVector), phaseVector = adaptiveISphaseVector)
+    .adaptiveIS(x = secondMomentVec, ISweights = exp(logISweightVector), phaseVector = adaptiveISphaseVector)
   })
   marginalSDs <- sqrt(marginalSecondMoments - marginalMeans^2)
-  data.frame(Mean = marginalMeans, StdDev = marginalSDs)
+  credIntFrame <- ComputeFEcredInts(control$credIntervalPercs, hyperparaList, marginalMeans, marginalSDs)
+  outputFrame <- cbind(data.frame(Mean = marginalMeans, StdDev = marginalSDs), credIntFrame)
+  rownames(outputFrame) <- covNames
+  outputFrame
 }
 
-ComputeKrigingMoments <- function(hyperparaList, treePointer, control) {
+ComputeFEcredInts <- function(p = c(0.025, 0.975), hyperparaList, marginalMeans, marginalSDs) {
+  valuesRanges <- lapply(1:length(marginalMeans), function(x) {
+    c(-3 * marginalSDs[[x]], 3 * marginalSDs[[x]]) + marginalMeans[[x]]
+  })
+  distValuesByFEpar <- lapply(seq_along(marginalMeans), function(FEindex) {
+    valuesToConsider <- seq(
+      from = valuesRanges[[FEindex]][1],
+      to = valuesRanges[[FEindex]][2],
+      length.out = 200
+    )
+    distValuesByISiter <- sapply(hyperparaList, function(hyperparaListElement) {
+      dnorm(valuesToConsider, mean = hyperparaListElement$FullCondMean[[FEindex]], sd = hyperparaListElement$FullCondSDs[[FEindex]]) * exp(hyperparaListElement$logISweight)
+    })
+    summedValues <- Reduce("+", distValuesByISiter)
+    data.frame(x = valuesToConsider, values = rowSums(distValuesByISiter))
+  })
+  boundsByFEpar <- lapply(distValuesByFEpar, FUN = function(distFrame) {
+    distributionValuesNormalised <- distFrame$values/sum(distFrame$values)
+    DFvalues <- cumsum(distributionValuesNormalised)
+    leftBoundPos <- match(TRUE, DFvalues >= p[1])
+    rightBoundPos <- match(TRUE, DFvalues >= p[2])
+    c(distFrame$x[[leftBoundPos]], distFrame$x[[rightBoundPos]])
+  })
+  boundsFrame <- as.data.frame(do.call("rbind", boundsByFEpar))
+  colnames(boundsFrame) <- paste("CredInt_", round(p, 3)*100, "%", sep = "")
+  boundsFrame
+}
+
+.ComputeKrigingMoments <- function(hyperparaList, treePointer, control) {
   adaptiveISphaseVector <- rep(1:(control$numISpropDistUpdates + 1), each = ceiling(control$numValuesForIS / (control$numISpropDistUpdates + 1)))[1:min(control$numValuesForIS, length(hyperparaList))]
   logISweightVector <- sapply(hyperparaList, function(x) x$logISweight)
   krigingMeans <- sapply(1:length(hyperparaList[[1]]$CondPredStats$Hmean), function(predObsIndex) {
     predVector <- sapply(hyperparaList, function(x) x$CondPredStats$Hmean[[predObsIndex]])
-    adaptiveIS(x = predVector, ISweights = exp(logISweightVector), phaseVector = adaptiveISphaseVector)
+    .adaptiveIS(x = predVector, ISweights = exp(logISweightVector), phaseVector = adaptiveISphaseVector)
   })
 
   varE <- sapply(1:length(hyperparaList[[1]]$CondPredStats$Hmean), function(predObsIndex) {
     predVector <- sapply(hyperparaList, function(x) x$CondPredStats$Hmean[[predObsIndex]]^2)
-    adaptiveIS(x = predVector, ISweights = exp(logISweightVector), phaseVector = adaptiveISphaseVector) - krigingMeans[[predObsIndex]]^2
+    .adaptiveIS(x = predVector, ISweights = exp(logISweightVector), phaseVector = adaptiveISphaseVector) - krigingMeans[[predObsIndex]]^2
   })
 
   Evar <- sapply(1:length(hyperparaList[[1]]$CondPredStats$Hmean), function(predObsIndex) {
     EvarVector <- sapply(hyperparaList, function(x) x$CondPredStats$Evar[[predObsIndex]]^2)
-    adaptiveIS(x = EvarVector, ISweights = exp(logISweightVector), phaseVector = adaptiveISphaseVector)
+    .adaptiveIS(x = EvarVector, ISweights = exp(logISweightVector), phaseVector = adaptiveISphaseVector)
   })
 
   predObsOrder <- GetPredObsOrder(treePointer = treePointer)
   if (identical(control$IScompleted, TRUE)) {
     predObsOrder <- get(load(paste(control$folderToSaveISpoints, "/predObsOrder.Rdata", sep = "")))
   }
-  list(predictMeans = krigingMeans[order(predObsOrder)], predictSDs = sqrt(varE + Evar)[order(predObsOrder)])
+  data.frame(predictMeans = krigingMeans[order(predObsOrder)], predictSDs = sqrt(varE + Evar)[order(predObsOrder)])
 }
 
-covFunctionBiMatern <- function(rangeParaSpace = 10, rangeParaTime = 10) {
-  function(spacetime1, spacetime2) {
-    euclidDist <- sp::spDists(spacetime1@sp, spacetime2@sp)
-    timeDist <- outer(zoo::index(spacetime2@time), zoo::index(spacetime1@time), function(x, y) as.numeric(abs(difftime(x, y, units = "days"))))
-    fields::Exponential(euclidDist, range = 10)*t(fields::Exponential(timeDist, range = 10))
-  }
-}
-
-# In the Wikipedia notation, smoothness corresponds to nu, and
-# scale corresponds to sigma.
-maternCov <- function(d, rho, smoothness, scale) {
-  if (any(d < 0))
-    stop("distance argument must be nonnegative")
-  d[d == 0] <- 1e-10
-
-  dScaled <- sqrt(2 * smoothness) * d / rho
-  con <- scale^2 * 2^(1 - smoothness) / gamma(smoothness)
-
-  con * dScaled^smoothness * besselK(dScaled, smoothness)
-}
-
-LogJointHyperMarginal <- function(treePointer, hyperparaValues, recordFullConditional, processPredictions = FALSE) {
+.LogJointHyperMarginal <- function(treePointer, hyperparaValues, recordFullConditional, processPredictions = FALSE) {
   LogJointHyperMarginalToWrap(treePointer = treePointer, MaternHyperpars = hyperparaValues[c("space", "time", "scale")], fixedEffSD = hyperparaValues$fixedEffSD, errorSD = hyperparaValues$errorSD, recordFullConditional = TRUE, processPredictions = processPredictions)
 }
 
-ComputeLogJointHyperMarginal <- function(hyperparaMatrix, spacetimeData, predictionData, hyperStart, fixedHyperValues, hyperpriorPars, FEmuVec, control) {
+.ComputeLogJointHyperMarginal <- function(hyperparaMatrix, spacetimeData, predictionData, hyperStart, fixedHyperValues, hyperpriorPars, FEmuVec, control) {
   # CHECKS #########################
   if (!is.null(predictionData)) {
     if (!identical(colnames(spacetimeData@data)[-1], colnames(predictionData@data))) {
@@ -585,7 +717,8 @@ ComputeLogJointHyperMarginal <- function(hyperparaMatrix, spacetimeData, predict
 
   covariateMatrix <- as.matrix(spacetimeData@data[, -1, drop = FALSE])
 
-  gridPointer <- setupGridCpp(responseValues = spacetimeData@data[, 1], spCoords = dataCoordinates, predCoords = predCoordinates, obsTime = timeValues, predTime = predTime, covariateMatrix = covariateMatrix, predCovariateMatrix = predCovariates, Mlon = control$Mlon, Mlat = control$Mlat, Mtime = control$Mtime, lonRange = control$lonRange, latRange = control$latRange, timeRange = timeRangeReshaped, randomSeed = control$randomSeed, cutForTimeSplit = control$cutForTimeSplit, splitTime = control$splitTime, numKnotsRes0 = control$numKnotsRes0, J = control$J, distMethod = control$distMethod, MaternParsHyperpars = hyperpriorPars[c("space", "time", "scale")], fixedEffParsHyperpars = hyperpriorPars$fixedEffSD, errorParsHyperpars = hyperpriorPars$errorSD, FEmuVec = FEmuVec, nuggetSD = control$nuggetSD, normalHyperprior = control$normalHyperprior)$gridPointer
+  nestedGridsPointer <- setupNestedGrids(responseValues = spacetimeData@data[, 1], spCoords = dataCoordinates, predCoords = predCoordinates, obsTime = timeValues, predTime = predTime, covariateMatrix = covariateMatrix, predCovariateMatrix = predCovariates, Mlon = control$Mlon, Mlat = control$Mlat, Mtime = control$Mtime, lonRange = control$lonRange, latRange = control$latRange, timeRange = timeRangeReshaped, randomSeed = control$randomSeed, cutForTimeSplit = control$cutForTimeSplit, splitTime = control$splitTime, numKnotsRes0 = control$numKnotsRes0, J = control$J, distMethod = control$distMethod, MaternParsHyperpars = hyperpriorPars[c("space", "time", "scale")], fixedEffParsHyperpars = hyperpriorPars$fixedEffSD, errorParsHyperpars = hyperpriorPars$errorSD, FEmuVec = FEmuVec, nuggetSD = control$nuggetSD, normalHyperprior = control$normalHyperprior, tipKnotsThinningRate = control$tipKnotsThinningRate)$nestedGridsPointer
+
   funForOptim <- function(xOnLogScale, namesXstartValues) {
     names(xOnLogScale) <- namesXstartValues
     xTrans <- exp(xOnLogScale)
@@ -594,7 +727,7 @@ ComputeLogJointHyperMarginal <- function(hyperparaMatrix, spacetimeData, predict
       unlistedFixedHyperValues <- exp(unlistedFixedHyperValues)
     }
     hyperList <- MRAinla:::.prepareHyperList(xTrans, fixedHyperValuesUnlisted = unlistedFixedHyperValues)
-    returnedValue <- -LogJointHyperMarginal(treePointer = gridPointer, hyperparaValues = hyperList, recordFullConditional = FALSE, processPredictions = FALSE)
+    returnedValue <- -.LogJointHyperMarginal(treePointer = nestedGridsPointer, hyperparaValues = hyperList, recordFullConditional = FALSE, processPredictions = FALSE)
     returnedValue
   }
 
@@ -647,15 +780,16 @@ ComputeLogJointHyperMarginal <- function(hyperparaMatrix, spacetimeData, predict
     hyperList <- MRAinla:::.prepareHyperList(xTrans, fixedHyperValuesUnlisted = unlistedFixedHyperValues)
   })
 
-  sapply(hyperparasFormatted, FUN = LogJointHyperMarginal, treePointer = gridPointer, recordFullConditional = FALSE, processPredictions = FALSE)
+  sapply(hyperparasFormatted, FUN = .LogJointHyperMarginal, treePointer = nestedGridsPointer, recordFullConditional = FALSE, processPredictions = FALSE)
 }
 
-adaptiveIS <- function(x, ISweights, phaseVector) {
+# See http://statweb.stanford.edu/~owen/pubtalks/AdaptiveISweb.pdf
 
+.adaptiveIS <- function(x, ISweights, phaseVector) {
   resultPerPhase <- sapply(1:max(phaseVector), function(phaseNum) {
     itersToConsider <- phaseVector == phaseNum
     sum(x[itersToConsider] * ISweights[itersToConsider])
   })
-  adaptiveISweights <- sqrt(1:max(phaseVector)) # See http://statweb.stanford.edu/~owen/pubtalks/AdaptiveISweb.pdf
+  adaptiveISweights <- sqrt(1:max(phaseVector))
   sum(resultPerPhase * adaptiveISweights)/sum(adaptiveISweights)
 }

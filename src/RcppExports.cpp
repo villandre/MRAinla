@@ -7,9 +7,9 @@
 
 using namespace Rcpp;
 
-// setupGridCpp
-List setupGridCpp(NumericVector responseValues, NumericMatrix spCoords, NumericMatrix predCoords, NumericVector obsTime, NumericVector predTime, NumericMatrix covariateMatrix, NumericMatrix predCovariateMatrix, uint Mlon, uint Mlat, uint Mtime, NumericVector lonRange, NumericVector latRange, NumericVector timeRange, uint randomSeed, uint cutForTimeSplit, bool splitTime, int numKnotsRes0, double J, String distMethod, Rcpp::List MaternParsHyperpars, Rcpp::NumericVector fixedEffParsHyperpars, NumericVector errorParsHyperpars, Rcpp::NumericVector FEmuVec, double nuggetSD, bool normalHyperprior, double tipKnotsThinningRate);
-RcppExport SEXP _MRAinla_setupGridCpp(SEXP responseValuesSEXP, SEXP spCoordsSEXP, SEXP predCoordsSEXP, SEXP obsTimeSEXP, SEXP predTimeSEXP, SEXP covariateMatrixSEXP, SEXP predCovariateMatrixSEXP, SEXP MlonSEXP, SEXP MlatSEXP, SEXP MtimeSEXP, SEXP lonRangeSEXP, SEXP latRangeSEXP, SEXP timeRangeSEXP, SEXP randomSeedSEXP, SEXP cutForTimeSplitSEXP, SEXP splitTimeSEXP, SEXP numKnotsRes0SEXP, SEXP JSEXP, SEXP distMethodSEXP, SEXP MaternParsHyperparsSEXP, SEXP fixedEffParsHyperparsSEXP, SEXP errorParsHyperparsSEXP, SEXP FEmuVecSEXP, SEXP nuggetSDSEXP, SEXP normalHyperpriorSEXP, SEXP tipKnotsThinningRateSEXP) {
+// setupNestedGrids
+List setupNestedGrids(NumericVector responseValues, NumericMatrix spCoords, NumericMatrix predCoords, NumericVector obsTime, NumericVector predTime, NumericMatrix covariateMatrix, NumericMatrix predCovariateMatrix, uint Mlon, uint Mlat, uint Mtime, NumericVector lonRange, NumericVector latRange, NumericVector timeRange, uint randomSeed, uint cutForTimeSplit, bool splitTime, int numKnotsRes0, double J, String distMethod, Rcpp::List MaternParsHyperpars, Rcpp::NumericVector fixedEffParsHyperpars, NumericVector errorParsHyperpars, Rcpp::NumericVector FEmuVec, double nuggetSD, bool normalHyperprior, double tipKnotsThinningRate);
+RcppExport SEXP _MRAinla_setupNestedGrids(SEXP responseValuesSEXP, SEXP spCoordsSEXP, SEXP predCoordsSEXP, SEXP obsTimeSEXP, SEXP predTimeSEXP, SEXP covariateMatrixSEXP, SEXP predCovariateMatrixSEXP, SEXP MlonSEXP, SEXP MlatSEXP, SEXP MtimeSEXP, SEXP lonRangeSEXP, SEXP latRangeSEXP, SEXP timeRangeSEXP, SEXP randomSeedSEXP, SEXP cutForTimeSplitSEXP, SEXP splitTimeSEXP, SEXP numKnotsRes0SEXP, SEXP JSEXP, SEXP distMethodSEXP, SEXP MaternParsHyperparsSEXP, SEXP fixedEffParsHyperparsSEXP, SEXP errorParsHyperparsSEXP, SEXP FEmuVecSEXP, SEXP nuggetSDSEXP, SEXP normalHyperpriorSEXP, SEXP tipKnotsThinningRateSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -39,7 +39,7 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< double >::type nuggetSD(nuggetSDSEXP);
     Rcpp::traits::input_parameter< bool >::type normalHyperprior(normalHyperpriorSEXP);
     Rcpp::traits::input_parameter< double >::type tipKnotsThinningRate(tipKnotsThinningRateSEXP);
-    rcpp_result_gen = Rcpp::wrap(setupGridCpp(responseValues, spCoords, predCoords, obsTime, predTime, covariateMatrix, predCovariateMatrix, Mlon, Mlat, Mtime, lonRange, latRange, timeRange, randomSeed, cutForTimeSplit, splitTime, numKnotsRes0, J, distMethod, MaternParsHyperpars, fixedEffParsHyperpars, errorParsHyperpars, FEmuVec, nuggetSD, normalHyperprior, tipKnotsThinningRate));
+    rcpp_result_gen = Rcpp::wrap(setupNestedGrids(responseValues, spCoords, predCoords, obsTime, predTime, covariateMatrix, predCovariateMatrix, Mlon, Mlat, Mtime, lonRange, latRange, timeRange, randomSeed, cutForTimeSplit, splitTime, numKnotsRes0, J, distMethod, MaternParsHyperpars, fixedEffParsHyperpars, errorParsHyperpars, FEmuVec, nuggetSD, normalHyperprior, tipKnotsThinningRate));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -127,7 +127,7 @@ END_RCPP
 }
 
 static const R_CallMethodDef CallEntries[] = {
-    {"_MRAinla_setupGridCpp", (DL_FUNC) &_MRAinla_setupGridCpp, 26},
+    {"_MRAinla_setupNestedGrids", (DL_FUNC) &_MRAinla_setupNestedGrids, 26},
     {"_MRAinla_LogJointHyperMarginalToWrap", (DL_FUNC) &_MRAinla_LogJointHyperMarginalToWrap, 6},
     {"_MRAinla_GetFullCondMean", (DL_FUNC) &_MRAinla_GetFullCondMean, 1},
     {"_MRAinla_GetFullCondSDs", (DL_FUNC) &_MRAinla_GetFullCondSDs, 1},

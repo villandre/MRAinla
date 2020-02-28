@@ -52,7 +52,9 @@ AugTree::AugTree(const uint & Mlon,
   std::mt19937_64 generator(rd()) ;
   generator.seed(seed) ;
   m_randomNumGenerator = generator ;
-  SetPredictData(predSp, predTime, predCovariates) ;
+  if (predSp.rows() > 0) {
+    SetPredictData(predSp, predTime, predCovariates) ;
+  }
   m_assignedPredToKnot = Array<bool, Dynamic, 1>(m_predictData.timeCoords.size()) ;
   m_assignedPredToKnot.segment(0, m_assignedPredToKnot.size()) = false ;
 
