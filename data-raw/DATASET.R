@@ -133,7 +133,7 @@ omp_set_num_threads(1)
 
 setwd("/home/luc/Rpackages/MRAinla/")
 
-rawDataFilesLocation <- "data_raw/"
+rawDataFilesLocation <- "data-raw/"
 
 ### Preparing datasets...
 
@@ -267,5 +267,5 @@ MODISdataMumbai@sp@coords <- geoR::jitter2d(MODISdataMumbai@sp@coords, max = 0.0
 MODISdataTraining <- MODISdataMumbai
 MODISdataTest <- MODISdataMumbaiTest
 
-usethis::use_data(MODISdataTraining, MODISdataTest)
+usethis::use_data(MODISdataTraining, MODISdataTest, overwrite = TRUE)
 
