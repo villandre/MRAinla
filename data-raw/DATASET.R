@@ -69,10 +69,7 @@ prepareDataForMRAinla <- function(temperatures, elevations, landCover, satellite
     sp::SpatialPointsDataFrame(coords = tempPoints@coords, data = data.frame(elevation = elevationValues), proj4string = crs(tempPoints))
   })
 
-  latitudePoints <- lapply(temperaturePoints, function(x) {
-    sp::SpatialPointsDataFrame(x@coords, data = data.frame(latitude = x@coords[, 2]), proj4string = raster::crs(x))
-  })
-  combinedData <- do.call("cbind", lapply(list(landCoverPoints, latitudePoints, elevationPoints), function(x) do.call("rbind", lapply(x, function(y) y@data))))
+  combinedData <- do.call("cbind", lapply(list(landCoverPoints, elevationPoints), function(x) do.call("rbind", lapply(x, function(y) y@data))))
   combinedData <- cbind(combinedData, timeModelMatrix, Aqua = satellite)
   if ("RasterLayer" %in% class(temperatures[[1]])) {
     combinedData <- cbind(do.call("rbind", lapply(temperaturePoints, function(y) y@data)), combinedData)
@@ -134,9 +131,9 @@ RandomFields::RFoptions(cores = 1)
 blas_set_num_threads(1)
 omp_set_num_threads(1)
 
-setwd("/home/luc/INLAMRAfiles/INLAMRApaper1/realData")
+setwd("/home/luc/Rpackages/MRAinla/")
 
-rawDataFilesLocation <- "/home/luc/INLAMRAfiles/INLAMRApaper1/realData/data/"
+rawDataFilesLocation <- "data_raw/"
 
 ### Preparing datasets...
 
