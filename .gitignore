@@ -3,3 +3,4 @@
 .RData
 .Ruserdata
 nlaFunctions.R
+inst/doc

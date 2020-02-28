@@ -95,7 +95,7 @@ MRA_INLA <- function(responseVec, covariateFrame, spatialCoordMat, timePOSIXctVe
   predTime <- NULL
   if (!noPredictionFlag) {
     predTime <- .ConvertPOSIXctInDays(predTimePOSIXctVec, min(control$timeRange))
-    predCovariateFrame <- as.matrix(predCovariateFrame) # setupGridCpp requires a matrix
+    predCovariateFrame <- as.matrix(predCovariateFrame)
     predCoords <- spObjectPred@coords
   } else {
     predCoords <- NULL

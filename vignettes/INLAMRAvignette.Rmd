@@ -1,0 +1,40 @@
+---
+title: "INLAMRAvignette"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{INLAMRAvignette}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+```{r setup}
+library(MRAinla)
+data("MODISdataTraining")
+data("MODISdataTest")
+
+fittedModel <- MRA_INLA(
+  responseVec = MODISdataTraining@data$y,
+  covariateFrame = subset(MODISdataTraining@data, select = -y),
+  spatialCoordMat = MODISdataTraining@sp@coords,
+  timePOSIXctVec = time(MODISdataTraining),
+  predCovariateFrame = MODISdataTest@data,
+  predSpatialCoordMat = MODISdataTest@sp@coords,
+  predTimePOSIXctVec = time(MODISdataTest),
+  sinusoidalProjection = FALSE,
+  spatialRangeList = NULL, 
+  timeRangeList = NULL, 
+  FEmuVec = rep(0, ncol(MODISdataTraining@data)),
+  control = list(
+    Mlon = 1,
+    Mlat = 1,
+    Mtime = 1
+  )
+  )
+```
