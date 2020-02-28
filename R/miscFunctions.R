@@ -39,10 +39,16 @@ SimulateSpacetimeData <- function(numObsPerTimeSlice = 225, covFunction, lonRang
 }
 
 plotOutput <- function(inlaMRAoutput, trainingData, testData, realTestValues = NULL, filename = NULL, graphicsEngine = tiff, plotWhat = c("joint", "training", "SD", "fittedVsRealNoSp"), polygonsToOverlay = NULL, control = list()) {
+  if (is.null(control$trim)) {
+    control$trim <- FALSE
+  }
   if (!("fontScaling" %in% names(control))) {
     control$fontScaling <- 1
   }
-
+  if (control$trim) {
+    inlaMRAoutput$predictionMoments$predictMeans <- replace(inlaMRAoutput$predictionMoments$predictMeans, which(inlaMRAoutput$predictionMoments$predictMeans > max(trainingData@data[, "y"])), max(trainingData@data[, "y"]))
+    inlaMRAoutput$predictionMoments$predictMeans <- replace(inlaMRAoutput$predictionMoments$predictMeans, which(inlaMRAoutput$predictionMoments$predictMeans < min(trainingData@data[, "y"])), min(trainingData@data[, "y"]))
+  }
   if (!("width" %in% names(control))) {
     control$width <- control$height <- 1600
   }
@@ -189,3 +195,35 @@ plotSpacetimeData <- function(spacetimeData, fontsize) {
          names.attr = as.character(unique(time(spacetimeData))),
          par.settings=list(fontsize=list(text=fontsize)))
 }
+
+# In the Wikipedia notation, smoothness corresponds to nu, and
+# scale corresponds to sigma.
+
+maternCov <- function(d, rho, smoothness, scale) {
+  if (any(d < 0))
+    stop("distance argument must be nonnegative")
+  d[d == 0] <- 1e-10
+
+  dScaled <- sqrt(2 * smoothness) * d / rho
+  con <- scale^2 * 2^(1 - smoothness) / gamma(smoothness)
+
+  con * dScaled^smoothness * besselK(dScaled, smoothness)
+}
+
+plotHyperparMarginal <- function(output, parameterName, numValues, device, filename, ...) {
+  hyperparSkewness <- output$hyperMarginalMoments[parameterName, "Skewness"]
+  hyperparSD <- output$hyperMarginalMoments[parameterName, "StdDev"]
+  hyperparMean <- output$hyperMarginalMoments[parameterName, "Mean"]
+  if (!(is.na(hyperparSD) | (hyperparSD > 0))) {
+    credIntBounds <- .ComputeCredIntervalSkewNorm(c(0.025, 0.975), meanValue = hyperparMean, sdValue = hyperparSD, skewnessValue = hyperparSkewness)
+  } else {
+    stop("Error: selected hyperparameter was fixed when INLA-MRA was used.")
+  }
+  xValues <- seq(from = credIntBounds$bounds[1], to = credIntBounds$bounds[2], length.out = numValues)
+  yValues <- sn::dsn(x = xValues, xi = credIntBounds$xi, omega = credIntBounds$omega, alpha = credIntBounds$alpha)
+  device(file = filename, ...)
+  plot(x = xValues, y = yValues, xlab = parameterName, ylab = "Value", type = "l")
+  dev.off()
+}
+
+
