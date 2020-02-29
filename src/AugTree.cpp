@@ -27,10 +27,8 @@ AugTree::AugTree(const uint & Mlon,
                  const ArrayXXd & predCovariates,
                  const ArrayXXd & predSp,
                  const ArrayXd & predTime,
-                 const uint & minObsForTimeSplit,
                  const unsigned long int & seed,
                  const ArrayXXd & covariates,
-                 const bool & splitTime,
                  const unsigned int & numKnotsRes0,
                  const double & J,
                  const string & distMethod,
@@ -60,7 +58,7 @@ AugTree::AugTree(const uint & Mlon,
 
   m_fixedEffParameters = Eigen::VectorXd::Zero(m_dataset.covariateValues.cols() + 1);
   Rcout << "Building the grid..." << std::endl ;
-  BuildTree(minObsForTimeSplit, splitTime, numKnotsRes0, J, tipKnotsThinningRate) ;
+  BuildTree(numKnotsRes0, J, tipKnotsThinningRate) ;
   Rcout << "Grid built!" << std::endl ;
 
   m_numKnots = 0 ;
@@ -87,7 +85,7 @@ AugTree::AugTree(const uint & Mlon,
   // }
 }
 
-void AugTree::BuildTree(const uint & minObsForTimeSplit, const bool splitTime, const unsigned int numKnots0, double J, double tipKnotsThinningRate)
+void AugTree::BuildTree(const unsigned int numKnots0, double J, double tipKnotsThinningRate)
 {
   m_vertexVector.reserve(1) ;
 

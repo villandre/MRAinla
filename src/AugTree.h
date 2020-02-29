@@ -67,10 +67,8 @@ public:
           const Eigen::ArrayXXd &,
           const Eigen::ArrayXXd &,
           const Eigen::ArrayXd &,
-          const uint &,
           const unsigned long int &,
           const Eigen::ArrayXXd &,
-          const bool &,
           const unsigned int &,
           const double &,
           const std::string &,
@@ -208,7 +206,7 @@ private:
   void diveAndUpdate(TreeNode *, std::vector<TreeNode *> *) ;
 
   // Tree construction functions //
-  void BuildTree(const uint &, const bool, const unsigned int, double, double) ;
+  void BuildTree(const unsigned int, double, double) ;
   void createLevels(TreeNode *, std::string, Eigen::ArrayXi, double) ;
   void generateKnots(TreeNode *, const unsigned int, double) ;
 

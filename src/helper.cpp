@@ -24,7 +24,7 @@ Spatiotemprange sptimeDistance(const Eigen::ArrayXd & spCoor1, const double & ti
   if (method == "haversine") {
     sp = haversine_distance(spCoor1(0), spCoor1(1), spCoor2(0), spCoor2(1)) ; // Works under the assumption that coordinates are (longitude, latitude)
   } else { // Input other
-    Rcpp::stop("Input distance method...\n") ;
+    Rcpp::stop("For now, only Haversine distance is implemented. \n") ;
     // sp = vincenty_distance(spCoor1(0), spCoor1(1), spCoor2(0), spCoor2(1)) ; // Same as for haversine
   }
   double timeDiff = abs(time2 - time1) ;

@@ -20,13 +20,35 @@
 #' @param FEmuVec Vector with the mean value of the priors for the fixed effects. Its length must match the number of columns in covariateFrame
 #' @param control List with control parameters. See details.
 #'
-#' @details Some of the control parameters should be tuned to ensure better computational or predictive performance.
+#' @details Some of the control parameters should be tuned to ensure better computational or predictive performance, or to make it possible to stop and resume model fitting:
+#' \itemize{
+#' \item{Mlon, Mlat, Mtime} {The number of longitude, latitude, and time splits used to create the nested resolutions. We have M = Mlon + Mlat + Mtime. They should be set as low as possible,  keeping in mind time and memory constraints.}
+#' \item{numKnotsRes0} {The number of knots at resolution 0 (the resolution encompassing the entire spatiotemporal domain). Takes value 20 by default. We would not recommend setting it under 8, as knots are first placed on the vertices of a rectangular prism nested within each subregion. Increasing this number also increases the program's memory footprint and running time.}
+#' \item{J} {Multiplier used to determine the number of knots at each resolution. The number of knots in each subregion at resolution i is ceiling(numKnotsRes0 * (J/2)^i). {Takes value 2 by default. We do not recommend setting J under 2, as some regions might end up with only two knots when M is large enough.}
+#' \item{numValuesForIS} {The number of IS samples to be used for marginalisation. Takes value 100 by default.}
+#' \item{numIterOptim} {The number of iterations in the L-BFGS algorithm used to identify the maximum of the join marginal posterior distribution of the hyperparameters. Takes value 25 by default. Could be set somewhat lower, 20 say, to reduce running time, but setting it too low might create imbalance in the importance sampling weights.}
+#' \item{tipKnotsThinningRate} {The proportion of observation spatiotemporal locations that should be used as knots at the finest resolution, values should be in (0, 1]. Takes value 1 by default. A lower value for this parameter could reduce predictive performance, but greatly reduce the memory footprint. For very large datasets, lower values of this parameter are recommended, and can even be necessary.}
+#' \item{credIntervalPercs} {The quantile boundaries of the reported credibility intervals. By default, 0.025 and 0.975, for a 95% credibility interval.}
+#' \item{fileToSaveOptOutput} {String indicating where the results of the optimisation, used to identify the maximum of the marginal joint hyperparameter posterior distribution, should be saved. If this is set, it becomes possible to resume the fitting after interruption. The function will restart after the optimisation step.}
+#' }
+#' \item{folderToSaveISpoints} {String indicating the name of a folder where the results of each iteration of the IS algorithm should be saved. This allows the IS algorithm to be resumed after interruption. It also makes it possible to produce an output before all IS iterations have been processed, cf. control$IScompleted.}
+#' There are other control parameters that should not required to be changed (but that we keep there in case they might be required in future versions of the package):
+#' \itemize{
+#' \item{distMethod} {String indicating the method used to obtain distances in kilometers from longitude/latitude coordinates. Takes value "haversine" by default, for the Haversine distance formula. No alternative is implemented for now.}
+#' \item {randomSeed} {Seed for the random number generator used for knot placement. Takes value 24 by default.}
+#' \item{numISpropDistUpdates} {The number of importance sampling (IS) weight updates in the adaptive IS algorithm. Takes value 0 by default. We implemented an adaptive IS scheme in case a reasonable level of balance in IS weights was not reached. It is enabled by setting this pararameter to 1 or more.}
+#' \item{nuggetSD} {A small number added to the diagonal of the covariance matrices obtained by applying the Matern formula, to ensure that they are invertible. Takes value 1e-5 by default.}
+#' \item{normalHyperprior} {Should hyperparameters be modelled on the logarithmic scale and normal hyperpriors be used? Takes value TRUE by default. Modelling hyperparameters on the original scale, with gamma priors, is possible, but not recommended.}
+#' \item{IScompleted} {Logical value indicating whether all importance sampling weights have been obtained. Takes value FALSE by default. Set it to TRUE to produce intermediate results (based on fewer IS iterations than had been originally planned) when the run takes too long time to finish. Note that control$fileToSaveOptOutput and control$folderToSaveISpoints must be specified for this feature to work.}
+#' }
+#'
+#'
 #'
 #' @return A list with three components:
 #' \itemize{
 #'  \item{hyperMarginalMoments} {A data.frame giving the mean, and standard deviation of the marginal hyperparameter posteriors, as well as the related 95\% credibility intervals.}
-#'  \item{FEmarginalMoments}{A data.frame giving the mean, and standard deviation of the marginal fixed effects posteriors, as well as 95\% credibility intervals.}
-#'  \item{predictionMoments}{A data.frame with two columns, predictMeans and predictSDs. The order of the predictions matches the one in predCovariateFrame.}
+#'  \item{FEmarginalMoments} {A data.frame giving the mean, and standard deviation of the marginal fixed effects posteriors, as well as 95\% credibility intervals.}
+#'  \item{predictionMoments} {A data.frame with two columns, predictMeans and predictSDs. The order of the predictions matches the one in predCovariateFrame.}
 #' }
 #'
 #' @examples
@@ -56,7 +78,7 @@ MRA_INLA <- function(responseVec, covariateFrame, spatialCoordMat, timePOSIXctVe
 
   ##################################
   # DEFINING CONTROL PARA.##########
-  defaultControl <- list(Mlon = 1, Mlat = 1, Mtime = 1, randomSeed = 24,  cutForTimeSplit = 400, nuggetSD = 0.00001, splitTime = FALSE, numKnotsRes0 = 20L, J = 4L, numValuesForIS = 200, numIterOptim = 25L, distMethod = "haversine", normalHyperprior = TRUE, numISpropDistUpdates = 4, tipKnotsThinningRate = 1, credIntervalPercs = c(0.025, 0.975))
+  defaultControl <- list(Mlon = 1, Mlat = 1, Mtime = 1, randomSeed = 24, nuggetSD = 1e-5, numKnotsRes0 = 20L, J = 4L, numValuesForIS = 100, numIterOptim = 25L, distMethod = "haversine", normalHyperprior = TRUE, numISpropDistUpdates = 0, tipKnotsThinningRate = 1, credIntervalPercs = c(0.025, 0.975))
   coordRanges <- .prepareCoordRanges(spObject, spObjectPred)
   defaultControl <- c(defaultControl, coordRanges)
 
@@ -105,7 +127,7 @@ MRA_INLA <- function(responseVec, covariateFrame, spatialCoordMat, timePOSIXctVe
   fixedHyperValues <- .makeFixedHyperValues(spatialRangeList, spatialSmoothnessList, timeRangeList, timeSmoothnessList, errorSDlist, fixedEffSDlist, scaleList)
   hyperpriorPars <- .makeHyperpriorPars(spatialRangeList, spatialSmoothnessList, timeRangeList, timeSmoothnessList, errorSDlist, fixedEffSDlist, scaleList)
 
-  nestedGridsPointer <- setupNestedGrids(responseValues = responseVec, spCoords = spObject@coords, predCoords = predCoords, obsTime = timeValues, predTime = predTime, covariateMatrix = as.matrix(covariateFrame), predCovariateMatrix = predCovariateFrame, Mlon = control$Mlon, Mlat = control$Mlat, Mtime = control$Mtime, lonRange = control$lonRange, latRange = control$latRange, timeRange = control$timeRange, randomSeed = control$randomSeed, cutForTimeSplit = control$cutForTimeSplit, splitTime = control$splitTime, numKnotsRes0 = control$numKnotsRes0, J = control$J, distMethod = control$distMethod, MaternParsHyperpars = hyperpriorPars[c("space", "time", "scale")], fixedEffParsHyperpars = hyperpriorPars$fixedEffSD, errorParsHyperpars = hyperpriorPars$errorSD, FEmuVec = FEmuVec, nuggetSD = control$nuggetSD, normalHyperprior = control$normalHyperprior, tipKnotsThinningRate = control$tipKnotsThinningRate)$nestedGridsPointer
+  nestedGridsPointer <- setupNestedGrids(responseValues = responseVec, spCoords = spObject@coords, predCoords = predCoords, obsTime = timeValues, predTime = predTime, covariateMatrix = as.matrix(covariateFrame), predCovariateMatrix = predCovariateFrame, Mlon = control$Mlon, Mlat = control$Mlat, Mtime = control$Mtime, lonRange = control$lonRange, latRange = control$latRange, timeRange = control$timeRange, randomSeed = control$randomSeed, numKnotsRes0 = control$numKnotsRes0, J = control$J, distMethod = control$distMethod, MaternParsHyperpars = hyperpriorPars[c("space", "time", "scale")], fixedEffParsHyperpars = hyperpriorPars$fixedEffSD, errorParsHyperpars = hyperpriorPars$errorSD, FEmuVec = FEmuVec, nuggetSD = control$nuggetSD, normalHyperprior = control$normalHyperprior, tipKnotsThinningRate = control$tipKnotsThinningRate)$nestedGridsPointer
 
   # First we compute values relating to the hyperprior marginal distribution...
 
@@ -334,9 +356,9 @@ MRA_INLA <- function(responseVec, covariateFrame, spatialCoordMat, timePOSIXctVe
     }
 
     if (!is.null(control$fileToSaveOptOutput)) {
-      save(opt, file = control$fileToSaveOptOutput)
+      tryCatch(expr = save(opt, file = control$fileToSaveOptOutput), error = function(e) {warning("Could not save optimisation results! It will not be possible to resume the function after the optimisation step, should you need to interrupt the current run. Check the file name you provided.", immediate. = TRUE)})
       filenameForVarCovar <- paste(substr(control$fileToSaveOptOutput, start = 1, stop = gregexpr(pattern = ".Rdata", text = control$fileToSaveOptOutput)[[1]] - 1), "_ISvarCovar.Rdata", sep = "")
-      save(varCovar, file = filenameForVarCovar)
+      tryCatch(expr =  save(varCovar, file = filenameForVarCovar), error = function(e) invisible(NULL))
     }
     cat("Optimised values:", solution)
   } else {
@@ -448,16 +470,16 @@ MRA_INLA <- function(responseVec, covariateFrame, spatialCoordMat, timePOSIXctVe
       output[[generalCounter]]$varCovar <- updatedISvarCovar
       if (!is.null(control$folderToSaveISpoints)) {
         if (!dir.exists(control$folderToSaveISpoints)) {
-          dir.create(path = control$folderToSaveISpoints)
+          tryCatch(expr = dir.create(path = control$folderToSaveISpoints), error = function(e) warning("Could not create directory to save importance sampling results! Check the directory name you provided. It will not be possible to resume the IS algorithm should you decide to interrupt this run.", immediate. = TRUE))
         }
         filename <- paste(control$folderToSaveISpoints, "/", "ISoutputPhase", phase,"_iter", generalCounter, ".Rdata", sep = "")
         objectToSave <- output[[generalCounter]]
-        save(objectToSave, file = filename, compress = TRUE)
+        tryCatch(expr = save(objectToSave, file = filename, compress = TRUE), error = function(e) invisible(NULL))
 
         if (generalCounter == 1) { # On the first iteration, the vector to restore the order of predictions must be saved to allow for the predicted values to be re-ordered after a resume in which CreateHmatrixPred is not called. This situation occurs when we specify control$IScompleted=TRUE.
           predOrder <- GetPredObsOrder(nestedGridsPointer)
           filenameForPredOrder <- paste(control$folderToSaveISpoint, "/predObsOrder.Rdata", sep = "")
-          save(predOrder, file = filenameForPredOrder, compress = TRUE)
+          tryCatch(expr = save(predOrder, file = filenameForPredOrder, compress = TRUE), error = function(e) invisible(NULL))
         }
       }
     }
@@ -482,7 +504,7 @@ MRA_INLA <- function(responseVec, covariateFrame, spatialCoordMat, timePOSIXctVe
       }
       if (!is.null(control$fileToSaveOptOutput)) {
         varCovarFilename <- paste(substr(control$fileToSaveOptOutput, start = 1, stop = gregexpr(pattern = ".Rdata", text = control$fileToSaveOptOutput)[[1]] - 1), "_ISvarCovar.Rdata", sep = "")
-        save(updatedISvarCovar, file = varCovarFilename) # We update the matrix in memory. If the function is restarted, it will resume with the last matrix saved, which is what we want.
+        tryCatch(expr = save(updatedISvarCovar, file = varCovarFilename), error = function(e) warning("Could not save proposal variance-covariance matrix in IS run! Check control$fileToSaveOptOutput.", immediate. = TRUE)) # We update the matrix in memory. If the function is restarted, it will resume with the last matrix saved, which is what we want.
       }
     }
   }
@@ -628,7 +650,7 @@ ComputeFEcredInts <- function(p = c(0.025, 0.975), hyperparaList, marginalMeans,
 
   predObsOrder <- GetPredObsOrder(treePointer = treePointer)
   if (identical(control$IScompleted, TRUE)) {
-    predObsOrder <- get(load(paste(control$folderToSaveISpoints, "/predObsOrder.Rdata", sep = "")))
+    predObsOrder <- tryCatch(expr = get(load(paste(control$folderToSaveISpoints, "/predObsOrder.Rdata", sep = ""))), error = function(e) stop("Could not load prediction order file (named predObsOrder.Rdata). It is not in control$folderToSaveISpoints. Cannot produce summary results... Exiting."))
   }
   data.frame(predictMeans = krigingMeans[order(predObsOrder)], predictSDs = sqrt(varE + Evar)[order(predObsOrder)])
 }
@@ -646,7 +668,7 @@ ComputeFEcredInts <- function(p = c(0.025, 0.975), hyperparaList, marginalMeans,
   }
   ##################################
   # DEFINING CONTROL PARA.##########
-  defaultControl <- list(Mlon = 1, Mlat = 1, Mtime = 1, randomSeed = 24,  cutForTimeSplit = 400, nuggetSD = 0.00001, splitTime = FALSE, numKnotsRes0 = 20L, J = 4L, numValuesForIS = 200, numIterOptim = 200L, distMethod = "haversine", normalHyperprior = FALSE)
+  defaultControl <- list(Mlon = 1, Mlat = 1, Mtime = 1, randomSeed = 24, nuggetSD = 0.00001, numKnotsRes0 = 20L, J = 4L, numValuesForIS = 200, numIterOptim = 200L, distMethod = "haversine", normalHyperprior = FALSE)
   if (length(position <- grep(colnames(spacetimeData@sp@coords), pattern = "lon")) >= 1) {
     colnames(spacetimeData@sp@coords)[[position[[1]]]] <- "x"
     if (!is.null(predictionData)) {
@@ -717,7 +739,7 @@ ComputeFEcredInts <- function(p = c(0.025, 0.975), hyperparaList, marginalMeans,
 
   covariateMatrix <- as.matrix(spacetimeData@data[, -1, drop = FALSE])
 
-  nestedGridsPointer <- setupNestedGrids(responseValues = spacetimeData@data[, 1], spCoords = dataCoordinates, predCoords = predCoordinates, obsTime = timeValues, predTime = predTime, covariateMatrix = covariateMatrix, predCovariateMatrix = predCovariates, Mlon = control$Mlon, Mlat = control$Mlat, Mtime = control$Mtime, lonRange = control$lonRange, latRange = control$latRange, timeRange = timeRangeReshaped, randomSeed = control$randomSeed, cutForTimeSplit = control$cutForTimeSplit, splitTime = control$splitTime, numKnotsRes0 = control$numKnotsRes0, J = control$J, distMethod = control$distMethod, MaternParsHyperpars = hyperpriorPars[c("space", "time", "scale")], fixedEffParsHyperpars = hyperpriorPars$fixedEffSD, errorParsHyperpars = hyperpriorPars$errorSD, FEmuVec = FEmuVec, nuggetSD = control$nuggetSD, normalHyperprior = control$normalHyperprior, tipKnotsThinningRate = control$tipKnotsThinningRate)$nestedGridsPointer
+  nestedGridsPointer <- setupNestedGrids(responseValues = spacetimeData@data[, 1], spCoords = dataCoordinates, predCoords = predCoordinates, obsTime = timeValues, predTime = predTime, covariateMatrix = covariateMatrix, predCovariateMatrix = predCovariates, Mlon = control$Mlon, Mlat = control$Mlat, Mtime = control$Mtime, lonRange = control$lonRange, latRange = control$latRange, timeRange = timeRangeReshaped, randomSeed = control$randomSeed, numKnotsRes0 = control$numKnotsRes0, J = control$J, distMethod = control$distMethod, MaternParsHyperpars = hyperpriorPars[c("space", "time", "scale")], fixedEffParsHyperpars = hyperpriorPars$fixedEffSD, errorParsHyperpars = hyperpriorPars$errorSD, FEmuVec = FEmuVec, nuggetSD = control$nuggetSD, normalHyperprior = control$normalHyperprior, tipKnotsThinningRate = control$tipKnotsThinningRate)$nestedGridsPointer
 
   funForOptim <- function(xOnLogScale, namesXstartValues) {
     names(xOnLogScale) <- namesXstartValues
