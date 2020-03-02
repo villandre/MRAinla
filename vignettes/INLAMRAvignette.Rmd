@@ -15,10 +15,12 @@ knitr::opts_chunk$set(
 ```
 
 ```{r setup}
+```
+
+```{r, include=TRUE}
 library(MRAinla)
 data("MODISdataTraining")
 data("MODISdataTest")
-
 fittedModel <- MRA_INLA(
   responseVec = MODISdataTraining@data$y,
   covariateFrame = subset(MODISdataTraining@data, select = -y),
@@ -36,5 +38,7 @@ fittedModel <- MRA_INLA(
     Mlat = 1,
     Mtime = 1
   )
-  )
+)
+
+fittedModel$hyperMarginalMoments
 ```

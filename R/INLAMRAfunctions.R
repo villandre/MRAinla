@@ -40,6 +40,7 @@
 #' \item{nuggetSD} {A small number added to the diagonal of the covariance matrices obtained by applying the Matern formula, to ensure that they are invertible. Takes value 1e-5 by default.}
 #' \item{normalHyperprior} {Should hyperparameters be modelled on the logarithmic scale and normal hyperpriors be used? Takes value TRUE by default. Modelling hyperparameters on the original scale, with gamma priors, is possible, but not recommended.}
 #' \item{IScompleted} {Logical value indicating whether all importance sampling weights have been obtained. Takes value FALSE by default. Set it to TRUE to produce intermediate results (based on fewer IS iterations than had been originally planned) when the run takes too long time to finish. Note that control$fileToSaveOptOutput and control$folderToSaveISpoints must be specified for this feature to work.}
+#' \item{spaceJitterMax} {The maximum jittering to apply to longitude/ latitude coordinates. Takes value 0 by default, for no jittering. The method might run into numerical difficulties if longitude/latitude coordinates are replicated. The jittering ensures that it does not happen.}
 #' }
 #'
 #'
@@ -68,9 +69,9 @@ MRA_INLA <- function(responseVec, covariateFrame, spatialCoordMat, timePOSIXctVe
   ##################################
   lonLatProjString <- "+proj=longlat +datum=WGS84 +no_defs +ellps=WGS84 +towgs84=0,0,0"
   crsString <- ifelse(sinusoidalProjection, yes = "+proj=sinu +lon_0=0 +x_0=0 +y_0=0 +R=6371007.181 +units=m +no_defs", no = lonLatProjString)
-  spObject <- sp::SpatialPoints(coords = spatialCoordMat, proj4string = crsString)
+  spObject <- sp::SpatialPoints(coords = spatialCoordMat, proj4string = sp::CRS(crsString))
   spObjectPred <- NULL
-  if (!noPredictionFlag) spObjectPred <- sp::SpatialPoints(coords = predSpatialCoordMat, proj4string = crsString)
+  if (!noPredictionFlag) spObjectPred <- sp::SpatialPoints(coords = predSpatialCoordMat, proj4string = sp::CRS(crsString))
   if (sinusoidalProjection) {
     spObject <- sp::spTransform(x = spObject, CRSobj = lonLatProjString)
     if (!noPredictionFlag) spObjectPred <- sp::spTransform(x = spObjectPred, CRSobj = lonLatProjString)
@@ -78,8 +79,8 @@ MRA_INLA <- function(responseVec, covariateFrame, spatialCoordMat, timePOSIXctVe
 
   ##################################
   # DEFINING CONTROL PARA.##########
-  defaultControl <- list(Mlon = 1, Mlat = 1, Mtime = 1, randomSeed = 24, nuggetSD = 1e-5, numKnotsRes0 = 20L, J = 4L, numValuesForIS = 100, numIterOptim = 25L, distMethod = "haversine", normalHyperprior = TRUE, numISpropDistUpdates = 0, tipKnotsThinningRate = 1, credIntervalPercs = c(0.025, 0.975))
-  coordRanges <- .prepareCoordRanges(spObject, spObjectPred)
+  defaultControl <- list(Mlon = 1, Mlat = 1, Mtime = 1, randomSeed = 24, nuggetSD = 1e-5, numKnotsRes0 = 20L, J = 4L, numValuesForIS = 100, numIterOptim = 25L, distMethod = "haversine", normalHyperprior = TRUE, numISpropDistUpdates = 0, tipKnotsThinningRate = 1, credIntervalPercs = c(0.025, 0.975), timeJitterMaxInDays = 0, spaceJitterMax = 0)
+  coordRanges <- .prepareCoordRanges(spObject = spObject, spObjectPred = spObjectPred, timePOSIXctVec = timePOSIXctVec, predTimePOSIXctVec = predTimePOSIXctVec)
   defaultControl <- c(defaultControl, coordRanges)
 
   for (i in names(control)) {
@@ -87,6 +88,8 @@ MRA_INLA <- function(responseVec, covariateFrame, spatialCoordMat, timePOSIXctVe
   }
   control <- defaultControl
   ##################################
+  if (control$spaceJitterMax > 0) spObject@coords <- geoR::jitter2d(spObject@coords, max = control$spaceJitterMax)
+
   if (is.null(spatialRangeList)) {
     warning("Did not provide a starting value for the spatial range parameter. Using a fifth of the length of the training data bounding box, and setting hyperparameters mu = 'default starting value' and sigma = 'default starting value').")
     lowerLeftCorner <- c(control$lonRange[[1]], control$latRange[[1]])
@@ -111,21 +114,19 @@ MRA_INLA <- function(responseVec, covariateFrame, spatialCoordMat, timePOSIXctVe
       control$IScompleted <- TRUE
     }
   }
-
-  timeValues <- .ConvertPOSIXctInDays(timePOSIXctVec, min(control$timeRange))
-
+  timeValues <- .ConvertPOSIXctInDays(timePOSIXctVec, min(c(timePOSIXctVec, predTimePOSIXctVec)))
   predTime <- NULL
   if (!noPredictionFlag) {
-    predTime <- .ConvertPOSIXctInDays(predTimePOSIXctVec, min(control$timeRange))
+    predTime <- .ConvertPOSIXctInDays(predTimePOSIXctVec, min(timePOSIXctVec))
     predCovariateFrame <- as.matrix(predCovariateFrame)
     predCoords <- spObjectPred@coords
   } else {
     predCoords <- NULL
   }
 
-  hyperStart <- .makeHyperStart(spatialRangeList, spatialSmoothnessList, timeRangeList, timeSmoothnessList, errorSDlist, fixedEffSDlist, scaleList)
-  fixedHyperValues <- .makeFixedHyperValues(spatialRangeList, spatialSmoothnessList, timeRangeList, timeSmoothnessList, errorSDlist, fixedEffSDlist, scaleList)
-  hyperpriorPars <- .makeHyperpriorPars(spatialRangeList, spatialSmoothnessList, timeRangeList, timeSmoothnessList, errorSDlist, fixedEffSDlist, scaleList)
+  hyperStart <- .makeHyperStart(spatialRangeList = spatialRangeList, spatialSmoothnessList = spatialSmoothnessList, timeRangeList = timeRangeList, timeSmoothnessList = timeSmoothnessList, errorSDlist = errorSDlist, fixedEffSDlist = fixedEffSDlist, scaleList = scaleList)
+  fixedHyperValues <- .makeFixedHyperValues(spatialRangeList = spatialRangeList, spatialSmoothnessList = spatialSmoothnessList, timeRangeList = timeRangeList, timeSmoothnessList = timeSmoothnessList, errorSDlist = errorSDlist, fixedEffSDlist = fixedEffSDlist, scaleList = scaleList)
+  hyperpriorPars <- .makeHyperpriorPars(spatialRangeList = spatialRangeList, spatialSmoothnessList = spatialSmoothnessList, timeRangeList = timeRangeList, timeSmoothnessList = timeSmoothnessList, errorSDlist = errorSDlist, fixedEffSDlist = fixedEffSDlist, scaleList = scaleList)
 
   nestedGridsPointer <- setupNestedGrids(responseValues = responseVec, spCoords = spObject@coords, predCoords = predCoords, obsTime = timeValues, predTime = predTime, covariateMatrix = as.matrix(covariateFrame), predCovariateMatrix = predCovariateFrame, Mlon = control$Mlon, Mlat = control$Mlat, Mtime = control$Mtime, lonRange = control$lonRange, latRange = control$latRange, timeRange = control$timeRange, randomSeed = control$randomSeed, numKnotsRes0 = control$numKnotsRes0, J = control$J, distMethod = control$distMethod, MaternParsHyperpars = hyperpriorPars[c("space", "time", "scale")], fixedEffParsHyperpars = hyperpriorPars$fixedEffSD, errorParsHyperpars = hyperpriorPars$errorSD, FEmuVec = FEmuVec, nuggetSD = control$nuggetSD, normalHyperprior = control$normalHyperprior, tipKnotsThinningRate = control$tipKnotsThinningRate)$nestedGridsPointer
 
@@ -150,8 +151,8 @@ MRA_INLA <- function(responseVec, covariateFrame, spatialCoordMat, timePOSIXctVe
   outputList
 }
 
-.ConvertPOSIXctInDays <- function(POSIXctVec, baselineDay = 0) {
-  as.integer(POSIXctVec)/(3600 * 24) - baselineDay
+.ConvertPOSIXctInDays <- function(POSIXctVec, baselinePOSIXct = 0) {
+  as.numeric(POSIXctVec - baselinePOSIXct)/(3600 * 24)
 }
 
 .checkInputConsistency <- function(responseVec, covariateFrame, spatialCoordMat, timePOSIXctVec, predCovariateFrame, predSpatialCoordMat, predTimePOSIXctVec) {
@@ -175,78 +176,78 @@ MRA_INLA <- function(responseVec, covariateFrame, spatialCoordMat, timePOSIXctVe
 .prepareCoordRanges <- function(spObject, spObjectPred, timePOSIXctVec, predTimePOSIXctVec) {
   spCoordRanges <- lapply(1:2, function(coordColIndex) {
     bufferSize <- 0.01
-    coordinates <- spObject@coord[ , coordColIndex]
+    coordinates <- spObject@coords[ , coordColIndex]
     combinedRangeNoBuffer <- range(coordinates)
     if (!is.null(spObjectPred)) {
-      predCoordinates <- spObjectPred[, coordColIndex]
+      predCoordinates <- spObjectPred@coords[, coordColIndex]
       combinedRangeNoBuffer <- range(c(coordinates, predCoordinates))
     }
     combinedRangeNoBuffer + c(-bufferSize, bufferSize)
   })
   names(spCoordRanges) <- c("lonRange", "latRange")
 
-  timeValuesRangesNoBuffer <- range(timePOSIXctVec)
-  if (!is.null(spObjectPred)) timeValuesRangesNoBuffer <- range(c(timePOSIXctVec, predTimePOSIXctVec))
+  timeValuesRangeNoBuffer <- range(timePOSIXctVec)
+  if (!is.null(spObjectPred)) timeValuesRangeNoBuffer <- range(c(timePOSIXctVec, predTimePOSIXctVec))
   timeBufferSize <- 10 # In seconds
-  timeValuesRange <- timeValuesRangesNoBuffer + c(-timeBufferSize, timeBufferSize)
-  timeRangeReshaped <- as.integer(timeValuesRange)/(3600 * 24) # Converts time range in days
-  timeBaseline <- min(timeRangeReshaped)
-  timeRangeReshaped <- timeRangeReshaped - timeBaseline
+  timeValuesRange <- timeValuesRangeNoBuffer + c(-timeBufferSize, timeBufferSize)
+  timeRangeReshaped <- .ConvertPOSIXctInDays(timeValuesRange, min(timeValuesRangeNoBuffer))
   c(spCoordRanges, list(timeRange = timeRangeReshaped))
 }
 
-.makeFixedHyperValues <- function(spatialRangeList, spatialSmoothnessList, timeRangeList, timeSmoothnessList, errorSDlist, fixedEffSD, scaleList) {
+.makeFixedHyperValues <- function(spatialRangeList, spatialSmoothnessList, timeRangeList, timeSmoothnessList, errorSDlist, fixedEffSDlist, scaleList) {
   fixedHyper <- list()
-  if (is.null(spatialRangeList[[2]])) {
+  if (length(spatialRangeList) == 1) {
     fixedHyper$space <- c(rho = spatialRangeList[[1]])
   }
-  if (is.null(spatialSmoothnessList[[2]])) {
+  if (length(spatialSmoothnessList) == 1) {
     fixedHyper$space <- c(fixedHyper$space["rho"], smoothness = spatialSmoothnessList[[1]])
     # 1e5 is used as a substitute for infinity, which is not understood by the C++ code.
     if (fixedHyper$space[["smoothness"]] > 1e5) fixedHyper$space[["smoothness"]] <- 1e5
   }
-  if (is.null(timeRangeList[[2]])) {
+  if (length(timeRangeList) == 1) {
     fixedHyper$time <- c(rho = timeRangeList[[1]])
   }
-  if (is.null(timeSmoothnessList[[2]])) {
+  if (length(timeSmoothnessList) == 1) {
     fixedHyper$time <- c(fixedHyper$time["rho"], smoothness = timeSmoothnessList[[1]])
     if (fixedHyper$time[["smoothness"]] > 1e5) fixedHyper$time[["smoothness"]] <- 1e5
   }
 
-  for (paraName in c("errorSD", "fixedEffSD", "scale")) {
-    if (is.null(get(paraName)[[2]])) {
-      fixedHyper[[paraName]] <- get(paraName)[[1]]
+  for (argName in c("errorSDlist", "fixedEffSDlist", "scaleList")) {
+    if (length(get(argName)) == 1) {
+      paraName <- substr(x = argName, start = 1, stop = nchar(argName) - 4)
+      fixedHyper[[paraName]] <- get(argName)[[1]]
     }
   }
   fixedHyper
 }
 
-.makeHyperStart <- function(spatialRangeList, spatialSmoothnessList, timeRangeList, timeSmoothnessList, errorSDlist, fixedEffSD, scaleList) {
+.makeHyperStart <- function(spatialRangeList, spatialSmoothnessList, timeRangeList, timeSmoothnessList, errorSDlist, fixedEffSDlist, scaleList) {
   hyperStart <- list()
-  if (!is.null(spatialRangeList[[2]])) {
+  if (length(spatialRangeList) > 1) {
     hyperStart$space <- c(rho = spatialRangeList[[1]])
   }
-  if (!is.null(spatialSmoothnessList[[2]])) {
+  if (length(spatialSmoothnessList) > 1) {
     hyperStart$space <- c(hyperStart$space["rho"], smoothness = spatialSmoothnessList[[1]])
     if (hyperStart$space[["smoothness"]] > 1e5) hyperStart$space[["smoothness"]] <- 1e5
   }
-  if (!is.null(timeRangeList[[2]])) {
+  if (length(timeRangeList) > 1) {
     hyperStart$time <- c(rho = timeRangeList[[1]])
   }
-  if (!is.null(timeSmoothnessList[[2]])) {
+  if (length(timeSmoothnessList) > 1) {
     hyperStart$time <- c(hyperStart$time["rho"], smoothness = timeSmoothnessList[[1]])
     if (hyperStart$time[["smoothness"]] > 1e5) hyperStart$time[["smoothness"]] <- 1e5
   }
 
-  for (paraName in c("errorSD", "fixedEffSD", "scale")) {
-    if (!is.null(get(paraName)[[2]])) {
-      hyperStart[[paraName]] <- get(paraName)[[1]]
+  for (argName in c("errorSDlist", "fixedEffSDlist", "scaleList")) {
+    if (length(get(argName)) > 1) {
+      paraName <- substr(x = argName, start = 1, stop = nchar(argName) - 4)
+      hyperStart[[paraName]] <- get(argName)[[1]]
     }
   }
   hyperStart
 }
 
-.makeHyperpriorPars <- function(spatialRangeList, spatialSmoothnessList, timeRangeList, timeSmoothnessList, errorSDlist, fixedEffSD, scaleList) {
+.makeHyperpriorPars <- function(spatialRangeList, spatialSmoothnessList, timeRangeList, timeSmoothnessList, errorSDlist, fixedEffSDlist, scaleList) {
   hyperpriorPars <- list(
     space = list(rho = c(mu = 0, sigma = 0), smoothness = c(mu = 0, sigma = 0)),
     time = list(rho = c(mu = 0, sigma = 0), smoothness = c(mu = 0, sigma = 0)),
@@ -254,22 +255,23 @@ MRA_INLA <- function(responseVec, covariateFrame, spatialCoordMat, timePOSIXctVe
     fixedEffSD = c(mu = 0, sigma = 0),
     scale = c(mu = 0, sigma = 0)
   )
-  if (!is.null(spatialRangeList[[2]])) {
+  if (length(spatialRangeList) > 1) {
     hyperpriorPars$space$rho <- spatialRangeList[[2]]
   }
-  if (!is.null(spatialSmoothnessList[[2]])) {
+  if (length(spatialSmoothnessList) > 1) {
     hyperpriorPars$space$smoothness <- spatialSmoothnessList[[2]]
   }
-  if (!is.null(timeRangeList[[2]])) {
+  if (length(timeRangeList) > 1) {
     hyperpriorPars$time$rho <- timeRangeList[[2]]
   }
-  if (!is.null(timeSmoothnessList[[2]])) {
+  if (length(timeSmoothnessList) > 1) {
     hyperpriorPars$time$smoothness <- timeSmoothnessList[[2]]
   }
 
-  for (paraName in c("errorSD", "fixedEffSD", "scale")) {
-    if (!is.null(get(paraName)[[2]])) {
-      hyperpriorPars[[paraName]] <- get(paraName)[[2]]
+  for (argName in c("errorSDlist", "fixedEffSDlist", "scaleList")) {
+    if (length(get(argName)) > 1) {
+      paraName <- substr(x = argName, start = 1, stop = nchar(argName) - 4)
+      hyperpriorPars[[paraName]] <- get(argName)[[2]]
     }
   }
   hyperpriorPars
