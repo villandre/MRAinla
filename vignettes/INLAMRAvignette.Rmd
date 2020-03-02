@@ -21,7 +21,7 @@ knitr::opts_chunk$set(
 library(MRAinla)
 data("MODISdataTraining")
 data("MODISdataTest")
-fittedModel <- MRA_INLA(
+fittedModel <- INLAMRA(
   responseVec = MODISdataTraining@data$y,
   covariateFrame = subset(MODISdataTraining@data, select = -y),
   spatialCoordMat = MODISdataTraining@sp@coords,
@@ -33,10 +33,12 @@ fittedModel <- MRA_INLA(
   spatialRangeList = NULL, 
   timeRangeList = NULL, 
   FEmuVec = rep(0, ncol(MODISdataTraining@data)),
-  control = list(
-    Mlon = 1,
-    Mlat = 1,
-    Mtime = 1
+  control = INLAMRA.control(
+    Mlon = 3,
+    Mlat = 3,
+    Mtime = 1,
+    numKnotsRes0 = 20,
+    tipKnotsThinningRate = 0.5
   )
 )
 

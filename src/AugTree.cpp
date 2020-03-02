@@ -115,7 +115,6 @@ void AugTree::numberNodes() {
 }
 
 // We make sure that splits don't result in empty regions
-// numObsForTimeSplit still does nothing
 
 void AugTree::createLevels(TreeNode * parent, std::string splitWhat, ArrayXi numSplitsLeft, double tipKnotsThinningRate) {
   ArrayXi obsForMedian = parent->GetObsInNode() ;
@@ -159,7 +158,6 @@ void AugTree::createLevels(TreeNode * parent, std::string splitWhat, ArrayXi num
     childDimensions.push_back(newDimensions) ;
     childDimensions.at(0).latitude = updatedLatitude ;
   } else if (splitWhat == "time") {
-
     bool onlyOneTimePoint = true;
     uint innerIndex = 1 ;
     ArrayXd elementsForMedian = elem(m_dataset.timeCoords, obsForMedian) ;
@@ -191,7 +189,7 @@ void AugTree::createLevels(TreeNode * parent, std::string splitWhat, ArrayXi num
       parent->AddChild(newNode) ;
     } else {
       TipNode * newNode = new TipNode(i, incrementedDepth, parent, m_dataset, tipKnotsThinningRate) ;
-      m_numTips = m_numTips+1 ;
+      m_numTips += 1 ;
       m_vertexVector.push_back(newNode) ;
       parent->AddChild(newNode) ;
     }
@@ -359,10 +357,8 @@ void AugTree::createHmatrix() {
 
   std::vector<Triplet> tripletList = populateTripletList(tipNodes, false) ;
   m_Hmat.resize(m_dataset.covariateValues.rows(), m_numKnots + m_dataset.covariateValues.cols() + 1) ;
-  Rprintf("Hmat size: %i %i \n", m_Hmat.rows(), m_Hmat.cols()) ;
-  Rcout << "Populating H matrix..." << std::endl ;
   m_Hmat.setFromTriplets(tripletList.begin(), tripletList.end()) ;
-  Rcout << "Done! \n" ;
+
   // The idea behind this is to associate a memory location in the W matrices and a cell
   // in the H matrix. The memory location we get from calling .data() on a given W
   // matrix changes when the W values are updated, even when W is allocated on the
@@ -373,7 +369,7 @@ void AugTree::createHmatrix() {
   // I made m_Hmat row-major to make the updating process faster, as all values on any
   // given row are associated with the same observation, which belongs to a single tip node.
   // Don't mind the four nested loops: all it does is traverse all the elements once.
-  Rcout << "Preparing offset vector... " << std::endl ;
+
   for (auto & tipNode : tipNodes) {
     std::vector<TreeNode *> tipNodeAncestors = tipNode->getAncestors() ;
     uint numObs = tipNode->GetObsInNode().size() ;
@@ -392,7 +388,6 @@ void AugTree::createHmatrix() {
       }
     }
   }
-  Rcout << "Offset vector ready!" << std::endl ;
 }
 
 std::vector<Eigen::Triplet<double>> AugTree::populateTripletList(const std::vector<TreeNode *> & tipNodes,
@@ -652,10 +647,9 @@ void AugTree::ComputeLogFCandLogCDandDataLL() {
   vec responsesReshuffled = elem(m_dataset.responseValues.array(), m_obsOrderForHmat) ;
   mat scaledResponse = std::pow(m_errorSD, -2) * m_Hmat.transpose() * responsesReshuffled ;
 
-  Rcout << "Computing secondTerm... " << std::endl ;
   sp_mat secondTerm = std::pow(m_errorSD, -2) * (m_Hmat.transpose() * m_Hmat) ;
 
-  Rcout << "Computing Cholesky... " << std::endl ;
+  Rcout << "Computing Q matrix Cholesky... " << std::endl ;
   fflush(stdout) ;
   if (m_logFullCond == 0) { // This is the first iteration...
     try {

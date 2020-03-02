@@ -18,31 +18,9 @@
 #' @param errorSDlist List with two elements: a starting value for the *uncorrelated error standard deviation* hyperparameter, and a length-two vector giving the mean and standard deviation of the associated normal hyperprior (second element must be omitted if hyperparameter is fixed)
 #' @param fixedEffSDlist List with two elements: a starting value for the *uncorrelated fixed effects standard deviation* hyperparameter, and a length-two vector giving the mean and standard deviation of the associated normal hyperprior (second element must be omitted if hyperparameter is fixed)
 #' @param FEmuVec Vector with the mean value of the priors for the fixed effects. Its length must match the number of columns in covariateFrame
-#' @param control List with control parameters. See details.
+#' @param control See ?INLAMRA.control.
 #'
-#' @details Some of the control parameters should be tuned to ensure better computational or predictive performance, or to make it possible to stop and resume model fitting:
-#' \itemize{
-#' \item{Mlon, Mlat, Mtime} {The number of longitude, latitude, and time splits used to create the nested resolutions. We have M = Mlon + Mlat + Mtime. They should be set as low as possible,  keeping in mind time and memory constraints.}
-#' \item{numKnotsRes0} {The number of knots at resolution 0 (the resolution encompassing the entire spatiotemporal domain). Takes value 20 by default. We would not recommend setting it under 8, as knots are first placed on the vertices of a rectangular prism nested within each subregion. Increasing this number also increases the program's memory footprint and running time.}
-#' \item{J} {Multiplier used to determine the number of knots at each resolution. The number of knots in each subregion at resolution i is ceiling(numKnotsRes0 * (J/2)^i). {Takes value 2 by default. We do not recommend setting J under 2, as some regions might end up with only two knots when M is large enough.}
-#' \item{numValuesForIS} {The number of IS samples to be used for marginalisation. Takes value 100 by default.}
-#' \item{numIterOptim} {The number of iterations in the L-BFGS algorithm used to identify the maximum of the join marginal posterior distribution of the hyperparameters. Takes value 25 by default. Could be set somewhat lower, 20 say, to reduce running time, but setting it too low might create imbalance in the importance sampling weights.}
-#' \item{tipKnotsThinningRate} {The proportion of observation spatiotemporal locations that should be used as knots at the finest resolution, values should be in (0, 1]. Takes value 1 by default. A lower value for this parameter could reduce predictive performance, but greatly reduce the memory footprint. For very large datasets, lower values of this parameter are recommended, and can even be necessary.}
-#' \item{credIntervalPercs} {The quantile boundaries of the reported credibility intervals. By default, 0.025 and 0.975, for a 95% credibility interval.}
-#' \item{fileToSaveOptOutput} {String indicating where the results of the optimisation, used to identify the maximum of the marginal joint hyperparameter posterior distribution, should be saved. If this is set, it becomes possible to resume the fitting after interruption. The function will restart after the optimisation step.}
-#' }
-#' \item{folderToSaveISpoints} {String indicating the name of a folder where the results of each iteration of the IS algorithm should be saved. This allows the IS algorithm to be resumed after interruption. It also makes it possible to produce an output before all IS iterations have been processed, cf. control$IScompleted.}
-#' There are other control parameters that should not required to be changed (but that we keep there in case they might be required in future versions of the package):
-#' \itemize{
-#' \item{distMethod} {String indicating the method used to obtain distances in kilometers from longitude/latitude coordinates. Takes value "haversine" by default, for the Haversine distance formula. No alternative is implemented for now.}
-#' \item {randomSeed} {Seed for the random number generator used for knot placement. Takes value 24 by default.}
-#' \item{numISpropDistUpdates} {The number of importance sampling (IS) weight updates in the adaptive IS algorithm. Takes value 0 by default. We implemented an adaptive IS scheme in case a reasonable level of balance in IS weights was not reached. It is enabled by setting this pararameter to 1 or more.}
-#' \item{nuggetSD} {A small number added to the diagonal of the covariance matrices obtained by applying the Matern formula, to ensure that they are invertible. Takes value 1e-5 by default.}
-#' \item{normalHyperprior} {Should hyperparameters be modelled on the logarithmic scale and normal hyperpriors be used? Takes value TRUE by default. Modelling hyperparameters on the original scale, with gamma priors, is possible, but not recommended.}
-#' \item{IScompleted} {Logical value indicating whether all importance sampling weights have been obtained. Takes value FALSE by default. Set it to TRUE to produce intermediate results (based on fewer IS iterations than had been originally planned) when the run takes too long time to finish. Note that control$fileToSaveOptOutput and control$folderToSaveISpoints must be specified for this feature to work.}
-#' \item{spaceJitterMax} {The maximum jittering to apply to longitude/ latitude coordinates. Takes value 0 by default, for no jittering. The method might run into numerical difficulties if longitude/latitude coordinates are replicated. The jittering ensures that it does not happen.}
-#' }
-#'
+#' @details Some of the control parameters should be tuned to ensure better computational or predictive performance, or to make it possible to stop and resume model fitting. See INLAMRA.control.
 #'
 #'
 #' @return A list with three components:
@@ -58,7 +36,7 @@
 #' }
 #' @export
 
-MRA_INLA <- function(responseVec, covariateFrame, spatialCoordMat, timePOSIXctVec, predCovariateFrame = NULL, predSpatialCoordMat = NULL, predTimePOSIXctVec = NULL, sinusoidalProjection = FALSE,  spatialRangeList = NULL, spatialSmoothnessList = list(start = log(1.5)), timeRangeList = NULL, timeSmoothnessList = list(start = log(0.5)), scaleList = list(start = 0, hyperpars = c(0, 2)), errorSDlist = list(start = 0), fixedEffSDlist = list(start = log(10)), FEmuVec = rep(0, ncol(covariateFrame)), control) {
+INLAMRA <- function(responseVec, covariateFrame, spatialCoordMat, timePOSIXctVec, predCovariateFrame = NULL, predSpatialCoordMat = NULL, predTimePOSIXctVec = NULL, sinusoidalProjection = FALSE,  spatialRangeList = NULL, spatialSmoothnessList = list(start = log(1.5)), timeRangeList = NULL, timeSmoothnessList = list(start = log(0.5)), scaleList = list(start = 0, hyperpars = c(mu = 0, sigma = 2)), errorSDlist = list(start = 0), fixedEffSDlist = list(start = log(10)), FEmuVec = rep(0, ncol(covariateFrame)), control = INLAMRA.control()) {
 
   noPredictionFlag <- is.null(predCovariateFrame) | is.null(predSpatialCoordMat) | is.null(predTimePOSIXctVec)
 
@@ -66,7 +44,6 @@ MRA_INLA <- function(responseVec, covariateFrame, spatialCoordMat, timePOSIXctVe
 
   # .checkInputConsistency has already ensured that column names match. This line ensures that covariates are presented in the exact same order in predictions as in observations.
   if (!noPredictionFlag) predCovariateFrame <- predCovariateFrame[colnames(covariateFrame)]
-  ##################################
   lonLatProjString <- "+proj=longlat +datum=WGS84 +no_defs +ellps=WGS84 +towgs84=0,0,0"
   crsString <- ifelse(sinusoidalProjection, yes = "+proj=sinu +lon_0=0 +x_0=0 +y_0=0 +R=6371007.181 +units=m +no_defs", no = lonLatProjString)
   spObject <- sp::SpatialPoints(coords = spatialCoordMat, proj4string = sp::CRS(crsString))
@@ -76,24 +53,15 @@ MRA_INLA <- function(responseVec, covariateFrame, spatialCoordMat, timePOSIXctVe
     spObject <- sp::spTransform(x = spObject, CRSobj = lonLatProjString)
     if (!noPredictionFlag) spObjectPred <- sp::spTransform(x = spObjectPred, CRSobj = lonLatProjString)
   }
-
-  ##################################
-  # DEFINING CONTROL PARA.##########
-  defaultControl <- list(Mlon = 1, Mlat = 1, Mtime = 1, randomSeed = 24, nuggetSD = 1e-5, numKnotsRes0 = 20L, J = 4L, numValuesForIS = 100, numIterOptim = 25L, distMethod = "haversine", normalHyperprior = TRUE, numISpropDistUpdates = 0, tipKnotsThinningRate = 1, credIntervalPercs = c(0.025, 0.975), timeJitterMaxInDays = 0, spaceJitterMax = 0)
   coordRanges <- .prepareCoordRanges(spObject = spObject, spObjectPred = spObjectPred, timePOSIXctVec = timePOSIXctVec, predTimePOSIXctVec = predTimePOSIXctVec)
-  defaultControl <- c(defaultControl, coordRanges)
 
-  for (i in names(control)) {
-    defaultControl[[i]] <- control[[i]]
-  }
-  control <- defaultControl
-  ##################################
+  set.seed(control$randomSeed)
   if (control$spaceJitterMax > 0) spObject@coords <- geoR::jitter2d(spObject@coords, max = control$spaceJitterMax)
 
   if (is.null(spatialRangeList)) {
-    warning("Did not provide a starting value for the spatial range parameter. Using a fifth of the length of the training data bounding box, and setting hyperparameters mu = 'default starting value' and sigma = 'default starting value').")
-    lowerLeftCorner <- c(control$lonRange[[1]], control$latRange[[1]])
-    upperRightCorner <- c(control$lonRange[[2]], control$latRange[[2]])
+    warning("Did not provide a starting value for the spatial range parameter. Using a fifth of the length of the training data bounding box, and setting hyperparameters mu = 'default starting value' and sigma = 'default starting value').", immediate. = TRUE)
+    lowerLeftCorner <- c(coordRanges$lonRange[[1]], coordRanges$latRange[[1]])
+    upperRightCorner <- c(coordRanges$lonRange[[2]], coordRanges$latRange[[2]])
     diagLengthInKm <- geosphere::distHaversine(p1 = lowerLeftCorner, p2 = upperRightCorner, r = 6378.137) # Distances are in kilometers.
     logRangePara <- log(diagLengthInKm/5)
     spatialRangeList <- list(start = logRangePara,
@@ -103,8 +71,8 @@ MRA_INLA <- function(responseVec, covariateFrame, spatialCoordMat, timePOSIXctVe
   }
 
   if (is.null(timeRangeList)) {
-    warning("Did not provide a starting value for the temporal range parameter. Using a fifth of the length of the time range (expressed in days), and setting hyperparameters mu = 'default starting value'  and sigma = 'default starting value'.")
-    timeRangeList <- list(start = diff(control$timeRange)/5)
+    warning("Did not provide a starting value for the temporal range parameter. Using a fifth of the length of the time range (expressed in days), and setting hyperparameters mu = 'default starting value'  and sigma = 'default starting value'.", immediate. = TRUE)
+    timeRangeList <- list(start = diff(coordRanges$timeRange)/5)
     timeRangeList$hyperpars <- c(mu = timeRangeList$start, sigma = timeRangeList$start)
   }
 
@@ -114,10 +82,10 @@ MRA_INLA <- function(responseVec, covariateFrame, spatialCoordMat, timePOSIXctVe
       control$IScompleted <- TRUE
     }
   }
-  timeValues <- .ConvertPOSIXctInDays(timePOSIXctVec, min(c(timePOSIXctVec, predTimePOSIXctVec)))
+  timeValues <- .ConvertPOSIXctInDays(POSIXctVec = timePOSIXctVec, baselinePOSIXct = min(c(timePOSIXctVec, predTimePOSIXctVec)), jitterMax = control$timeJitterMaxInDecimalDays)
   predTime <- NULL
   if (!noPredictionFlag) {
-    predTime <- .ConvertPOSIXctInDays(predTimePOSIXctVec, min(timePOSIXctVec))
+    predTime <- .ConvertPOSIXctInDays(POSIXctVec = predTimePOSIXctVec, baselinePOSIXct = min(c(timePOSIXctVec, predTimePOSIXctVec))) # No need to jitter prediction coordinates.
     predCovariateFrame <- as.matrix(predCovariateFrame)
     predCoords <- spObjectPred@coords
   } else {
@@ -128,10 +96,9 @@ MRA_INLA <- function(responseVec, covariateFrame, spatialCoordMat, timePOSIXctVe
   fixedHyperValues <- .makeFixedHyperValues(spatialRangeList = spatialRangeList, spatialSmoothnessList = spatialSmoothnessList, timeRangeList = timeRangeList, timeSmoothnessList = timeSmoothnessList, errorSDlist = errorSDlist, fixedEffSDlist = fixedEffSDlist, scaleList = scaleList)
   hyperpriorPars <- .makeHyperpriorPars(spatialRangeList = spatialRangeList, spatialSmoothnessList = spatialSmoothnessList, timeRangeList = timeRangeList, timeSmoothnessList = timeSmoothnessList, errorSDlist = errorSDlist, fixedEffSDlist = fixedEffSDlist, scaleList = scaleList)
 
-  nestedGridsPointer <- setupNestedGrids(responseValues = responseVec, spCoords = spObject@coords, predCoords = predCoords, obsTime = timeValues, predTime = predTime, covariateMatrix = as.matrix(covariateFrame), predCovariateMatrix = predCovariateFrame, Mlon = control$Mlon, Mlat = control$Mlat, Mtime = control$Mtime, lonRange = control$lonRange, latRange = control$latRange, timeRange = control$timeRange, randomSeed = control$randomSeed, numKnotsRes0 = control$numKnotsRes0, J = control$J, distMethod = control$distMethod, MaternParsHyperpars = hyperpriorPars[c("space", "time", "scale")], fixedEffParsHyperpars = hyperpriorPars$fixedEffSD, errorParsHyperpars = hyperpriorPars$errorSD, FEmuVec = FEmuVec, nuggetSD = control$nuggetSD, normalHyperprior = control$normalHyperprior, tipKnotsThinningRate = control$tipKnotsThinningRate)$nestedGridsPointer
+  nestedGridsPointer <- setupNestedGrids(responseValues = responseVec, spCoords = spObject@coords, predCoords = predCoords, obsTime = timeValues, predTime = predTime, covariateMatrix = as.matrix(covariateFrame), predCovariateMatrix = predCovariateFrame, Mlon = control$Mlon, Mlat = control$Mlat, Mtime = control$Mtime, lonRange = coordRanges$lonRange, latRange = coordRanges$latRange, timeRange = coordRanges$timeRange, randomSeed = control$randomSeed, numKnotsRes0 = control$numKnotsRes0, J = control$J, distMethod = control$distMethod, MaternParsHyperpars = hyperpriorPars[c("space", "time", "scale")], fixedEffParsHyperpars = hyperpriorPars$fixedEffSD, errorParsHyperpars = hyperpriorPars$errorSD, FEmuVec = FEmuVec, nuggetSD = control$nuggetSD, normalHyperprior = control$normalHyperprior, tipKnotsThinningRate = control$tipKnotsThinningRate)$nestedGridsPointer
 
   # First we compute values relating to the hyperprior marginal distribution...
-
   computedValues <- .obtainISvalues(nestedGridsPointer = nestedGridsPointer, hyperStart = hyperStart, fixedHyperValues = fixedHyperValues, control = control)
 
   # Now, we obtain the marginal distribution of all mean parameters.
@@ -151,8 +118,48 @@ MRA_INLA <- function(responseVec, covariateFrame, spatialCoordMat, timePOSIXctVe
   outputList
 }
 
-.ConvertPOSIXctInDays <- function(POSIXctVec, baselinePOSIXct = 0) {
-  as.numeric(POSIXctVec - baselinePOSIXct)/(3600 * 24)
+#' Control parameters for INLAMRA
+#'
+#' Some important and less important tuning parameters for the INLA-MRA algorithm. Use this function to modify control parameters.
+#
+#' @param {Mlon, Mlat, Mtime} Number of longitude, latitude, and time splits used to create the nested resolutions. We have M = Mlon + Mlat + Mtime. They should be set as low as possible,  keeping in mind time and memory constraints
+#' @param numKnotsRes0 Number of knots at resolution 0 (the resolution encompassing the entire spatiotemporal domain). We would not recommend setting it under 8, as knots are first placed on the vertices of a rectangular prism nested within each subregion. Increasing this number also increases the program's memory footprint and running time.
+#' @param J Multiplier used to determine the number of knots at each resolution. The number of knots in each subregion at resolution i is ceiling(numKnotsRes0 * (J/2)^i). We do not recommend setting J under 2, as some regions might end up with only two knots when M is large enough.
+#' @param numValuesForIS The number of IS samples to be used for marginalisation.
+#' @param numIterOptim Number of iterations in the L-BFGS algorithm used to identify the maximum of the join marginal posterior distribution of the hyperparameters. Could be set somewhat lower, 20 say, to reduce running time, but setting it too low might create imbalance in the importance sampling weights.
+#' @param tipKnotsThinningRate Proportion of observation spatiotemporal locations that should be used as knots at the finest resolution, values should be in (0, 1]. Takes value 1 by default. A lower value for this parameter could reduce predictive performance, but greatly reduce the memory footprint. For very large datasets, lower values of this parameter are recommended, and can even be necessary.}
+#' @param credIntervalPercs Quantile boundaries of the reported credibility intervals. By default, 0.025 and 0.975, for a 95% credibility interval.
+#' @param fileToSaveOptOutput String indicating where the results of the optimisation, used to identify the maximum of the marginal joint hyperparameter posterior distribution, should be saved. If this is set, it becomes possible to resume the fitting after interruption. The function will restart after the optimisation step.
+#' }
+#' @param folderToSaveISpoints String indicating the name of a folder where the results of each iteration of the IS algorithm should be saved. This allows the IS algorithm to be resumed after interruption. It also makes it possible to produce an output before all IS iterations have been processed, cf. control$IScompleted.
+#' @param distMethod String indicating the method used to obtain distances in kilometers from longitude/latitude coordinates. Takes value "haversine" by default, for the Haversine distance formula. No alternative is implemented for now.
+#' @param randomSeed Seed for the random number generator used for jittering and knot placement. Takes value 24 by default.
+#' @param numISpropDistUpdates The number of importance sampling (IS) weight updates in the adaptive IS algorithm. Takes value 0 by default. We implemented an adaptive IS scheme in case a reasonable level of balance in IS weights was not reached. It is enabled by setting this pararameter to 1 or more.
+#' @param nuggetSD A small number added to the diagonal of the covariance matrices obtained by applying the Matern formula, to ensure that they are invertible. Takes value 1e-5 by default.
+#' @param normalHyperprior Should hyperparameters be modelled on the logarithmic scale and normal hyperpriors be used? Takes value TRUE by default. Modelling hyperparameters on the original scale, with gamma priors, is possible, but not recommended.
+#' @param IScompleted Logical value indicating whether all importance sampling weights have been obtained. Takes value FALSE by default. Set it to TRUE to produce intermediate results (based on fewer IS iterations than had been originally planned) when the run takes too long time to finish. Note that control$fileToSaveOptOutput and control$folderToSaveISpoints must be specified for this feature to work.
+#' @param spaceJitterMax The maximum jittering to apply to longitude/ latitude coordinates. Takes value 1e-5 by default. The method might run into numerical difficulties if longitude/latitude coordinates are replicated. The jittering ensures that it does not happen. Putting this value at 0 disables the spatial jittering, which is not recommended.
+#' @param timeJitterMaxInDecimalDays The maximum jittering to apply to time values, in days. Default value is 1/864000000 (1e-5 seconds). This is used to make it possible to evenly split the data into subregions at any depth. A balanced distribution of observations in the different regions makes it easier to control the method's computational performance. Putting this value at 0 disables the time jittering, which is not recommended.
+#'
+#' @details Some of the control parameters should be tuned to ensure better computational or predictive performance: Mlon, Mlat, Mtime, numKnotsRes0, J, numValuesForIS, numIterOptim, tipKnotsThinningRate.
+#' Other control parameters make it possible to stop an INLAMRA run at any point and resume close to where the algorithm initially stopped, or produce an intermediate results based on an incomplete run: fileToSaveOptOutput, folderToSaveISpoints, IScompleted.
+#' There are other control parameters that users should not normally need to change: distMethod, nuggetSD, normalHyperprior, spaceJitterMax, timeJitterMaxInDecimalDays.
+#'
+#'
+#' @return A list with all control parameters.
+#' @examples
+#' \dontrun{#'
+#' }
+#' @export
+
+INLAMRA.control <- function(Mlon = 1, Mlat = 1, Mtime = 1, randomSeed = 24, nuggetSD = 1e-5, numKnotsRes0 = 20L, J = 2L, numValuesForIS = 100, numIterOptim = 25L, distMethod = "haversine", normalHyperprior = TRUE, numISpropDistUpdates = 0, tipKnotsThinningRate = 1, credIntervalPercs = c(0.025, 0.975), timeJitterMaxInDecimalDays = 1/864000000, spaceJitterMax = 1e-5) {
+  list(Mlon = Mlon, Mlat = Mlat, Mtime = Mtime, randomSeed = randomSeed, nuggetSD = nuggetSD, numKnotsRes0 = numKnotsRes0, J = J, numValuesForIS = numValuesForIS, numIterOptim = numIterOptim, distMethod = distMethod, normalHyperprior = normalHyperprior, numISpropDistUpdates = numISpropDistUpdates, tipKnotsThinningRate = tipKnotsThinningRate, credIntervalPercs = credIntervalPercs, timeJitterMaxInDecimalDays = timeJitterMaxInDecimalDays, spaceJitterMax = spaceJitterMax)
+}
+
+.ConvertPOSIXctInDays <- function(POSIXctVec, baselinePOSIXct = 0, jitterMax = 0) {
+  baseValues <- as.numeric(difftime(time1 = POSIXctVec, time2 = baselinePOSIXct, units = "days"))
+  if (jitterMax > 0) baseValues <- jitter(baseValues, amount = jitterMax)
+  baseValues
 }
 
 .checkInputConsistency <- function(responseVec, covariateFrame, spatialCoordMat, timePOSIXctVec, predCovariateFrame, predSpatialCoordMat, predTimePOSIXctVec) {
@@ -190,7 +197,7 @@ MRA_INLA <- function(responseVec, covariateFrame, spatialCoordMat, timePOSIXctVe
   if (!is.null(spObjectPred)) timeValuesRangeNoBuffer <- range(c(timePOSIXctVec, predTimePOSIXctVec))
   timeBufferSize <- 10 # In seconds
   timeValuesRange <- timeValuesRangeNoBuffer + c(-timeBufferSize, timeBufferSize)
-  timeRangeReshaped <- .ConvertPOSIXctInDays(timeValuesRange, min(timeValuesRangeNoBuffer))
+  timeRangeReshaped <- .ConvertPOSIXctInDays(POSIXctVec = timeValuesRange, baselinePOSIXct = min(timeValuesRangeNoBuffer))
   c(spCoordRanges, list(timeRange = timeRangeReshaped))
 }
 
@@ -249,11 +256,11 @@ MRA_INLA <- function(responseVec, covariateFrame, spatialCoordMat, timePOSIXctVe
 
 .makeHyperpriorPars <- function(spatialRangeList, spatialSmoothnessList, timeRangeList, timeSmoothnessList, errorSDlist, fixedEffSDlist, scaleList) {
   hyperpriorPars <- list(
-    space = list(rho = c(mu = 0, sigma = 0), smoothness = c(mu = 0, sigma = 0)),
-    time = list(rho = c(mu = 0, sigma = 0), smoothness = c(mu = 0, sigma = 0)),
-    errorSD = c(mu = 0, sigma = 0),
-    fixedEffSD = c(mu = 0, sigma = 0),
-    scale = c(mu = 0, sigma = 0)
+    space = list(rho = c(mu = 0, sigma = 2), smoothness = c(mu = 0, sigma = 2)),
+    time = list(rho = c(mu = 0, sigma = 2), smoothness = c(mu = 0, sigma = 2)),
+    errorSD = c(mu = 0, sigma = 2),
+    fixedEffSD = c(mu = 0, sigma = 2),
+    scale = c(mu = 0, sigma = 2)
   )
   if (length(spatialRangeList) > 1) {
     hyperpriorPars$space$rho <- spatialRangeList[[2]]

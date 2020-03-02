@@ -14,16 +14,26 @@ using namespace std;
 
 // [[Rcpp::export]]
 
-List setupNestedGrids(NumericVector responseValues, NumericMatrix spCoords, NumericMatrix predCoords,
-                  NumericVector obsTime,  NumericVector predTime, NumericMatrix covariateMatrix,
-                  NumericMatrix predCovariateMatrix, uint Mlon, uint Mlat, uint Mtime,
-                  NumericVector lonRange, NumericVector latRange, NumericVector timeRange,
-                  uint randomSeed,
-                  int numKnotsRes0, double J, String distMethod,
-                  Rcpp::List MaternParsHyperpars, Rcpp::NumericVector fixedEffParsHyperpars,
-                  NumericVector errorParsHyperpars,
-                  Rcpp::NumericVector FEmuVec,
-                  double nuggetSD, bool normalHyperprior, double tipKnotsThinningRate)
+List setupNestedGrids(NumericVector responseValues,
+                      NumericMatrix spCoords,
+                      NumericMatrix predCoords,
+                      NumericVector obsTime,
+                      NumericVector predTime,
+                      NumericMatrix covariateMatrix,
+                      NumericMatrix predCovariateMatrix,
+                      uint Mlon, uint Mlat, uint Mtime,
+                      NumericVector lonRange, NumericVector latRange, NumericVector timeRange,
+                      uint randomSeed,
+                      int numKnotsRes0,
+                      double J,
+                      String distMethod,
+                      Rcpp::List MaternParsHyperpars,
+                      Rcpp::NumericVector fixedEffParsHyperpars,
+                      NumericVector errorParsHyperpars,
+                      Rcpp::NumericVector FEmuVec,
+                      double nuggetSD,
+                      bool normalHyperprior,
+                      double tipKnotsThinningRate)
 {
   ArrayXd lonRinit = as<ArrayXd>(lonRange) ;
   ArrayXd latRinit = as<ArrayXd>(latRange) ;

@@ -259,11 +259,6 @@ MODISdataMumbai@data <- subset(MODISdataMumbai@data, select = -landCover0)
 MODISdataMumbaiTest@data <- subset(MODISdataMumbaiTest@data, select = -landCover0)
 MODISdataMumbaiTest@data <- subset(MODISdataMumbaiTest@data, select = -y)
 
-# We need to jitter the training data...
-
-set.seed(10)
-MODISdataMumbai@sp@coords <- geoR::jitter2d(MODISdataMumbai@sp@coords, max = 0.00001)
-
 MODISdataTraining <- MODISdataMumbai
 MODISdataTest <- MODISdataMumbaiTest
 
