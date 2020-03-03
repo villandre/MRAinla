@@ -38,10 +38,11 @@ AugTree::AugTree(const uint & Mlon,
                  const Rcpp::NumericVector & FEmuVec,
                  const double & nuggetSD,
                  const bool & normalHyperprior,
-                 const double & tipKnotsThinningRate)
+                 const double & tipKnotsThinningRate,
+                 const uint & numOpenMPthreads)
   : m_distMethod(distMethod), m_nuggetSD(nuggetSD),
     m_Mlon(Mlon), m_Mlat(Mlat), m_Mtime(Mtime),
-    m_normalHyperprior(normalHyperprior)
+    m_normalHyperprior(normalHyperprior), m_numOpenMPthreads(numOpenMPthreads)
 {
   m_M = Mlon + Mlat + Mtime ;
   m_dataset = inputdata(observations, obsSp, obsTime, covariates) ;
@@ -749,6 +750,7 @@ void AugTree::ComputeHpred() {
 }
 
 vec AugTree::ComputeEvar() {
+  omp_set_num_threads(m_numOpenMPthreads) ;
   double errorVar = std::pow(m_errorSD, 2) ;
   vec EvarValues = vec::Zero(m_HmatPred.rows()) ;
   int obsIndex = 0 ;

@@ -33,7 +33,8 @@ List setupNestedGrids(NumericVector responseValues,
                       Rcpp::NumericVector FEmuVec,
                       double nuggetSD,
                       bool normalHyperprior,
-                      double tipKnotsThinningRate)
+                      double tipKnotsThinningRate,
+                      int numOpenMPthreads)
 {
   ArrayXd lonRinit = as<ArrayXd>(lonRange) ;
   ArrayXd latRinit = as<ArrayXd>(latRange) ;
@@ -69,7 +70,8 @@ List setupNestedGrids(NumericVector responseValues,
                                   FEmuVec,
                                   nuggetSD,
                                   normalHyperprior,
-                                  tipKnotsThinningRate) ;
+                                  tipKnotsThinningRate,
+                                  numOpenMPthreads) ;
   XPtr<AugTree> p(MRAgrid, false) ; // Disabled automatic garbage collection.
   return List::create(Named("nestedGridsPointer") = p) ;
 }
