@@ -3,7 +3,7 @@
 #' The function fits the INLA-MRA model to a spatiotemporal dataset and outputs posterior predictive distributions. INLA-MRA assumes a multiplicative form for spatiotemporal covariance, with each component expressed with the Matérn formula.
 #'
 #' @param responseVec A numeric vector with response values.
-#' @param covariateFrame A data.frame containing covariate values in the order of elements in responseVec
+#' @param covariateFrame A data.frame containing covariate values in the order of elements in responseVec. Character elements should be re-coded as factors.
 #' @param spatialCoordMat A matrix or data.frame with two columns with the *first corresponding to longitude*, and the *second to latitude*; can also be x and y if the sinusoidal projection is used (default for satellite imagery data)
 #' @param timePOSIXctVec A vector of time values in POSIXct format
 #' @param predCovariateFrame A data.frame containing covariate values for the prediction datasets
@@ -36,11 +36,31 @@
 #' }
 #' @export
 
-INLAMRA <- function(responseVec, covariateFrame, spatialCoordMat, timePOSIXctVec, predCovariateFrame = NULL, predSpatialCoordMat = NULL, predTimePOSIXctVec = NULL, sinusoidalProjection = FALSE,  spatialRangeList = NULL, spatialSmoothnessList = list(start = log(1.5)), timeRangeList = NULL, timeSmoothnessList = list(start = log(0.5)), scaleList = list(start = 0, hyperpars = c(mu = 0, sigma = 2)), errorSDlist = list(start = 0), fixedEffSDlist = list(start = log(10)), FEmuVec = rep(0, ncol(covariateFrame)), control = INLAMRA.control()) {
+INLAMRA <- function(responseVec, covariateFrame, spatialCoordMat, timePOSIXctVec, predCovariateFrame = NULL, predSpatialCoordMat = NULL, predTimePOSIXctVec = NULL, sinusoidalProjection = FALSE,  spatialRangeList = NULL, spatialSmoothnessList = list(start = log(1.5)), timeRangeList = NULL, timeSmoothnessList = list(start = log(0.5)), scaleList = list(start = 0, hyperpars = c(mu = 0, sigma = 2)), errorSDlist = list(start = 0), fixedEffSDlist = list(start = log(10)), FEmuVec = rep(0, ncol(covariateFrame) + 1), control = INLAMRA.control()) {
+
+  .checkInputConsistency(responseVec, covariateFrame, spatialCoordMat, timePOSIXctVec, predCovariateFrame, predSpatialCoordMat, predTimePOSIXctVec)
 
   noPredictionFlag <- is.null(predCovariateFrame) | is.null(predSpatialCoordMat) | is.null(predTimePOSIXctVec)
 
-  .checkInputConsistency(responseVec, covariateFrame, spatialCoordMat, timePOSIXctVec, predCovariateFrame, predSpatialCoordMat, predTimePOSIXctVec)
+  nonMissingObservationIndices <- .getNonMissingIndices(responseVec = responseVec, covariateFrame = covariateFrame, spatialCoordMat = spatialCoordMat, timePOSIXctVec = timePOSIXctVec)
+  if (length(nonMissingObservationIndices) < length(responseVec)) {
+    warning("Missing values (NAs) in provided data. Observations with missing information will be excluded.", immediate. = TRUE)
+    responseVec <- responseVec[nonMissingObservationIndices]
+    covariateFrame <- covariateFrame[nonMissingObservationIndices, ]
+    spatialCoordMat <- spatialCoordMat[nonMissingObservationIndices, ]
+    timePOSIXctVec <- timePOSIXctVec[nonMissingObservationIndices]
+  }
+
+  if (!noPredictionFlag) {
+    nonMissingPredIndices <- .getNonMissingIndices(covariateFrame = predCovariateFrame, spatialCoordMat = predSpatialCoordMat, timePOSIXctVec = predTimePOSIXctVec)
+    if (length(nonMissingPredIndices) < nrow(predCovariateFrame)) {
+      warning("Missing values (NAs) in data provided for predictions. Locations with incomplete information will not be processed.")
+      originalNumberPreds <- nrow(predCovariateFrame)
+      predCovariateFrame <- predCovariateFrame[nonMissingPredIndices, ]
+      predSpatialCoordMat <- predSpatialCoordMat[nonMissingPredIndices, ]
+      predTimePOSIXctVec <- predTimePOSIXctVec[nonMissingPredIndices]
+    }
+  }
 
   # .checkInputConsistency has already ensured that column names match. This line ensures that covariates are presented in the exact same order in predictions as in observations.
   if (!noPredictionFlag) predCovariateFrame <- predCovariateFrame[colnames(covariateFrame)]
@@ -112,6 +132,9 @@ INLAMRA <- function(responseVec, covariateFrame, spatialCoordMat, timePOSIXctVec
   if (!noPredictionFlag) {
     cat("Computing prediction moments... \n")
     outputList$predictionMoments <- .ComputeKrigingMoments(computedValues$output, nestedGridsPointer, control = control)
+    # The following two lines add NAs in locations where incomplete information was provided. They also ensure that prediction outputs match inputs.
+    outputList$predictionMoments$predictMeans <- replace(rep(NA, originalNumberPreds), nonMissingPredIndices, outputList$predictionMoments$predictMeans)
+    outputList$predictionMoments$predictSDs <- replace(rep(NA, originalNumberPreds), nonMissingPredIndices, outputList$predictionMoments$predictSDs)
   }
 
   cat("Returning results... \n")
@@ -155,6 +178,17 @@ INLAMRA <- function(responseVec, covariateFrame, spatialCoordMat, timePOSIXctVec
 INLAMRA.control <- function(Mlon = 1, Mlat = 1, Mtime = 1, randomSeed = 24, nuggetSD = 1e-5, numKnotsRes0 = 20L, J = 2L, numValuesForIS = 100, numIterOptim = 25L, distMethod = "haversine", normalHyperprior = TRUE, numISpropDistUpdates = 0, tipKnotsThinningRate = 1, credIntervalPercs = c(0.025, 0.975), timeJitterMaxInDecimalDays = 1/864000000, spaceJitterMax = 1e-5) {
   list(Mlon = Mlon, Mlat = Mlat, Mtime = Mtime, randomSeed = randomSeed, nuggetSD = nuggetSD, numKnotsRes0 = numKnotsRes0, J = J, numValuesForIS = numValuesForIS, numIterOptim = numIterOptim, distMethod = distMethod, normalHyperprior = normalHyperprior, numISpropDistUpdates = numISpropDistUpdates, tipKnotsThinningRate = tipKnotsThinningRate, credIntervalPercs = credIntervalPercs, timeJitterMaxInDecimalDays = timeJitterMaxInDecimalDays, spaceJitterMax = spaceJitterMax)
 }
+
+.getNonMissingIndices <- function(responseVec = NULL, covariateFrame, spatialCoordMat, timePOSIXctVec) {
+  responseMissing <- rep(FALSE, nrow(covariateFrame))
+  if (!is.null(responseVec)) responseMissing <- is.na(responseVec)
+  covariateMissingByCol <- lapply(covariateFrame, is.na)
+  covariateMissing <- do.call("*", covariateMissingByCol)
+  coordMissing <- is.na(spatialCoordMat[ , 1]) * is.na(spatialCoordMat[ , 2])
+  timeMissing <- is.na(timePOSIXctVec)
+  which(!(responseMissing * covariateMissing * coordMissing * timeMissing))
+}
+
 
 .ConvertPOSIXctInDays <- function(POSIXctVec, baselinePOSIXct = 0, jitterMax = 0) {
   baseValues <- as.numeric(difftime(time1 = POSIXctVec, time2 = baselinePOSIXct, units = "days"))
