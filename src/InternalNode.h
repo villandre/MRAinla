@@ -98,7 +98,7 @@ public:
 
   mat & GetB(const uint & l) { throw Rcpp::exception("Trying to get B matrix in internal node.\n") ;}
   double GetBelement(const uint & l, const uint & row, const uint & col) { throw Rcpp::exception("Trying to get elements of B matrix from internal node.\n") ;}
-  void SetUncorrSD(const double &) {throw Rcpp::exception("Trying to add uncorrelated error for internal nodes! \n") ;}
+  // void SetUncorrSD(const double &) {throw Rcpp::exception("Trying to add uncorrelated error for internal nodes! \n") ;}
   // mat & GetUpred(const uint & l) { throw Rcpp::exception("Upred matrices only computed for tip nodes! \n") ;}
   double & GetUpredElement(const uint & l, const uint & row, const uint & col) { throw Rcpp::exception("Upred matrices only computed for tip nodes! \n") ; }
   std::vector<mat> & GetUmatList() { throw Rcpp::exception("UmatList only available in tip nodes! \n") ;}
