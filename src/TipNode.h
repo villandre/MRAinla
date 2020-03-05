@@ -60,9 +60,9 @@ public:
 
   mat GetKmatrixInverse() { return m_Kinverse ;}
 
-  void SetUncorrSD(const double & sd) {
-    m_uncorrSD = sd ;
-  }
+  // void SetUncorrSD(const double & sd) {
+  //   m_uncorrSD = sd ;
+  // }
   // mat & GetUpred(const uint & l) { return m_UmatList.at(l) ;}
   double & GetUpredElement(const uint & l, const uint & row, const uint & col) {
     if (l == m_depth) {
@@ -130,7 +130,7 @@ public:
 
 protected:
 
-  double m_uncorrSD{ -1 } ;
+  // double m_uncorrSD{ -1 } ;
   mat m_Kinverse ;
 
   // Prediction components (should probably be freed once computations are done)

@@ -5,10 +5,10 @@
 #' @param responseVec A numeric vector with response values.
 #' @param covariateFrame A data.frame containing covariate values in the order of elements in responseVec. Character elements should be re-coded as factors.
 #' @param spatialCoordMat A matrix or data.frame with two columns with the *first corresponding to longitude*, and the *second to latitude*; can also be x and y if the sinusoidal projection is used (default for satellite imagery data)
-#' @param timePOSIXctVec A vector of time values in POSIXct format
+#' @param timePOSIXorNumericVec A vector of time values in POSIX* or numeric format.
 #' @param predCovariateFrame A data.frame containing covariate values for the prediction datasets
 #' @param predSpatialCoordMat Like spatialCoordMat, but for the prediction data
-#' @param predTimePOSIXctVec Like timePOSIXctVec, but for prediction data
+#' @param predTimePOSIXorNumericVec Like timePOSIXorNumericVec, but for prediction data
 #' @param sinusoidalProjection Logical value indicating whether the provided coordinates are in the sinusoidal projection
 #' @param spatialRangeList List with two elements: a starting value for the *spatial range* hyperparameter, and a two element vector giving the mean and standard deviation of the normal hyperprior (second element must be omitted if hyperparameter is fixed)
 #' @param spatialSmoothnessList List with two elements: a starting value for the *spatial smoothness* hyperparameter, and a length-two vector giving the mean and standard deviation of the associated normal hyperprior (second element must be omitted if hyperparameter is fixed)
@@ -25,7 +25,7 @@
 #'
 #' @return A list with three components:
 #' \itemize{
-#'  \item{hyperMarginalMoments} {A data.frame giving the mean, and standard deviation of the marginal hyperparameter posteriors, as well as the related 95\% credibility intervals.}
+#'  \item{hyperMarginalMoments} {A data.frame giving the mean, and standard deviation of the marginal hyperparameter posteriors, as well as the related 95\% credibility intervals. Note that the scaling of the time hyperparameters depends on the provided time values. If they are inputted as POSIX* objects, time hyperparameters will relate to time measured in days. If they are inputted as numeric, no assumption is made: the original scale is used.}
 #'  \item{FEmarginalMoments} {A data.frame giving the mean, and standard deviation of the marginal fixed effects posteriors, as well as 95\% credibility intervals.}
 #'  \item{predictionMoments} {A data.frame with two columns, predictMeans and predictSDs. The order of the predictions matches the one in predCovariateFrame.}
 #' }
@@ -36,29 +36,29 @@
 #' }
 #' @export
 
-INLAMRA <- function(responseVec, covariateFrame, spatialCoordMat, timePOSIXctVec, predCovariateFrame = NULL, predSpatialCoordMat = NULL, predTimePOSIXctVec = NULL, sinusoidalProjection = FALSE,  spatialRangeList = NULL, spatialSmoothnessList = list(start = log(1.5)), timeRangeList = NULL, timeSmoothnessList = list(start = log(0.5)), scaleList = list(start = 0, hyperpars = c(mu = 0, sigma = 2)), errorSDlist = list(start = 0), fixedEffSDlist = list(start = log(10)), FEmuVec = rep(0, ncol(covariateFrame) + 1), control = INLAMRA.control()) {
+INLAMRA <- function(responseVec, covariateFrame = NULL, spatialCoordMat, timePOSIXorNumericVec, predCovariateFrame = NULL, predSpatialCoordMat = NULL, predTimePOSIXorNumericVec = NULL, sinusoidalProjection = FALSE,  spatialRangeList = NULL, spatialSmoothnessList = list(start = log(1.5)), timeRangeList = NULL, timeSmoothnessList = list(start = log(0.5)), scaleList = list(start = 0, hyperpars = c(mu = 0, sigma = 2)), errorSDlist = list(start = 0), fixedEffSDlist = list(start = log(10)), FEmuVec = rep(0, ncol(covariateFrame) + 1), control = INLAMRA.control()) {
 
-  .checkInputConsistency(responseVec, covariateFrame, spatialCoordMat, timePOSIXctVec, predCovariateFrame, predSpatialCoordMat, predTimePOSIXctVec)
+  .checkInputConsistency(responseVec, covariateFrame, spatialCoordMat, timePOSIXorNumericVec, predCovariateFrame, predSpatialCoordMat, predTimePOSIXorNumericVec)
 
-  noPredictionFlag <- is.null(predCovariateFrame) | is.null(predSpatialCoordMat) | is.null(predTimePOSIXctVec)
+  noPredictionFlag <- is.null(predSpatialCoordMat) | is.null(predTimePOSIXorNumericVec)
 
-  nonMissingObservationIndices <- .getNonMissingIndices(responseVec = responseVec, covariateFrame = covariateFrame, spatialCoordMat = spatialCoordMat, timePOSIXctVec = timePOSIXctVec)
+  nonMissingObservationIndices <- .getNonMissingIndices(responseVec = responseVec, covariateFrame = covariateFrame, spatialCoordMat = spatialCoordMat, timePOSIXorNumericVec = timePOSIXorNumericVec)
   if (length(nonMissingObservationIndices) < length(responseVec)) {
     warning("Missing values (NAs) in provided data. Observations with missing information will be excluded.", immediate. = TRUE)
     responseVec <- responseVec[nonMissingObservationIndices]
     covariateFrame <- covariateFrame[nonMissingObservationIndices, ]
     spatialCoordMat <- spatialCoordMat[nonMissingObservationIndices, ]
-    timePOSIXctVec <- timePOSIXctVec[nonMissingObservationIndices]
+    timePOSIXorNumericVec <- timePOSIXorNumericVec[nonMissingObservationIndices]
   }
 
   if (!noPredictionFlag) {
-    nonMissingPredIndices <- .getNonMissingIndices(covariateFrame = predCovariateFrame, spatialCoordMat = predSpatialCoordMat, timePOSIXctVec = predTimePOSIXctVec)
+    nonMissingPredIndices <- .getNonMissingIndices(covariateFrame = predCovariateFrame, spatialCoordMat = predSpatialCoordMat, timePOSIXorNumericVec = predTimePOSIXorNumericVec)
     if (length(nonMissingPredIndices) < nrow(predCovariateFrame)) {
       warning("Missing values (NAs) in data provided for predictions. Locations with incomplete information will not be processed.")
       originalNumberPreds <- nrow(predCovariateFrame)
       predCovariateFrame <- predCovariateFrame[nonMissingPredIndices, ]
       predSpatialCoordMat <- predSpatialCoordMat[nonMissingPredIndices, ]
-      predTimePOSIXctVec <- predTimePOSIXctVec[nonMissingPredIndices]
+      predTimePOSIXorNumericVec <- predTimePOSIXorNumericVec[nonMissingPredIndices]
     }
   }
 
@@ -73,7 +73,7 @@ INLAMRA <- function(responseVec, covariateFrame, spatialCoordMat, timePOSIXctVec
     spObject <- sp::spTransform(x = spObject, CRSobj = lonLatProjString)
     if (!noPredictionFlag) spObjectPred <- sp::spTransform(x = spObjectPred, CRSobj = lonLatProjString)
   }
-  coordRanges <- .prepareCoordRanges(spObject = spObject, spObjectPred = spObjectPred, timePOSIXctVec = timePOSIXctVec, predTimePOSIXctVec = predTimePOSIXctVec)
+  coordRanges <- .prepareCoordRanges(spObject = spObject, spObjectPred = spObjectPred, timePOSIXorNumericVec = timePOSIXorNumericVec, predTimePOSIXorNumericVec = predTimePOSIXorNumericVec)
 
   set.seed(control$randomSeed)
   if (control$spaceJitterMax > 0) spObject@coords <- geoR::jitter2d(spObject@coords, max = control$spaceJitterMax)
@@ -102,10 +102,10 @@ INLAMRA <- function(responseVec, covariateFrame, spatialCoordMat, timePOSIXctVec
       control$IScompleted <- TRUE
     }
   }
-  timeValues <- .ConvertPOSIXctInDays(POSIXctVec = timePOSIXctVec, baselinePOSIXct = min(c(timePOSIXctVec, predTimePOSIXctVec)), jitterMax = control$timeJitterMaxInDecimalDays)
+  timeValues <- .ConvertPOSIXtoDays(POSIXorNumericVec = timePOSIXorNumericVec, baselinePOSIXOrNumeric = min(c(timePOSIXorNumericVec, predTimePOSIXorNumericVec)), jitterMax = control$timeJitterMaxInDecimalDays)
   predTime <- NULL
   if (!noPredictionFlag) {
-    predTime <- .ConvertPOSIXctInDays(POSIXctVec = predTimePOSIXctVec, baselinePOSIXct = min(c(timePOSIXctVec, predTimePOSIXctVec))) # No need to jitter prediction coordinates.
+    predTime <- .ConvertPOSIXtoDays(POSIXorNumericVec = predTimePOSIXorNumericVec, baselinePOSIXOrNumeric = min(c(timePOSIXorNumericVec, predTimePOSIXorNumericVec))) # No need to jitter prediction coordinates.
     predCovariateFrame <- as.matrix(predCovariateFrame)
     predCoords <- spObjectPred@coords
   } else {
@@ -116,6 +116,8 @@ INLAMRA <- function(responseVec, covariateFrame, spatialCoordMat, timePOSIXctVec
   fixedHyperValues <- .makeFixedHyperValues(spatialRangeList = spatialRangeList, spatialSmoothnessList = spatialSmoothnessList, timeRangeList = timeRangeList, timeSmoothnessList = timeSmoothnessList, errorSDlist = errorSDlist, fixedEffSDlist = fixedEffSDlist, scaleList = scaleList)
   hyperpriorPars <- .makeHyperpriorPars(spatialRangeList = spatialRangeList, spatialSmoothnessList = spatialSmoothnessList, timeRangeList = timeRangeList, timeSmoothnessList = timeSmoothnessList, errorSDlist = errorSDlist, fixedEffSDlist = fixedEffSDlist, scaleList = scaleList)
 
+  covariateFrame <- cbind(Intercept = rep(1, nrow(covariateFrame)), covariateFrame)
+  if (!noPredictionFlag) predCovariateFrame <- cbind(Intercept = rep(1, nrow(predCovariateFrame)), predCovariateFrame)
   nestedGridsPointer <- setupNestedGrids(responseValues = responseVec, spCoords = spObject@coords, predCoords = predCoords, obsTime = timeValues, predTime = predTime, covariateMatrix = as.matrix(covariateFrame), predCovariateMatrix = predCovariateFrame, Mlon = control$Mlon, Mlat = control$Mlat, Mtime = control$Mtime, lonRange = coordRanges$lonRange, latRange = coordRanges$latRange, timeRange = coordRanges$timeRange, randomSeed = control$randomSeed, numKnotsRes0 = control$numKnotsRes0, J = control$J, distMethod = control$distMethod, MaternParsHyperpars = hyperpriorPars[c("space", "time", "scale")], fixedEffParsHyperpars = hyperpriorPars$fixedEffSD, errorParsHyperpars = hyperpriorPars$errorSD, FEmuVec = FEmuVec, nuggetSD = control$nuggetSD, normalHyperprior = control$normalHyperprior, tipKnotsThinningRate = control$tipKnotsThinningRate, numOpenMPthreads = control$numOpenMPthreads)$nestedGridsPointer
 
   # First we compute values relating to the hyperprior marginal distribution...
@@ -179,42 +181,60 @@ INLAMRA.control <- function(Mlon = 1, Mlat = 1, Mtime = 1, randomSeed = 24, nugg
   list(Mlon = Mlon, Mlat = Mlat, Mtime = Mtime, randomSeed = randomSeed, nuggetSD = nuggetSD, numKnotsRes0 = numKnotsRes0, J = J, numValuesForIS = numValuesForIS, numIterOptim = numIterOptim, distMethod = distMethod, normalHyperprior = normalHyperprior, numISpropDistUpdates = numISpropDistUpdates, tipKnotsThinningRate = tipKnotsThinningRate, credIntervalPercs = credIntervalPercs, timeJitterMaxInDecimalDays = timeJitterMaxInDecimalDays, spaceJitterMax = spaceJitterMax, numOpenMPthreads = numOpenMPthreads)
 }
 
-.getNonMissingIndices <- function(responseVec = NULL, covariateFrame, spatialCoordMat, timePOSIXctVec) {
-  responseMissing <- rep(FALSE, nrow(covariateFrame))
+.getNonMissingIndices <- function(responseVec = NULL, covariateFrame, spatialCoordMat, timePOSIXorNumericVec) {
+  responseMissing <- covariateMissing <- rep(FALSE, nrow(spatialCoordMat))
   if (!is.null(responseVec)) responseMissing <- is.na(responseVec)
-  covariateMissingByCol <- lapply(covariateFrame, is.na)
-  covariateMissing <- do.call("*", covariateMissingByCol)
+  if (!is.null(covariateFrame)) {
+    covariateMissingByCol <- lapply(covariateFrame, is.na)
+    covariateMissing <- Reduce("*", covariateMissingByCol)
+  }
   coordMissing <- is.na(spatialCoordMat[ , 1]) * is.na(spatialCoordMat[ , 2])
-  timeMissing <- is.na(timePOSIXctVec)
+  timeMissing <- is.na(timePOSIXorNumericVec)
   which(!(responseMissing * covariateMissing * coordMissing * timeMissing))
 }
 
-
-.ConvertPOSIXctInDays <- function(POSIXctVec, baselinePOSIXct = 0, jitterMax = 0) {
-  baseValues <- as.numeric(difftime(time1 = POSIXctVec, time2 = baselinePOSIXct, units = "days"))
+.ConvertPOSIXtoDays <- function(POSIXorNumericVec, baselinePOSIXOrNumeric = 0, jitterMax = 0) {
+  if (any(grepl(pattern = "POSIX", x = class(POSIXorNumericVec)))) {
+    baseValues <- as.numeric(difftime(time1 = POSIXorNumericVec, time2 = baselinePOSIXOrNumeric, units = "days"))
+  } else if (class(POSIXorNumericVec) %in% c("numeric", "integer")) {
+    baseValues <- POSIXorNumericVec - baselinePOSIXOrNumeric
+  } else {
+    stop("Check the format of the provided time values.")
+  }
   if (jitterMax > 0) baseValues <- jitter(baseValues, amount = jitterMax)
   baseValues
 }
 
-.checkInputConsistency <- function(responseVec, covariateFrame, spatialCoordMat, timePOSIXctVec, predCovariateFrame, predSpatialCoordMat, predTimePOSIXctVec) {
-  noPredictionFlag <- is.null(predCovariateFrame) | is.null(predSpatialCoordMat) | is.null(predTimePOSIXctVec)
+.checkInputConsistency <- function(responseVec, covariateFrame, spatialCoordMat, timePOSIXorNumericVec, predCovariateFrame, predSpatialCoordMat, predTimePOSIXorNumericVec) {
+  noPredictionFlag <- is.null(predSpatialCoordMat) | is.null(predTimePOSIXorNumericVec)
   if (noPredictionFlag) {
     warning("Missing component for predictions: the model will be fitted, but no predictions will be produced.")
   }
 
-  if (!identical(NULL, predCovariateFrame) | !identical(colnames(covariateFrame), colnames(predCovariateFrame))) {
+  if (is.null(covariateFrame)) {
+    warning("No provided covariates: INLAMRA will only fit an intercept.", immediate. = TRUE)
+    if (!is.null(predCovariateFrame)) stop("No covariate values were provided for observations, despite covariates being provided for predictions. Check model inputs.")
+  }
+  if (!is.null(predCovariateFrame) & !is.null(covariateFrame)) {
     if (!identical(sort(colnames(covariateFrame)), sort(colnames(predCovariateFrame)))) {
       stop("Mismatch between covariates in training and test data. \n")
     }
   }
-  if (!all(duplicated(c(length(responseVec), nrow(covariateFrame), nrow(spatialCoordMat), length(timePOSIXctVec)))[-1])) stop("Mismatch in the dimensions of responseVec, covariateFrame, spatialCoordMat, and/or timePOSIXctVec.")
+
+  if (!all(duplicated(c(length(responseVec), nrow(covariateFrame), nrow(spatialCoordMat), length(timePOSIXorNumericVec)))[-1])) stop("Mismatch in the dimensions of responseVec, covariateFrame, spatialCoordMat, and/or timePOSIXorNumericVec.")
   if (!noPredictionFlag) {
-    if (!all(duplicated(c(nrow(predCovariateFrame), nrow(predSpatialCoordMat), length(predTimePOSIXctVec)))[-1])) stop("Mismatch in the dimensions of predCovariateFrame, predSpatialCoordMat, and/or predTimePOSIXctVec.")
+    if (!all(duplicated(c(nrow(predCovariateFrame), nrow(predSpatialCoordMat), length(predTimePOSIXorNumericVec)))[-1])) stop("Mismatch in the dimensions of predCovariateFrame, predSpatialCoordMat, and/or predTimePOSIXorNumericVec.")
+  }
+  if (!identical(class(predTimePOSIXorNumericVec), class(timePOSIXorNumericVec)) & !is.null(class(predTimePOSIXorNumericVec))) {
+    stop("Observation and prediction time inputs have different classes. Please ensure they match before calling INLAMRA.")
+  }
+  if (identical(class(timePOSIXorNumericVec), "character")) {
+    stop("Time values must be expressed in numeric or POSIX format. Please check.")
   }
   NULL
 }
 
-.prepareCoordRanges <- function(spObject, spObjectPred, timePOSIXctVec, predTimePOSIXctVec) {
+.prepareCoordRanges <- function(spObject, spObjectPred, timePOSIXorNumericVec, predTimePOSIXorNumericVec) {
   spCoordRanges <- lapply(1:2, function(coordColIndex) {
     bufferSize <- 0.01
     coordinates <- spObject@coords[ , coordColIndex]
@@ -227,11 +247,11 @@ INLAMRA.control <- function(Mlon = 1, Mlat = 1, Mtime = 1, randomSeed = 24, nugg
   })
   names(spCoordRanges) <- c("lonRange", "latRange")
 
-  timeValuesRangeNoBuffer <- range(timePOSIXctVec)
-  if (!is.null(spObjectPred)) timeValuesRangeNoBuffer <- range(c(timePOSIXctVec, predTimePOSIXctVec))
+  timeValuesRangeNoBuffer <- range(timePOSIXorNumericVec)
+  if (!is.null(spObjectPred)) timeValuesRangeNoBuffer <- range(c(timePOSIXorNumericVec, predTimePOSIXorNumericVec))
   timeBufferSize <- 10 # In seconds
   timeValuesRange <- timeValuesRangeNoBuffer + c(-timeBufferSize, timeBufferSize)
-  timeRangeReshaped <- .ConvertPOSIXctInDays(POSIXctVec = timeValuesRange, baselinePOSIXct = min(timeValuesRangeNoBuffer))
+  timeRangeReshaped <- .ConvertPOSIXtoDays(POSIXorNumericVec = timeValuesRange, baselinePOSIXOrNumeric = min(timeValuesRangeNoBuffer))
   c(spCoordRanges, list(timeRange = timeRangeReshaped))
 }
 
@@ -700,152 +720,6 @@ ComputeFEcredInts <- function(p = c(0.025, 0.975), hyperparaList, marginalMeans,
 
 .LogJointHyperMarginal <- function(treePointer, hyperparaValues, recordFullConditional, processPredictions = FALSE) {
   LogJointHyperMarginalToWrap(treePointer = treePointer, MaternHyperpars = hyperparaValues[c("space", "time", "scale")], fixedEffSD = hyperparaValues$fixedEffSD, errorSD = hyperparaValues$errorSD, recordFullConditional = TRUE, processPredictions = processPredictions)
-}
-
-.ComputeLogJointHyperMarginal <- function(hyperparaMatrix, spacetimeData, predictionData, hyperStart, fixedHyperValues, hyperpriorPars, FEmuVec, control) {
-  # CHECKS #########################
-  if (!is.null(predictionData)) {
-    if (!identical(colnames(spacetimeData@data)[-1], colnames(predictionData@data))) {
-      stop("Mismatch between covariates in training and test data. \n")
-    }
-  }
-  ##################################
-  # DEFINING CONTROL PARA.##########
-  defaultControl <- list(Mlon = 1, Mlat = 1, Mtime = 1, randomSeed = 24, nuggetSD = 0.00001, numKnotsRes0 = 20L, J = 4L, numValuesForIS = 200, numIterOptim = 200L, distMethod = "haversine", normalHyperprior = FALSE)
-  if (length(position <- grep(colnames(spacetimeData@sp@coords), pattern = "lon")) >= 1) {
-    colnames(spacetimeData@sp@coords)[[position[[1]]]] <- "x"
-    if (!is.null(predictionData)) {
-      colnames(predictionData@sp@coords)[[position[[1]]]] <- "x"
-    }
-  }
-  if (length(position <- grep(colnames(spacetimeData@sp@coords), pattern = "lat")) >= 1) {
-    colnames(spacetimeData@sp@coords)[[position[[1]]]] <- "y"
-    if (!is.null(predictionData)) {
-      colnames(predictionData@sp@coords)[[position[[1]]]] <- "y"
-    }
-  }
-
-  coordRanges <- mapply(dimName = c("lonRange", "latRange", "timeRange"), code = c("x", "y", "time"), function(dimName, code) {
-    predCoordinates <- c()
-    if (code != "time") {
-      bufferSize <- 0.01
-      coordinates <- spacetimeData@sp@coords[, code]
-      if (!is.null(predictionData)) {
-        predCoordinates <- predictionData@sp@coords[, code]
-      }
-    } else {
-      bufferSize <- 10
-      coordinates <- time(spacetimeData@time)
-      if (!is.null(predictionData)) {
-        predCoordinates <- time(predictionData@time)
-      }
-    }
-    combinedRange <- range(c(coordinates, predCoordinates))
-    combinedRange + c(-bufferSize, bufferSize)
-  }, SIMPLIFY = FALSE)
-  defaultControl <- c(defaultControl, coordRanges)
-  ##################################
-  # 1e5 is used as a substitute for infinity, which is not understood by the C++ code.
-  if ("smoothness" %in% names(hyperStart$space)) {
-    if (hyperStart$space[["smoothness"]] > 1e5) hyperStart$space[["smoothness"]] <- 1e5
-  } else {
-    if (fixedHyperValues$space[["smoothness"]] > 1e5) fixedHyperValues$space[["smoothness"]] <- 1e5
-  }
-
-  if ("smoothness" %in% names(hyperStart$time)) {
-    if (hyperStart$time[["smoothness"]] > 1e5) hyperStart$time[["smoothness"]] <- 1e5
-  } else {
-    if (fixedHyperValues$time[["smoothness"]] > 1e5) fixedHyperValues$time[["smoothness"]] <- 1e5
-  }
-
-  for (i in names(control)) {
-    defaultControl[[i]] <- control[[i]]
-  }
-
-  control <- defaultControl
-
-  if (!is.null(control$folderToSaveISpoints)) {
-    numPoints <- length(list.files(path = control$folderToSaveISpoints, pattern = "ISoutput"))
-    if (numPoints >= control$numValuesForIS) {
-      control$IScompleted <- TRUE
-    }
-  }
-  dataCoordinates <- spacetimeData@sp@coords
-  predCoordinates <- predictionData@sp@coords
-  predCovariates <- as.matrix(predictionData@data)
-
-  timeRangeReshaped <- as.integer(control$timeRange)/(3600*24)
-  timeBaseline <- min(timeRangeReshaped)
-  timeValues <- as.integer(time(spacetimeData@time))/(3600*24) - timeBaseline # The division is to obtain values in days.
-  predTime <- as.integer(time(predictionData))/(3600*24) - timeBaseline
-  timeRangeReshaped <- timeRangeReshaped - timeBaseline
-
-  covariateMatrix <- as.matrix(spacetimeData@data[, -1, drop = FALSE])
-
-  nestedGridsPointer <- setupNestedGrids(responseValues = spacetimeData@data[, 1], spCoords = dataCoordinates, predCoords = predCoordinates, obsTime = timeValues, predTime = predTime, covariateMatrix = covariateMatrix, predCovariateMatrix = predCovariates, Mlon = control$Mlon, Mlat = control$Mlat, Mtime = control$Mtime, lonRange = control$lonRange, latRange = control$latRange, timeRange = timeRangeReshaped, randomSeed = control$randomSeed, numKnotsRes0 = control$numKnotsRes0, J = control$J, distMethod = control$distMethod, MaternParsHyperpars = hyperpriorPars[c("space", "time", "scale")], fixedEffParsHyperpars = hyperpriorPars$fixedEffSD, errorParsHyperpars = hyperpriorPars$errorSD, FEmuVec = FEmuVec, nuggetSD = control$nuggetSD, normalHyperprior = control$normalHyperprior, tipKnotsThinningRate = control$tipKnotsThinningRate)$nestedGridsPointer
-
-  funForOptim <- function(xOnLogScale, namesXstartValues) {
-    names(xOnLogScale) <- namesXstartValues
-    xTrans <- exp(xOnLogScale)
-    unlistedFixedHyperValues <- unlist(fixedHyperValues)
-    if (control$normalHyperprior) {
-      unlistedFixedHyperValues <- exp(unlistedFixedHyperValues)
-    }
-    hyperList <- MRAinla:::.prepareHyperList(xTrans, fixedHyperValuesUnlisted = unlistedFixedHyperValues)
-    returnedValue <- -.LogJointHyperMarginal(treePointer = nestedGridsPointer, hyperparaValues = hyperList, recordFullConditional = FALSE, processPredictions = FALSE)
-    returnedValue
-  }
-
-  gradForOptim <- function(xOnLogScale, namesXstartValues) {
-    names(xOnLogScale) <- namesXstartValues
-    numDeriv::grad(func = funForOptim, x = xOnLogScale, method = "simple", namesXstartValues = namesXstartValues)
-  }
-  # A short optimisation first...
-
-  # Remember that if the priors for hyperparameters are normal, starting values are given on the log-scale.
-  xStartValues <- unlist(hyperStart)
-
-  lowerBound <- rep(1e-10, length(xStartValues))
-  if (control$normalHyperprior) {
-    lowerBound <- log(lowerBound)
-  }
-  upperBound <- rep(Inf, length(xStartValues))
-  if (!is.null(control$upperBound)) {
-    upperBound <- unlist(control$upperBound)
-  }
-  names(upperBound) <- names(lowerBound) <- names(xStartValues)
-  cat("Optimising... \n")
-  if (!tryCatch(file.exists(control$fileToSaveOptOutput), error = function(e) FALSE)) { # The tryCatch is necessary to ensure that an error does not occur if control$fileToSaveOptOutput is NULL. If it is undefined, we want the optimisation to take place.
-    x0val <- xStartValues
-    if (!control$normalHyperprior) {
-      x0val <- log(xStartValues)
-    }
-    opt <- nloptr::lbfgs(x0 = x0val, lower = lowerBound, upper = upperBound, fn = funForOptim, gr = gradForOptim, control = list(xtol_rel = 1e-3, maxeval = control$numIterOptim), namesXstartValues = names(xStartValues))
-    solution <- opt$par
-    if (!control$normalHyperprior) {
-      solution <- exp(opt$par)
-    }
-  } else {
-    load(control$fileToSaveOptOutput)
-    solution <- opt$par
-    if (!control$normalHyperprior) {
-      solution <- exp(opt$par)
-    }
-    varCovarFilename <- paste(substr(control$fileToSaveOptOutput, start = 1, stop = gregexpr(pattern = ".Rdata", text = control$fileToSaveOptOutput)[[1]] - 1), "_ISvarCovar.Rdata", sep = "")
-    load(varCovarFilename) # Restores varCovar
-  }
-
-  hyperparasFormatted <- lapply(1:nrow(hyperparaMatrix), function(lineIndex) {
-    xTrans <- hyperparaMatrix[lineIndex, ]
-    unlistedFixedHyperValues <- unlist(fixedHyperValues)
-    if (control$normalHyperprior) {
-      xTrans <- exp(hyperparaMatrix[lineIndex, ])
-      unlistedFixedHyperValues <- exp(unlistedFixedHyperValues)
-    }
-    hyperList <- MRAinla:::.prepareHyperList(xTrans, fixedHyperValuesUnlisted = unlistedFixedHyperValues)
-  })
-
-  sapply(hyperparasFormatted, FUN = .LogJointHyperMarginal, treePointer = nestedGridsPointer, recordFullConditional = FALSE, processPredictions = FALSE)
 }
 
 # See http://statweb.stanford.edu/~owen/pubtalks/AdaptiveISweb.pdf

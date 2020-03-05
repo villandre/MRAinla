@@ -88,9 +88,9 @@ double LogJointHyperMarginalToWrap(SEXP treePointer, Rcpp::List MaternHyperpars,
 
   std::vector<TreeNode *> tipNodes = pointedTree->GetLevelNodes(pointedTree->GetM()) ;
 
-  for (auto & i : tipNodes) {
-    i->SetUncorrSD(0.001) ; // Is this a nugget effect?
-  }
+  // for (auto & i : tipNodes) {
+  //   i->SetUncorrSD(0.001) ; // Is this a nugget effect?
+  // }
   pointedTree->SetMaternPars(MaternHyperpars) ;
   pointedTree->SetErrorSD(errorSD) ;
   pointedTree->SetFixedEffSD(fixedEffSD) ;

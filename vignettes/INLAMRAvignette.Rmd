@@ -1,5 +1,5 @@
 ---
-title: "INLAMRAvignette"
+title: "INLA-MRA vignette"
 output: rmarkdown::html_vignette
 vignette: >
   %\VignetteIndexEntry{INLAMRAvignette}
@@ -17,6 +17,14 @@ knitr::opts_chunk$set(
 ```{r setup}
 ```
 
+The INLAMRA functions lets users fit the INLA-MRA model described in Villandre et al. 2020. With sensible tuning and a large enough memory bank, it should work adequately for datasets of sizes under 1.5 million. Note that much of the computational burden results from predictions: the running time scales linearly with the required number of predictions. The software takes advantage of OpenMP parallelisation to handle that step. It is disabled by default, but should be enabled to decrease computation time, cf. numOpenMPthreads in INLAMRA.control. 
+
+The following code calls INLAMRA under several default control parameters. The function's arguments include the usual data inputs: a vector of responses, a data.frame of covariates, a matrix of spatial coordinates, and a vector of time values in POSIX or numeric format. When a POSIX* object is provided, *time will be scaled in days*. If a numeric object is provided instead, no such assumption is made: time parameters will be based on the untransformed values. If predictions are required, relevant spatial and temporal coordinates, as well as covariate values, must be provided before the model is fitted.
+
+If the software encounters missing values in the training dataset, a warning is produced, and the missing observations are removed. Any missingness related to prediction inputs will result as an NA in the prediction vectors. 
+
+We input control parameters with the help of the `INLAMRA.control` function. In this example, we tried to reduce computation time by generating a grid hierarchy of depth $7$, by putting $20$ knots in each subregion at depths $0$ to $6$, and by keeping only half the observation locations to obtain knot positions at depth $7$. Before using INLAMRA a first time, we recommend taking a look at available tuning parameters (`?INLAMRA.control).
+
 ```{r, include=TRUE}
 library(MRAinla)
 data("MODISdataTraining")
@@ -25,14 +33,10 @@ fittedModel <- INLAMRA(
   responseVec = MODISdataTraining@data$y,
   covariateFrame = subset(MODISdataTraining@data, select = -y),
   spatialCoordMat = MODISdataTraining@sp@coords,
-  timePOSIXctVec = time(MODISdataTraining),
+  timePOSIXorNumericVec = time(MODISdataTraining),
   predCovariateFrame = MODISdataTest@data,
   predSpatialCoordMat = MODISdataTest@sp@coords,
-  predTimePOSIXctVec = time(MODISdataTest),
-  sinusoidalProjection = FALSE,
-  spatialRangeList = NULL, 
-  timeRangeList = NULL, 
-  FEmuVec = rep(0, ncol(MODISdataTraining@data)),
+  predTimePOSIXorNumericVec = time(MODISdataTest),
   control = INLAMRA.control(
     Mlon = 3,
     Mlat = 3,
@@ -44,3 +48,6 @@ fittedModel <- INLAMRA(
 
 fittedModel$hyperMarginalMoments
 ```
+
+# Notes on design. 
+The INLA-MRA interface was designed with a focus on ease-of-use. The main function for fitting models, `INLAMRA` requires strictly common R objects, e.g. matrix, data.frame, list. The down side is that users can provide 

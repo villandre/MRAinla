@@ -86,8 +86,6 @@ public:
   void ComputeLogFCandLogCDandDataLL() ;
   void ComputeLogPriors() ;
 
-  // double GetMRAlogLik() const {return m_MRAlogLik ;}
-  inputdata GetDataset() {return m_dataset;}
   int GetNumTips() {return m_numTips ;}
   sp_mat & GetHmatPred() {return m_HmatPred ;}
   sp_mat & GetHmat() {return m_Hmat ;}

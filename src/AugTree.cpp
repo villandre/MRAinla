@@ -57,7 +57,7 @@ AugTree::AugTree(const uint & Mlon,
   m_assignedPredToKnot = Array<bool, Dynamic, 1>(m_predictData.timeCoords.size()) ;
   m_assignedPredToKnot.segment(0, m_assignedPredToKnot.size()) = false ;
 
-  m_fixedEffParameters = Eigen::VectorXd::Zero(m_dataset.covariateValues.cols() + 1);
+  m_fixedEffParameters = Eigen::VectorXd::Zero(m_dataset.covariateValues.cols()) ; // m_dataset.covariateValues includes a column of 1s for the intercept.
   Rcout << "Building the grid..." << std::endl ;
   BuildTree(numKnotsRes0, J, tipKnotsThinningRate) ;
   Rcout << "Grid built!" << std::endl ;
@@ -69,7 +69,7 @@ AugTree::AugTree(const uint & Mlon,
   }
   m_FullCondMean = Eigen::VectorXd::Zero(m_numKnots + m_fixedEffParameters.size()) ;
   m_FullCondSDs = Eigen::VectorXd::Zero(m_numKnots + m_fixedEffParameters.size()) ;
-  m_Vstar = Eigen::VectorXd::Zero(m_numKnots + m_dataset.covariateValues.cols() + 1) ;
+  m_Vstar = Eigen::VectorXd::Zero(m_numKnots + m_dataset.covariateValues.cols()) ; // Intercept already in covariateValues.
   m_Vstar.segment(0, m_FEmu.size()) = m_FEmu ;
 
   std::vector<TreeNode *> tipNodes = GetTipNodes() ;
@@ -357,7 +357,7 @@ void AugTree::createHmatrix() {
   orderTipNodesForHmat(tipNodes) ;
 
   std::vector<Triplet> tripletList = populateTripletList(tipNodes, false) ;
-  m_Hmat.resize(m_dataset.covariateValues.rows(), m_numKnots + m_dataset.covariateValues.cols() + 1) ;
+  m_Hmat.resize(m_dataset.covariateValues.rows(), m_numKnots + m_dataset.covariateValues.cols()) ; // Intercept added on the R side, already in covariateValues.
   m_Hmat.setFromTriplets(tripletList.begin(), tripletList.end()) ;
 
   // The idea behind this is to associate a memory location in the W matrices and a cell
@@ -435,24 +435,7 @@ std::vector<Eigen::Triplet<double>> AugTree::populateTripletList(const std::vect
     }
     uint numRowsInBorU = forPredictions? tipNode->GetNumPreds() : tipNode->GetNumObs() ;
 
-    // std::vector<TreeNode *> tipNodeAncestors = tipNode->getAncestors() ;
     for (uint depthIndex = 0; depthIndex <= m_M; depthIndex++) {
-      // This is necessary because the B matrices in storage are actually the W matrices, which have too many columns in the tip nodes.
-      // tipNode->GetB(depthIndex).cols() would give us too many columns for depthIndex = m_M when we exclude some of the knots at the finest resolution.
-      // uint numColumnsInB =  previousBrickAncestors.at(depthIndex)->GetNumKnots() ;
-
-      // ArrayXi rowIndicesForW = rep(uvec::LinSpaced(numRowsInB, 0, numRowsInB - 1).array(),
-      //                              numColumnsInB) ;
-      // ArrayXi colIndicesForW = rep_each(
-      //   uvec::LinSpaced(numColumnsInB, 0, numColumnsInB - 1).array(),
-      //   numRowsInB
-      // ) ;
-      // ArrayXi rowIndicesForF = rowIndicesForW + rowIndex ;
-      // ArrayXi colIndicesForF = colIndicesForW + colIndexAtEachRes(depthIndex) ;
-      //
-      // if (depthIndex == m_M) {
-      //   colIndicesForW = rep_each(tipNode->GetKeepKnotIndices(), numRowsInB) ;
-      // }
       uint numRows = forPredictions? tipNode->GetNumPreds() : tipNode->GetNumObs() ;
       uint numCols = previousBrickAncestors.at(depthIndex)->GetNumKnots() ;
 
@@ -479,14 +462,14 @@ std::vector<Eigen::Triplet<double>> AugTree::populateTripletList(const std::vect
     datasetPointer = &m_dataset ;
     orderPointer = &m_obsOrderForHmat ;
   }
-  // Adding in the intercept...
-  for (uint i = 0; i < datasetPointer->covariateValues.rows(); i++) {
-    tripletList.push_back(Triplet(i, 0, 1)) ;
-  }
+  // Adding in the intercept... No need: supposed to be added on the R side.
+  // for (uint i = 0; i < datasetPointer->covariateValues.rows(); i++) {
+  //   tripletList.push_back(Triplet(i, 0, 1)) ;
+  // }
 
   for (uint rowInd = 0 ; rowInd < datasetPointer->covariateValues.rows() ; rowInd++) {
     for(uint colInd = 0 ; colInd < datasetPointer->covariateValues.cols() ; colInd++) {
-      tripletList.push_back(Triplet(rowInd, colInd + 1,datasetPointer->covariateValues((*orderPointer)(rowInd), colInd))) ;
+      tripletList.push_back(Triplet(rowInd, colInd, datasetPointer->covariateValues((*orderPointer)(rowInd), colInd))) ;
     }
   }
 
@@ -519,7 +502,7 @@ ArrayXi AugTree::initialiseColIndexAtEachRes() {
       }
     }
   } // Convoluted way of getting cumsum(c(0, Num knots at resolutions 0 to M-1))
-  colIndexAtEachRes += (m_dataset.covariateValues.cols() + 1) ; // Covariate columns go before, the +1 is for the intercept.
+  colIndexAtEachRes += (m_dataset.covariateValues.cols()) ; // Covariate columns go before.
   return colIndexAtEachRes ;
 }
 
@@ -561,7 +544,7 @@ void AugTree::createHmatrixPred() {
   std::vector<Triplet> tripletList = populateTripletList(tipNodes, true) ;
 
   Rcout << "Creating HmatPred! \n" ;
-  m_HmatPred.resize(m_predictData.covariateValues.rows(), m_numKnots + m_dataset.covariateValues.cols() + 1) ;
+  m_HmatPred.resize(m_predictData.covariateValues.rows(), m_numKnots + m_dataset.covariateValues.cols()) ; // Intercept is added on the R side, already included in covariateValues.
   m_HmatPred.setFromTriplets(tripletList.begin(), tripletList.end()) ;
   Rcout << "Done! \n" ;
 

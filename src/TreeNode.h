@@ -158,7 +158,7 @@ public:
   mat & GetKmatrix() {return m_K ;}
 
   virtual mat GetKmatrixInverse() = 0 ;
-  virtual void SetUncorrSD(const double &)=0 ;
+  // virtual void SetUncorrSD(const double &)=0 ;
   // virtual mat & GetUpred(const uint & l)=0 ;
   virtual double & GetUpredElement(const uint & l, const uint & row, const uint & col)=0;
   virtual std::vector<mat> & GetUmatList()=0 ;
