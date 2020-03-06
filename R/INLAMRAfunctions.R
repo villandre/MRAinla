@@ -127,9 +127,12 @@ INLAMRA <- function(responseVec, covariateFrame = NULL, spatialCoordMat, timePOS
   cat("Computing moments for marginal posterior distributions...\n")
   computedValues$output <- .AddLogISweight(output = computedValues$output, distMode = computedValues$ISdistParas$mu, control = control)
   hyperMarginalMoments <- .ComputeHyperMarginalMoments(computedValues$output, control = control)
+
   FEmarginalMoments <- .ComputeFEmarginalMoments(computedValues$output, covNames = c("Intercept", colnames(covariateFrame)), control = control)
 
-  outputList <- list(hyperMarginalMoments = hyperMarginalMoments$paraMoments, FEmarginalMoments = FEmarginalMoments, psiAndMargDistMatrix = hyperMarginalMoments$psiAndMargDistMatrix)
+  keepHyperNames <- names(unlist(hyperStart))
+  dropHyperNames <- names(unlist(fixedHyperValues))
+  outputList <- list(hyperMarginalMoments = hyperMarginalMoments$paraMoments[keepHyperNames, ], FEmarginalMoments = FEmarginalMoments, psiAndMargDistMatrix = hyperMarginalMoments$psiAndMargDistMatrix[!(colnames(hyperMarginalMoments$psiAndMargDistMatrix) %in% dropHyperNames)])
 
   if (!noPredictionFlag) {
     cat("Computing prediction moments... \n")
