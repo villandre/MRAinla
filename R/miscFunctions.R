@@ -1,6 +1,6 @@
 # spaceDistFun must take as an argument a matrix or data.frame with a column named latitude and another called longitude.
 
-SimulateSpacetimeData <- function(numObsPerTimeSlice = 225, covFunction, lonRange, latRange,  timeValuesInPOSIXct, covariateGenerationFctList, errorSD, spaceDistFun, timeDistFun, FEvalues) {
+.SimulateSpacetimeData <- function(numObsPerTimeSlice = 225, covFunction, lonRange, latRange,  timeValuesInPOSIXct, covariateGenerationFctList, errorSD, spaceDistFun, timeDistFun, FEvalues) {
   numSlotsPerRow <- ceiling(sqrt(numObsPerTimeSlice))
   slotCoordinates <- sapply(list(longitude = lonRange, latitude = latRange), FUN = function(x) {
     width <- abs(diff(x)/numSlotsPerRow)
@@ -38,140 +38,7 @@ SimulateSpacetimeData <- function(numObsPerTimeSlice = 225, covFunction, lonRang
   spacetimeObj
 }
 
-plotOutput <- function(inlaMRAoutput, trainingData, testData, realTestValues = NULL, filename = NULL, graphicsEngine = tiff, plotWhat = c("joint", "training", "SD", "fittedVsRealNoSp"), polygonsToOverlay = NULL, control = list()) {
-  if (is.null(control$trim)) {
-    control$trim <- FALSE
-  }
-  if (!("fontScaling" %in% names(control))) {
-    control$fontScaling <- 1
-  }
-  if (control$trim) {
-    inlaMRAoutput$predictionMoments$predictMeans <- replace(inlaMRAoutput$predictionMoments$predictMeans, which(inlaMRAoutput$predictionMoments$predictMeans > max(trainingData@data[, "y"])), max(trainingData@data[, "y"]))
-    inlaMRAoutput$predictionMoments$predictMeans <- replace(inlaMRAoutput$predictionMoments$predictMeans, which(inlaMRAoutput$predictionMoments$predictMeans < min(trainingData@data[, "y"])), min(trainingData@data[, "y"]))
-  }
-  if (!("width" %in% names(control))) {
-    control$width <- control$height <- 1600
-  }
-  testDays <- sort(unique(time(testData)))
-  trainingDays <- sort(unique(time(trainingData)))
-  if (is.null(control$onlyDaysWithTest)) {
-    control$onlyDaysWithTest <- FALSE
-  }
-
-  if (!("rasterNrow" %in% names(control))) {
-    control$rasterNrow <- 50
-    control$rasterNcol <- 50
-  }
-  lonLatMinMax <- lapply(1:2, function(colIndex) {
-    sapply(list(min, max), function(summaryFunction) {
-      summaryFunction(testData@sp@coords[ , colIndex], trainingData@sp@coords[ , colIndex])
-    })
-  })
-
-  landRaster <- raster::raster(nrows = control$rasterNrow, ncols = control$rasterNcol, xmn = lonLatMinMax[[1]][[1]], xmx = lonLatMinMax[[1]][[2]], ymn = lonLatMinMax[[2]][[1]], ymx = lonLatMinMax[[2]][[2]])
-  uniqueTimeValues <- unique(c(time(trainingData), time(testData)))
-  if (control$onlyDaysWithTest) {
-    uniqueTimeValues <- testDays
-    dayBefore <- tail(trainingDays[trainingDays < min(testDays)], n = 1)
-    dayAfter <- head(trainingDays[trainingDays > max(testDays)], n = 1)
-    if (length(dayBefore) > 0) {
-      uniqueTimeValues <- c(dayBefore, uniqueTimeValues)
-    }
-    if (length(dayAfter) > 0) {
-      uniqueTimeValues <- c(uniqueTimeValues, dayAfter)
-    }
-  }
-
-  rasterizeTrainingAndJoint <- function(timePoint) {
-    rasterList <- list()
-    trainingDataIndices <- time(trainingData) == timePoint
-    testDataIndices <- time(testData) == timePoint
-    if (any(trainingDataIndices)) {
-      rasterList$landRasterTraining <- raster::rasterize(x = trainingData@sp@coords[trainingDataIndices, ], y = landRaster, field = trainingData@data[trainingDataIndices , 1])
-    } else {
-      rasterList$landRasterTraining <- landRaster
-    }
-    landRasterJointSD <- NULL
-    landRasterTest <- NULL
-    if (any(testDataIndices)) {
-      landRasterNoSpFillMat <- matrix(rep(NA, control$rasterNrow * control$rasterNcol), control$rasterNrow, control$rasterNcol)
-      if (!is.null(realTestValues)) {
-        rasterList$landRasterTestNoSp <- raster::raster(x = replace(landRasterNoSpFillMat, 1:sum(testDataIndices), realTestValues[testDataIndices]))
-      }
-      rasterList$landRasterFittedNoSp <- raster::raster(x = replace(landRasterNoSpFillMat, 1:sum(testDataIndices), inlaMRAoutput$predictionMoments$predictMeans[testDataIndices]))
-      rasterList$landRasterJointSD <- raster::rasterize(x = testData@sp@coords[testDataIndices, ], y = landRaster, field = inlaMRAoutput$predictionMoments$predictSDs[testDataIndices])
-      rasterList$landRasterFitted <- raster::rasterize(x = testData@sp@coords[testDataIndices, ], y = landRaster, field = inlaMRAoutput$predictionMoments$predictMeans[testDataIndices])
-    }
-    if (any(testDataIndices) & any(trainingDataIndices)) {
-      jointCoordinates <- unname(rbind(testData@sp@coords[testDataIndices, ], trainingData@sp@coords[trainingDataIndices, ]))
-      dataObject <- data.frame(y = unname(c(inlaMRAoutput$predictionMoments$predictMeans[testDataIndices], trainingData@data[trainingDataIndices, 1])))
-      pointsDataFrame <- sp::SpatialPointsDataFrame(coords = jointCoordinates, data = dataObject)
-      rasterList$landRasterJoint <- raster::rasterize(x = pointsDataFrame, y = landRaster, field = "y")
-      rasterList$landRasterTest <- raster::rasterize(x = testData@sp@coords[testDataIndices, ], y = landRaster, field = inlaMRAoutput$predictionMoments$predictMeans[testDataIndices])
-    } else if (any(trainingDataIndices)) {
-      rasterList$landRasterJoint <- rasterList$landRasterTraining
-    } else if (any(testDataIndices)) {
-      rasterList$landRasterJoint <- raster::rasterize(x = testData@sp@coords[testDataIndices, ], y = landRaster, field = inlaMRAoutput$predictionMoments$predictMeans[testDataIndices])
-    } else {
-      rasterList$landRasterJoint <- NULL
-    }
-    output <- list(training = rasterList$landRasterTraining, joint = rasterList$landRasterJoint, fitted = rasterList$landRasterFitted, SD = rasterList$landRasterJointSD, fittedNoSp = rasterList$landRasterFittedNoSp)
-    if (!is.null(realTestValues)) {
-      output$testNoSp <- rasterList$landRasterTestNoSp
-    }
-    output
-  }
-  dailyRasters <- lapply(uniqueTimeValues, rasterizeTrainingAndJoint)
-
-  funToGetStackedRaster <- function(dataName) {
-    nullAndEmptyPos <- sapply(dailyRasters, function(x) {
-      if (is.null(x[[dataName]])) {
-        return(TRUE)
-      } else {
-        if (all(is.na(raster::values(x[[dataName]])))) return(TRUE)
-      }
-      FALSE
-    })
-    stackedRasters <- lapply(dailyRasters, function(x) x[[dataName]])[!nullAndEmptyPos]
-    names(stackedRasters) <- paste(dataName, ":", as.character(uniqueTimeValues[!nullAndEmptyPos]), sep = "")
-    stackedRasters
-  }
-  rasterNames <- names(dailyRasters[[1]])
-  stackedRastersList <- lapply(rasterNames, FUN = funToGetStackedRaster)
-  names(stackedRastersList) <- rasterNames
-
-  if (!is.null(filename)) {
-    graphicsEngine(filename, width = control$width, height = control$height)
-  }
-  if (plotWhat == "SD") {
-    stackedRasters <- stackedRastersList$SD
-  } else if (plotWhat == "fittedVsRealNoSp") {
-    stackedRasters <- c(stackedRastersList$testNoSp, stackedRastersList$fittedNoSp)
-  } else if (plotWhat == "training") {
-    stackedRasters <- stackedRastersList$training
-  } else if (plotWhat == "joint") {
-    stackedRasters <- c(stackedRastersList$training, stackedRastersList$joint)
-  } else {
-    stop("Unrecognised plot type requested: please select one of: joint, training, SD, fittedVSrealNoSp.")
-  }
-  par(mfrow = c(2, 3), mai = rep(1.5, 4))
-  for (i in seq_along(stackedRasters)) {
-    raster::plot(stackedRasters[[i]], legend = FALSE, axes = FALSE)
-    if (!is.null(polygonsToOverlay)) {
-      raster::plot(polygonsToOverlay, add = TRUE)
-      mapmisc::scaleBar(crs = raster::crs(polygonsToOverlay), pos = "topleft", cex = 3, pt.cex = 2.2, title.cex = 3.5)
-    }
-    raster::plot(stackedRasters[[i]], legend.only = TRUE, legend.width = 5, axis.args = list(cex.axis = 4))
-  }
-  # plot(stackedRasters, interpolate = FALSE, col = rev( rainbow( 20, start = 0, end = 1) ), breaks = seq(floor(rangeForScale[[1]]), ceiling(rangeForScale[[2]]), length.out = 19), cex = control$fontScaling)
-
-  if (!is.null(filename)) {
-    dev.off()
-  }
-  invisible(0)
-}
-
-plotSpacetimeData <- function(spacetimeData, fontsize) {
+.plotSpacetimeData <- function(spacetimeData, fontsize) {
 
   width <- ceiling(sqrt(nrow(spacetimeData@sp@coords)/length(unique(time(spacetimeData@time)))))
   padding <- 0.01
@@ -193,7 +60,7 @@ plotSpacetimeData <- function(spacetimeData, fontsize) {
   raster::spplot(stackedRasters, scales = list(draw = FALSE),
          xlab = "Longitude", ylab = "Latitude",
          names.attr = as.character(unique(time(spacetimeData))),
-         par.settings=list(fontsize=list(text=fontsize)))
+         par.settings = list(fontsize=list(text=fontsize)))
 }
 
 # In the Wikipedia notation, smoothness corresponds to nu, and
@@ -209,21 +76,3 @@ maternCov <- function(d, rho, smoothness, scale) {
 
   con * dScaled^smoothness * besselK(dScaled, smoothness)
 }
-
-plotHyperparMarginal <- function(output, parameterName, numValues, device, filename, ...) {
-  hyperparSkewness <- output$hyperMarginalMoments[parameterName, "Skewness"]
-  hyperparSD <- output$hyperMarginalMoments[parameterName, "StdDev"]
-  hyperparMean <- output$hyperMarginalMoments[parameterName, "Mean"]
-  if (!(is.na(hyperparSD) | (hyperparSD > 0))) {
-    credIntBounds <- .ComputeCredIntervalSkewNorm(c(0.025, 0.975), meanValue = hyperparMean, sdValue = hyperparSD, skewnessValue = hyperparSkewness)
-  } else {
-    stop("Error: selected hyperparameter was fixed when INLA-MRA was used.")
-  }
-  xValues <- seq(from = credIntBounds$bounds[1], to = credIntBounds$bounds[2], length.out = numValues)
-  yValues <- sn::dsn(x = xValues, xi = credIntBounds$xi, omega = credIntBounds$omega, alpha = credIntBounds$alpha)
-  device(file = filename, ...)
-  plot(x = xValues, y = yValues, xlab = parameterName, ylab = "Value", type = "l")
-  dev.off()
-}
-
-

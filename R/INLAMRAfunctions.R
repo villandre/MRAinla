@@ -1,6 +1,6 @@
 #' INLA-MRA model for inference and prediction in spatiotemporal data
 #'
-#' The function fits the INLA-MRA model to a spatiotemporal dataset and outputs posterior predictive distributions. INLA-MRA assumes a multiplicative form for spatiotemporal covariance, with each component expressed with the Matérn formula.
+#' Fits the INLA-MRA model to a spatiotemporal dataset and outputs posterior predictive distributions. INLA-MRA assumes a multiplicative form for spatiotemporal covariance, with each component expressed with the Matérn formula. Spatial coordinates must use the longitude/latitude ("+proj=longlat +datum=WGS84 +no_defs +ellps=WGS84 +towgs84=0,0,0") or sinusoidal ("+proj=sinu +lon_0=0 +x_0=0 +y_0=0 +R=6371007.181 +units=m +no_defs") projection, the default in MODIS data. In the latter case, they will be automatically converted to the long./lat. projection.
 #'
 #' @param responseVec A numeric vector with response values.
 #' @param covariateFrame A data.frame containing covariate values in the order of elements in responseVec. Character elements should be re-coded as factors.
@@ -27,7 +27,7 @@
 #' \itemize{
 #'  \item{hyperMarginalMoments} {A data.frame giving the mean, and standard deviation of the marginal hyperparameter posteriors, as well as the related 95\% credibility intervals. Note that the scaling of the time hyperparameters depends on the provided time values. If they are inputted as POSIX* objects, time hyperparameters will relate to time measured in days. If they are inputted as numeric, no assumption is made: the original scale is used.}
 #'  \item{FEmarginalMoments} {A data.frame giving the mean, and standard deviation of the marginal fixed effects posteriors, as well as 95\% credibility intervals.}
-#'  \item{predictionMoments} {A data.frame with two columns, predictMeans and predictSDs. The order of the predictions matches the one in predCovariateFrame.}
+#'  \item{predMoments} {A data.frame with two columns, Mean and SD. The order of the predictions matches the one in predCovariateFrame.}
 #' }
 #'
 #' @examples
@@ -66,9 +66,9 @@ INLAMRA <- function(responseVec, covariateFrame = NULL, spatialCoordMat, timePOS
   if (!noPredictionFlag) predCovariateFrame <- predCovariateFrame[colnames(covariateFrame)]
   lonLatProjString <- "+proj=longlat +datum=WGS84 +no_defs +ellps=WGS84 +towgs84=0,0,0"
   crsString <- ifelse(sinusoidalProjection, yes = "+proj=sinu +lon_0=0 +x_0=0 +y_0=0 +R=6371007.181 +units=m +no_defs", no = lonLatProjString)
-  spObject <- sp::SpatialPoints(coords = spatialCoordMat, proj4string = sp::CRS(crsString))
+  spObject <- sp::SpatialPointsDataFrame(coords = as.matrix(spatialCoordMat), proj4string = sp::CRS(crsString), data = cbind(data.frame(y = responseVec), covariateFrame))
   spObjectPred <- NULL
-  if (!noPredictionFlag) spObjectPred <- sp::SpatialPoints(coords = predSpatialCoordMat, proj4string = sp::CRS(crsString))
+  if (!noPredictionFlag) spObjectPred <- sp::SpatialPointsDataFrame(coords = as.matrix(predSpatialCoordMat), proj4string = sp::CRS(crsString), data = predCovariateFrame)
   if (sinusoidalProjection) {
     spObject <- sp::spTransform(x = spObject, CRSobj = lonLatProjString)
     if (!noPredictionFlag) spObjectPred <- sp::spTransform(x = spObjectPred, CRSobj = lonLatProjString)
@@ -133,13 +133,18 @@ INLAMRA <- function(responseVec, covariateFrame = NULL, spatialCoordMat, timePOS
 
   if (!noPredictionFlag) {
     cat("Computing prediction moments... \n")
-    outputList$predictionMoments <- .ComputeKrigingMoments(computedValues$output, nestedGridsPointer, control = control)
+    outputList$predMoments <- .ComputeKrigingMoments(computedValues$output, nestedGridsPointer, control = control)
     # The following two lines add NAs in locations where incomplete information was provided. They also ensure that prediction outputs match inputs.
-    outputList$predictionMoments$predictMeans <- replace(rep(NA, originalNumberPreds), nonMissingPredIndices, outputList$predictionMoments$predictMeans)
-    outputList$predictionMoments$predictSDs <- replace(rep(NA, originalNumberPreds), nonMissingPredIndices, outputList$predictionMoments$predictSDs)
+    outputList$predMoments$Mean <- replace(rep(NA, originalNumberPreds), nonMissingPredIndices, outputList$predMoments$Mean)
+    outputList$predMoments$SD <- replace(rep(NA, originalNumberPreds), nonMissingPredIndices, outputList$predMoments$SD)
   }
 
   cat("Returning results... \n")
+  if (control$saveData) {
+    outputList$data <- list(spObject = spObject, time = timePOSIXorNumericVec)
+    if (!noPredictionFlag) outputList$predData <- list(spObject = spObjectPred, time = predTimePOSIXorNumericVec)
+  }
+  class(outputList) <- "INLAMRA"
   outputList
 }
 
@@ -165,6 +170,7 @@ INLAMRA <- function(responseVec, covariateFrame = NULL, spatialCoordMat, timePOS
 #' @param IScompleted Logical value indicating whether all importance sampling weights have been obtained. Takes value FALSE by default. Set it to TRUE to produce intermediate results (based on fewer IS iterations than had been originally planned) when the run takes too long time to finish. Note that control$fileToSaveOptOutput and control$folderToSaveISpoints must be specified for this feature to work.
 #' @param spaceJitterMax The maximum jittering to apply to longitude/ latitude coordinates. Takes value 1e-5 by default. The method might run into numerical difficulties if longitude/latitude coordinates are replicated. The jittering ensures that it does not happen. Putting this value at 0 disables the spatial jittering, which is not recommended.
 #' @param timeJitterMaxInDecimalDays The maximum jittering to apply to time values, in days. Default value is 1/864000000 (1e-5 seconds). This is used to make it possible to evenly split the data into subregions at any depth. A balanced distribution of observations in the different regions makes it easier to control the method's computational performance. Putting this value at 0 disables the time jittering, which is not recommended.
+#' @param saveData Logical. Indicates whether data used to fit the model and prediction dataset (if applicable) should be bundled with the output, which is helpful for plotting. Can be disabled if provided datasets are huge and memory is limited.
 #'
 #' @details Some of the control parameters should be tuned to ensure better computational or predictive performance: Mlon, Mlat, Mtime, numKnotsRes0, J, numValuesForIS, numIterOptim, tipKnotsThinningRate.
 #' Other control parameters make it possible to stop an INLAMRA run at any point and resume close to where the algorithm initially stopped, or produce an intermediate results based on an incomplete run: fileToSaveOptOutput, folderToSaveISpoints, IScompleted.
@@ -177,8 +183,8 @@ INLAMRA <- function(responseVec, covariateFrame = NULL, spatialCoordMat, timePOS
 #' }
 #' @export
 
-INLAMRA.control <- function(Mlon = 1, Mlat = 1, Mtime = 1, randomSeed = 24, nuggetSD = 1e-5, numKnotsRes0 = 20L, J = 2L, numValuesForIS = 100, numIterOptim = 25L, distMethod = "haversine", normalHyperprior = TRUE, numISpropDistUpdates = 0, tipKnotsThinningRate = 1, credIntervalPercs = c(0.025, 0.975), timeJitterMaxInDecimalDays = 1/864000000, spaceJitterMax = 1e-5, numOpenMPthreads = 1L) {
-  list(Mlon = Mlon, Mlat = Mlat, Mtime = Mtime, randomSeed = randomSeed, nuggetSD = nuggetSD, numKnotsRes0 = numKnotsRes0, J = J, numValuesForIS = numValuesForIS, numIterOptim = numIterOptim, distMethod = distMethod, normalHyperprior = normalHyperprior, numISpropDistUpdates = numISpropDistUpdates, tipKnotsThinningRate = tipKnotsThinningRate, credIntervalPercs = credIntervalPercs, timeJitterMaxInDecimalDays = timeJitterMaxInDecimalDays, spaceJitterMax = spaceJitterMax, numOpenMPthreads = numOpenMPthreads)
+INLAMRA.control <- function(Mlon = 1, Mlat = 1, Mtime = 1, randomSeed = 24, nuggetSD = 1e-5, numKnotsRes0 = 20L, J = 2L, numValuesForIS = 100, numIterOptim = 25L, distMethod = "haversine", normalHyperprior = TRUE, numISpropDistUpdates = 0, tipKnotsThinningRate = 1, credIntervalPercs = c(0.025, 0.975), timeJitterMaxInDecimalDays = 1/864000000, spaceJitterMax = 1e-6, numOpenMPthreads = 1L, saveData = TRUE) {
+  list(Mlon = Mlon, Mlat = Mlat, Mtime = Mtime, randomSeed = randomSeed, nuggetSD = nuggetSD, numKnotsRes0 = numKnotsRes0, J = J, numValuesForIS = numValuesForIS, numIterOptim = numIterOptim, distMethod = distMethod, normalHyperprior = normalHyperprior, numISpropDistUpdates = numISpropDistUpdates, tipKnotsThinningRate = tipKnotsThinningRate, credIntervalPercs = credIntervalPercs, timeJitterMaxInDecimalDays = timeJitterMaxInDecimalDays, spaceJitterMax = spaceJitterMax, numOpenMPthreads = numOpenMPthreads, saveData = saveData)
 }
 
 .getNonMissingIndices <- function(responseVec = NULL, covariateFrame, spatialCoordMat, timePOSIXorNumericVec) {
@@ -361,7 +367,7 @@ INLAMRA.control <- function(Mlon = 1, Mlat = 1, Mtime = 1, randomSeed = 24, nugg
   iterCounter <- 0
   funForOptim <- function(xOnLogScale, namesXstartValues) {
     iterCounter <<- iterCounter + 1
-    cat("Performing evaluation ", iterCounter, ".\n")
+    cat("Performing optim. evaluation ", iterCounter, ".\n", sep = "")
     names(xOnLogScale) <- namesXstartValues
     xTrans <- exp(xOnLogScale)
     unlistedFixedHyperValues <- unlist(fixedHyperValues)
@@ -400,6 +406,7 @@ INLAMRA.control <- function(Mlon = 1, Mlat = 1, Mtime = 1, randomSeed = 24, nugg
       x0val <- log(xStartValues)
     }
     opt <- nloptr::lbfgs(x0 = x0val, lower = lowerBound, upper = upperBound, fn = funForOptim, gr = gradForOptim, control = list(xtol_rel = 1e-3, maxeval = control$numIterOptim), namesXstartValues = names(xStartValues))
+    cat("Optimisation complete. \n")
     solution <- opt$par
     if (!control$normalHyperprior) {
       solution <- exp(opt$par)
@@ -423,7 +430,7 @@ INLAMRA.control <- function(Mlon = 1, Mlat = 1, Mtime = 1, randomSeed = 24, nugg
       filenameForVarCovar <- paste(substr(control$fileToSaveOptOutput, start = 1, stop = gregexpr(pattern = ".Rdata", text = control$fileToSaveOptOutput)[[1]] - 1), "_ISvarCovar.Rdata", sep = "")
       tryCatch(expr =  save(varCovar, file = filenameForVarCovar), error = function(e) invisible(NULL))
     }
-    cat("Optimised values:", solution)
+    # cat("Optimised values:", solution)
   } else {
     load(control$fileToSaveOptOutput)
     solution <- opt$par
@@ -444,7 +451,7 @@ INLAMRA.control <- function(Mlon = 1, Mlat = 1, Mtime = 1, randomSeed = 24, nugg
 
   cat("Running IS algorithm... \n")
   ISvaluesList <- .ISfct(distMode = solution, ISvarCovar = varCovar, nestedGridsPointer = nestedGridsPointer, namesXstartValues = names(xStartValues), fixedHyperValues = fixedHyperValues,  control = control)
-  cat("IS algorithm completed... \n")
+  cat("IS algorithm completed. \n")
 
   keepIndices <- sapply(ISvaluesList$output, function(x) class(x$logJointValue) == "numeric")
   ISvaluesList$output <- ISvaluesList$output[keepIndices]
@@ -715,7 +722,7 @@ ComputeFEcredInts <- function(p = c(0.025, 0.975), hyperparaList, marginalMeans,
   if (identical(control$IScompleted, TRUE)) {
     predObsOrder <- tryCatch(expr = get(load(paste(control$folderToSaveISpoints, "/predObsOrder.Rdata", sep = ""))), error = function(e) stop("Could not load prediction order file (named predObsOrder.Rdata). It is not in control$folderToSaveISpoints. Cannot produce summary results... Exiting."))
   }
-  data.frame(predictMeans = krigingMeans[order(predObsOrder)], predictSDs = sqrt(varE + Evar)[order(predObsOrder)])
+  data.frame(Mean = krigingMeans[order(predObsOrder)], SD = sqrt(varE + Evar)[order(predObsOrder)])
 }
 
 .LogJointHyperMarginal <- function(treePointer, hyperparaValues, recordFullConditional, processPredictions = FALSE) {

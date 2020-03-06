@@ -17,13 +17,13 @@ knitr::opts_chunk$set(
 ```{r setup}
 ```
 
-The INLAMRA functions lets users fit the INLA-MRA model described in Villandre et al. 2020. With sensible tuning and a large enough memory bank, it should work adequately for datasets of sizes under 1.5 million. Note that much of the computational burden results from predictions: the running time scales linearly with the required number of predictions. The software takes advantage of OpenMP parallelisation to handle that step. It is disabled by default, but should be enabled to decrease computation time, cf. numOpenMPthreads in INLAMRA.control. 
+The INLAMRA functions lets users fit the INLA-MRA model described in Villandre et al. 2020. With adequate tuning and a large enough memory bank, they should  be applicable to datasets of sizes under 1.5 million. Note that much of the computational burden results from predictions: the running time scales linearly with the required number of predictions. The software can take advantage of OpenMP parallelisation to handle that step, but it is disabled by default. We recommend enabling it to decrease computation time, cf. `numOpenMPthreads` in `INLAMRA.control`. 
 
-The following code calls INLAMRA under several default control parameters. The function's arguments include the usual data inputs: a vector of responses, a data.frame of covariates, a matrix of spatial coordinates, and a vector of time values in POSIX or numeric format. When a POSIX* object is provided, *time will be scaled in days*. If a numeric object is provided instead, no such assumption is made: time parameters will be based on the untransformed values. If predictions are required, relevant spatial and temporal coordinates, as well as covariate values, must be provided before the model is fitted.
+The following code calls INLAMRA under several default control parameters. You can list all default control parameters with `INLAMRA.control()`. You also use that function to set control parameters. The arguments of `INLAMRA` include the usual data inputs: a `numeric` vector of responses, a `data.frame` of numeric covariates, a `matrix` of spatial coordinates, and a vector of time values in `POSIX*` or `numeric` format. When a `POSIX*` object is provided, *time is scaled in days*. If a numeric object is provided instead, no such assumption is made: time hyperparameters, e.g. range, will be based on the untransformed values. If predictions are required, relevant spatial and temporal coordinates, as well as covariate values, must be provided before the model is fitted.
 
-If the software encounters missing values in the training dataset, a warning is produced, and the missing observations are removed. Any missingness related to prediction inputs will result as an NA in the prediction vectors. 
+If the software encounters missing values, a warning is produced, and the missing observations are removed. Any missingness in the prediction inputs will result in an NA in the prediction output vectors. 
 
-We input control parameters with the help of the `INLAMRA.control` function. In this example, we tried to reduce computation time by generating a grid hierarchy of depth $7$, by putting $20$ knots in each subregion at depths $0$ to $6$, and by keeping only half the observation locations to obtain knot positions at depth $7$. Before using INLAMRA a first time, we recommend taking a look at available tuning parameters (`?INLAMRA.control).
+In this example, we tried to reduce computation time by generating a grid hierarchy of depth $7$, by putting $20$ knots in each subregion at depths $0$ to $6$, by keeping only half the observation locations to obtain knot positions at depth $7$, and by sampling only $20$ points in the importance sampling step. Note that `MODISdataTraining` and `MODISdataTest` are in the `STIDF` format, defined in the `spacetime` library.
 
 ```{r, include=TRUE}
 library(MRAinla)
@@ -42,6 +42,7 @@ fittedModel <- INLAMRA(
     Mlat = 3,
     Mtime = 1,
     numKnotsRes0 = 20,
+    numValuesForIS = 20,
     tipKnotsThinningRate = 0.5
   )
 )

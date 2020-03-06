@@ -58,9 +58,9 @@ AugTree::AugTree(const uint & Mlon,
   m_assignedPredToKnot.segment(0, m_assignedPredToKnot.size()) = false ;
 
   m_fixedEffParameters = Eigen::VectorXd::Zero(m_dataset.covariateValues.cols()) ; // m_dataset.covariateValues includes a column of 1s for the intercept.
-  Rcout << "Building the grid..." << std::endl ;
+  Rcout << "Setting up nested grids..." << std::endl ;
   BuildTree(numKnotsRes0, J, tipKnotsThinningRate) ;
-  Rcout << "Grid built!" << std::endl ;
+  Rcout << "Done!" << std::endl ;
 
   m_numKnots = 0 ;
 
@@ -543,10 +543,10 @@ void AugTree::createHmatrixPred() {
 
   std::vector<Triplet> tripletList = populateTripletList(tipNodes, true) ;
 
-  Rcout << "Creating HmatPred! \n" ;
+  // Rcout << "Creating HmatPred! \n" ;
   m_HmatPred.resize(m_predictData.covariateValues.rows(), m_numKnots + m_dataset.covariateValues.cols()) ; // Intercept is added on the R side, already included in covariateValues.
   m_HmatPred.setFromTriplets(tripletList.begin(), tripletList.end()) ;
-  Rcout << "Done! \n" ;
+  // Rcout << "Done! \n" ;
 
   for (auto & tipNode : tipNodes) {
     if (tipNode->GetPredIndices().size() > 0) {
@@ -586,8 +586,8 @@ void AugTree::diveAndUpdate(TreeNode * nodePointer, std::vector<TreeNode *> * de
 // Since I create this vector of pairs only to simplify the syntax of the
 // final evaluation, maybe it's ok? There might be a better way to go about it though.
 void AugTree::ComputeLogPriors() {
-  Rcout << "Computing log(p(Psi))..." << std::endl ;
-  fflush(stdout) ;
+  // Rcout << "Computing log(p(Psi))..." << std::endl ;
+  // fflush(stdout) ;
 
     m_logPrior = m_MaternParsHyperparsRhoSpace->computeLogDensity(m_normalHyperprior? log(m_MaternParsSpace.m_rho) : m_MaternParsSpace.m_rho)
       + m_MaternParsHyperparsSmoothnessSpace->computeLogDensity(m_normalHyperprior? log(m_MaternParsSpace.m_smoothness) : m_MaternParsSpace.m_smoothness)
@@ -597,12 +597,12 @@ void AugTree::ComputeLogPriors() {
       + m_ParsHyperparsFixedEffsSD->computeLogDensity(m_normalHyperprior? log(m_fixedEffSD) : m_fixedEffSD)
       + m_ParsHyperparsErrorSD->computeLogDensity(m_normalHyperprior? log(m_errorSD) : m_errorSD) ;
 
-  Rcout << "Done!" << std::endl ;
+  // Rcout << "Done!" << std::endl ;
 }
 
 void AugTree::ComputeLogFCandLogCDandDataLL() {
-  Rcout << "Computing log(p(v | y, Psi))..." << std::endl ;
-  fflush(stdout) ;
+  // Rcout << "Computing log(p(v | y, Psi))..." << std::endl ;
+  // fflush(stdout) ;
   int n = m_dataset.responseValues.size() ;
 
   if (m_SigmaFEandEtaInv.rows() == 0) {
@@ -633,8 +633,8 @@ void AugTree::ComputeLogFCandLogCDandDataLL() {
 
   sp_mat secondTerm = std::pow(m_errorSD, -2) * (m_Hmat.transpose() * m_Hmat) ;
 
-  Rcout << "Computing Q matrix Cholesky... " << std::endl ;
-  fflush(stdout) ;
+  // Rcout << "Computing Q matrix Cholesky... " << std::endl ;
+  // fflush(stdout) ;
   if (m_logFullCond == 0) { // This is the first iteration...
     try {
       m_FullCondPrecisionChol.analyzePattern(m_SigmaFEandEtaInv + secondTerm) ;
@@ -645,7 +645,7 @@ void AugTree::ComputeLogFCandLogCDandDataLL() {
 
   fflush(stdout) ;
   m_FullCondPrecisionChol.factorize(m_SigmaFEandEtaInv + secondTerm) ; // The sparsity pattern in matToInvert is always the same, notwithstand the hyperparameter values.
-  Rcout << "Done computing Cholesky! " << std::endl ;
+  // Rcout << "Done computing Cholesky! " << std::endl ;
   secondTerm.resize(0,0) ; // Making sure it doesn't clog the memory (although I suspect this is not necessary)
 
   ComputeFullCondSDsFE() ;
@@ -670,13 +670,13 @@ void AugTree::ComputeLogFCandLogCDandDataLL() {
 
   // Computing p(v* | Psi)
   mat logLikTerm ;
-  Rcout << "Done! Computing log(p(v | Psi))..." << std::endl ;
-  fflush(stdout) ;
+  // Rcout << "Done! Computing log(p(v | Psi))..." << std::endl ;
+  // fflush(stdout) ;
   logLikTerm.noalias() = -0.5 * m_Vstar.transpose() * m_SigmaFEandEtaInv.selfadjointView<Upper>() * m_Vstar ;
 
   m_logCondDist = logLikTerm(0,0) + 0.5 * logDetSigmaKFEinv ;
 
-  Rcout << "Done! Computing p(y | v, Psi)" << std::endl ;
+  // Rcout << "Done! Computing p(y | v, Psi)" << std::endl ;
   double errorLogDet = -2 * n * log(m_errorSD) ;
   vec recenteredY ;
   recenteredY.noalias() = responsesReshuffled - m_Hmat * m_Vstar ;
@@ -684,14 +684,14 @@ void AugTree::ComputeLogFCandLogCDandDataLL() {
   vec globalLogLikExp ;
   globalLogLikExp.noalias() = -0.5 * std::pow(m_errorSD, -2) * recenteredY.transpose() * recenteredY ;
   m_globalLogLik = 0.5 * errorLogDet + globalLogLikExp(0) ;
-  Rcout << "Done!" << std::endl ;
+  // Rcout << "Done!" << std::endl ;
 }
 
 void AugTree::ComputeLogJointPsiMarginal() {
 
-  m_MaternParsSpace.print("Spatial parameters:") ;
-  m_MaternParsTime.print("Time parameters:") ;
-  Rprintf("Scaling parameter: %.3e \n", m_spacetimeScaling) ;
+  // m_MaternParsSpace.print("Spatial parameters:") ;
+  // m_MaternParsTime.print("Time parameters:") ;
+  // Rprintf("Scaling parameter: %.3e \n", m_spacetimeScaling) ;
 
   ComputeLogPriors() ;
 
@@ -705,10 +705,10 @@ void AugTree::ComputeLogJointPsiMarginal() {
     ComputeHpred() ;
   }
 
-  Rprintf("Observations log-lik: %.4e \n Log-prior: %.4e \n Log-Cond. dist.: %.4e \n Log-full cond.: %.4e \n \n \n",
-   m_globalLogLik, m_logPrior, m_logCondDist, m_logFullCond) ;
+  // Rprintf("\n Observations log-lik: %.4e \n Log-prior: %.4e \n Log-Cond. dist.: %.4e \n Log-full cond.: %.4e \n \n \n",
+  //  m_globalLogLik, m_logPrior, m_logCondDist, m_logFullCond) ;
   m_logJointPsiMarginal = m_globalLogLik + m_logPrior + m_logCondDist - m_logFullCond ;
-   Rprintf("Joint value: %.4e \n \n", m_logJointPsiMarginal) ;
+   // Rprintf("Joint value: %.4e \n \n", m_logJointPsiMarginal) ;
 }
 
 void AugTree::ComputeHpred() {
