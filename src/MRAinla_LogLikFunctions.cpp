@@ -46,10 +46,10 @@ List setupNestedGrids(NumericVector responseValues,
   ArrayXXd sp = as<ArrayXXd>(spCoords) ;
   ArrayXXd predSp, predCovariates ;
   ArrayXd predTimeVec ;
-  if (!(predCoords == R_NilValue)) {
-    ArrayXXd predSp = as<ArrayXXd>(predCoords) ;
-    ArrayXd predTimeVec = as<ArrayXd>(predTime) ;
-    ArrayXXd predCovariates = as<ArrayXXd>(predCovariateMatrix) ;
+  if (not Rf_isNull(predCoords)) {
+    predSp = as<ArrayXXd>(predCoords) ;
+    predTimeVec = as<ArrayXd>(predTime) ;
+    predCovariates = as<ArrayXXd>(predCovariateMatrix) ;
   }
   ArrayXd time = as<ArrayXd>(obsTime) ;
   string dMethod = as<std::string>(Rcpp::wrap(distMethod)) ;

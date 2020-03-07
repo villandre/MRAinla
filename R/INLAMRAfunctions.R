@@ -128,7 +128,7 @@ INLAMRA <- function(responseVec, covariateFrame = NULL, spatialCoordMat, timePOS
   computedValues$output <- .AddLogISweight(output = computedValues$output, distMode = computedValues$ISdistParas$mu, control = control)
   hyperMarginalMoments <- .ComputeHyperMarginalMoments(computedValues$output, control = control)
 
-  FEmarginalMoments <- .ComputeFEmarginalMoments(computedValues$output, covNames = c("Intercept", colnames(covariateFrame)), control = control)
+  FEmarginalMoments <- .ComputeFEmarginalMoments(computedValues$output, covNames = colnames(covariateFrame), control = control)
 
   keepHyperNames <- names(unlist(hyperStart))
   dropHyperNames <- names(unlist(fixedHyperValues))
@@ -186,8 +186,8 @@ INLAMRA <- function(responseVec, covariateFrame = NULL, spatialCoordMat, timePOS
 #' }
 #' @export
 
-INLAMRA.control <- function(Mlon = 1, Mlat = 1, Mtime = 1, randomSeed = 24, nuggetSD = 1e-5, numKnotsRes0 = 20L, J = 2L, numValuesForIS = 100, numIterOptim = 25L, distMethod = "haversine", normalHyperprior = TRUE, numISpropDistUpdates = 0, tipKnotsThinningRate = 1, credIntervalPercs = c(0.025, 0.975), timeJitterMaxInDecimalDays = 1/864000000, spaceJitterMax = 1e-6, numOpenMPthreads = 1L, saveData = TRUE) {
-  list(Mlon = Mlon, Mlat = Mlat, Mtime = Mtime, randomSeed = randomSeed, nuggetSD = nuggetSD, numKnotsRes0 = numKnotsRes0, J = J, numValuesForIS = numValuesForIS, numIterOptim = numIterOptim, distMethod = distMethod, normalHyperprior = normalHyperprior, numISpropDistUpdates = numISpropDistUpdates, tipKnotsThinningRate = tipKnotsThinningRate, credIntervalPercs = credIntervalPercs, timeJitterMaxInDecimalDays = timeJitterMaxInDecimalDays, spaceJitterMax = spaceJitterMax, numOpenMPthreads = numOpenMPthreads, saveData = saveData)
+INLAMRA.control <- function(Mlon = 1, Mlat = 1, Mtime = 1, randomSeed = 24, nuggetSD = 1e-5, numKnotsRes0 = 20L, J = 2L, numValuesForIS = 100, numIterOptim = 25L, distMethod = "haversine", normalHyperprior = TRUE, numISpropDistUpdates = 0, tipKnotsThinningRate = 1, credIntervalPercs = c(0.025, 0.975), timeJitterMaxInDecimalDays = 1/864000000, spaceJitterMax = 1e-6, numOpenMPthreads = 1L, saveData = TRUE, fileToSaveOptOutput = NULL, folderToSaveISpoints = NULL) {
+  list(Mlon = Mlon, Mlat = Mlat, Mtime = Mtime, randomSeed = randomSeed, nuggetSD = nuggetSD, numKnotsRes0 = numKnotsRes0, J = J, numValuesForIS = numValuesForIS, numIterOptim = numIterOptim, distMethod = distMethod, normalHyperprior = normalHyperprior, numISpropDistUpdates = numISpropDistUpdates, tipKnotsThinningRate = tipKnotsThinningRate, credIntervalPercs = credIntervalPercs, timeJitterMaxInDecimalDays = timeJitterMaxInDecimalDays, spaceJitterMax = spaceJitterMax, numOpenMPthreads = numOpenMPthreads, saveData = saveData, fileToSaveOptOutput = fileToSaveOptOutput, folderToSaveISpoints = folderToSaveISpoints)
 }
 
 .getNonMissingIndices <- function(responseVec = NULL, covariateFrame, spatialCoordMat, timePOSIXorNumericVec) {
@@ -539,7 +539,7 @@ INLAMRA.control <- function(Mlon = 1, Mlat = 1, Mtime = 1, randomSeed = 24, nugg
       if (control$normalHyperprior) {
         xVec <- exp(xVec)
       }
-      output[[generalCounter]] <- .funForGridEst(xNonLogScale = xVec, treePointer = nestedGridsPointer, fixedHyperValues = fixedHyperValues, computePrediction = TRUE, control = control)
+      output[[generalCounter]] <- .funForISest(xNonLogScale = xVec, treePointer = nestedGridsPointer, fixedHyperValues = fixedHyperValues, computePrediction = TRUE, control = control)
       output[[generalCounter]]$varCovar <- updatedISvarCovar
       if (!is.null(control$folderToSaveISpoints)) {
         if (!dir.exists(control$folderToSaveISpoints)) {
@@ -585,7 +585,7 @@ INLAMRA.control <- function(Mlon = 1, Mlat = 1, Mtime = 1, randomSeed = 24, nugg
   list(output = output)
 }
 
-.funForGridEst <- function(xNonLogScale, treePointer, fixedHyperValues, computePrediction, control) {
+.funForISest <- function(xNonLogScale, treePointer, fixedHyperValues, computePrediction, control) {
   fixedHyperValuesUnlisted <- unlist(fixedHyperValues)
   if (control$normalHyperprior) {
     fixedHyperValuesUnlisted <- exp(fixedHyperValuesUnlisted)
@@ -679,7 +679,7 @@ ComputeFEcredInts <- function(p = c(0.025, 0.975), hyperparaList, marginalMeans,
   valuesRanges <- lapply(1:length(marginalMeans), function(x) {
     c(-3 * marginalSDs[[x]], 3 * marginalSDs[[x]]) + marginalMeans[[x]]
   })
-  distValuesByFEpar <- lapply(seq_along(marginalMeans), function(FEindex) {
+  funToGetDistValuesByFEpar <- function(FEindex) {
     valuesToConsider <- seq(
       from = valuesRanges[[FEindex]][1],
       to = valuesRanges[[FEindex]][2],
@@ -690,7 +690,8 @@ ComputeFEcredInts <- function(p = c(0.025, 0.975), hyperparaList, marginalMeans,
     })
     summedValues <- Reduce("+", distValuesByISiter)
     data.frame(x = valuesToConsider, values = rowSums(distValuesByISiter))
-  })
+  }
+  distValuesByFEpar <- lapply(seq_along(marginalMeans), funToGetDistValuesByFEpar)
   boundsByFEpar <- lapply(distValuesByFEpar, FUN = function(distFrame) {
     distributionValuesNormalised <- distFrame$values/sum(distFrame$values)
     DFvalues <- cumsum(distributionValuesNormalised)

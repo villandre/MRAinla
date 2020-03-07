@@ -543,10 +543,8 @@ void AugTree::createHmatrixPred() {
 
   std::vector<Triplet> tripletList = populateTripletList(tipNodes, true) ;
 
-  // Rcout << "Creating HmatPred! \n" ;
   m_HmatPred.resize(m_predictData.covariateValues.rows(), m_numKnots + m_dataset.covariateValues.cols()) ; // Intercept is added on the R side, already included in covariateValues.
   m_HmatPred.setFromTriplets(tripletList.begin(), tripletList.end()) ;
-  // Rcout << "Done! \n" ;
 
   for (auto & tipNode : tipNodes) {
     if (tipNode->GetPredIndices().size() > 0) {
