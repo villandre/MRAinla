@@ -533,7 +533,7 @@ INLAMRA.control <- function(Mlon = 1, Mlat = 1, Mtime = 1, randomSeed = 24, nugg
 
     for (i in seq_along(currentIterInPhase:numItersInPhase)) {
       generalCounter <- generalCounter + 1
-      cat("Processing grid value ", generalCounter, "... \n")
+      cat("Processing IS value ", generalCounter, "... \n")
       xVec <- paraGrid[i, ]
       names(xVec) <- colnames(paraGrid)
       if (control$normalHyperprior) {
@@ -592,9 +592,8 @@ INLAMRA.control <- function(Mlon = 1, Mlat = 1, Mtime = 1, randomSeed = 24, nugg
   }
   hyperList <- .prepareHyperList(hyperStartUnlisted = xNonLogScale, fixedHyperValuesUnlisted = fixedHyperValuesUnlisted)
 
-  # logJointValue <- tryCatch(expr = .LogJointHyperMarginal(treePointer = treePointer, hyperparaValues = hyperList, recordFullConditional = FALSE, processPredictions = TRUE), error = function(e) e)
-  cat("Processed value: \n")
-  print(hyperList)
+  # cat("Processed value: \n")
+  # print(hyperList)
   logJointValue <- .LogJointHyperMarginal(treePointer = treePointer, hyperparaValues = hyperList, recordFullConditional = FALSE, processPredictions = TRUE)
   x <- xNonLogScale
   if (control$normalHyperprior) {

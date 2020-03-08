@@ -1,19 +1,19 @@
-plot.INLAMRA <- function(INLAMRAoutput, filename = NULL, type = c("joint", "training", "predictions", "SD", "hyperpars"), polygonsToOverlay = NULL, control = plot.control()) {
+plot.INLAMRA <- function(x, filename = NULL, type = c("joint", "training", "predictions", "SD", "hyperpars"), polygonsToOverlay = NULL, control = plot.control()) {
   type <- type[[1]]
 
-  .checkPlotInputConsistency(INLAMRAoutput, type)
+  .checkPlotInputConsistency(x, type)
 
   if (control$trim) {
-    INLAMRAoutput$predMoments$Mean <- replace(INLAMRAoutput$predMoments$Mean, which(INLAMRAoutput$predMoments$Mean > max(INLAMRAoutput$data$spObject@data$y)), max(INLAMRAoutput$data$spObject@data$y))
-    INLAMRAoutput$predMoments$Mean <- replace(INLAMRAoutput$predMoments$Mean, which(INLAMRAoutput$predMoments$Mean < min(INLAMRAoutput$data$spObject@data$y)), min(INLAMRAoutput$data$spObject@data$y))
+    x$predMoments$Mean <- replace(x$predMoments$Mean, which(x$predMoments$Mean > max(x$data$spObject@data$y)), max(x$data$spObject@data$y))
+    x$predMoments$Mean <- replace(x$predMoments$Mean, which(x$predMoments$Mean < min(x$data$spObject@data$y)), min(x$data$spObject@data$y))
   }
 
   if (control$plotRaster & (type != "hyperpars")) {
-    .plotRaster(INLAMRAoutput, control, type = type)
+    .plotRaster(x, control, type = type)
   } else if (type[[1]] != "hyperpars") {
-    .plotPoints(INLAMRAoutput, control, type = type)
+    .plotPoints(x, control, type = type)
   } else {
-    .plotHyperparMarginal(output = INLAMRAoutput, filename = filename, device = control$graphicsDevice, width = control$width, height = control$height)
+    .plotHyperparMarginal(output = x, filename = filename, device = control$graphicsDevice, width = control$width, height = control$height)
   }
 }
 
@@ -29,7 +29,7 @@ plot.INLAMRA <- function(INLAMRAoutput, filename = NULL, type = c("joint", "trai
 
 .plotRaster <- function(INLAMRAoutput, control, filename, polygonsToOverlay, type) {
   testDays <- sort(unique(INLAMRAoutput$predData$time))
-  control <- .SetRasterSizes(control, INLAMRAoutput)
+  control <- .SetRasterSizes(control, INLAMRAoutput, type = type)
   rasterListPerDay <- lapply(testDays, .rasterizeTrainingTestJointSD, INLAMRAoutput = INLAMRAoutput, control = control)
 
   if (!is.null(filename)) {
@@ -62,11 +62,32 @@ plot.INLAMRA <- function(INLAMRAoutput, filename = NULL, type = c("joint", "trai
   invisible(0)
 }
 
-.SetRasterSizes <- function(control, INLAMRAoutput) {
-  combinedCoords <- rbind(INLAMRAoutput$data$spObject@coords, INLAMRAoutput$predData$spObject@coords)
-  # We try to remove the effects of the jittering.
-  control$rasterNrows <- length(unique(round(combinedCoords[ , 1], digits = control$numDigitRound)))
-  control$rasterNcols <- length(unique(round(combinedCoords[ , 2], digits = control$numDigitRound)))
+.SetRasterSizes <- function(control, INLAMRAoutput, type) {
+  uniqueTimeValues <- sort(unique(c(INLAMRAoutput$data$time, INLAMRAoutput$predData$time)))
+
+  findNrowsNcolsByTimeIndex <- function(timeValue, coordIndex) {
+    coordsForTraining <- INLAMRAoutput$data$spObject@coords[INLAMRAoutput$data$time == timeValue, ]
+    coordsForPredSet <- INLAMRAoutput$predData$spObject@coords[INLAMRAoutput$predData$time == timeValue, ]
+    if (type == "joint") {
+      combinedCoords <- rbind(coordsForTraining, coordsForPredSet)
+    } else if (type == "training") {
+      combinedCoords <- coordsForTraining
+    } else {
+      combinedCoords <- coordsForPredSet
+    }
+    orderedCombinedCoords <- combinedCoords[order(combinedCoords[ , coordIndex]), ]
+    diffCoord <- diff(orderedCombinedCoords[, coordIndex])
+    sdDiffCoord <- sd(diffCoord)
+    breakPositions <- which(abs(diffCoord) > 3*sdDiffCoord)
+    dimSizes <- c(breakPositions[[1]], diff(breakPositions))
+    max(dimSizes)
+  }
+  proposedNrowsNcolsByTime <- sapply(uniqueTimeValues, FUN = function(timeValue) {
+    sapply(c(2,1),  FUN = findNrowsNcolsByTimeIndex, timeValue = timeValue)
+  })
+
+  control$rasterNrows <- max(proposedNrowsNcolsByTime[1, ])
+  control$rasterNcols <- max(proposedNrowsNcolsByTime[2, ])
   cat("Trying to infer the ideal number of cells in the raster by rounding spatial coordinates at", control$numDigitRound,"digits to eliminate the spatial jittering created by INLAMRA. Obtained", control$rasterNrows, "rows and", control$rasterNcols, "columns. If the raster looks bad in the end, set these values manually with plot.control(). If your data are not gridded, set plotRaster to FALSE in plot.control() instead.", sep = " ")
   control
 }
