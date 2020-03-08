@@ -53,9 +53,9 @@ INLAMRA <- function(responseVec, covariateFrame = NULL, spatialCoordMat, timePOS
 
   if (!noPredictionFlag) {
     nonMissingPredIndices <- .getNonMissingIndices(covariateFrame = predCovariateFrame, spatialCoordMat = predSpatialCoordMat, timePOSIXorNumericVec = predTimePOSIXorNumericVec)
+    originalNumberPreds <- nrow(predCovariateFrame)
     if (length(nonMissingPredIndices) < nrow(predCovariateFrame)) {
       warning("Missing values (NAs) in data provided for predictions. Locations with incomplete information will not be processed.")
-      originalNumberPreds <- nrow(predCovariateFrame)
       predCovariateFrame <- predCovariateFrame[nonMissingPredIndices, ]
       predSpatialCoordMat <- predSpatialCoordMat[nonMissingPredIndices, ]
       predTimePOSIXorNumericVec <- predTimePOSIXorNumericVec[nonMissingPredIndices]
@@ -132,7 +132,7 @@ INLAMRA <- function(responseVec, covariateFrame = NULL, spatialCoordMat, timePOS
 
   keepHyperNames <- names(unlist(hyperStart))
   dropHyperNames <- names(unlist(fixedHyperValues))
-  outputList <- list(hyperMarginalMoments = hyperMarginalMoments$paraMoments[keepHyperNames, ], FEmarginalMoments = FEmarginalMoments, psiAndMargDistMatrix = hyperMarginalMoments$psiAndMargDistMatrix[!(colnames(hyperMarginalMoments$psiAndMargDistMatrix) %in% dropHyperNames)])
+  outputList <- list(hyperMarginalMoments = hyperMarginalMoments$paraMoments[keepHyperNames, ], FEmarginalMoments = FEmarginalMoments, psiAndMargDistMatrix = hyperMarginalMoments$psiAndMargDistMatrix[ , !(colnames(hyperMarginalMoments$psiAndMargDistMatrix) %in% dropHyperNames)])
 
   if (!noPredictionFlag) {
     cat("Computing prediction moments... \n")
@@ -619,7 +619,6 @@ INLAMRA.control <- function(Mlon = 1, Mlat = 1, Mtime = 1, randomSeed = 24, nugg
   domainCheck <- sapply(hyperparaList, function(x) x$logJointValue > -Inf)
   hyperparaList <- hyperparaList[domainCheck]
   psiAndMargDistMatrix <- t(sapply(seq_along(hyperparaList), function(hyperparaIndex) c(unlist(hyperparaList[[hyperparaIndex]]$MaternHyperpars), fixedEffSD = hyperparaList[[hyperparaIndex]]$fixedEffSD, errorSD = hyperparaList[[hyperparaIndex]]$errorSD, logJointValue = hyperparaList[[hyperparaIndex]]$logJointValue, ISweight = exp(hyperparaList[[hyperparaIndex]]$logISweight))))
-  rownames(psiAndMargDistMatrix) <- NULL
   adaptiveISphaseVector <- rep(1:(control$numISpropDistUpdates + 1), each = ceiling(control$numValuesForIS / (control$numISpropDistUpdates + 1)))[1:min(control$numValuesForIS, length(hyperparaList))]
   funToGetParaMoments <- function(hyperparaIndex) {
     # meanValue <- sum(psiAndMargDistMatrix[, hyperparaIndex] * psiAndMargDistMatrix[, ncol(psiAndMargDistMatrix)])
