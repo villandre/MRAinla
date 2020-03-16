@@ -580,9 +580,6 @@ void AugTree::diveAndUpdate(TreeNode * nodePointer, std::vector<TreeNode *> * de
   }
 }
 
-// Am I betraying the concept of unique pointers here?
-// Since I create this vector of pairs only to simplify the syntax of the
-// final evaluation, maybe it's ok? There might be a better way to go about it though.
 void AugTree::ComputeLogPriors() {
   // Rcout << "Computing log(p(Psi))..." << std::endl ;
   // fflush(stdout) ;
