@@ -25,7 +25,7 @@ If the software encounters missing values, a warning is produced, and the missin
 
 In this example, we tried to reduce computation time by generating a grid hierarchy of depth $7$, by putting $20$ knots in each subregion at depths $0$ to $6$, by keeping only half the observation locations to obtain knot positions at depth $7$, and by sampling only $20$ points in the importance sampling step. Note that `MODISdataTraining` and `MODISdataTest` are in the `STIDF` format, defined in the `spacetime` library.
 
-```{r, include=TRUE}
+```{r, include=TRUE, echo = FALSE}
 library(MRAinla)
 data("MODISdataTraining")
 data("MODISdataTest")
@@ -43,12 +43,18 @@ fittedModel <- INLAMRA(
     Mtime = 1,
     numKnotsRes0 = 20,
     numValuesForIS = 20,
+    fileToSaveOptOutput = "/home/luc/INLAMRAfiles/vignetteExampleOptOutput.Rdata",
     tipKnotsThinningRate = 0.5
   )
 )
 
 fittedModel$hyperMarginalMoments
 ```
+We can plot the predictions with the `plot` function, adapted to the `INLAMRA` class:
+```{r, include=TRUE, echo = FALSE}
+plot(fittedModel, filename = "~/myFile.tif", type = "joint")
+```
+
 
 # Notes on design. 
 The INLA-MRA interface was designed with a focus on ease-of-use. The main function for fitting models, `INLAMRA` requires strictly common R objects, e.g. matrix, data.frame, list. The down side is that users can provide 
