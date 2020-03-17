@@ -7,3 +7,5 @@ AugTree.o
 RcppExports.R
 helper.o
 TipNode.o
+Forest.o
+RcppExports.cpp

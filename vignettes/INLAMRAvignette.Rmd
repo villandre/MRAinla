@@ -1,0 +1,60 @@
+---
+title: "INLA-MRA vignette"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{INLAMRAvignette}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+```{r setup}
+```
+
+The INLAMRA functions lets users fit the INLA-MRA model described in Villandre et al. 2020. With adequate tuning and a large enough memory bank, they should  be applicable to datasets of sizes under 1.5 million. Note that much of the computational burden results from predictions: the running time scales linearly with the required number of predictions. The software can take advantage of OpenMP parallelisation to handle that step, but it is disabled by default. We recommend enabling it to decrease computation time, cf. `numOpenMPthreads` in `INLAMRA.control`. 
+
+The following code calls INLAMRA under several default control parameters. You can list all default control parameters with `INLAMRA.control()`. You also use that function to set control parameters. The arguments of `INLAMRA` include the usual data inputs: a `numeric` vector of responses, a `data.frame` of numeric covariates, a `matrix` of spatial coordinates, and a vector of time values in `POSIX*` or `numeric` format. When a `POSIX*` object is provided, *time is scaled in days*. If a numeric object is provided instead, no such assumption is made: time hyperparameters, e.g. range, will be based on the untransformed values. If predictions are required, relevant spatial and temporal coordinates, as well as covariate values, must be provided before the model is fitted.
+
+If the software encounters missing values, a warning is produced, and the missing observations are removed. Any missingness in the prediction inputs will result in an NA in the prediction output vectors. 
+
+In this example, we tried to reduce computation time by generating a grid hierarchy of depth $7$, by putting $20$ knots in each subregion at depths $0$ to $6$, by keeping only half the observation locations to obtain knot positions at depth $7$, and by sampling only $20$ points in the importance sampling step. Note that `MODISdataTraining` and `MODISdataTest` are in the `STIDF` format, defined in the `spacetime` library.
+
+```{r, include=TRUE, echo = FALSE}
+library(MRAinla)
+data("MODISdataTraining")
+data("MODISdataTest")
+fittedModel <- INLAMRA(
+  responseVec = MODISdataTraining@data$y,
+  covariateFrame = subset(MODISdataTraining@data, select = -y),
+  spatialCoordMat = MODISdataTraining@sp@coords,
+  timePOSIXorNumericVec = time(MODISdataTraining),
+  predCovariateFrame = MODISdataTest@data,
+  predSpatialCoordMat = MODISdataTest@sp@coords,
+  predTimePOSIXorNumericVec = time(MODISdataTest),
+  control = INLAMRA.control(
+    Mlon = 3,
+    Mlat = 3,
+    Mtime = 1,
+    numKnotsRes0 = 20,
+    numValuesForIS = 20,
+    fileToSaveOptOutput = "/home/luc/INLAMRAfiles/vignetteExampleOptOutput.Rdata",
+    tipKnotsThinningRate = 0.5
+  )
+)
+
+fittedModel$hyperMarginalMoments
+```
+We can plot the predictions with the `plot` function, adapted to the `INLAMRA` class:
+```{r, include=TRUE, echo = FALSE}
+plot(fittedModel, filename = "~/myFile.tif", type = "joint")
+```
+
+
+# Notes on design. 
+The INLA-MRA interface was designed with a focus on ease-of-use. The main function for fitting models, `INLAMRA` requires strictly common R objects, e.g. matrix, data.frame, list. The down side is that users can provide 

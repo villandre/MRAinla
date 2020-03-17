@@ -1,112 +1,114 @@
-// [[Rcpp::depends(RcppArmadillo)]]
-// [[Rcpp::depends(BH)]]
-
 #include <iostream>
 #include <string>
 #include <algorithm>
-#include <RcppArmadillo.h>
+#include <RcppEigen.h>
+// #include <unsupported/Eigen/SparseExtra>
 // #include "gperftools/profiler.h"
 
 #include "AugTree.h"
 
-using namespace arma;
+using namespace Eigen;
 using namespace Rcpp;
 using namespace MRAinla;
-
-typedef unsigned int uint ;
+using namespace std;
 
 // [[Rcpp::export]]
 
-List setupGridCpp(NumericVector responseValues, NumericMatrix spCoords, NumericMatrix predCoords,
-                  NumericVector obsTime,  NumericVector predTime, NumericMatrix covariateMatrix,
-                  NumericMatrix predCovariateMatrix, uint M,
-                  NumericVector lonRange, NumericVector latRange, NumericVector timeRange,
-                  uint randomSeed, uint cutForTimeSplit, bool splitTime,
-                  int numKnotsRes0, int J)
+List setupNestedGrids(NumericVector responseValues,
+                      NumericMatrix spCoords,
+                      NumericMatrix predCoords,
+                      NumericVector obsTime,
+                      NumericVector predTime,
+                      NumericMatrix covariateMatrix,
+                      NumericMatrix predCovariateMatrix,
+                      uint Mlon, uint Mlat, uint Mtime,
+                      NumericVector lonRange, NumericVector latRange, NumericVector timeRange,
+                      uint randomSeed,
+                      int numKnotsRes0,
+                      double J,
+                      String distMethod,
+                      Rcpp::List MaternParsHyperpars,
+                      Rcpp::NumericVector fixedEffParsHyperpars,
+                      NumericVector errorParsHyperpars,
+                      Rcpp::NumericVector FEmuVec,
+                      double nuggetSD,
+                      bool normalHyperprior,
+                      double tipKnotsThinningRate,
+                      int numOpenMPthreads)
 {
-  vec lonR = as<vec>(lonRange) ;
-  vec latR = as<vec>(latRange) ;
-  vec timeR = as<vec>(timeRange) ;
+  ArrayXd lonRinit = as<ArrayXd>(lonRange) ;
+  ArrayXd latRinit = as<ArrayXd>(latRange) ;
+  ArrayXd timeRinit = as<ArrayXd>(timeRange) ;
+  Array2d lonR = lonRinit.segment(0,2) ;
+  Array2d latR = latRinit.segment(0,2) ;
+  Array2d timeR = timeRinit.segment(0,2) ;
   vec response = as<vec>(responseValues) ;
-  mat sp = as<mat>(spCoords) ;
-  mat predSp = as<mat>(predCoords) ;
-  vec predTimeVec = as<vec>(predTime) ;
-  mat predCovariates = as<mat>(predCovariateMatrix) ;
-  vec time = as<vec>(obsTime) ;
+  ArrayXXd sp = as<ArrayXXd>(spCoords) ;
+  ArrayXXd predSp, predCovariates ;
+  ArrayXd predTimeVec ;
+  if (not Rf_isNull(predCoords)) {
+    predSp = as<ArrayXXd>(predCoords) ;
+    predTimeVec = as<ArrayXd>(predTime) ;
+    predCovariates = as<ArrayXXd>(predCovariateMatrix) ;
+  }
+  ArrayXd time = as<ArrayXd>(obsTime) ;
+  string dMethod = as<std::string>(Rcpp::wrap(distMethod)) ;
 
   unsigned long int seedForRNG = randomSeed ;
 
-  mat covariateMat = as<mat>(covariateMatrix) ;
+  ArrayXXd covariateMat = as<ArrayXXd>(covariateMatrix) ;
 
-  AugTree * MRAgrid = new AugTree(M, lonR, latR, timeR, response, sp, time, predCovariates, predSp, predTimeVec, cutForTimeSplit, seedForRNG, covariateMat, splitTime, numKnotsRes0, J) ;
-
+  AugTree * MRAgrid = new AugTree(Mlon, Mlat, Mtime,
+                                  lonR, latR, timeR,
+                                  response, sp, time,
+                                  predCovariates, predSp, predTimeVec,
+                                  seedForRNG,
+                                  covariateMat,
+                                  numKnotsRes0, J,
+                                  dMethod,
+                                  MaternParsHyperpars, fixedEffParsHyperpars, errorParsHyperpars,
+                                  FEmuVec,
+                                  nuggetSD,
+                                  normalHyperprior,
+                                  tipKnotsThinningRate,
+                                  numOpenMPthreads) ;
   XPtr<AugTree> p(MRAgrid, false) ; // Disabled automatic garbage collection.
-
-  return List::create(Named("gridPointer") = p) ;
+  return List::create(Named("nestedGridsPointer") = p) ;
 }
 
 // [[Rcpp::export]]
 
-double LogJointHyperMarginalToWrap(SEXP treePointer, Rcpp::List MRAhyperparas,
-         double fixedEffSD, double errorSD, Rcpp::List MRAcovParasGammaAlphaBeta,
-         Rcpp::NumericVector FEmuVec, NumericVector fixedEffGammaAlphaBeta,
-         NumericVector errorGammaAlphaBeta, bool matern, double spaceNuggetSD, double timeNuggetSD,
-         bool recordFullConditional, Rcpp::Function gradCholeskiFun,
-         Rcpp::Function sparseMatrixConstructFun, Rcpp::Function sparseDeterminantFun) {
-  arma::mat posteriorMatrix ;
+double LogJointHyperMarginalToWrap(SEXP treePointer, Rcpp::List MaternHyperpars,
+         double fixedEffSD, double errorSD, bool recordFullConditional,
+         bool processPredictions) {
+  mat posteriorMatrix ;
   double outputValue = 0 ;
 
-  if (!(treePointer == NULL))
-  {
-    XPtr<AugTree> pointedTree(treePointer) ; // Becomes a regular pointer again.
+  XPtr<AugTree> pointedTree(treePointer) ; // Becomes a regular pointer again.
 
-    // The alpha's and beta's for the gamma distribution of the hyperparameters do not change.
-    if (!pointedTree->CheckMRAcovParasGammaAlphaBeta()) {
-      pointedTree->ToggleGammaParasSet() ;
-      pointedTree->SetMRAcovParasGammaAlphaBeta(MRAcovParasGammaAlphaBeta) ;
+  std::vector<TreeNode *> tipNodes = pointedTree->GetLevelNodes(pointedTree->GetM()) ;
 
-      vec fixedEffAlphaBeta = Rcpp::as<vec>(fixedEffGammaAlphaBeta) ;
-      vec errorAlphaBeta = Rcpp::as<vec>(errorGammaAlphaBeta) ;
-      vec FEmu = Rcpp::as<vec>(FEmuVec) ;
+  // for (auto & i : tipNodes) {
+  //   i->SetUncorrSD(0.001) ; // Is this a nugget effect?
+  // }
+  pointedTree->SetMaternPars(MaternHyperpars) ;
+  pointedTree->SetErrorSD(errorSD) ;
+  pointedTree->SetFixedEffSD(fixedEffSD) ;
 
-      pointedTree->SetFixedEffGammaAlphaBeta(GammaHyperParas(fixedEffAlphaBeta.at(0), fixedEffAlphaBeta.at(1))) ;
-      pointedTree->SetErrorGammaAlphaBeta(GammaHyperParas(errorAlphaBeta.at(0), errorAlphaBeta.at(1))) ;
-      pointedTree->SetFEmu(FEmu) ;
-      pointedTree->SetMatern(matern) ;
-      pointedTree->SetSpaceAndTimeNuggetSD(spaceNuggetSD, timeNuggetSD) ;
-      std::vector<TreeNode *> tipNodes = pointedTree->GetLevelNodes(pointedTree->GetM()) ;
-      for (auto & i : tipNodes) {
-        i->SetUncorrSD(0.001) ;
-      }
-    }
-    pointedTree->SetErrorSD(errorSD) ;
-    pointedTree->SetFixedEffSD(fixedEffSD) ;
+  pointedTree->SetRecordFullConditional(recordFullConditional) ;
+  pointedTree->SetProcessPredictions(processPredictions) ;
 
-    pointedTree->SetMRAcovParas(MRAhyperparas) ;
-    pointedTree->SetRecordFullConditional(recordFullConditional) ;
-    // if (pointedTree->m_HmatPos.size() > 0) {
-    //   ProfilerStart("/home/luc/Downloads/myprofile.log") ;
-    //   pointedTree->ComputeLogJointPsiMarginal(gradCholeskiFun, sparseMatrixConstructFun, sparseDeterminantFun) ;
-    //   ProfilerStop() ;
-    //   throw Rcpp::exception("Stop for profiling... \n") ;
-    // }
-    // else {
-      pointedTree->ComputeLogJointPsiMarginal(gradCholeskiFun, sparseMatrixConstructFun, sparseDeterminantFun) ;
-    // }
+  pointedTree->ComputeLogJointPsiMarginal() ;
 
-    outputValue = pointedTree->GetLogJointPsiMarginal() ;
-    // printf("Marginal joint Psi: %.4e \n \n \n", pointedTree->GetLogJointPsiMarginal()) ;
-  }
-  else
-  {
-    throw Rcpp::exception("Pointer to MRA grid is null." ) ;
-  }
+  outputValue = pointedTree->GetLogJointPsiMarginal() ;
+  // Rprintf("Marginal joint Psi: %.4e \n \n \n", pointedTree->GetLogJointPsiMarginal()) ;
+
   return outputValue ;
 }
 
 // [[Rcpp::export]]
 
-arma::vec GetFullCondMean(SEXP treePointer) {
+Eigen::VectorXd GetFullCondMean(SEXP treePointer) {
   vec outputVec ;
   if (!(treePointer == NULL))
   {
@@ -122,7 +124,7 @@ arma::vec GetFullCondMean(SEXP treePointer) {
 
 // [[Rcpp::export]]
 
-arma::vec GetFullCondSDs(SEXP treePointer) {
+Eigen::VectorXd GetFullCondSDs(SEXP treePointer) {
   vec outputVec ;
   if (!(treePointer == NULL))
   {
@@ -138,30 +140,22 @@ arma::vec GetFullCondSDs(SEXP treePointer) {
 
 // [[Rcpp::export]]
 
-Rcpp::List ComputeCondPredStats(SEXP treePointer, NumericMatrix spCoordsForPredict, NumericVector timeForPredict,
-                                 NumericMatrix covariateMatrixForPredict, Rcpp::Function sparseMatrixConstructFun,
-                                 Rcpp::Function sparseSolveFun, int batchSize) {
-  sp_mat Hmat, Hmean, HmeanSq ;
-  mat HmeanMat ;
-  vec Evar ;
-
+Rcpp::List ComputeCondPredStats(SEXP treePointer) {
+  vec Evar, Hmean ;
   if (!(treePointer == NULL))
   {
     XPtr<AugTree> pointedTree(treePointer) ; // Becomes a regular pointer again.
-    mat spCoords = Rcpp::as<mat>(spCoordsForPredict) ;
-    vec time = Rcpp::as<vec>(timeForPredict) ;
-    mat covariates = Rcpp::as<mat>(covariateMatrixForPredict) ;
 
-    Hmat = conv_to<mat>::from(pointedTree->ComputeHpred(spCoords, time, covariates, sparseMatrixConstructFun)) ;
-    sp_mat Hmean = Hmat * conv_to<sp_mat>::from(pointedTree->GetFullCondMean()) ;
-    HmeanMat = conv_to<mat>::from(Hmean) ;
-    Evar = pointedTree->ComputeEvar(Hmat, sparseSolveFun, batchSize) ;
+    Hmean = pointedTree->GetHmatPred() * pointedTree->GetFullCondMean() ;
+    Rcout << "Computing Evar..." << std::endl ;
+    Evar = pointedTree->ComputeEvar() ;
+    Rcout << "Done!" << std::endl ;
   }
   else
   {
-    throw Rcpp::exception("Pointer to MRA grid is null." ) ;
+    throw Rcpp::exception("Pointer to MRA grid is null.") ;
   }
-  return Rcpp::List::create(Named("Hmean") = HmeanMat, Named("Evar") = Evar) ;
+  return Rcpp::List::create(Named("Hmean") = Hmean, Named("Evar") = Evar) ;
 }
 
 // [[Rcpp::export]]
@@ -174,16 +168,16 @@ int GetNumTips(SEXP treePointer) {
 
 // [[Rcpp::export]]
 
-arma::uvec GetPredObsOrder(SEXP treePointer) {
+Eigen::VectorXi GetPredObsOrder(SEXP treePointer) {
   XPtr<AugTree> pointedTree(treePointer) ; // Becomes a regular pointer again.
-  arma::uvec value = pointedTree->GetObsOrderForHpredMat() ;
+  uvec value = pointedTree->GetObsOrderForHpredMat() ;
   return value ;
 }
 
 // [[Rcpp::export]]
 
-arma::sp_mat GetHmat(SEXP treePointer) {
+Eigen::SparseMatrix<double> GetHmat(SEXP treePointer) {
   XPtr<AugTree> pointedTree(treePointer) ; // Becomes a regular pointer again.
-  arma::sp_mat value = pointedTree->GetHmat() ;
+  Eigen::SparseMatrix<double> value = pointedTree->GetHmat() ;
   return value ;
 }

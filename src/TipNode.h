@@ -17,110 +17,127 @@ public:
 
   void RemoveChildren() {}
   int GetM() {return m_depth ;}
+  void ComputeWmat(const maternVec & covParasSp, const maternVec & covParasTime, const double & scaling, const double & nuggetSD, const std::string & distMethod) {
+    baseComputeWmat(covParasSp, covParasTime, scaling, nuggetSD, distMethod) ;
 
-  void DeriveAtilde() {
-    for (uint k = 0; k < m_depth; k++) {
-      for (uint l = 0; l <= k; l++) {
-        m_AtildeList.at(k).at(l) = trans(GetB(k)) * m_SigmaInverse * GetB(l) ;
-      }
-    }
+    // m_Wlist.at(m_depth).triangularView<Upper>() = m_Wlist.at(m_depth).triangularView<Lower>() ; // Will this cause aliasing?
+    SetKmatrixInverse() ;
+    m_K = GetKmatrixInverse().selfadjointView<Eigen::Upper>().ldlt().solve(mat::Identity(GetKmatrixInverse().rows(), GetKmatrixInverse().cols())) ; // The K matrix is some sort of covariance matrix, so it should always be symmetrical..
   }
 
-  void DeriveOmega(const arma::vec &) ;
-
-  void DeriveU(const arma::vec & responseValues) {
-    arma::mat uInMat = arma::trans(responseValues.elem(m_obsInNode)) * m_SigmaInverse *
-      responseValues.elem(m_obsInNode) ;
-    m_u = uInMat.at(0,0) ; // uInMat is supposed to be a 1x1 matrix.
-  }
-
-  void DeriveD() {
-    double val = 0;
-    double sign = 0;
-    arma::log_det(val, sign, GetSigma()) ;
-    if (sign < 0) {
-      throw Rcpp::exception("Sigma is a covariance matrix: it cannot have a negative determinant. \n") ;
-    }
-    m_d = val ;
-  }
-
-  void ComputeWmat(const maternVec & covParasSp, const maternVec & covParasTime, const double & scaling, const bool matern, const double & spaceNuggetSD, const double & timeNuggetSD) {
-    baseComputeWmat(covParasSp, covParasTime, scaling, matern, spaceNuggetSD, timeNuggetSD) ;
-    m_Wlist.at(m_depth) = symmatl(m_Wlist.at(m_depth)) ; // This is added to solve numerical issues that arise when smoothness parameters take certain values and matrices turn out to be computationally non-symmetric.
-    m_SigmaInverse = arma::inv_sympd(GetSigma()) ;
-  }
-
-  // void ComputeParasEtaDeltaTilde(const spatialcoor &, const inputdata &, const arma::vec &) ;
-  std::vector<std::vector<arma::mat>> GetAlist() const {throw Rcpp::exception("Trying to get an A matrix in a tip node! \n") ;}
-  arma::mat GetKtilde() const {throw Rcpp::exception("Trying to get Ktilde in a tip node! \n") ;}
-  // void deriveBtilde(const spatialcoor & ) ;
-  // void computeBpred(const spatialcoor &, const arma::vec &) ;
-  // GaussDistParas CombineEtaDelta(const inputdata &, const arma::vec &) ;
-  // GaussDistParas GetEtaDelta() const { return m_deltaTilde ;}
-
-  arma::mat GetB(const uint & l) {
+  mat & GetB(const uint & l) {
     if (l > m_depth) {
-      printf("Error message... \n") ;
-      printf("Error occured in node %i. \n", m_nodeId) ;
-      printf("Trying to get index %i while tree has %i layers. \n", l, m_depth) ;
+      Rprintf("Error message... \n") ;
+      Rprintf("Error occured in node %i. \n", m_nodeId) ;
+      Rprintf("Trying to get index %i while tree has %i layers. \n", l, m_depth) ;
       throw Rcpp::exception("Trying to get B^l(j_1, ..., j_M) with l > M! \n") ;
     }
     return m_Wlist.at(l) ; // This works for l = M because knot positions in tips correspond to observation positions. It wouldn't be valid otherwise.
   }
 
-  arma::mat GetSigma() {
-    return m_Wlist.at(m_depth) + std::pow(m_uncorrSD, 2) * eye(size(m_Wlist.at(m_depth))) ;
+  double GetBelement(const uint & l, const uint & row, const uint & col) {
+    if (l == m_depth) {
+      return m_Wlist.at(l)(row, m_keepKnotIndices(col)) ;
+    } else {
+      return m_Wlist.at(l)(row, col) ;
+    }
   }
-  // The following Kmatrix-related functions work because of the correspondence between knots
-  // and observations at the finest resolution.
-  arma::mat GetKmatrix() {return m_SigmaInverse ;}
-  arma::mat * GetKmatrixAddress() {return &m_SigmaInverse ;}
-  arma::mat * GetKmatrixInverseAddress() { return &m_Wlist.at(m_depth) ;}
-  arma::mat GetKmatrixInverse() {return GetSigma() - std::pow(m_uncorrSD, 2) * eye(size(GetSigma()));}
-  arma::vec GetOmega(const uint & order) { throw Rcpp::exception("Trying to get omega vector in tip node! \n") ; return arma::vec(1) ;}
-  void SetUncorrSD(const double & sd) {
-    m_uncorrSD = sd ;
+
+  void SetKmatrixInverse() {
+    if (m_knotsThinningRate < 1) {
+      mat newMatToAdd = mat(m_keepKnotIndices.size(), m_keepKnotIndices.size()) ;
+
+      for (int i = 0; i < newMatToAdd.rows(); i++) {
+        for (int j = 0; j < newMatToAdd.cols(); j++) {
+          newMatToAdd(i,j) = m_Wlist.at(m_depth)(m_keepKnotIndices(i), m_keepKnotIndices(j)) ;
+        }
+      }
+      m_Kinverse = newMatToAdd ;
+    } else {
+      m_Kinverse = m_Wlist.at(m_depth) ;
+    }
+  };
+
+  mat GetKmatrixInverse() { return m_Kinverse ;}
+
+  // void SetUncorrSD(const double & sd) {
+  //   m_uncorrSD = sd ;
+  // }
+  // mat & GetUpred(const uint & l) { return m_UmatList.at(l) ;}
+  double & GetUpredElement(const uint & l, const uint & row, const uint & col) {
+    if (l == m_depth) {
+      return m_UmatList.at(l)(row, m_keepKnotIndices(col)) ;
+    } else {
+      return m_UmatList.at(l)(row, col) ;
+    }
   }
-  arma::mat GetUpred(const uint & l) { return m_UmatList.at(l) ;}
-  std::vector<arma::mat> GetUmatList() { return m_UmatList ;}
+  std::vector<mat> & GetUmatList() { return m_UmatList ;}
 
   void SetPredictLocations(const inputdata &) ;
-  arma::uvec GetPredIndices() { return m_predsInNode ;}
-  void computeUpred(const maternVec &, const maternVec &, const double &, const spatialcoor &, const bool, const double &, const double &) ;
+  Eigen::ArrayXi & GetPredIndices() { return m_predsInNode ;}
+  int GetNumPreds() override { return m_predsInNode.size() ;}
+  void computeUpred(const maternVec &, const maternVec &, const double &, const spatialcoor &, const double &, const std::string &) ;
 
-  void genRandomKnots(spatialcoor & dataCoor, const uint & numKnots, const gsl_rng * RNG) {
-    m_knotsCoor = spatialcoor(dataCoor.spatialCoords.rows(m_obsInNode),
-                              dataCoor.timeCoords.elem(m_obsInNode)) ;
+  void genKnotsOnCube(spatialcoor & dataCoor, int & numKnots, std::mt19937_64 & RNG, Eigen::Array<bool, Eigen::Dynamic, 1> &) {
+
+    m_knotsCoor = spatialcoor(rows(dataCoor.spatialCoords, m_obsInNode),
+                              elem(dataCoor.timeCoords, m_obsInNode)) ;
+
+    if (m_knotsThinningRate < 1) {
+      Eigen::ArrayXi indicesToSampleFrom = Eigen::VectorXi::LinSpaced(
+        m_obsInNode.size(),
+        0,
+        m_obsInNode.size() - 1
+      ).array() ;
+      m_keepKnotIndices = sampleWithoutReplacement(
+        indicesToSampleFrom,
+        ceil(double(m_obsInNode.size()) * m_knotsThinningRate),
+        true,
+        RNG
+      ) ;
+    }
+  }
+
+  void genRandomKnots(spatialcoor & dataCoor, int & numKnots, std::mt19937_64 & RNG) {
+    m_knotsCoor = spatialcoor(rows(dataCoor.spatialCoords, m_obsInNode),
+                              elem(dataCoor.timeCoords, m_obsInNode)) ;
+    if (m_knotsThinningRate < 1) {
+      Eigen::ArrayXi indicesToSampleFrom = Eigen::VectorXi::LinSpaced(
+        m_obsInNode.size(),
+        0,
+        m_obsInNode.size() - 1
+      ).array() ;
+      m_keepKnotIndices = sampleWithoutReplacement(
+        indicesToSampleFrom,
+        ceil(double(m_obsInNode.size()) * m_knotsThinningRate),
+        true,
+        RNG
+      ) ;
+    }
   }
 
   TipNode(const dimensions & dims, const uint & depth, TreeNode * parent,
-          const inputdata & dataset) {
+          const inputdata & dataset, const double & thinningRate) : m_knotsThinningRate(thinningRate) {
     baseInitialise(dims, depth, parent, dataset) ;
+    m_UmatList.resize(m_depth + 1) ;
     m_obsInNode = deriveObsInNode(dataset) ;
+    m_keepKnotIndices = Eigen::VectorXi::LinSpaced(GetNumObs(), 0, GetNumObs() - 1).array() ;
+  }
+
+  Eigen::ArrayXi GetKeepKnotIndices() override {
+    return m_keepKnotIndices ;
   }
 
 protected:
 
-  std::vector<arma::mat> GetBlist() {
-    return m_Wlist ;
-  };
-
-  arma::mat m_SigmaInverse ;
-  double m_uncorrSD ;
+  // double m_uncorrSD{ -1 } ;
+  mat m_Kinverse ;
 
   // Prediction components (should probably be freed once computations are done)
 
-  // void computeVpred(const arma::vec &, const spatialcoor &) ;
-  arma::mat GetLM() { return m_UmatList.at(m_depth) ;}
-  // void computeDeltaTildeParas(const inputdata &) ;
-  // void recurseBtilde(const uint, const uint) ;
-  arma::uvec m_predsInNode ;
-
-  // arma::mat m_V ;
-  std::vector<arma::mat> m_UmatList ;
-  // arma::mat m_covMatrixPredict ;
-  // GaussDistParas m_deltaTilde ;
-  // std::vector<std::vector<arma::mat>> m_Btilde ;
-  // std::vector<arma::mat> m_bPred ;
+  Eigen::ArrayXi m_predsInNode ;
+  std::vector<mat> m_UmatList ;
+  Eigen::ArrayXi m_keepKnotIndices ;
+  double m_knotsThinningRate{ 1 } ;
 };
 }

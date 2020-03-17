@@ -1,5 +1,3 @@
-// [[Rcpp::depends(BH)]]
-
 #include<math.h>
 #include<iostream>
 #include<stdlib.h>
@@ -8,141 +6,79 @@
 
 #include "helper.h"
 
-using namespace arma ;
 using namespace boost ;
 using namespace std ;
 using namespace math ;
+typedef Eigen::VectorXd vec ;
+typedef Eigen::MatrixXd mat ;
+typedef Eigen::SparseMatrix<double, Eigen::RowMajor> sp_mat ;
+typedef Eigen::VectorXi uvec ;
+typedef Eigen::MatrixXi umat ;
+typedef Eigen::Triplet<double> Triplet;
 
-Spatiotemprange sptimeDistance(const arma::vec & spCoor1, const double & time1, const arma::vec & spCoor2,
-                               const double & time2) {
-  arma::vec diffVec = spCoor1 - spCoor2 ;
-  arma::vec scaledVec = arma::pow(diffVec, 2) ;
-  double sp = arma::sum(scaledVec) ;
-  sp = std::sqrt(sp) ;
+// Other choices for method: "vincenty" and "euclidean"
+// The assumption is that spCoor1 is a vector of length 2 which lists longitude first, then latitude.
+Spatiotemprange sptimeDistance(const Eigen::ArrayXd & spCoor1, const double & time1, const Eigen::ArrayXd & spCoor2,
+                               const double & time2, const string & method) {
+  double sp = 0 ;
+  if (method == "haversine") {
+    sp = haversine_distance(spCoor1(0), spCoor1(1), spCoor2(0), spCoor2(1)) ; // Works under the assumption that coordinates are (longitude, latitude)
+  } else { // Input other
+    Rcpp::stop("For now, only Haversine distance is implemented. \n") ;
+    // sp = vincenty_distance(spCoor1(0), spCoor1(1), spCoor2(0), spCoor2(1)) ; // Same as for haversine
+  }
   double timeDiff = abs(time2 - time1) ;
-  // printf("Time coordinates and time difference: %.4e  %.4e %.4e \n", time1, time2, timeDiff) ;
+
   return Spatiotemprange(sp, timeDiff) ;
 };
 
-// Pretty slow. Should not be called too often.
+sp_mat createBlockMatrix(std::vector<mat *> listOfMatrices) {
 
-arma::sp_mat createBlockMatrix(std::vector<arma::mat *> listOfMatrices) {
-  uint numRows = 0 ;
-  uint numCols = 0 ;
-  for (auto & i : listOfMatrices) {
-    numRows += i->n_rows ;
-    numCols += i->n_cols ;
+  std::vector<Triplet> tripletList;
+
+  int offset = 0 ;
+
+  for (auto & aMatrix : listOfMatrices) {
+    for (uint i = 0; i < aMatrix->rows() ; i++) {
+      for (uint j = 0; j < aMatrix->cols(); j++) {
+        tripletList.push_back(Triplet(i + offset, j + offset, (*aMatrix)(i, j))) ;
+      }
+    }
+    offset += aMatrix->rows() ;
   }
-  arma::sp_mat X(numRows, numCols);
+  sp_mat X(offset, offset);
 
-  int idxRows = 0;
-  int idxCols = 0 ;
-
-  for(int i = 0; i < listOfMatrices.size(); i++) {
-    sp_mat dereferencedMatrix = conv_to<sp_mat>::from(*(listOfMatrices.at(i))) ;
-    X(idxRows, idxCols, arma::size(dereferencedMatrix.n_rows, dereferencedMatrix.n_cols)) = dereferencedMatrix ;
-    idxRows += dereferencedMatrix.n_rows ;
-    idxCols += dereferencedMatrix.n_cols ;
-  }
+  X.setFromTriplets(tripletList.begin(), tripletList.end()) ;
 
   return X ;
 }
 
-arma::uvec extractBlockIndices(const arma::sp_mat & symmSparseMatrix) {
-  std::vector<unsigned int> blockIndices ;
-  blockIndices.push_back(0) ;
+sp_mat createBlockMatrix(std::vector<mat> listOfMatrices) {
 
-  int posNextBlock = 0 ;
-  int newPosNextBlock = 0 ;
+  std::vector<Triplet> tripletList;
 
-  while (posNextBlock < symmSparseMatrix.n_cols) {
-    // printf("Processing block starting at %i ... \n", posNextBlock) ;
-    newPosNextBlock = posNextBlock + 1 ;
-    for (int i = posNextBlock; i < newPosNextBlock; i++) {
-      arma::vec myCol = arma::vec(symmSparseMatrix.col(i)) ;
-      arma::uvec nonZeroElements = arma::find(myCol) ;
-      arma::uword lastNonZero = nonZeroElements.tail(1)(0) ;
-      if ((lastNonZero + 1) > newPosNextBlock) {
-        newPosNextBlock = lastNonZero + 1;
-        // printf("Moving bound to %i... \n", newPosNextBlock) ;
+  int offset = 0 ;
+
+  for (auto & aMatrix : listOfMatrices) {
+    for (uint i = 0; i < aMatrix.rows() ; i++) {
+      for (uint j = 0; j < aMatrix.cols(); j++) {
+        tripletList.push_back(Triplet(i + offset, j + offset, aMatrix(i, j))) ;
       }
     }
-    posNextBlock = newPosNextBlock ;
-    blockIndices.push_back(posNextBlock) ;
+    offset += aMatrix.rows() ;
   }
-  return conv_to<arma::uvec>::from(blockIndices) ;
+  sp_mat X(offset, offset);
+
+  X.setFromTriplets(tripletList.begin(), tripletList.end()) ;
+
+  return X ;
 }
 
-// The break is below or to the right of each element. For example, putting rowBreak = 0 and colBreak = 0
-// corresponds to creating A11 1 x 1, A12 1 x n_col-1, A21 n_row - 1 x 1, A22 n_row - 1 x n_col - 1
-// mat invPDsymmMatrixWithSplit(const sp_mat & pdsymmMatrix, const int rowBreak, const int colBreak) {
-//   mat A11 = mat(pdsymmMatrix.submat(0, 0, rowBreak, colBreak)) ;
-//   mat A12 = mat(pdsymmMatrix.submat(0, colBreak + 1, rowBreak, pdsymmMatrix.n_cols - 1)) ;
-//   mat A21 = mat(pdsymmMatrix.submat(rowBreak + 1, 0, pdsymmMatrix.n_rows, colBreak)) ;
-//   mat A22 = mat(pdsymmMatrix.submat(rowBreak + 1, colBreak + 1, pdsymmMatrix.n_rows - 1, pdsymmMatrix.n_cols - 1)) ;
-//   // A11 and A22 are square and symmetrical. We check if they are block diagonal.
-//   bool blockDiagA11 = blockDiagCheck(A11) ;
-//   bool blockDiagA22 = blockDiagCheck(A22) ;
-//
-//   mat A11inv, A22inv ;
-//   if (blockDiagA11) {
-//     std::vector<mat> blocksInA11 = extractBlocks(sp_mat(A11)) ;
-//     A11inv = invertSymmBlockDiag(blocksInA11) ;
-//   } else {
-//     A11inv = inv_sympd(A11) ;
-//   }
-//   if (blockDiagA22) {
-//     std::vector<mat> blocksInA22 = extractBlocks(sp_mat(A22)) ;
-//     A22inv = invertSymmBlockDiag(blocksInA22) ;
-//   } else {
-//     A22inv = inv_sympd(A22) ;
-//   }
-//
-//   mat firstInvertedBlock = inv_sympd(A22 - trans(A12) * A11inv * A12) ;
-//   mat B11 = A11inv + A11inv * A12 * firstInvertedBlock * trans(A12) * A11inv ;
-//   mat B22 = A22inv + A22inv * trans(A12) * inv_sympd(A11 - A12 * A22inv * trans(A12)) * A12 * A22inv ;
-//   mat B12t = -A11inv * A12 * firstInvertedBlock ;
-//
-//   mat Bmatrix = join_rows(join_cols(B11, B12t), join_cols(trans(B12t), B22)) ;
-//   return Bmatrix ;
-// }
-
-// Pretty slow. Should not be called too often.
-
-// sp_mat invertSymmBlockDiag(const sp_mat & blockMatrix, const uvec & blockIndices) {
-//   uint diagElement = 0 ;
-//   uint numRows = blockIndices.at(blockIndices.size() - 1) ;
-//   sp_mat inverted(numRows, numRows) ;
-//   for (unsigned int i = 0; i < (blockIndices.size()-1); i++) {
-//     int blockSize = blockIndices.at(i+1) - blockIndices.at(i) ;
-//     inverted(diagElement, diagElement, size(blockSize, blockSize)) =
-//       inv_sympd(mat(blockMatrix(diagElement, diagElement, size(blockSize, blockSize)))) ;
-//     diagElement += blockSize ;
-//   }
-//
-//   return inverted ;
-// }
-
-// bool blockDiagCheck(const mat & matrixToCheck) {
-//   int newPosNextBlock = 1 ;
-//
-//   for (int i = 0; i < newPosNextBlock; i++) {
-//     arma::vec myCol = arma::vec(matrixToCheck.col(i)) ;
-//     arma::uvec nonZeroElements = arma::find(myCol) ;
-//     arma::uword lastNonZero = nonZeroElements.tail(1)(0) + 1 ;
-//     if (lastNonZero > newPosNextBlock) {
-//       newPosNextBlock = lastNonZero ;
-//     }
-//   }
-//   bool testResult = newPosNextBlock >= matrixToCheck.n_rows ;
-//   return testResult ;
-// }
-
-double logNormPDF(const arma::vec & x, const arma::vec & mu, const arma::vec & sd) {
+double logNormPDF(const vec & x, const vec & mu, const vec & sd) {
   double logValue = 0;
   for (unsigned int i = 0 ; i < x.size() ; i++) {
-    logValue += (-log(sd.at(i)) -
-      0.5 * pow((x.at(i) - mu.at(i)), 2)/pow(sd.at(i), 2)) ;
+    logValue += (-log(sd(i)) -
+      0.5 * pow((x(i) - mu(i)), 2)/pow(sd(i), 2)) ;
   }
   logValue += (-0.5*x.size()*(log(2) + log(PI))) ;
   return logValue ;
@@ -179,18 +115,67 @@ double maternCov(const double & distance, const double & rho,
   return maternValue ;
 }
 
-double logDetBlockMatrix(const arma::sp_mat & blockMatrix, const arma::uvec & blockIndices) {
-  // uvec blockIndices = extractBlockIndices(blockMatrix) ;
-  double logDeterminant = 0 ;
-  for (unsigned int i = 0 ; i < (blockIndices.size() - 1) ; i++) {
-    double value = 0 ;
-    double sign = 0 ;
-    unsigned int matSize = blockIndices.at(i+1) - blockIndices.at(i) ;
-    log_det(value, sign, mat(blockMatrix(blockIndices.at(i), blockIndices.at(i), size(matSize, matSize)))) ;
-    if (sign < 0) {
-      throw Rcpp::exception("Error logDetBlockMatrix: Log determinant sign should be positive. \n") ;
+Eigen::ArrayXi find(const Eigen::Ref<const Eigen::Array<bool, Eigen::Dynamic, 1>>& logicalVector) {
+  Eigen::ArrayXi outputVec(logicalVector.size()) ;
+  uint index = 0 ;
+  for (uint i = 0 ; i < logicalVector.size(); i++) {
+    if (logicalVector(i)) {
+      outputVec(index) = i ;
+      index += 1 ;
     }
-    logDeterminant += value ;
   }
-  return logDeterminant ;
+  return outputVec.segment(0, index) ;
 }
+
+// The following code was taken from https://gist.github.com/ed-flanagan/e6dc6b8d3383ef5a354a.
+
+/*
+ * Great-circle distance computational forumlas
+ *
+ * https://en.wikipedia.org/wiki/Great-circle_distance
+ */
+
+#ifndef _USE_MATH_DEFINES
+#define _USE_MATH_DEFINES
+#endif
+
+#ifndef M_PI
+#define M_PI    3.1415926535897932384626433832795
+#endif
+
+using namespace std;
+
+static const double earth_radius_km = 6371.0;
+
+
+// Obtained from https://www.geeksforgeeks.org/haversine-formula-to-find-distance-between-two-points-on-a-sphere/
+
+double haversine_distance(double lon1, double lat1,
+                        double lon2, double lat2)
+{
+  // distance between latitudes
+  // and longitudes
+  double dLat = (lat2 - lat1) *
+    M_PI / 180.0;
+  double dLon = (lon2 - lon1) *
+    M_PI / 180.0;
+
+  // convert to radians
+  lat1 = (lat1) * M_PI / 180.0;
+  lat2 = (lat2) * M_PI / 180.0;
+
+  // apply formulae
+  double a = pow(sin(dLat / 2), 2) +
+    pow(sin(dLon / 2), 2) *
+    cos(lat1) * cos(lat2);
+
+  double c = 2 * asin(sqrt(a));
+  return earth_radius_km * c;
+}
+
+double vincenty_distance(double longitude1, double latitude1, double longitude2, double latitude2)
+{
+  Rcpp::stop("Vincenty distance not implemented for now... \n") ;
+}
+
+
