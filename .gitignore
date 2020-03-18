@@ -1,0 +1,7 @@
+src/*.o
+src/RcppExports.cpp
+src/MRAinla.so
+R/RcppExports.R
+.RData
+.Rhistory
+.Rproj.user/
