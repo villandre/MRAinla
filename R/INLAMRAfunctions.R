@@ -703,7 +703,7 @@ INLAMRA.control <- function(Mlon = 1, Mlat = 1, Mtime = 1, randomSeed = 24, nugg
     rightBoundPos <- match(TRUE, DFvalues >= p[2])
     c(distFrame$x[[leftBoundPos]], distFrame$x[[rightBoundPos]])
   })
-  names(allDistValuesAsList) <- names(marginalMeans)
+  names(distValuesByFEpar) <- names(marginalMeans)
   boundsFrame <- as.data.frame(do.call("rbind", boundsByFEpar))
   colnames(boundsFrame) <- paste("CredInt_", round(p, 3)*100, "%", sep = "")
   list(boundsFrame = boundsFrame, distValues = distValuesByFEpar)
