@@ -31,9 +31,9 @@ plot.INLAMRA <- function(x, filename = NULL, type = c("joint", "training", "pred
   }
 
   if (control$plotRaster & (type != "marginals")) {
-    plottedObjects <- .plotRaster(x, control, filename = filename, type = type, ...)
+    plottedObjects <- .plotRaster(x, control, filename = filename, type = type, polygonsToOverlay = polygonsToOverlay, ...)
   } else if (type[[1]] != "marginals") {
-    plottedObjects <- .plotPoints(x, control, filename = filename, type = type, ...)
+    plottedObjects <- .plotPoints(x, control, filename = filename, type = type, polygonsToOverlay = polygonsToOverlay, ...)
   } else {
     plottedObjects <- .plotMarginals(output = x, filename = filename, device = control$graphicsEngine, ...)
   }
