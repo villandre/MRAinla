@@ -671,13 +671,13 @@ INLAMRA.control <- function(Mlon = 1, Mlat = 1, Mtime = 1, randomSeed = 24, nugg
     .adaptiveIS(x = secondMomentVec, ISweights = exp(logISweightVector), phaseVector = adaptiveISphaseVector)
   })
   marginalSDs <- sqrt(marginalSecondMoments - marginalMeans^2)
-  credIntFrameAndDistValues <- ComputeFEdistValuesAndCredInts(control$credIntervalPercs, hyperparaList, marginalMeans, marginalSDs)
-  outputFrame <- cbind(data.frame(Mean = unname(marginalMeans), StdDev = marginalSDs), credIntFrame$boundsFrame)
+  credIntFrameAndDistValues <- .ComputeFEdistValuesAndCredInts(control$credIntervalPercs, hyperparaList, marginalMeans, marginalSDs)
+  outputFrame <- cbind(data.frame(Mean = unname(marginalMeans), StdDev = marginalSDs), credIntFrameAndDistValues$boundsFrame)
   rownames(outputFrame) <- covNames
   list(outputFrame = outputFrame, distValues = credIntFrameAndDistValues$distValues)
 }
 
-ComputeFEdistValuesAndCredInts <- function(p = c(0.025, 0.975), hyperparaList, marginalMeans, marginalSDs) {
+.ComputeFEdistValuesAndCredInts <- function(p = c(0.025, 0.975), hyperparaList, marginalMeans, marginalSDs) {
   valuesRanges <- lapply(1:length(marginalMeans), function(x) {
     c(-3 * marginalSDs[[x]], 3 * marginalSDs[[x]]) + marginalMeans[[x]]
   })
