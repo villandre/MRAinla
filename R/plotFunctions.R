@@ -66,10 +66,10 @@ plot.INLAMRA <- function(x, filename = NULL, type = c("joint", "training", "pred
   }
 
   numPlotsPerLine <- ceiling(sqrt(length(rastersToPlot)))
-  par(mfrow = c(numPlotsPerLine, numPlotsPerLine), mai = rep(1.5, 4))
   if (!is.null(filename)) {
     control$graphicsEngine(filename = filename, ...)
   }
+  layout(matrix(1:(numPlotsPerLine^2), nrow = numPlotsPerLine, ncol = numPlotsPerLine, byrow = TRUE))
   for (i in seq_along(rastersToPlot)) {
     raster::plot(rastersToPlot[[i]], zlim = colorRange)
     raster::plot(rastersToPlot[[i]], legend.only = TRUE, legend.width = 5, axis.args = list(cex.axis = 4), zlim = colorRange)
@@ -154,10 +154,11 @@ plot.INLAMRA <- function(x, filename = NULL, type = c("joint", "training", "pred
   }
 
   numPlotsPerLine <- ceiling(sqrt(length(pointsToPlotList)))
-  par(mfrow = c(numPlotsPerLine, numPlotsPerLine), mai = rep(1.5, 4))
+
   if (!is.null(filename)) {
     control$graphicsEngine(filename = filename, ...)
   }
+  layout(matrix(1:(numPlotsPerLine^2), nrow = numPlotsPerLine, ncol = numPlotsPerLine, byrow = TRUE))
   for (i in seq_along(pointsToPlotList)) {
     sp::plot(pointsToPlotList[[i]], zlim = colorRange)
     sp::plot(pointsToPlotList[[i]], legend.only = TRUE, legend.width = 5, axis.args = list(cex.axis = 4), zlim = colorRange)
