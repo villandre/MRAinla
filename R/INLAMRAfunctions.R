@@ -18,7 +18,7 @@
 #' @param errorSDlist List with two elements: a starting value for the *uncorrelated error standard deviation* hyperparameter, and a length-two vector giving the mean and standard deviation of the associated normal hyperprior (second element must be omitted if hyperparameter is fixed)
 #' @param fixedEffSDlist List with two elements: a starting value for the *uncorrelated fixed effects standard deviation* hyperparameter, and a length-two vector giving the mean and standard deviation of the associated normal hyperprior (second element must be omitted if hyperparameter is fixed)
 #' @param FEmuVec Vector with the mean value of the priors for the fixed effects. Its length must match the number of columns in covariateFrame
-#' @param control See ?INLAMRA.control.
+#' @param control List of control parameters. See ?INLAMRA.control.
 #'
 #' @details Some of the control parameters should be tuned to ensure better computational or predictive performance, or to make it possible to stop and resume model fitting. See INLAMRA.control.
 #'
@@ -36,8 +36,12 @@
 #' }
 #' @export
 
-INLAMRA <- function(responseVec, covariateFrame = NULL, spatialCoordMat, timePOSIXorNumericVec, predCovariateFrame = NULL, predSpatialCoordMat = NULL, predTimePOSIXorNumericVec = NULL, sinusoidalProjection = FALSE,  spatialRangeList = NULL, spatialSmoothnessList = list(start = log(1.5)), timeRangeList = NULL, timeSmoothnessList = list(start = log(0.5)), scaleList = list(start = 0, hyperpars = c(mu = 0, sigma = 2)), errorSDlist = list(start = 0), fixedEffSDlist = list(start = log(10)), FEmuVec = rep(0, ncol(covariateFrame) + 1), control = INLAMRA.control()) {
-
+INLAMRA <- function(responseVec, covariateFrame = NULL, spatialCoordMat, timePOSIXorNumericVec, predCovariateFrame = NULL, predSpatialCoordMat = NULL, predTimePOSIXorNumericVec = NULL, sinusoidalProjection = FALSE,  spatialRangeList = NULL, spatialSmoothnessList = list(start = log(1.5)), timeRangeList = NULL, timeSmoothnessList = list(start = log(0.5)), scaleList = list(start = 0, hyperpars = c(mu = 0, sigma = 2)), errorSDlist = list(start = 0), fixedEffSDlist = list(start = log(10)), FEmuVec = rep(0, ncol(covariateFrame) + 1), control = NULL) {
+  if (is.null(control)) {
+    control <- INLAMRA.control()
+  } else {
+    control <- do.call(INLAMRA.control, args = control)
+  }
   .checkInputConsistency(responseVec, covariateFrame, spatialCoordMat, timePOSIXorNumericVec, predCovariateFrame, predSpatialCoordMat, predTimePOSIXorNumericVec)
 
   noPredictionFlag <- is.null(predSpatialCoordMat) | is.null(predTimePOSIXorNumericVec)

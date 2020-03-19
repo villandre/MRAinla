@@ -7,7 +7,7 @@
 #' @param type Character. The default, "joint" creates a grid of plots, one plot per time value, showing the training data, and the training data incremented with the predictions. ""SD" creates a grid of plots showing standard deviations for predictions. "trainingData" and "predictions" produce a similar grid with only the training data and predictions, respectively. "pars" produces plots of the marginal posterior densities for the parameters and hyperparameters.
 #' @param polygonsToOverlay Optional SpatialPolygons object. Those polygons, e.g. regional boundaries, are added to each prediction map.
 #' @param ... Arguments for the graphics engine, e.g. jpeg. 'width' and 'height' should be especially helpful.
-#' @param control Output of `plot.control`. See ?plot.control.
+#' @param control List of control options. See ?plot.control.
 #'
 #' @details The function produces a grid of rasters by default, cf. plot.control, one per distinct time value. If your data are not spaced regularly, you can plot the result as points instead by setting `control = plot.control(plotRaster = FALSE)`.
 #'
@@ -20,7 +20,12 @@
 #' }
 #' @export
 #'
-plot.INLAMRA <- function(x, filename = NULL, type = c("joint", "training", "predictions", "SD", "marginals"), polygonsToOverlay = NULL, control = plot.control(), ...) {
+plot.INLAMRA <- function(x, filename = NULL, type = c("joint", "training", "predictions", "SD", "marginals"), polygonsToOverlay = NULL, control = NULL, ...) {
+  if (is.null(control)) {
+    control <- plot.control()
+  } else {
+    control <- do.call(plot.control, args = control)
+  }
   type <- type[[1]]
 
   .checkPlotInputConsistency(x, type)
@@ -71,10 +76,10 @@ plot.INLAMRA <- function(x, filename = NULL, type = c("joint", "training", "pred
   }
   layout(matrix(1:(numPlotsPerLine^2), nrow = numPlotsPerLine, ncol = numPlotsPerLine, byrow = TRUE))
   for (i in seq_along(rastersToPlot)) {
-    raster::plot(rastersToPlot[[i]], zlim = colorRange, interpolate = FALSE, useRaster = FALSE, legend = FALSE)
+    do.call(raster::plot, args = c(list(rastersToPlot[[i]], zlim = colorRange, legend = FALSE), control$controlForRasterPlot))
     raster::plot(rastersToPlot[[i]], legend.only = TRUE, legend.width = 4, axis.args = list(cex.axis = 3), zlim = colorRange)
     if (!is.na(raster::crs(rastersToPlot[[i]]))) {
-      mapmisc::scaleBar(crs = raster::crs(rastersToPlot[[i]]), pos = "topleft", cex = 2, pt.cex = 1.2, title.cex = 1.2)
+      do.call(mapmisc::scaleBar, args = c(list(crs = raster::crs(rastersToPlot[[i]])), control$controlForScaleBar))
     }
     if (!is.null(polygonsToOverlay)) {
       raster::plot(polygonsToOverlay, add = TRUE)
@@ -110,9 +115,9 @@ plot.INLAMRA <- function(x, filename = NULL, type = c("joint", "training", "pred
     sapply(c(2,1),  FUN = findNrowsNcolsByTimeIndex, timeValue = timeValue)
   })
 
-  control$rasterNrows <- max(proposedNrowsNcolsByTime[1, ])  # The multiplier is there to remove white lines in the raster when the number of rows is not estimated perfectly.
-  control$rasterNcols <- max(proposedNrowsNcolsByTime[2, ])  # The multiplier is there to remove white lines in the raster when the number of rows is not estimated perfectly.
-  cat("Trying to infer the ideal number of cells in the raster by rounding spatial coordinates at", control$numDigitRound,"digits to eliminate the spatial jittering created by INLAMRA. Obtained", control$rasterNrows, "rows and", control$rasterNcols, "columns. If the raster looks bad in the end, set these values manually with plot.control(). If your data are not gridded, set plotRaster to FALSE in plot.control() instead.", sep = " ")
+  control$rasterNrows <- floor(max(proposedNrowsNcolsByTime[1, ]) * 0.9)  # The multiplier is there to remove white lines in the raster when the number of rows is not estimated perfectly.
+  control$rasterNcols <- floor(max(proposedNrowsNcolsByTime[2, ]) * 0.9)  # The multiplier is there to remove white lines in the raster when the number of rows is not estimated perfectly.
+  cat("Trying to infer the ideal number of cells in the raster by rounding spatial coordinates at", control$numDigitRound,"digits to eliminate the spatial jittering created by INLAMRA. Obtained", control$rasterNrows, "rows and", control$rasterNcols, "columns. If the raster looks bad in the end, set these values manually with plot.control(). If your data are not gridded, set plotRaster to FALSE in plot.control() instead. \n", sep = " ")
   control
 }
 
@@ -192,8 +197,8 @@ plot.INLAMRA <- function(x, filename = NULL, type = c("joint", "training", "pred
   lapply(testDays, getPoints)
 }
 
-plot.control <- function(trim = FALSE, fontScaling = 1, plotRaster = TRUE, rasterNrows = NULL, rasterNcols = NULL, numDigitRound = 5, graphicsEngine = jpeg, matchColours = FALSE) {
-  list(trim = trim, fontScaling = fontScaling, plotRaster = plotRaster, rasterNrows = rasterNrows, rasterNcols = rasterNcols, numDigitRound = numDigitRound, graphicsEngine = graphicsEngine, matchColours = matchColours)
+plot.control <- function(trim = FALSE, fontScaling = 1, plotRaster = TRUE, rasterNrows = NULL, rasterNcols = NULL, numDigitRound = 5, graphicsEngine = jpeg, matchColours = FALSE, controlForScaleBar = NULL, controlForRasterPlot = NULL) {
+  list(trim = trim, fontScaling = fontScaling, plotRaster = plotRaster, rasterNrows = rasterNrows, rasterNcols = rasterNcols, numDigitRound = numDigitRound, graphicsEngine = graphicsEngine, matchColours = matchColours, controlForScaleBar = controlForScaleBar, controlForRasterPlot = controlForRasterPlot)
 }
 
 .plotMarginals <- function(output, numValues = 50, device = jpeg, filename, ...) {
