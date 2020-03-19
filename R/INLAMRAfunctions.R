@@ -702,7 +702,7 @@ ComputeFEdistValuesAndCredInts <- function(p = c(0.025, 0.975), hyperparaList, m
     c(distFrame$x[[leftBoundPos]], distFrame$x[[rightBoundPos]])
   })
   allDistValuesAsList <- lapply(1:length(marginalMeans), FUN = function(index) {
-    outputDataFrame <- data.frame(x = valuesFrame[[index]], y = distValuesByFEpar[[index]])
+    outputDataFrame <- data.frame(x = valuesRanges[[index]], y = distValuesByFEpar[[index]])
     colnames(outputDataFrame)[[1]] <- names(marginalMeans)[[index]]
   })
   names(allDistValuesAsList) <- names(marginalMeans)
