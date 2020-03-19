@@ -132,7 +132,7 @@ INLAMRA <- function(responseVec, covariateFrame = NULL, spatialCoordMat, timePOS
 
   keepHyperNames <- names(unlist(hyperStart))
   dropHyperNames <- names(unlist(fixedHyperValues))
-  outputList <- list(hyperMarginalMoments = hyperMarginalMoments$paraMoments[keepHyperNames, ], FEmarginalMoments = FEmarginalMoments, psiAndMargDistMatrix = hyperMarginalMoments$psiAndMargDistMatrix[ , !(colnames(hyperMarginalMoments$psiAndMargDistMatrix) %in% dropHyperNames)])
+  outputList <- list(hyperMarginalMoments = hyperMarginalMoments$paraMoments[keepHyperNames, ], FEmarginalMoments = FEmarginalMoments$outputFrame, psiAndMargDistMatrix = hyperMarginalMoments$psiAndMargDistMatrix[ , !(colnames(hyperMarginalMoments$psiAndMargDistMatrix) %in% dropHyperNames)], FEmargDistValues = FEmarginalMoments$distValues)
 
   if (!noPredictionFlag) {
     cat("Computing prediction moments... \n")
@@ -174,6 +174,8 @@ INLAMRA <- function(responseVec, covariateFrame = NULL, spatialCoordMat, timePOS
 #' @param spaceJitterMax The maximum jittering to apply to longitude/ latitude coordinates. Takes value 1e-5 by default. The method might run into numerical difficulties if longitude/latitude coordinates are replicated. The jittering ensures that it does not happen. Putting this value at 0 disables the spatial jittering, which is not recommended.
 #' @param timeJitterMaxInDecimalDays The maximum jittering to apply to time values, in days. Default value is 1/864000000 (1e-5 seconds). This is used to make it possible to evenly split the data into subregions at any depth. A balanced distribution of observations in the different regions makes it easier to control the method's computational performance. Putting this value at 0 disables the time jittering, which is not recommended.
 #' @param saveData Logical. Indicates whether data used to fit the model and prediction dataset (if applicable) should be bundled with the output, which is helpful for plotting. Can be disabled if provided datasets are huge and memory is limited.
+#' @param fileToSaveOptOutput Character. An optional file name indicating where the optimiser's output should be saved. Specifying it ensures that INLAMRA can resume after the optimisation step.
+#' @param folderToSaveISpoints Character. An optional *folder* name indicating where the importance sampling weight values should be saved. Specifying it ensures that INLAMRA can properly resume at the IS iteration it had reached before being interrupted.
 #'
 #' @details Some of the control parameters should be tuned to ensure better computational or predictive performance: Mlon, Mlat, Mtime, numKnotsRes0, J, numValuesForIS, numIterOptim, tipKnotsThinningRate.
 #' Other control parameters make it possible to stop an INLAMRA run at any point and resume close to where the algorithm initially stopped, or produce an intermediate results based on an incomplete run: fileToSaveOptOutput, folderToSaveISpoints, IScompleted.
@@ -182,7 +184,8 @@ INLAMRA <- function(responseVec, covariateFrame = NULL, spatialCoordMat, timePOS
 #'
 #' @return A list with all control parameters.
 #' @examples
-#' \dontrun{#'
+#' \dontrun{
+#' INLAMRA.control(Mlon = 2, Mlat = 2, Mtime = 2)
 #' }
 #' @export
 
@@ -660,6 +663,7 @@ INLAMRA.control <- function(Mlon = 1, Mlat = 1, Mtime = 1, randomSeed = 24, nugg
     meanVector <- sapply(hyperparaList, function(x) x$FullCondMean[[paraIndex]])
     .adaptiveIS(x = meanVector, ISweights = exp(logISweightVector), phaseVector = adaptiveISphaseVector)
   })
+  names(marginalMeans) <- covNames
   marginalSecondMoments <- sapply(1:length(covNames), function(paraIndex) {
     meanVector <- sapply(hyperparaList, function(x) x$FullCondMean[[paraIndex]])
     sdVector <- sapply(hyperparaList, function(x) x$FullCondSDs[[paraIndex]])
@@ -667,13 +671,13 @@ INLAMRA.control <- function(Mlon = 1, Mlat = 1, Mtime = 1, randomSeed = 24, nugg
     .adaptiveIS(x = secondMomentVec, ISweights = exp(logISweightVector), phaseVector = adaptiveISphaseVector)
   })
   marginalSDs <- sqrt(marginalSecondMoments - marginalMeans^2)
-  credIntFrame <- ComputeFEcredInts(control$credIntervalPercs, hyperparaList, marginalMeans, marginalSDs)
-  outputFrame <- cbind(data.frame(Mean = marginalMeans, StdDev = marginalSDs), credIntFrame)
+  credIntFrameAndDistValues <- ComputeFEdistValuesAndCredInts(control$credIntervalPercs, hyperparaList, marginalMeans, marginalSDs)
+  outputFrame <- cbind(data.frame(Mean = unname(marginalMeans), StdDev = marginalSDs), credIntFrame$boundsFrame)
   rownames(outputFrame) <- covNames
-  outputFrame
+  list(outputFrame = outputFrame, distValues = credIntFrameAndDistValues$distValues)
 }
 
-ComputeFEcredInts <- function(p = c(0.025, 0.975), hyperparaList, marginalMeans, marginalSDs) {
+ComputeFEdistValuesAndCredInts <- function(p = c(0.025, 0.975), hyperparaList, marginalMeans, marginalSDs) {
   valuesRanges <- lapply(1:length(marginalMeans), function(x) {
     c(-3 * marginalSDs[[x]], 3 * marginalSDs[[x]]) + marginalMeans[[x]]
   })
@@ -697,9 +701,14 @@ ComputeFEcredInts <- function(p = c(0.025, 0.975), hyperparaList, marginalMeans,
     rightBoundPos <- match(TRUE, DFvalues >= p[2])
     c(distFrame$x[[leftBoundPos]], distFrame$x[[rightBoundPos]])
   })
+  allDistValuesAsList <- lapply(1:length(marginalMeans), FUN = function(index) {
+    outputDataFrame <- data.frame(x = valuesFrame[[index]], y = distValuesByFEpar[[index]])
+    colnames(outputDataFrame)[[1]] <- names(marginalMeans)[[index]]
+  })
+  names(allDistValuesAsList) <- names(marginalMeans)
   boundsFrame <- as.data.frame(do.call("rbind", boundsByFEpar))
   colnames(boundsFrame) <- paste("CredInt_", round(p, 3)*100, "%", sep = "")
-  boundsFrame
+  list(boundsFrame = boundsFrame, distValues = allDistValuesAsList)
 }
 
 .ComputeKrigingMoments <- function(hyperparaList, treePointer, control) {

@@ -1,4 +1,26 @@
-plot.INLAMRA <- function(x, filename = NULL, type = c("joint", "training", "predictions", "SD", "hyperpars"), polygonsToOverlay = NULL, control = plot.control()) {
+#' Plots the output from INLAMRA
+#'
+#' Plots the output from INLAMRA. It prints the predictions by default. Note that this is only possible if the data were saved in the output (which is the case by default).
+#'
+#' @param x INLAMRA object. Created after calling `INLAMRA`
+#' @param filename Character. File in which to save the output.
+#' @param type Character. The default, "joint" creates a grid of plots, one plot per time value, showing the training data, and the training data incremented with the predictions. ""SD" creates a grid of plots showing standard deviations for predictions. "trainingData" and "predictions" produce a similar grid with only the training data and predictions, respectively. "pars" produces plots of the marginal posterior densities for the parameters and hyperparameters.
+#' @param polygonsToOverlay Optional SpatialPolygons object. Those polygons, e.g. regional boundaries, are added to each prediction map.
+#' @param ... Arguments for the graphics engine, e.g. jpeg. 'width' and 'height' should be especially helpful.
+#' @param control Output of `plot.control`. See ?plot.control.
+#'
+#' @details The function produces a grid of rasters by default, cf. plot.control, one per distinct time value. If your data are not spaced regularly, you can plot the result as points instead by setting `control = plot.control(plotRaster = FALSE)`.
+#'
+#'
+#' @return A list of the plotted raster/SpatialPoints objects if type is anything but "pars"; a list of matching x/y values for the plotted (hyper)parameter posteriors otherwise.
+#'
+#' @examples
+#' \dontrun{
+#' INPUT_AN_EXAMPLE()
+#' }
+#' @export
+#'
+plot.INLAMRA <- function(x, filename = NULL, type = c("joint", "training", "predictions", "SD", "marginals"), polygonsToOverlay = NULL, control = plot.control(), ...) {
   type <- type[[1]]
 
   .checkPlotInputConsistency(x, type)
@@ -8,33 +30,30 @@ plot.INLAMRA <- function(x, filename = NULL, type = c("joint", "training", "pred
     x$predMoments$Mean <- replace(x$predMoments$Mean, which(x$predMoments$Mean < min(x$data$spObject@data$y)), min(x$data$spObject@data$y))
   }
 
-  if (control$plotRaster & (type != "hyperpars")) {
-    .plotRaster(x, control, type = type)
-  } else if (type[[1]] != "hyperpars") {
-    .plotPoints(x, control, type = type)
+  if (control$plotRaster & (type != "marginals")) {
+    plottedObjects <- .plotRaster(x, control, type = type, ...)
+  } else if (type[[1]] != "marginals") {
+    plottedObjects <- .plotPoints(x, control, type = type, ...)
   } else {
-    .plotHyperparMarginal(output = x, filename = filename, device = control$graphicsDevice, width = control$width, height = control$height)
+    plottedObjects <- .plotMarginals(output = x, filename = filename, device = control$graphicsDevice, width = control$width, height = control$height, ...)
   }
+  plottedObjects
 }
 
 .checkPlotInputConsistency <- function(INLAMRAoutput, type) {
-  if (!(type %in% c("training", "predictions", "joint", "SD", "hyperpars"))) {
+  if (!(type %in% c("training", "predictions", "joint", "SD", "marginals"))) {
     stop("type argument must be one of training, predictions, joint, SD.")
   }
-  if (!(type == "hyperpars") & is.null(INLAMRAoutput$predData)) {
+  if (!(type == "marginals") & is.null(INLAMRAoutput$predData)) {
     stop("Requested to get prediction graphs. If no prediction data were provided, only marginal hyperparameter posterior graphs are available. Please set type to 'hyperpars'.")
   }
   invisible(0)
 }
 
-.plotRaster <- function(INLAMRAoutput, control, filename, polygonsToOverlay, type) {
+.plotRaster <- function(INLAMRAoutput, control, filename, polygonsToOverlay, type, ...) {
   testDays <- sort(unique(INLAMRAoutput$predData$time))
   control <- .SetRasterSizes(control, INLAMRAoutput, type = type)
   rasterListPerDay <- lapply(testDays, .rasterizeTrainingTestJointSD, INLAMRAoutput = INLAMRAoutput, control = control)
-
-  if (!is.null(filename)) {
-    control$graphicsEngine(filename, width = control$width, height = control$height)
-  }
 
   rastersToPlot <- lapply(rasterListPerDay, function(x) x[[type]])
   rasterRanges <- sapply(rastersToPlot, function(x) range(raster::values(x)))
@@ -48,6 +67,9 @@ plot.INLAMRA <- function(x, filename = NULL, type = c("joint", "training", "pred
 
   numPlotsPerLine <- ceiling(sqrt(length(rastersToPlot)))
   par(mfrow = c(numPlotsPerLine, numPlotsPerLine), mai = rep(1.5, 4))
+  if (!is.null(filename)) {
+    control$graphicsEngine(filename = filename, ...)
+  }
   for (i in seq_along(rastersToPlot)) {
     raster::plot(rastersToPlot[[i]], zlim = colorRange)
     raster::plot(rastersToPlot[[i]], legend.only = TRUE, legend.width = 5, axis.args = list(cex.axis = 4), zlim = colorRange)
@@ -59,7 +81,7 @@ plot.INLAMRA <- function(x, filename = NULL, type = c("joint", "training", "pred
   if (!is.null(filename)) {
     dev.off()
   }
-  invisible(0)
+  rastersToPlot
 }
 
 .SetRasterSizes <- function(control, INLAMRAoutput, type) {
@@ -118,7 +140,7 @@ plot.INLAMRA <- function(x, filename = NULL, type = c("joint", "training", "pred
   rasterList
 }
 
-.plotPoints <- function(INLAMRAoutput, control, filename, polygonsToOverlay, type) {
+.plotPoints <- function(INLAMRAoutput, control, filename, polygonsToOverlay, type, ...) {
   pointsPerDayList <- .getPointsPerDay(INLAMRAoutput = INLAMRAoutput, control = control)
   pointsToPlotList <- lapply(pointsPerDayList, function(x) x[[type]])
 
@@ -133,7 +155,9 @@ plot.INLAMRA <- function(x, filename = NULL, type = c("joint", "training", "pred
 
   numPlotsPerLine <- ceiling(sqrt(length(pointsToPlotList)))
   par(mfrow = c(numPlotsPerLine, numPlotsPerLine), mai = rep(1.5, 4))
-
+  if (!is.null(filename)) {
+    control$graphicsEngine(filename = filename, ...)
+  }
   for (i in seq_along(pointsToPlotList)) {
     sp::plot(pointsToPlotList[[i]], zlim = colorRange)
     sp::plot(pointsToPlotList[[i]], legend.only = TRUE, legend.width = 5, axis.args = list(cex.axis = 4), zlim = colorRange)
@@ -145,7 +169,7 @@ plot.INLAMRA <- function(x, filename = NULL, type = c("joint", "training", "pred
   if (!is.null(filename)) {
     dev.off()
   }
-  invisible(0)
+  pointsToPlotList
 }
 
 .getPointsPerDay <- function(INLAMRAoutput, control) {
@@ -165,15 +189,15 @@ plot.INLAMRA <- function(x, filename = NULL, type = c("joint", "training", "pred
   lapply(testDays, getPoints)
 }
 
-plot.control <- function(trim = FALSE, fontScaling = 1, width = 1000, height = width, plotRaster = TRUE, rasterNrows = NULL, rasterNcols = NULL, numDigitRound = 5, graphicsEngine = tiff, matchColours = FALSE) {
+plot.control <- function(trim = FALSE, fontScaling = 1, plotRaster = TRUE, rasterNrows = NULL, rasterNcols = NULL, numDigitRound = 5, graphicsEngine = jpeg, matchColours = FALSE) {
   list(trim = trim, fontScaling = fontScaling, width = width, height = height, plotRaster = plotRaster, rasterNrows = rasterNrows, rasterNcols = rasterNcols, numDigitRound = numDigitRound, graphicsEngine = graphicsEngine, matchColours = matchColours)
 }
 
-.plotHyperparMarginal <- function(output, numValues = 50, device = jpeg, filename, ...) {
+.plotMarginals <- function(output, numValues = 50, device = jpeg, filename, ...) {
   plotValuesList <- function(parameterName) {
-    hyperparSkewness <- output$hyperMarginalMoments[parameterName, "Skewness"]
-    hyperparSD <- output$hyperMarginalMoments[parameterName, "StdDev"]
-    hyperparMean <- output$hyperMarginalMoments[parameterName, "Mean"]
+    parSkewness <- output$hyperMarginalMoments[parameterName, "Skewness"]
+    parSD <- output$hyperMarginalMoments[parameterName, "StdDev"]
+    parMean <- output$hyperMarginalMoments[parameterName, "Mean"]
     if (!(is.na(hyperparSD) | (hyperparSD > 0))) {
       credIntBounds <- .ComputeCredIntervalSkewNorm(c(0.025, 0.975), meanValue = hyperparMean, sdValue = hyperparSD, skewnessValue = hyperparSkewness)
     } else {
@@ -185,7 +209,8 @@ plot.control <- function(trim = FALSE, fontScaling = 1, width = 1000, height = w
     colnames(plotFrame)[[1]] <- parameterName
     plotFrame
   }
-  plotFrames <- lapply(rownames(output$hyperMarginalMoments), plotValuesList)
+  hyperPlotFrames <- lapply(rownames(output$hyperMarginalMoments), plotValuesList)
+  plotFrames <- c(hyperPlotFrames, output$FEmargDistValues)
   par(mfrow = c(ceiling(sqrt(length(plotFrames))), ceiling(sqrt(length(plotFrames)))))
   device(file = filename, ...)
   for (i in seq_along(plotFrames)) {
