@@ -704,6 +704,7 @@ INLAMRA.control <- function(Mlon = 1, Mlat = 1, Mtime = 1, randomSeed = 24, nugg
   allDistValuesAsList <- lapply(1:length(marginalMeans), FUN = function(index) {
     outputDataFrame <- data.frame(x = valuesRanges[[index]], y = distValuesByFEpar[[index]])
     colnames(outputDataFrame)[[1]] <- names(marginalMeans)[[index]]
+    outputDataFrame
   })
   names(allDistValuesAsList) <- names(marginalMeans)
   boundsFrame <- as.data.frame(do.call("rbind", boundsByFEpar))
