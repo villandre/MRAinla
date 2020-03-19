@@ -691,11 +691,11 @@ INLAMRA.control <- function(Mlon = 1, Mlat = 1, Mtime = 1, randomSeed = 24, nugg
       dnorm(valuesToConsider, mean = hyperparaListElement$FullCondMean[[FEindex]], sd = hyperparaListElement$FullCondSDs[[FEindex]]) * exp(hyperparaListElement$logISweight)
     })
     summedValues <- Reduce("+", distValuesByISiter)
-    data.frame(x = valuesToConsider, values = rowSums(distValuesByISiter))
+    data.frame(x = valuesToConsider, y = rowSums(distValuesByISiter))
   }
   distValuesByFEpar <- lapply(seq_along(marginalMeans), funToGetDistValuesByFEpar)
   boundsByFEpar <- lapply(distValuesByFEpar, FUN = function(distFrame) {
-    distributionValuesNormalised <- distFrame$values/sum(distFrame$values)
+    distributionValuesNormalised <- distFrame$y/sum(distFrame$y)
     DFvalues <- cumsum(distributionValuesNormalised)
     leftBoundPos <- match(TRUE, DFvalues >= p[1])
     rightBoundPos <- match(TRUE, DFvalues >= p[2])

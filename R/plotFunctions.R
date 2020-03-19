@@ -190,14 +190,14 @@ plot.INLAMRA <- function(x, filename = NULL, type = c("joint", "training", "pred
 }
 
 plot.control <- function(trim = FALSE, fontScaling = 1, plotRaster = TRUE, rasterNrows = NULL, rasterNcols = NULL, numDigitRound = 5, graphicsEngine = jpeg, matchColours = FALSE) {
-  list(trim = trim, fontScaling = fontScaling, width = width, height = height, plotRaster = plotRaster, rasterNrows = rasterNrows, rasterNcols = rasterNcols, numDigitRound = numDigitRound, graphicsEngine = graphicsEngine, matchColours = matchColours)
+  list(trim = trim, fontScaling = fontScaling, plotRaster = plotRaster, rasterNrows = rasterNrows, rasterNcols = rasterNcols, numDigitRound = numDigitRound, graphicsEngine = graphicsEngine, matchColours = matchColours)
 }
 
 .plotMarginals <- function(output, numValues = 50, device = jpeg, filename, ...) {
   plotValuesList <- function(parameterName) {
-    parSkewness <- output$hyperMarginalMoments[parameterName, "Skewness"]
-    parSD <- output$hyperMarginalMoments[parameterName, "StdDev"]
-    parMean <- output$hyperMarginalMoments[parameterName, "Mean"]
+    hyperparSkewness <- output$hyperMarginalMoments[parameterName, "Skewness"]
+    hyperparSD <- output$hyperMarginalMoments[parameterName, "StdDev"]
+    hyperparMean <- output$hyperMarginalMoments[parameterName, "Mean"]
     if (!(is.na(hyperparSD) | (hyperparSD > 0))) {
       credIntBounds <- .ComputeCredIntervalSkewNorm(c(0.025, 0.975), meanValue = hyperparMean, sdValue = hyperparSD, skewnessValue = hyperparSkewness)
     } else {
@@ -205,16 +205,15 @@ plot.control <- function(trim = FALSE, fontScaling = 1, plotRaster = TRUE, raste
     }
     xValues <- seq(from = credIntBounds$bounds[1], to = credIntBounds$bounds[2], length.out = numValues)
     yValues <- sn::dsn(x = xValues, xi = credIntBounds$xi, omega = credIntBounds$omega, alpha = credIntBounds$alpha)
-    plotFrame <- data.frame(x = xValues, Value = yValues)
-    colnames(plotFrame)[[1]] <- parameterName
-    plotFrame
+    data.frame(x = xValues, y = yValues)
   }
   hyperPlotFrames <- lapply(rownames(output$hyperMarginalMoments), plotValuesList)
+  names(hyperPlotFrames) <- rownames(output$hyperMarginalMoments)
   plotFrames <- c(hyperPlotFrames, output$FEmargDistValues)
   par(mfrow = c(ceiling(sqrt(length(plotFrames))), ceiling(sqrt(length(plotFrames)))))
   device(file = filename, ...)
   for (i in seq_along(plotFrames)) {
-    plot(x = plotFrames[[i]][ , 1], y = plotFrames[[i]]$Value, xlab = colnames(plotFrames[[i]])[[1]], ylab = "Value", type = "l")
+    plot(x = plotFrames[[i]]$x, y = plotFrames[[i]]$y, xlab = names(plotFrames)[[i]], ylab = "Value", type = "l")
   }
   dev.off()
 }
