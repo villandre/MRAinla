@@ -108,8 +108,8 @@ plot.INLAMRA <- function(x, filename = NULL, type = c("joint", "training", "pred
     sapply(c(2,1),  FUN = findNrowsNcolsByTimeIndex, timeValue = timeValue)
   })
 
-  control$rasterNrows <- max(proposedNrowsNcolsByTime[1, ]) - 1 # The -1 is there to squeeze the values a bit, to remove white lines in the raster.
-  control$rasterNcols <- max(proposedNrowsNcolsByTime[2, ]) - 1 # The -1 is there to squeeze the values a bit, to remove white lines in the raster.
+  control$rasterNrows <- floor(max(proposedNrowsNcolsByTime[1, ]) * 0.95)  # The multiplier is there to remove white lines in the raster when the number of rows is not estimated perfectly.
+  control$rasterNcols <- floor(max(proposedNrowsNcolsByTime[2, ]) * 0.95)  # The multiplier is there to remove white lines in the raster when the number of rows is not estimated perfectly.
   cat("Trying to infer the ideal number of cells in the raster by rounding spatial coordinates at", control$numDigitRound,"digits to eliminate the spatial jittering created by INLAMRA. Obtained", control$rasterNrows, "rows and", control$rasterNcols, "columns. If the raster looks bad in the end, set these values manually with plot.control(). If your data are not gridded, set plotRaster to FALSE in plot.control() instead.", sep = " ")
   control
 }
