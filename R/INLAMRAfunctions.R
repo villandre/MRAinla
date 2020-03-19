@@ -691,7 +691,9 @@ INLAMRA.control <- function(Mlon = 1, Mlat = 1, Mtime = 1, randomSeed = 24, nugg
       dnorm(valuesToConsider, mean = hyperparaListElement$FullCondMean[[FEindex]], sd = hyperparaListElement$FullCondSDs[[FEindex]]) * exp(hyperparaListElement$logISweight)
     })
     summedValues <- Reduce("+", distValuesByISiter)
-    data.frame(x = valuesToConsider, values = rowSums(distValuesByISiter))
+    outputFrame <- data.frame(x = valuesToConsider, values = rowSums(distValuesByISiter))
+    colnames(outputFrame)[[1]] <- names(marginalMeans)[[FEindex]]
+    outputFrame
   }
   distValuesByFEpar <- lapply(seq_along(marginalMeans), funToGetDistValuesByFEpar)
   boundsByFEpar <- lapply(distValuesByFEpar, FUN = function(distFrame) {
@@ -701,15 +703,10 @@ INLAMRA.control <- function(Mlon = 1, Mlat = 1, Mtime = 1, randomSeed = 24, nugg
     rightBoundPos <- match(TRUE, DFvalues >= p[2])
     c(distFrame$x[[leftBoundPos]], distFrame$x[[rightBoundPos]])
   })
-  allDistValuesAsList <- lapply(1:length(marginalMeans), FUN = function(index) {
-    outputDataFrame <- data.frame(x = valuesRanges[[index]], y = distValuesByFEpar[[index]])
-    colnames(outputDataFrame)[[1]] <- names(marginalMeans)[[index]]
-    outputDataFrame
-  })
   names(allDistValuesAsList) <- names(marginalMeans)
   boundsFrame <- as.data.frame(do.call("rbind", boundsByFEpar))
   colnames(boundsFrame) <- paste("CredInt_", round(p, 3)*100, "%", sep = "")
-  list(boundsFrame = boundsFrame, distValues = allDistValuesAsList)
+  list(boundsFrame = boundsFrame, distValues = distValuesByFEpar)
 }
 
 .ComputeKrigingMoments <- function(hyperparaList, treePointer, control) {
