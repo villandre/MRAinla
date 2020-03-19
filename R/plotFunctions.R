@@ -71,10 +71,10 @@ plot.INLAMRA <- function(x, filename = NULL, type = c("joint", "training", "pred
   }
   layout(matrix(1:(numPlotsPerLine^2), nrow = numPlotsPerLine, ncol = numPlotsPerLine, byrow = TRUE))
   for (i in seq_along(rastersToPlot)) {
-    raster::plot(rastersToPlot[[i]], zlim = colorRange, interpolate = TRUE, legend = FALSE)
+    raster::plot(rastersToPlot[[i]], zlim = colorRange, interpolate = FALSE, useRaster = FALSE, legend = FALSE)
     raster::plot(rastersToPlot[[i]], legend.only = TRUE, legend.width = 4, axis.args = list(cex.axis = 3), zlim = colorRange)
     if (!is.na(raster::crs(rastersToPlot[[i]]))) {
-      mapmisc::scaleBar(crs = raster::crs(rastersToPlot[[i]]), pos = "topleft", cex = 3, pt.cex = 2.2, title.cex = 3.5)
+      mapmisc::scaleBar(crs = raster::crs(rastersToPlot[[i]]), pos = "topleft", cex = 2, pt.cex = 1.2, title.cex = 1.2)
     }
     if (!is.null(polygonsToOverlay)) {
       raster::plot(polygonsToOverlay, add = TRUE)
