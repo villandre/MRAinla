@@ -71,11 +71,11 @@ plot.INLAMRA <- function(x, filename = NULL, type = c("joint", "training", "pred
   }
   layout(matrix(1:(numPlotsPerLine^2), nrow = numPlotsPerLine, ncol = numPlotsPerLine, byrow = TRUE))
   for (i in seq_along(rastersToPlot)) {
-    raster::plot(rastersToPlot[[i]], zlim = colorRange)
-    raster::plot(rastersToPlot[[i]], legend.only = TRUE, legend.width = 5, axis.args = list(cex.axis = 4), zlim = colorRange)
+    raster::plot(rastersToPlot[[i]], zlim = colorRange, interpolate = TRUE, legend = FALSE)
+    raster::plot(rastersToPlot[[i]], legend.only = TRUE, legend.width = 4, axis.args = list(cex.axis = 3), zlim = colorRange)
+    mapmisc::scaleBar(crs = raster::crs(polygonsToOverlay), pos = "topleft", cex = 3, pt.cex = 2.2, title.cex = 3.5)
     if (!is.null(polygonsToOverlay)) {
       raster::plot(polygonsToOverlay, add = TRUE)
-      mapmisc::scaleBar(crs = raster::crs(polygonsToOverlay), pos = "topleft", cex = 3, pt.cex = 2.2, title.cex = 3.5)
     }
   }
   if (!is.null(filename)) {
@@ -108,8 +108,8 @@ plot.INLAMRA <- function(x, filename = NULL, type = c("joint", "training", "pred
     sapply(c(2,1),  FUN = findNrowsNcolsByTimeIndex, timeValue = timeValue)
   })
 
-  control$rasterNrows <- floor(max(proposedNrowsNcolsByTime[1, ]) * 0.95)  # The multiplier is there to remove white lines in the raster when the number of rows is not estimated perfectly.
-  control$rasterNcols <- floor(max(proposedNrowsNcolsByTime[2, ]) * 0.95)  # The multiplier is there to remove white lines in the raster when the number of rows is not estimated perfectly.
+  control$rasterNrows <- max(proposedNrowsNcolsByTime[1, ])  # The multiplier is there to remove white lines in the raster when the number of rows is not estimated perfectly.
+  control$rasterNcols <- max(proposedNrowsNcolsByTime[2, ])  # The multiplier is there to remove white lines in the raster when the number of rows is not estimated perfectly.
   cat("Trying to infer the ideal number of cells in the raster by rounding spatial coordinates at", control$numDigitRound,"digits to eliminate the spatial jittering created by INLAMRA. Obtained", control$rasterNrows, "rows and", control$rasterNcols, "columns. If the raster looks bad in the end, set these values manually with plot.control(). If your data are not gridded, set plotRaster to FALSE in plot.control() instead.", sep = " ")
   control
 }
