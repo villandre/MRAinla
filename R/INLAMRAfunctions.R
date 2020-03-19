@@ -691,9 +691,7 @@ INLAMRA.control <- function(Mlon = 1, Mlat = 1, Mtime = 1, randomSeed = 24, nugg
       dnorm(valuesToConsider, mean = hyperparaListElement$FullCondMean[[FEindex]], sd = hyperparaListElement$FullCondSDs[[FEindex]]) * exp(hyperparaListElement$logISweight)
     })
     summedValues <- Reduce("+", distValuesByISiter)
-    outputFrame <- data.frame(x = valuesToConsider, values = rowSums(distValuesByISiter))
-    colnames(outputFrame)[[1]] <- names(marginalMeans)[[FEindex]]
-    outputFrame
+    data.frame(x = valuesToConsider, values = rowSums(distValuesByISiter))
   }
   distValuesByFEpar <- lapply(seq_along(marginalMeans), funToGetDistValuesByFEpar)
   boundsByFEpar <- lapply(distValuesByFEpar, FUN = function(distFrame) {
