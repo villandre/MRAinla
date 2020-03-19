@@ -35,7 +35,7 @@ plot.INLAMRA <- function(x, filename = NULL, type = c("joint", "training", "pred
   } else if (type[[1]] != "marginals") {
     plottedObjects <- .plotPoints(x, control, type = type, ...)
   } else {
-    plottedObjects <- .plotMarginals(output = x, filename = filename, device = control$graphicsDevice, width = control$width, height = control$height, ...)
+    plottedObjects <- .plotMarginals(output = x, filename = filename, device = control$graphicsEngine, ...)
   }
   plottedObjects
 }
@@ -198,11 +198,7 @@ plot.control <- function(trim = FALSE, fontScaling = 1, plotRaster = TRUE, raste
     hyperparSkewness <- output$hyperMarginalMoments[parameterName, "Skewness"]
     hyperparSD <- output$hyperMarginalMoments[parameterName, "StdDev"]
     hyperparMean <- output$hyperMarginalMoments[parameterName, "Mean"]
-    if (!(is.na(hyperparSD) | (hyperparSD > 0))) {
-      credIntBounds <- .ComputeCredIntervalSkewNorm(c(0.025, 0.975), meanValue = hyperparMean, sdValue = hyperparSD, skewnessValue = hyperparSkewness)
-    } else {
-      stop("Error: selected hyperparameter was fixed when INLA-MRA was used.")
-    }
+    credIntBounds <- .ComputeCredIntervalSkewNorm(c(0.025, 0.975), meanValue = hyperparMean, sdValue = hyperparSD, skewnessValue = hyperparSkewness)
     xValues <- seq(from = credIntBounds$bounds[1], to = credIntBounds$bounds[2], length.out = numValues)
     yValues <- sn::dsn(x = xValues, xi = credIntBounds$xi, omega = credIntBounds$omega, alpha = credIntBounds$alpha)
     data.frame(x = xValues, y = yValues)
