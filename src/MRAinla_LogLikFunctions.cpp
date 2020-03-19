@@ -147,9 +147,7 @@ Rcpp::List ComputeCondPredStats(SEXP treePointer) {
     XPtr<AugTree> pointedTree(treePointer) ; // Becomes a regular pointer again.
 
     Hmean = pointedTree->GetHmatPred() * pointedTree->GetFullCondMean() ;
-    Rcout << "Computing Evar..." << std::endl ;
     Evar = pointedTree->ComputeEvar() ;
-    Rcout << "Done!" << std::endl ;
   }
   else
   {

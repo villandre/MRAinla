@@ -206,10 +206,10 @@ plot.control <- function(trim = FALSE, fontScaling = 1, plotRaster = TRUE, raste
   hyperPlotFrames <- lapply(rownames(output$hyperMarginalMoments), plotValuesList)
   names(hyperPlotFrames) <- rownames(output$hyperMarginalMoments)
   plotFrames <- c(hyperPlotFrames, output$FEmargDistValues)
-  par(mfrow = c(ceiling(sqrt(length(plotFrames))), ceiling(sqrt(length(plotFrames)))))
   device(file = filename, ...)
+  layout(matrix(1:ceiling(sqrt(length(plotFrames)))^2, nrow = ceiling(sqrt(length(plotFrames))), ncol = ceiling(sqrt(length(plotFrames))), byrow = TRUE))
   for (i in seq_along(plotFrames)) {
-    plot(x = plotFrames[[i]]$x, y = plotFrames[[i]]$y, xlab = names(plotFrames)[[i]], ylab = "Value", type = "l")
+    plot(x = plotFrames[[i]]$x, y = plotFrames[[i]]$y, xlab = names(plotFrames)[[i]], ylab = "Value", type = "l", cex = 2)
   }
   dev.off()
 }
