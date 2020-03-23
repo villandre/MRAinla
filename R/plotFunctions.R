@@ -56,16 +56,15 @@ plot.INLAMRA <- function(x, filename = NULL, type = c("joint", "training", "pred
 }
 
 .plotRaster <- function(INLAMRAoutput, control, filename, polygonsToOverlay, type, ...) {
-  testDays <- sort(unique(INLAMRAoutput$predData$time))
-  control <- .SetRasterSizes(control, INLAMRAoutput, type = type)
-  rasterListPerDay <- lapply(testDays, .rasterizeTrainingTestJointSD, INLAMRAoutput = INLAMRAoutput, control = control)
 
-  rastersToPlot <- lapply(rasterListPerDay, function(x) x[[type]])
+  rasterListPerTimeUnit <- .rasterizeTrainingTestJointSD(INLAMRAoutput = INLAMRAoutput, control = control)
+
+  rastersToPlot <- lapply(rasterListPerTimeUnit, function(x) x[[type]])
   rasterRanges <- sapply(rastersToPlot, function(x) range(raster::values(x)))
   colorRange <- c(min(rasterRanges[1, ]), max(rasterRanges[2, ]))
 
   if (control$matchColours) {
-    rastersForRange <- lapply(rasterListPerDay, function(x) x[["joint"]])
+    rastersForRange <- lapply(rasterListPerTimeUnit, function(x) x[["joint"]])
     rasterRanges <- sapply(rastersForRange, function(x) range(raster::values(x)))
     colorRange <- c(min(rasterRanges[1, ]), max(rasterRanges[2, ]))
   }
@@ -91,60 +90,72 @@ plot.INLAMRA <- function(x, filename = NULL, type = c("joint", "training", "pred
   rastersToPlot
 }
 
-.SetRasterSizes <- function(control, INLAMRAoutput, type) {
-  uniqueTimeValues <- sort(unique(c(INLAMRAoutput$data$time, INLAMRAoutput$predData$time)))
-
-  findNrowsNcolsByTimeIndex <- function(timeValue, coordIndex) {
-    coordsForTraining <- INLAMRAoutput$data$spObject@coords[INLAMRAoutput$data$time == timeValue, ]
-    coordsForPredSet <- INLAMRAoutput$predData$spObject@coords[INLAMRAoutput$predData$time == timeValue, ]
-    if (type == "joint") {
-      combinedCoords <- rbind(coordsForTraining, coordsForPredSet)
-    } else if (type == "training") {
-      combinedCoords <- coordsForTraining
-    } else {
-      combinedCoords <- coordsForPredSet
-    }
-    orderedCombinedCoords <- combinedCoords[order(combinedCoords[ , coordIndex]), ]
-    diffCoord <- diff(orderedCombinedCoords[, coordIndex])
-    sdDiffCoord <- sd(diffCoord)
-    breakPositions <- which(abs(diffCoord) > 3*sdDiffCoord)
-    dimSizes <- c(breakPositions[[1]], diff(breakPositions))
-    max(dimSizes)
-  }
-  proposedNrowsNcolsByTime <- sapply(uniqueTimeValues, FUN = function(timeValue) {
-    sapply(c(2,1),  FUN = findNrowsNcolsByTimeIndex, timeValue = timeValue)
-  })
-
-  control$rasterNrows <- floor(max(proposedNrowsNcolsByTime[1, ]) * 0.9)  # The multiplier is there to remove white lines in the raster when the number of rows is not estimated perfectly.
-  control$rasterNcols <- floor(max(proposedNrowsNcolsByTime[2, ]) * 0.9)  # The multiplier is there to remove white lines in the raster when the number of rows is not estimated perfectly.
-  cat("Trying to infer the ideal number of cells in the raster by rounding spatial coordinates at", control$numDigitRound,"digits to eliminate the spatial jittering created by INLAMRA. Obtained", control$rasterNrows, "rows and", control$rasterNcols, "columns. If the raster looks bad in the end, set these values manually with plot.control(). If your data are not gridded, set plotRaster to FALSE in plot.control() instead. \n", sep = " ")
-  control
-}
-
 # Only applied to time points where predictions were required.
 
-.rasterizeTrainingTestJointSD <- function(timePoint, INLAMRAoutput, landRaster, control) {
+.rasterizeTrainingTestJointSD <- function(INLAMRAoutput, control) {
   combinedCoordMat <- rbind(INLAMRAoutput$data$spObject@coords, INLAMRAoutput$predData$spObject@coords)
-  landRaster <- raster::raster(nrows = control$rasterNrows, ncols = control$rasterNcols, xmn = min(combinedCoordMat[ , 1]), xmx = max(combinedCoordMat[ , 1]), ymn = min(combinedCoordMat[ , 2]), ymx = max(combinedCoordMat[ , 2]), crs = sp::proj4string(INLAMRAoutput$data$spObject))
+  mapExtentAndRasterDims <- .getExtentAndRasterSizes(coordMat = combinedCoordMat, resolutionInMeters = control$resolutionInMeters)
+  landRaster <- raster::raster(nrows = mapExtentAndRasterDims$rasterDims$nRows, ncols = mapExtentAndRasterDims$rasterDims$nCols, ext = mapExtentAndRasterDims$extentObj, crs = sp::proj4string(INLAMRAoutput$data$spObject))
 
-  trainingDataIndices <- INLAMRAoutput$data$time == timePoint
-  testDataIndices <- INLAMRAoutput$predData$time == timePoint
-
-  rasterList <- list()
-  rasterList$SD <- raster::rasterize(x = INLAMRAoutput$predData$spObject@coords[testDataIndices, ], y = landRaster, field = INLAMRAoutput$predMoments$SD[testDataIndices])
-  rasterList$predictions <- raster::rasterize(x = INLAMRAoutput$predData$spObject@coords[testDataIndices, ], y = landRaster, field = INLAMRAoutput$predMoments$Mean[testDataIndices])
-  if (any(trainingDataIndices)) {
-    rasterList$training <- raster::rasterize(x = INLAMRAoutput$data$spObject@coords[trainingDataIndices, ], y = landRaster, field = INLAMRAoutput$data$spObject@data[trainingDataIndices , "y"])
-
-    jointCoordinates <- unname(rbind(INLAMRAoutput$predData$spObject@coords[testDataIndices, ], INLAMRAoutput$data$spObject@coords[trainingDataIndices, ]))
-    dataObject <- data.frame(y = unname(c(INLAMRAoutput$predMoments$Mean[testDataIndices], INLAMRAoutput$data$spObject@data[trainingDataIndices, "y"])))
-    pointsDataFrame <- sp::SpatialPointsDataFrame(coords = jointCoordinates, data = dataObject)
-    rasterList$joint <- raster::rasterize(x = pointsDataFrame, y = landRaster, field = "y")
-  } else {
-    rasterList$training <- landRaster
-    rasterList$joint <- rasterList$predictions
+  timeValues <- sort(unique(c(INLAMRAoutput$data$time, INLAMRAoutput$predData$time)))
+  if (!is.null(control$timesToPlot)) {
+    if (!any(control$timesToPlot %in% timeValues)) {
+      stop("The time points inputted for plotting through timesToPlot are not found in the data. Make sure they were inputted correctly. \n")
+    }
+    timeValues <- sort(control$timesToPlot)
   }
-  rasterList
+  if (length(timeValues) > 14) {
+    warning("You will be getting rasters for more than 14 time points. Result might look bad. Either specify a subset of time points with control$timesToPlot or, if you have spatiotemporal data collected at irregular intervals, set control$plotRaster to FALSE.")
+  }
+  funForRasterList <- function(timePoint) {
+    trainingDataIndices <- INLAMRAoutput$data$time == timePoint
+    testDataIndices <- INLAMRAoutput$predData$time == timePoint
+
+    rasterList <- list()
+    rasterList$SD <- rasterList$predictions <- rasterList$training <- landRaster
+
+    if (any(testDataIndices)) {
+      rasterList$SD <- raster::rasterize(x = INLAMRAoutput$predData$spObject@coords[testDataIndices, ], y = landRaster, field = INLAMRAoutput$predMoments$SD[testDataIndices])
+      rasterList$predictions <- raster::rasterize(x = INLAMRAoutput$predData$spObject@coords[testDataIndices, ], y = landRaster, field = INLAMRAoutput$predMoments$Mean[testDataIndices])
+    }
+    if (any(trainingDataIndices)) {
+      rasterList$training <- rasterList$joint <- raster::rasterize(x = INLAMRAoutput$data$spObject@coords[trainingDataIndices, ], y = landRaster, field = INLAMRAoutput$data$spObject@data[trainingDataIndices , "y"])
+      if (any(testDataIndices)) {
+        jointCoordinates <- unname(rbind(INLAMRAoutput$predData$spObject@coords[testDataIndices, ], INLAMRAoutput$data$spObject@coords[trainingDataIndices, ]))
+        dataObject <- data.frame(y = unname(c(INLAMRAoutput$predMoments$Mean[testDataIndices], INLAMRAoutput$data$spObject@data[trainingDataIndices, "y"])))
+        pointsDataFrame <- sp::SpatialPointsDataFrame(coords = jointCoordinates, data = dataObject)
+        rasterList$joint <- raster::rasterize(x = pointsDataFrame, y = landRaster, field = "y")
+      }
+    } else {
+      rasterList$joint <- rasterList$predictions
+    }
+    rasterList
+  }
+  lapply(timeValues, funForRasterList)
+}
+
+.getExtentAndRasterSizes <- function(coordMat, resolutionInMeters) {
+  rangeByColumn <- apply(coordMat, MARGIN = 2, range)
+  cornerCoordinates <- rbind(
+    rangeByColumn[1, ],
+    replace(rangeByColumn[1, ], 1, rangeByColumn[2, 1]),
+    rangeByColumn[2, ],
+    replace(rangeByColumn[1, ], 2, rangeByColumn[2, 2])
+  )
+  lonDistInMeters <- geosphere::distHaversine(p1 = cornerCoordinates[1, ], p2 = cornerCoordinates[2, ])
+  latDistInMeters <- geosphere::distHaversine(p1 = cornerCoordinates[1, ], p2 = cornerCoordinates[4, ])
+  # The + 1 is to account for the fact that the corners of the zone identified fall in the middle of raster tiles.
+  rasterSizes <- list(
+    nCols = round(lonDistInMeters/resolutionInMeters) + 1,
+    nRows = round(latDistInMeters/resolutionInMeters) + 1
+  )
+  lonPadding <- (cornerCoordinates[2, 1] - cornerCoordinates[1, 1])/(2*(rasterSizes$nCols - 1))
+  latPadding <- (cornerCoordinates[4, 2] - cornerCoordinates[1, 2])/(2*(rasterSizes$nRows - 1))
+  extentBox <- rangeByColumn
+  extentBox[1, ] <- extentBox[1, ] - c(lonPadding, latPadding)
+  extentBox[2, ] <- extentBox[2, ] + c(lonPadding, latPadding)
+
+  list(extentObj = raster::extent(t(extentBox)), rasterDims = rasterSizes)
 }
 
 .plotPoints <- function(INLAMRAoutput, control, filename, polygonsToOverlay, type, ...) {
@@ -197,8 +208,8 @@ plot.INLAMRA <- function(x, filename = NULL, type = c("joint", "training", "pred
   lapply(testDays, getPoints)
 }
 
-plot.control <- function(trim = FALSE, fontScaling = 1, plotRaster = TRUE, rasterNrows = NULL, rasterNcols = NULL, numDigitRound = 5, graphicsEngine = jpeg, matchColours = FALSE, controlForScaleBar = NULL, controlForRasterPlot = NULL) {
-  list(trim = trim, fontScaling = fontScaling, plotRaster = plotRaster, rasterNrows = rasterNrows, rasterNcols = rasterNcols, numDigitRound = numDigitRound, graphicsEngine = graphicsEngine, matchColours = matchColours, controlForScaleBar = controlForScaleBar, controlForRasterPlot = controlForRasterPlot)
+plot.control <- function(trim = FALSE, fontScaling = 1, plotRaster = TRUE, rasterNrows = NULL, rasterNcols = NULL, numDigitRound = 5, graphicsEngine = jpeg, matchColours = FALSE, controlForScaleBar = NULL, controlForRasterPlot = NULL, resolutionInMeters = NULL, timesToPlot = NULL) {
+  list(trim = trim, fontScaling = fontScaling, plotRaster = plotRaster, rasterNrows = rasterNrows, rasterNcols = rasterNcols, numDigitRound = numDigitRound, graphicsEngine = graphicsEngine, matchColours = matchColours, controlForScaleBar = controlForScaleBar, controlForRasterPlot = controlForRasterPlot, resolutionInMeters = resolutionInMeters, timesToPlot = timesToPlot)
 }
 
 .plotMarginals <- function(output, numValues = 50, device = jpeg, filename, ...) {

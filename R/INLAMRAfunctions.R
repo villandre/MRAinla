@@ -145,7 +145,7 @@ INLAMRA <- function(responseVec, covariateFrame = NULL, spatialCoordMat, timePOS
     outputList$predMoments$Mean <- replace(rep(NA, originalNumberPreds), nonMissingPredIndices, outputList$predMoments$Mean)
     outputList$predMoments$SD <- replace(rep(NA, originalNumberPreds), nonMissingPredIndices, outputList$predMoments$SD)
   }
-
+  outputList$control <- control
   cat("Returning results... \n")
   if (control$saveData) {
     outputList$data <- list(spObject = spObject, time = timePOSIXorNumericVec)
