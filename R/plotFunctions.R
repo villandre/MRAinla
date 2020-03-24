@@ -36,7 +36,7 @@ plot.INLAMRA <- function(x, filename = NULL, type = c("joint", "training", "pred
   }
 
   if (control$plotRaster & (type != "marginals")) {
-    plottedObjects <- .plotRaster(x, control, filename = filename, type = type, polygonsToOverlay = polygonsToOverlay, ...)
+    plottedObjects <- .plotRasters(x, control, filename = filename, type = type, polygonsToOverlay = polygonsToOverlay, ...)
   } else if (type[[1]] != "marginals") {
     plottedObjects <- .plotPoints(x, control, filename = filename, type = type, polygonsToOverlay = polygonsToOverlay, ...)
   } else {
@@ -55,11 +55,12 @@ plot.INLAMRA <- function(x, filename = NULL, type = c("joint", "training", "pred
   invisible(0)
 }
 
-.plotRaster <- function(INLAMRAoutput, control, filename, polygonsToOverlay, type, ...) {
+.plotRasters <- function(INLAMRAoutput, control, filename, polygonsToOverlay, type, ...) {
 
   rasterListPerTimeUnit <- .rasterizeTrainingTestJointSD(INLAMRAoutput = INLAMRAoutput, control = control)
 
   rastersToPlot <- lapply(rasterListPerTimeUnit, function(x) x[[type]])
+  names(rastersToPlot) <- names(rasterListPerTimeUnit)
   rasterRanges <- sapply(rastersToPlot, function(x) range(raster::values(x)))
   colorRange <- c(min(rasterRanges[1, ]), max(rasterRanges[2, ]))
 
@@ -68,20 +69,22 @@ plot.INLAMRA <- function(x, filename = NULL, type = c("joint", "training", "pred
     rasterRanges <- sapply(rastersForRange, function(x) range(raster::values(x)))
     colorRange <- c(min(rasterRanges[1, ]), max(rasterRanges[2, ]))
   }
-
-  numPlotsPerLine <- ceiling(sqrt(length(rastersToPlot)))
+  numNonEmptyPlots <- sum(sapply(rastersToPlot, FUN = function(x) any(!is.na(raster::values(x)))))
+  numPlotsPerLine <- ceiling(sqrt(numNonEmptyPlots))
   if (!is.null(filename)) {
     control$graphicsEngine(filename = filename, ...)
   }
   layout(matrix(1:(numPlotsPerLine^2), nrow = numPlotsPerLine, ncol = numPlotsPerLine, byrow = TRUE))
   for (i in seq_along(rastersToPlot)) {
-    do.call(raster::plot, args = c(list(rastersToPlot[[i]], zlim = colorRange, legend = FALSE), control$controlForRasterPlot))
-    raster::plot(rastersToPlot[[i]], legend.only = TRUE, legend.width = 4, axis.args = list(cex.axis = 3), zlim = colorRange)
-    if (!is.na(raster::crs(rastersToPlot[[i]]))) {
-      do.call(mapmisc::scaleBar, args = c(list(crs = raster::crs(rastersToPlot[[i]])), control$controlForScaleBar))
-    }
-    if (!is.null(polygonsToOverlay)) {
-      raster::plot(polygonsToOverlay, add = TRUE)
+    if (any(!is.na(raster::values(rastersToPlot[[i]])))) {
+      do.call(raster::plot, args = c(list(x = rastersToPlot[[i]], zlim = colorRange, legend = FALSE, main = names(rastersToPlot)[[i]]), control$controlForRasterPlot))
+      do.call(raster::plot, args = c(list(x = rastersToPlot[[i]], legend.only = TRUE, zlim = colorRange), control$controlForRasterLegend))
+      if (!is.na(raster::crs(rastersToPlot[[i]]))) {
+        do.call(mapmisc::scaleBar, args = c(list(crs = raster::crs(rastersToPlot[[i]])), control$controlForScaleBar))
+      }
+      if (!is.null(polygonsToOverlay)) {
+        raster::plot(polygonsToOverlay, add = TRUE)
+      }
     }
   }
   if (!is.null(filename)) {
@@ -131,7 +134,10 @@ plot.INLAMRA <- function(x, filename = NULL, type = c("joint", "training", "pred
     }
     rasterList
   }
-  lapply(timeValues, funForRasterList)
+  funForRasterListOutputs <- lapply(timeValues, funForRasterList)
+  namesForElements <- paste("Time =", as.character(timeValues))
+  names(funForRasterListOutputs) <- namesForElements
+  funForRasterListOutputs
 }
 
 .getExtentAndRasterSizes <- function(coordMat, resolutionInMeters) {
@@ -208,8 +214,8 @@ plot.INLAMRA <- function(x, filename = NULL, type = c("joint", "training", "pred
   lapply(testDays, getPoints)
 }
 
-plot.control <- function(trim = FALSE, fontScaling = 1, plotRaster = TRUE, rasterNrows = NULL, rasterNcols = NULL, numDigitRound = 5, graphicsEngine = jpeg, matchColours = FALSE, controlForScaleBar = NULL, controlForRasterPlot = NULL, resolutionInMeters = NULL, timesToPlot = NULL) {
-  list(trim = trim, fontScaling = fontScaling, plotRaster = plotRaster, rasterNrows = rasterNrows, rasterNcols = rasterNcols, numDigitRound = numDigitRound, graphicsEngine = graphicsEngine, matchColours = matchColours, controlForScaleBar = controlForScaleBar, controlForRasterPlot = controlForRasterPlot, resolutionInMeters = resolutionInMeters, timesToPlot = timesToPlot)
+plot.control <- function(trim = FALSE, fontScaling = 1, plotRaster = TRUE, rasterNrows = NULL, rasterNcols = NULL, numDigitRound = 5, graphicsEngine = jpeg, matchColours = FALSE, controlForScaleBar = NULL, controlForRasterPlot = NULL, controlForRasterLegend = NULL, resolutionInMeters = NULL, timesToPlot = NULL) {
+  list(trim = trim, fontScaling = fontScaling, plotRaster = plotRaster, rasterNrows = rasterNrows, rasterNcols = rasterNcols, numDigitRound = numDigitRound, graphicsEngine = graphicsEngine, matchColours = matchColours, controlForScaleBar = controlForScaleBar, controlForRasterPlot = controlForRasterPlot, controlForRasterLegend = controlForRasterLegend, resolutionInMeters = resolutionInMeters, timesToPlot = timesToPlot)
 }
 
 .plotMarginals <- function(output, numValues = 50, device = jpeg, filename, ...) {
