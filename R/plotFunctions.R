@@ -85,13 +85,15 @@ plot.INLAMRA <- function(x, filename = NULL, type = c("joint", "training", "pred
       do.call(raster::plot, args = c(list(x = rastersToPlot[[i]], col = ecol$col, breaks = colourBreaks, legend = FALSE, main = names(rastersToPlot)[[i]]), control$controlForRasterPlot)) # I'm not using the breaks set by colourScale because I want the breaks to be the exact same across all graphs, which are supposed to express similar quantities on the same scale.
       # do.call(raster::plot, args = c(list(x = rastersToPlot[[i]], legend.only = TRUE, zlim = colorRange), control$controlForRasterLegend))
 
-      if (!is.na(raster::crs(rastersToPlot[[i]]))) {
-        do.call(mapmisc::scaleBar, args = c(list(crs = raster::crs(rastersToPlot[[i]])), control$controlForScaleBar))
-      }
       if (!is.null(polygonsToOverlay)) {
         subPolygons <- raster::intersect(polygonsToOverlay, raster::extent(rastersToPlot[[i]]))
         raster::plot(subPolygons, add = TRUE)
       }
+
+      if (!is.na(raster::crs(rastersToPlot[[i]]))) {
+        do.call(mapmisc::scaleBar, args = c(list(crs = raster::crs(rastersToPlot[[i]])), control$controlForScaleBar))
+      }
+
       do.call(mapmisc::legendBreaks, args = c(list(breaks = ecol), control$controlForRasterLegend))
     }
   }
