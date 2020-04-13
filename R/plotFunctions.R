@@ -61,30 +61,38 @@ plot.INLAMRA <- function(x, filename = NULL, type = c("joint", "training", "pred
 
   rastersToPlot <- lapply(rasterListPerTimeUnit, function(x) x[[type]])
   names(rastersToPlot) <- names(rasterListPerTimeUnit)
-  rasterRanges <- sapply(rastersToPlot, function(x) range(raster::values(x)))
-  colorRange <- c(min(rasterRanges[1, ]), max(rasterRanges[2, ]))
+  # rasterRanges <- sapply(rastersToPlot, function(x) range(raster::values(x), na.rm = TRUE))
+  # colorRange <- c(min(rasterRanges[1, ]), max(rasterRanges[2, ]))
 
-  if (control$matchColours) {
-    rastersForRange <- lapply(rasterListPerTimeUnit, function(x) x[["joint"]])
-    rasterRanges <- sapply(rastersForRange, function(x) range(raster::values(x)))
-    colorRange <- c(min(rasterRanges[1, ]), max(rasterRanges[2, ]))
-  }
+  # if (control$matchColours) {
+  #   rastersForRange <- lapply(rasterListPerTimeUnit, function(x) x[["joint"]])
+  #   rasterRanges <- sapply(rastersForRange, function(x) range(raster::values(x)))
+  #   colorRange <- c(min(rasterRanges[1, ]), max(rasterRanges[2, ]))
+  # }
   numNonEmptyPlots <- sum(sapply(rastersToPlot, FUN = function(x) any(!is.na(raster::values(x)))))
   numPlotsPerLine <- ceiling(sqrt(numNonEmptyPlots))
   if (!is.null(filename)) {
     control$graphicsEngine(filename = filename, ...)
   }
   layout(matrix(1:(numPlotsPerLine^2), nrow = numPlotsPerLine, ncol = numPlotsPerLine, byrow = TRUE))
+
+  valuesRanges <- sapply(rastersToPlot, function(x) range(raster::values(x), na.rm = TRUE))
+  boundaries <- c(min(valuesRanges[1, ]) - 1e-300, max(valuesRanges[2, ]) + 1e-300)
+  colourBreaks <- seq(from = boundaries[[1]], to = boundaries[[2]],                      length.out = ifelse(is.null(control$controlForRasterColourScale$breaks), 10, control$controlForRasterColourScale$breaks))
+  ecol <- do.call(mapmisc::colourScale, args = c(list(x = raster::values(rastersToPlot[[1]])), control$controlForRasterColourScale))
   for (i in seq_along(rastersToPlot)) {
     if (any(!is.na(raster::values(rastersToPlot[[i]])))) {
-      do.call(raster::plot, args = c(list(x = rastersToPlot[[i]], zlim = colorRange, legend = FALSE, main = names(rastersToPlot)[[i]]), control$controlForRasterPlot))
-      do.call(raster::plot, args = c(list(x = rastersToPlot[[i]], legend.only = TRUE, zlim = colorRange), control$controlForRasterLegend))
+      do.call(raster::plot, args = c(list(x = rastersToPlot[[i]], col = ecol$col, breaks = colourBreaks, legend = FALSE, main = names(rastersToPlot)[[i]]), control$controlForRasterPlot)) # I'm not using the breaks set by colourScale because I want the breaks to be the exact same across all graphs, which are supposed to express similar quantities on the same scale.
+      # do.call(raster::plot, args = c(list(x = rastersToPlot[[i]], legend.only = TRUE, zlim = colorRange), control$controlForRasterLegend))
+
       if (!is.na(raster::crs(rastersToPlot[[i]]))) {
         do.call(mapmisc::scaleBar, args = c(list(crs = raster::crs(rastersToPlot[[i]])), control$controlForScaleBar))
       }
       if (!is.null(polygonsToOverlay)) {
-        raster::plot(polygonsToOverlay, add = TRUE)
+        subPolygons <- raster::intersect(polygonsToOverlay, raster::extent(rastersToPlot[[i]]))
+        raster::plot(subPolygons, add = TRUE)
       }
+      do.call(mapmisc::legendBreaks, args = c(list(breaks = ecol), control$controlForRasterLegend))
     }
   }
   if (!is.null(filename)) {
@@ -214,8 +222,8 @@ plot.INLAMRA <- function(x, filename = NULL, type = c("joint", "training", "pred
   lapply(testDays, getPoints)
 }
 
-plot.control <- function(trim = FALSE, fontScaling = 1, plotRaster = TRUE, rasterNrows = NULL, rasterNcols = NULL, numDigitRound = 5, graphicsEngine = jpeg, matchColours = FALSE, controlForScaleBar = NULL, controlForRasterPlot = NULL, controlForRasterLegend = NULL, resolutionInMeters = NULL, timesToPlot = NULL) {
-  list(trim = trim, fontScaling = fontScaling, plotRaster = plotRaster, rasterNrows = rasterNrows, rasterNcols = rasterNcols, numDigitRound = numDigitRound, graphicsEngine = graphicsEngine, matchColours = matchColours, controlForScaleBar = controlForScaleBar, controlForRasterPlot = controlForRasterPlot, controlForRasterLegend = controlForRasterLegend, resolutionInMeters = resolutionInMeters, timesToPlot = timesToPlot)
+plot.control <- function(trim = FALSE, fontScaling = 1, plotRaster = TRUE, rasterNrows = NULL, rasterNcols = NULL, numDigitRound = 5, graphicsEngine = jpeg, matchColours = FALSE, controlForScaleBar = NULL, controlForRasterPlot = NULL, controlForRasterLegend = NULL, controlForRasterColourScale = NULL, resolutionInMeters = NULL, timesToPlot = NULL) {
+  list(trim = trim, fontScaling = fontScaling, plotRaster = plotRaster, rasterNrows = rasterNrows, rasterNcols = rasterNcols, numDigitRound = numDigitRound, graphicsEngine = graphicsEngine, matchColours = matchColours, controlForScaleBar = controlForScaleBar, controlForRasterPlot = controlForRasterPlot, controlForRasterLegend = controlForRasterLegend, controlForRasterColourScale = controlForRasterColourScale, resolutionInMeters = resolutionInMeters, timesToPlot = timesToPlot)
 }
 
 .plotMarginals <- function(output, numValues = 50, device = jpeg, filename, ...) {
