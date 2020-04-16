@@ -16,14 +16,16 @@ knitr::opts_chunk$set(
 
 ```{r setup}
 ```
+Installing INLAMRA is best done with the `install_git` function in the `remotes` library, which is installed along `devtools`, e.g.
+```{r, compute=FALSE, echo = FALSE}
+remotes::install_git(url = "https://github.com/villandre/MRAinla", lib = "/store/luc/R/x86_64-pc-linux-gnu-library/3.6")
+```
 
-The INLAMRA functions lets users fit the INLA-MRA model described in Villandre et al. 2020. With adequate tuning and a large enough memory bank, they should  be applicable to datasets of sizes under 1.5 million. Note that much of the computational burden results from predictions: the running time scales linearly with the required number of predictions. The software can take advantage of OpenMP parallelisation to handle that step, but it is disabled by default. We recommend enabling it to decrease computation time, cf. `numOpenMPthreads` in `INLAMRA.control`. 
+The `INLAMRA` function lets users fit the INLA-MRA model described in Villandre et al. 2020. With adequate tuning and a large enough memory bank, they should  be applicable to datasets of sizes under 1.5 million. The running time scales linearly with the required number of predictions. The software can take advantage of OpenMP parallelisation to perform that step more quickly. Enabling it is almost essential if the number of predictions to process exceeds $10,000$, cf. `numOpenMPthreads` in `INLAMRA.control`.
 
-The following code calls INLAMRA under several default control parameters. You can list all default control parameters with `INLAMRA.control()`. You also use that function to set control parameters. The arguments of `INLAMRA` include the usual data inputs: a `numeric` vector of responses, a `data.frame` of numeric covariates, a `matrix` of spatial coordinates, and a vector of time values in `POSIX*` or `numeric` format. When a `POSIX*` object is provided, *time is scaled in days*. If a numeric object is provided instead, no such assumption is made: time hyperparameters, e.g. range, will be based on the untransformed values. If predictions are required, relevant spatial and temporal coordinates, as well as covariate values, must be provided before the model is fitted.
+The arguments of `INLAMRA` include the usual data inputs: a `numeric` vector of responses, a `data.frame` of numeric covariates, a `matrix` of spatial coordinates, and a vector of time values in `POSIX*` or `numeric` format. When a `POSIX*` object is provided, *time is scaled in days*. If a numeric object is provided instead, no such assumption is made: time hyperparameters, e.g. range, will be based on the untransformed values. If predictions are required, relevant spatial and temporal coordinates, as well as covariate values, must be provided before the model is fitted. You can see all default control parameters for `INLAMRA` by checking `?INLAMRA.control`. If the software encounters missing values, a warning is produced, and the missing observations are removed. Any missingness in the prediction input will result in `NA`'s in the output.
 
-If the software encounters missing values, a warning is produced, and the missing observations are removed. Any missingness in the prediction inputs will result in an NA in the prediction output vectors. 
-
-In this example, we tried to reduce computation time by generating a grid hierarchy of depth $7$, by putting $20$ knots in each subregion at depths $0$ to $6$, by keeping only half the observation locations to obtain knot positions at depth $7$, and by sampling only $20$ points in the importance sampling step. Note that `MODISdataTraining` and `MODISdataTest` are in the `STIDF` format, defined in the `spacetime` library.
+In the following example, we generate seven nested grids, create $20$ knots in each subregion at depths $0$ to $6$, and keep only half the observation locations to obtain knot positions at depth $7$. We sample only $20$ points in the importance sampling step. The goal here was mainly to keep computation time reasonably low. Note that `MODISdataTraining` and `MODISdataTest` are in the `STIDF` format, defined in the `spacetime` library.
 
 ```{r, include=TRUE, echo = FALSE}
 library(MRAinla)
@@ -37,24 +39,56 @@ fittedModel <- INLAMRA(
   predCovariateFrame = MODISdataTest@data,
   predSpatialCoordMat = MODISdataTest@sp@coords,
   predTimePOSIXorNumericVec = time(MODISdataTest),
-  control = INLAMRA.control(
+  control = list(
     Mlon = 3,
     Mlat = 3,
     Mtime = 1,
     numKnotsRes0 = 20,
-    numValuesForIS = 20,
-    fileToSaveOptOutput = "/home/luc/INLAMRAfiles/vignetteExampleOptOutput.Rdata",
+    numValuesForIS = 10,
     tipKnotsThinningRate = 0.5
   )
 )
-
 fittedModel$hyperMarginalMoments
 ```
 We can plot the predictions with the `plot` function, adapted to the `INLAMRA` class:
 ```{r, include=TRUE, echo = FALSE}
-plot(fittedModel, filename = "~/myFile.tif", type = "joint")
+plot(fittedModel,
+     type = "joint",
+     control =  list(
+       controlForScaleBar = list(
+         pos = "topleft",
+         cex = 2,
+         pt.cex = 1.5
+       ),
+       controlForRasterLegend = list(
+         pos = "bottomleft",
+         title = "LST (Celsius)",
+         bg = "white",
+         cex = 2
+       ),
+       controlForRasterColourScale = list(
+         col = "Spectral",
+         breaks = 10,
+         rev = TRUE,
+         style = "equal",
+         dec = 1,
+         opacity = 0.5
+       ),
+       controlForRasterPlot = list(
+         cex.axis = 2,
+         cex.main = 3
+       ),
+       resolutionInMeters = 1000
+     ),
+)
+```
+Note that we can save the graph directly to a file by specifying a file name in argument `filename`. By default, the graphics engine used to export the graph is `jpeg`. It can be changed with the `graphicsEngine` option in the control parameters. We can plot marginal posteriors by specifying `type = "marginals"` instead.
+```{r, include=TRUE, echo = FALSE}
+plot(fittedModel, type = "marginals")
 ```
 
+# Notes on design
 
-# Notes on design. 
-The INLA-MRA interface was designed with a focus on ease-of-use. The main function for fitting models, `INLAMRA` requires strictly common R objects, e.g. matrix, data.frame, list. The down side is that users can provide 
+The INLA-MRA interface was designed with a focus on ease-of-use. The main function for fitting models, `INLAMRA` requires strictly common R objects, e.g. `matrix`, `data.frame`, `list`. The down side is that users can provide incompatible objects, which might break the function. INLAMRA checks for a number of common flaws in the input, but is unlikely to be able to catch everything. 
+
+Users should be aware that exceeding the amount of memory available on a given system is possible. What happens in this case is OS-specific. The software might produce a segmentation fault, which is why we recommend running it always in batch mode.

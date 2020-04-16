@@ -1,15 +1,15 @@
 #' Plots the output from INLAMRA
 #'
-#' Plots the output from INLAMRA. It prints the predictions by default. Note that this is only possible if the data were saved in the output (which is the case by default).
+#' Plots the predictions or the marginal posteriors produced by INLAMRA. The predictions can only be plotted if the data are found in the INLAMRA object (it will be the case unless the user explicitly disabled it by setting control parameter saveData to FALSE).
 #'
-#' @param x INLAMRA object. Created after calling `INLAMRA`
+#' @param x INLAMRA object,
 #' @param filename Character. File in which to save the output.
-#' @param type Character. The default, "joint" creates a grid of plots, one plot per time value, showing the training data, and the training data incremented with the predictions. ""SD" creates a grid of plots showing standard deviations for predictions. "trainingData" and "predictions" produce a similar grid with only the training data and predictions, respectively. "pars" produces plots of the marginal posterior densities for the parameters and hyperparameters.
+#' @param type Character. The default, "joint" creates a grid of plots, one plot per time value, showing training data incremented with the predictions. ""SD" creates a grid of plots showing standard deviations for predictions. "trainingData" and "predictions" produce a similar grid with only the training data and predictions, respectively. "pars" produces plots of the marginal posterior densities for the parameters and hyperparameters.
 #' @param polygonsToOverlay Optional SpatialPolygons object. Those polygons, e.g. regional boundaries, are added to each prediction map.
-#' @param ... Arguments for the graphics engine, e.g. jpeg. 'width' and 'height' should be especially helpful.
-#' @param control List of control options. See ?plot.control.
+#' @param ... Arguments for the graphics engine; 'width' and 'height' should be especially helpful.
+#' @param control List of control options, cf. ?plot.control.
 #'
-#' @details The function produces a grid of rasters by default, cf. plot.control, one per distinct time value. If your data are not spaced regularly, you can plot the result as points instead by setting `control = plot.control(plotRaster = FALSE)`.
+#' @details The function produces a grid of rasters by default, one per time value. If your data are not spaced regularly, you can plot the result as points instead by setting `control = plot.control(plotRaster = FALSE)`. If you have data collected over more than a few days, selecting the days to plot with the `timeValues` option in control is recommended.
 #'
 #'
 #' @return A list of the plotted raster/SpatialPoints objects if type is anything but "pars"; a list of matching x/y values for the plotted (hyper)parameter posteriors otherwise.
@@ -30,9 +30,18 @@ plot.INLAMRA <- function(x, filename = NULL, type = c("joint", "training", "pred
 
   .checkPlotInputConsistency(x, type)
 
-  if (control$trim) {
+  if (control$trim == 1) {
     x$predMoments$Mean <- replace(x$predMoments$Mean, which(x$predMoments$Mean > max(x$data$spObject@data$y)), max(x$data$spObject@data$y))
     x$predMoments$Mean <- replace(x$predMoments$Mean, which(x$predMoments$Mean < min(x$data$spObject@data$y)), min(x$data$spObject@data$y))
+  } else if (control$trim == 2) {
+    for (timeValue in unique(x$predData$time)) {
+      if (timeValue %in% x$data$time) {
+        minValueThatDay <- min(x$data$spObject@data$y[x$data$time == timeValue])
+        maxValueThatDay <- max(x$data$spObject@data$y[x$data$time == timeValue])
+        x$predMoments$Mean <- replace(x$predMoments$Mean, which((x$predMoments$Mean > maxValueThatDay) & (x$predData$time == timeValue)), maxValueThatDay)
+        x$predMoments$Mean <- replace(x$predMoments$Mean, which((x$predMoments$Mean < minValueThatDay) & (x$predData$time == timeValue)), minValueThatDay)
+      }
+    }
   }
 
   if (control$plotRaster & (type != "marginals")) {
@@ -61,14 +70,7 @@ plot.INLAMRA <- function(x, filename = NULL, type = c("joint", "training", "pred
 
   rastersToPlot <- lapply(rasterListPerTimeUnit, function(x) x[[type]])
   names(rastersToPlot) <- names(rasterListPerTimeUnit)
-  # rasterRanges <- sapply(rastersToPlot, function(x) range(raster::values(x), na.rm = TRUE))
-  # colorRange <- c(min(rasterRanges[1, ]), max(rasterRanges[2, ]))
 
-  # if (control$matchColours) {
-  #   rastersForRange <- lapply(rasterListPerTimeUnit, function(x) x[["joint"]])
-  #   rasterRanges <- sapply(rastersForRange, function(x) range(raster::values(x)))
-  #   colorRange <- c(min(rasterRanges[1, ]), max(rasterRanges[2, ]))
-  # }
   numNonEmptyPlots <- sum(sapply(rastersToPlot, FUN = function(x) any(!is.na(raster::values(x)))))
   numPlotsPerLine <- ceiling(sqrt(numNonEmptyPlots))
   if (!is.null(filename)) {
@@ -178,14 +180,9 @@ plot.INLAMRA <- function(x, filename = NULL, type = c("joint", "training", "pred
   pointsPerDayList <- .getPointsPerDay(INLAMRAoutput = INLAMRAoutput, control = control)
   pointsToPlotList <- lapply(pointsPerDayList, function(x) x[[type]])
 
-  valuesRanges <- sapply(pointsToPlotList, function(x) range(x@data$y))
-  colorRange <- c(min(valuesRanges[1, ]), max(valuesRanges[2, ]))
-
-  if (control$matchColours) {
-    pointsForRange <- lapply(pointsToPlotList, function(x) x[["joint"]])
-    pointColourRanges <- sapply(pointsForRange, function(x) range(x@data$y))
-    colorRange <- c(min(pointColourRanges[1, ]), max(pointColourRanges[2, ]))
-  }
+  pointsForRange <- lapply(pointsToPlotList, function(x) x[["joint"]])
+  pointColourRanges <- sapply(pointsForRange, function(x) range(x@data$y))
+  colorRange <- c(min(pointColourRanges[1, ]), max(pointColourRanges[2, ]))
 
   numPlotsPerLine <- ceiling(sqrt(length(pointsToPlotList)))
 
@@ -224,8 +221,32 @@ plot.INLAMRA <- function(x, filename = NULL, type = c("joint", "training", "pred
   lapply(testDays, getPoints)
 }
 
-plot.control <- function(trim = FALSE, fontScaling = 1, plotRaster = TRUE, rasterNrows = NULL, rasterNcols = NULL, numDigitRound = 5, graphicsEngine = jpeg, matchColours = FALSE, controlForScaleBar = NULL, controlForRasterPlot = NULL, controlForRasterLegend = NULL, controlForRasterColourScale = NULL, resolutionInMeters = NULL, timesToPlot = NULL) {
-  list(trim = trim, fontScaling = fontScaling, plotRaster = plotRaster, rasterNrows = rasterNrows, rasterNcols = rasterNcols, numDigitRound = numDigitRound, graphicsEngine = graphicsEngine, matchColours = matchColours, controlForScaleBar = controlForScaleBar, controlForRasterPlot = controlForRasterPlot, controlForRasterLegend = controlForRasterLegend, controlForRasterColourScale = controlForRasterColourScale, resolutionInMeters = resolutionInMeters, timesToPlot = timesToPlot)
+#' Control parameters for plot.INLAMRA
+#'
+#' Control parameters for the `control` argument of plot.
+#'
+#' @param trim Either 0, 1, or 2. Determines if predicted values should be trimmed before plotting to fit within the observation range. 0 (default): no trimming, 1: Values are trimmed to fall within the range of all observations, 2: Values are trimmed to fall within the range of observations on the corresponding day (if available).
+#' @param plotRaster Logical. Should rasters (TRUE) or points (FALSE) be plotted? Ignored if type is "marginals". Points may be preferrable if data were not collected on a regular spatial grid.
+#' @param graphicsEngine Function, e.g. jpeg, png, postscript. Corresponds to the graphics engine used to produce the plots,
+#' @param resolutionInMeters Numeric value indicating the width, in meters, of each (square) cell in the raster. Ignored if plotRaster is FALSE.
+#' @param timesToPlot Vector of dates in the same format as that used in the data used to fit INLAMRA. Only maps corresponding to those days will be plotted.
+#' @param controlForScaleBar List of control parameters for the scale bars in the graphs, cf. ?mapmisc::scaleBar.
+#' @param controlForRasterPlot List of control parameters for the raster plotting function, cf. ?raster::plot.
+#' @param controlForRasterLegend List of control parameters for the raster legend, cf. ?mapmisc::legendBreaks.
+#' @param controlForRasterColourScale List of control parameters for the raster colour scale, cf. ?mapmisc::colourScale.
+#'
+#' @details The function need not be called explicitly: it's just a convenient way to see/set control parameters.
+#'
+#' @return A list of control parameters.
+#'
+#' @examples
+#' \dontrun{
+#' }
+#' @export
+#'
+
+plot.control <- function(trim = 0, plotRaster = TRUE, graphicsEngine = jpeg, resolutionInMeters = NULL, timesToPlot = NULL, controlForScaleBar = NULL, controlForRasterPlot = NULL, controlForRasterLegend = NULL, controlForRasterColourScale = NULL) {
+  list(trim = trim, plotRaster = plotRaster, graphicsEngine = graphicsEngine, controlForScaleBar = controlForScaleBar, controlForRasterPlot = controlForRasterPlot, controlForRasterLegend = controlForRasterLegend, controlForRasterColourScale = controlForRasterColourScale, resolutionInMeters = resolutionInMeters, timesToPlot = timesToPlot)
 }
 
 .plotMarginals <- function(output, numValues = 50, device = jpeg, filename, ...) {
