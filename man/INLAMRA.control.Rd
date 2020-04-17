@@ -8,24 +8,24 @@ INLAMRA.control(
   Mlon = 1,
   Mlat = 1,
   Mtime = 1,
-  randomSeed = 24,
-  nuggetSD = 1e-05,
+  numValuesForIS = 100,
   numKnotsRes0 = 20L,
   J = 2L,
-  numValuesForIS = 100,
-  numIterOptim = 25L,
-  distMethod = "haversine",
-  normalHyperprior = TRUE,
-  numISpropDistUpdates = 0,
   tipKnotsThinningRate = 1,
-  credIntervalPercs = c(0.025, 0.975),
-  timeJitterMaxInDecimalDays = 1/8.64e+08,
-  spaceJitterMax = 1e-06,
+  numIterOptim = 25L,
   numOpenMPthreads = 1L,
-  saveData = TRUE,
   fileToSaveOptOutput = NULL,
   folderToSaveISpoints = NULL,
-  IScompleted = FALSE
+  IScompleted = FALSE,
+  credIntervalPercs = c(0.025, 0.975),
+  randomSeed = 24,
+  nuggetSD = 1e-05,
+  distMethod = "haversine",
+  normalHyperprior = TRUE,
+  spaceJitterMax = 1e-06,
+  timeJitterMaxInDecimalDays = 1/8.64e+08,
+  saveData = TRUE,
+  numISpropDistUpdates = 0
 )
 }
 \arguments{
@@ -35,50 +35,54 @@ INLAMRA.control(
 
 \item{Mtime}{Number of time splits used to create the nested resolutions.}
 
-\item{randomSeed}{Seed for the random number generator used for jittering and knot placement. Takes value 24 by default.}
+\item{numValuesForIS}{The number of IS samples to be used for marginalisation.}
 
-\item{nuggetSD}{A small number added to the diagonal of the covariance matrices obtained by applying the Matern formula, to ensure that they are invertible. Takes value 1e-5 by default.}
-
-\item{numKnotsRes0}{Number of knots at resolution 0 (the resolution encompassing the entire spatiotemporal domain). We would not recommend setting it under 8, as knots are first placed on the vertices of a rectangular prism nested within each subregion. Increasing this number also increases the program's memory footprint and running time.}
+\item{numKnotsRes0}{Number of knots at resolution 0 (the resolution encompassing the entire spatiotemporal domain).}
 
 \item{J}{Multiplier used to determine the number of knots at each resolution. The number of knots in each subregion at resolution i is ceiling(numKnotsRes0 * (J/2)^i). We do not recommend setting J under 2, as some regions might end up with only two knots when M is large enough.}
 
-\item{numValuesForIS}{The number of IS samples to be used for marginalisation.}
+\item{tipKnotsThinningRate}{Numeric value indicating the proportion of observation spatiotemporal locations that should be used as knots at the finest resolution. Should be between 0 and 1.}
 
-\item{numIterOptim}{Number of iterations in the L-BFGS algorithm used to identify the maximum of the join marginal posterior distribution of the hyperparameters. Could be set somewhat lower, 20 say, to reduce running time, but setting it too low might create imbalance in the importance sampling weights.}
+\item{numIterOptim}{Integer giving the number of iterations in the L-BFGS algorithm used to identify the maximum of the join marginal posterior distribution of the hyperparameters. Could be set somewhat lower, 20 say, to reduce running time, but setting it too low might create imbalance in the importance sampling weights.}
+
+\item{numOpenMPthreads}{Integer giving the number of threads used in the processing of predictions.}
+
+\item{fileToSaveOptOutput}{Character. An optional file name indicating where the optimiser's output should be saved. Specifying it ensures that INLAMRA can resume after the optimisation step if an interruption occurs.}
+
+\item{folderToSaveISpoints}{Character. An optional *folder* name indicating where the importance sampling weight values should be saved. Specifying it ensures that INLAMRA can properly resume at the IS iteration it had reached if an interruption occurs.}
+
+\item{IScompleted}{Logical value indicating whether all importance sampling weights have been obtained. If TRUE, an intermediate result (based on fewer IS iterations than had been originally planned) is produced. Note that control$fileToSaveOptOutput and control$folderToSaveISpoints must be specified for this feature to work.}
+
+\item{credIntervalPercs}{Numeric vector of size 2 indicating the quantile boundaries of the reported credibility intervals. Produces a standard 95\% credible interval by default.}
+
+\item{randomSeed}{Numeric value corresponding to the seed for the random number generator used for jittering and knot placement.}
+
+\item{nuggetSD}{Numeric value added to the diagonal of the covariance matrices to ensure that they are invertible.}
 
 \item{distMethod}{String indicating the method used to obtain distances in kilometers from longitude/latitude coordinates. Takes value "haversine" by default, for the Haversine distance formula. No alternative is implemented for now.}
 
-\item{normalHyperprior}{Should hyperparameters be modelled on the logarithmic scale and normal hyperpriors be used? Takes value TRUE by default. Modelling hyperparameters on the original scale, with gamma priors, is possible, but not recommended.}
+\item{normalHyperprior}{Logical. Should hyperparameters be modelled on the logarithmic scale and normal hyperpriors be used? Modelling hyperparameters on the original scale, with gamma priors, is possible, but not recommended.}
 
-\item{numISpropDistUpdates}{The number of importance sampling (IS) weight updates in the adaptive IS algorithm. Takes value 0 by default. We implemented an adaptive IS scheme in case a reasonable level of balance in IS weights was not reached. It is enabled by setting this pararameter to 1 or more.}
+\item{spaceJitterMax}{Numeric value. The maximum jittering to apply to longitude/ latitude coordinates. Putting this value at 0 disables the spatial jittering, which is not recommended.}
 
-\item{tipKnotsThinningRate}{Proportion of observation spatiotemporal locations that should be used as knots at the finest resolution, values should be in (0, 1]. Takes value 1 by default. A lower value for this parameter could reduce predictive performance, but greatly reduce the memory footprint. For very large datasets, lower values of this parameter are recommended, and can even be necessary.}
+\item{timeJitterMaxInDecimalDays}{Numeric value. The maximum jittering to apply to time values, in days. Default value is 1/864000000 (1e-5 seconds). Used for splitting data into subregions. Putting this value at 0 disables the time jittering, which is not recommended.}
 
-\item{credIntervalPercs}{Quantile boundaries of the reported credibility intervals. By default, 0.025 and 0.975, for a 95\% credibility interval.}
+\item{saveData}{Logical. Indicates whether the data used to fit the model and prediction dataset (if applicable) should be bundled with the output, which is essential for plotting. Can be disabled if memory is limited.}
 
-\item{timeJitterMaxInDecimalDays}{The maximum jittering to apply to time values, in days. Default value is 1/864000000 (1e-5 seconds). This is used to make it possible to evenly split the data into subregions at any depth. A balanced distribution of observations in the different regions makes it easier to control the method's computational performance. Putting this value at 0 disables the time jittering, which is not recommended.}
-
-\item{spaceJitterMax}{The maximum jittering to apply to longitude/ latitude coordinates. Takes value 1e-5 by default. The method might run into numerical difficulties if longitude/latitude coordinates are replicated. The jittering ensures that it does not happen. Putting this value at 0 disables the spatial jittering, which is not recommended.}
-
-\item{saveData}{Logical. Indicates whether data used to fit the model and prediction dataset (if applicable) should be bundled with the output, which is helpful for plotting. Can be disabled if provided datasets are huge and memory is limited.}
-
-\item{fileToSaveOptOutput}{Character. An optional file name indicating where the optimiser's output should be saved. Specifying it ensures that INLAMRA can resume after the optimisation step.}
-
-\item{folderToSaveISpoints}{Character. An optional *folder* name indicating where the importance sampling weight values should be saved. Specifying it ensures that INLAMRA can properly resume at the IS iteration it had reached before being interrupted.}
-
-\item{IScompleted}{Logical value indicating whether all importance sampling weights have been obtained. Takes value FALSE by default. Set it to TRUE to produce intermediate results (based on fewer IS iterations than had been originally planned) when the run takes too long time to finish. Note that control$fileToSaveOptOutput and control$folderToSaveISpoints must be specified for this feature to work.}
+\item{numISpropDistUpdates}{The number of importance sampling (IS) weight updates in the adaptive IS algorithm. We will most likely remove the adaptive IS scheme in a future update, and so, we do not recommend touching this.}
 }
 \value{
 A list with all control parameters.
 }
 \description{
-Some important and less important tuning parameters for the INLA-MRA algorithm. Use this function to modify control parameters.
+Tuning parameters for the INLA-MRA algorithm.
 }
 \details{
-Some of the control parameters should be tuned to ensure better computational or predictive performance: Mlon, Mlat, Mtime, numKnotsRes0, J, numValuesForIS, numIterOptim, tipKnotsThinningRate.
-Other control parameters make it possible to stop an INLAMRA run at any point and resume close to where the algorithm initially stopped, or produce an intermediate results based on an incomplete run: fileToSaveOptOutput, folderToSaveISpoints, IScompleted.
-There are other control parameters that users should not normally need to change: distMethod, nuggetSD, normalHyperprior, spaceJitterMax, timeJitterMaxInDecimalDays.
+Some of the control parameters should certainly be tuned to ensure better computational or predictive performance: Mlon, Mlat, Mtime, numKnotsRes0, J, numValuesForIS, numIterOptim, tipKnotsThinningRate.
+Although a lower value for tipKnotsThinningRate can reduce predictive performance, it can also greatly reduce the function's memory footprint. For very large datasets, lower values of this parameter are recommended, and can even be essential.
+Other control parameters make it possible to stop an INLAMRA run at any point and resume close to where the algorithm initially stopped: fileToSaveOptOutput, folderToSaveISpoints. Set IScompleted to TRUE if an intermediate result is needed once at least one importance sampling point has been processed. This will make the function summarise the results in folderToSaveISpoints, and output as though all points have already been processed.
+We do not recommend setting numKnotsRes0 under 8, as knots are first placed on the vertices of a rectangular prism nested within each subregion.
+The following control parameters should not normally need to be changed by the user: distMethod, normalHyperprior, nuggetSD, normalHyperprior, spaceJitterMax, timeJitterMaxInDecimalDays, randomSeed, saveData, numISpropDistUpdates.
 }
 \examples{
 \dontrun{

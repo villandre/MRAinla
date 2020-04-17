@@ -29,52 +29,54 @@ INLAMRA(
 
 \item{covariateFrame}{A data.frame containing covariate values in the order of elements in responseVec. Character elements should be re-coded as factors.}
 
-\item{spatialCoordMat}{A matrix or data.frame with two columns with the *first corresponding to longitude*, and the *second to latitude*; can also be x and y if the sinusoidal projection is used (default for satellite imagery data)}
+\item{spatialCoordMat}{A matrix or data.frame with two columns with the first corresponding to longitude, and the second to latitude; can also be x and y if the sinusoidal projection is used.}
 
-\item{timePOSIXorNumericVec}{A vector of time values in POSIX* or numeric format.}
+\item{timePOSIXorNumericVec}{A vector of time values, preferrably in POSIX* format. Can also be in numeric format.}
 
-\item{predCovariateFrame}{A data.frame containing covariate values for the prediction datasets}
+\item{predCovariateFrame}{A data.frame containing covariate values for the prediction datasets.}
 
-\item{predSpatialCoordMat}{Like spatialCoordMat, but for the prediction data}
+\item{predSpatialCoordMat}{Like spatialCoordMat, but for the prediction data.}
 
-\item{predTimePOSIXorNumericVec}{Like timePOSIXorNumericVec, but for prediction data}
+\item{predTimePOSIXorNumericVec}{Like timePOSIXorNumericVec, but for prediction data.}
 
-\item{sinusoidalProjection}{Logical value indicating whether the provided coordinates are in the sinusoidal projection}
+\item{sinusoidalProjection}{Logical value indicating whether the provided coordinates are in the sinusoidal projection.}
 
-\item{spatialRangeList}{List with two elements: a starting value for the *spatial range* log-hyperparameter, and a two element vector giving the mean and standard deviation of the normal hyperprior (second element must be omitted if hyperparameter is fixed)}
+\item{spatialRangeList}{List with two elements: a starting value for the spatial range log-hyperparameter, and a two element vector giving the mean and standard deviation of the normal hyperprior (second element must be omitted if hyperparameter is fixed).}
 
-\item{spatialSmoothnessList}{List with two elements: a starting value for the *spatial smoothness* log-hyperparameter, and a length-two vector giving the mean and standard deviation of the associated normal hyperprior (second element must be omitted if hyperparameter is fixed)}
+\item{spatialSmoothnessList}{List with two elements: a starting value for the spatial smoothness log-hyperparameter, and a length-two vector giving the mean and standard deviation of the associated normal hyperprior (second element must be omitted if hyperparameter is fixed.}
 
-\item{timeRangeList}{List with two elements: a starting value for the *temporal range* log-hyperparameter, and a length-two vector giving the mean and standard deviation of the associated normal hyperprior (second element must be omitted if hyperparameter is fixed)}
+\item{timeRangeList}{List with two elements: a starting value for the temporal range log-hyperparameter, and a length-two vector giving the mean and standard deviation of the associated normal hyperprior (second element must be omitted if hyperparameter is fixed).}
 
-\item{timeSmoothnessList}{List with two elements: a starting value for the *temporal smoothness* log-hyperparameter, and a length-two vector giving the mean and standard deviation of the associated normal hyperprior (second element must be omitted if hyperparameter is fixed)}
+\item{timeSmoothnessList}{List with two elements: a starting value for the temporal smoothness log-hyperparameter, and a length-two vector giving the mean and standard deviation of the associated normal hyperprior (second element must be omitted if hyperparameter is fixed).}
 
-\item{scaleList}{List with two elements: a starting value for the *scale* log-hyperparameter, and a length-two vector giving the mean and standard deviation of the associated normal hyperprior (second element must be omitted if hyperparameter is fixed)}
+\item{scaleList}{List with two elements: a starting value for the scale log-hyperparameter, and a length-two vector giving the mean and standard deviation of the associated normal hyperprior (second element must be omitted if hyperparameter is fixed)}
 
-\item{errorSDlist}{List with two elements: a starting value for the *uncorrelated error standard deviation* hyperparameter, and a length-two vector giving the mean and standard deviation of the associated normal hyperprior (second element must be omitted if hyperparameter is fixed)}
+\item{errorSDlist}{List with two elements: a starting value for the uncorrelated error standard deviation log-hyperparameter, and a length-two vector giving the mean and standard deviation of the associated normal hyperprior (second element must be omitted if hyperparameter is fixed).}
 
-\item{fixedEffSDlist}{List with two elements: a starting value for the *uncorrelated fixed effects standard deviation* hyperparameter, and a length-two vector giving the mean and standard deviation of the associated normal hyperprior (second element must be omitted if hyperparameter is fixed)}
+\item{fixedEffSDlist}{List with two elements: a starting value for the uncorrelated fixed effects standard deviation log-hyperparameter, and a length-two vector giving the mean and standard deviation of the associated normal hyperprior (second element must be omitted if hyperparameter is fixed).}
 
-\item{FEmuVec}{Vector with the mean value of the priors for the fixed effects. Its length must match the number of columns in covariateFrame}
+\item{FEmuVec}{Vector with the mean value of the priors for the fixed effects. Its length must be equal to the number of columns in covariateFrame plus one (for the intercept).}
 
 \item{control}{List of control parameters. See ?INLAMRA.control.}
 }
 \value{
 A list with three components:
 \itemize{
- \item{hyperMarginalMoments} {A data.frame giving the mean, and standard deviation of the marginal hyperparameter posteriors, as well as the related 95\% credibility intervals. Note that the scaling of the time hyperparameters depends on the provided time values. If they are inputted as POSIX* objects, time hyperparameters will relate to time measured in days. If they are inputted as numeric, no assumption is made: the original scale is used.}
- \item{FEmarginalMoments} {A data.frame giving the mean, and standard deviation of the marginal fixed effects posteriors, as well as 95\% credibility intervals.}
+ \item{hyperMarginalMoments} {A data.frame giving the mean, and standard deviation of the marginal log-hyperparameter posteriors, as well as their 95\% credible intervals. Note that the scaling of the time hyperparameters depends on the provided time values. If they are inputted as POSIX* objects, time hyperparameters will relate to time measured in days. If they are inputted as numeric, the original scale is used instead.}
+ \item{FEmarginalMoments} {A data.frame giving the mean and standard deviation of the marginal fixed effects posteriors, as well as their 95\% credibility intervals.}
  \item{predMoments} {A data.frame with two columns, Mean and SD. The order of the predictions matches the one in predCovariateFrame.}
 }
 }
 \description{
-Fits the INLA-MRA model to a spatiotemporal dataset and outputs posterior predictive distributions. INLA-MRA assumes a multiplicative form for spatiotemporal covariance, with each component expressed with the Matérn formula. Spatial coordinates must use the longitude/latitude ("+proj=longlat +datum=WGS84 +no_defs +ellps=WGS84 +towgs84=0,0,0") or sinusoidal ("+proj=sinu +lon_0=0 +x_0=0 +y_0=0 +R=6371007.181 +units=m +no_defs") projection, the default in MODIS data. In the latter case, they will be automatically converted to the long./lat. projection.
+Fits the INLA-MRA model to a spatiotemporal dataset.
 }
 \details{
+Spatial coordinates must use the longitude/latitude ("+proj=longlat +datum=WGS84 +no_defs +ellps=WGS84 +towgs84=0,0,0") or sinusoidal ("+proj=sinu +lon_0=0 +x_0=0 +y_0=0 +R=6371007.181 +units=m +no_defs") projection. In the latter case, they will be automatically converted to the lon./lat. projection.
+
 Some of the control parameters should be tuned to ensure better computational or predictive performance, or to make it possible to stop and resume model fitting. See INLAMRA.control.
 }
 \examples{
 \dontrun{
-INPUT_AN_EXAMPLE()
+# See example in vignette.
 }
 }

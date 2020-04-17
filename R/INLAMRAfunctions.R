@@ -1,38 +1,40 @@
 #' INLA-MRA model for inference and prediction in spatiotemporal data
 #'
-#' Fits the INLA-MRA model to a spatiotemporal dataset and outputs posterior predictive distributions. INLA-MRA assumes a multiplicative form for spatiotemporal covariance, with each component expressed with the Matérn formula. Spatial coordinates must use the longitude/latitude ("+proj=longlat +datum=WGS84 +no_defs +ellps=WGS84 +towgs84=0,0,0") or sinusoidal ("+proj=sinu +lon_0=0 +x_0=0 +y_0=0 +R=6371007.181 +units=m +no_defs") projection, the default in MODIS data. In the latter case, they will be automatically converted to the long./lat. projection.
+#' Fits the INLA-MRA model to a spatiotemporal dataset.
 #'
 #' @param responseVec A numeric vector with response values.
 #' @param covariateFrame A data.frame containing covariate values in the order of elements in responseVec. Character elements should be re-coded as factors.
-#' @param spatialCoordMat A matrix or data.frame with two columns with the *first corresponding to longitude*, and the *second to latitude*; can also be x and y if the sinusoidal projection is used (default for satellite imagery data)
-#' @param timePOSIXorNumericVec A vector of time values in POSIX* or numeric format.
-#' @param predCovariateFrame A data.frame containing covariate values for the prediction datasets
-#' @param predSpatialCoordMat Like spatialCoordMat, but for the prediction data
-#' @param predTimePOSIXorNumericVec Like timePOSIXorNumericVec, but for prediction data
-#' @param sinusoidalProjection Logical value indicating whether the provided coordinates are in the sinusoidal projection
-#' @param spatialRangeList List with two elements: a starting value for the *spatial range* log-hyperparameter, and a two element vector giving the mean and standard deviation of the normal hyperprior (second element must be omitted if hyperparameter is fixed)
-#' @param spatialSmoothnessList List with two elements: a starting value for the *spatial smoothness* log-hyperparameter, and a length-two vector giving the mean and standard deviation of the associated normal hyperprior (second element must be omitted if hyperparameter is fixed)
-#' @param timeRangeList List with two elements: a starting value for the *temporal range* log-hyperparameter, and a length-two vector giving the mean and standard deviation of the associated normal hyperprior (second element must be omitted if hyperparameter is fixed)
-#' @param timeSmoothnessList List with two elements: a starting value for the *temporal smoothness* log-hyperparameter, and a length-two vector giving the mean and standard deviation of the associated normal hyperprior (second element must be omitted if hyperparameter is fixed)
-#' @param scaleList List with two elements: a starting value for the *scale* log-hyperparameter, and a length-two vector giving the mean and standard deviation of the associated normal hyperprior (second element must be omitted if hyperparameter is fixed)
-#' @param errorSDlist List with two elements: a starting value for the *uncorrelated error standard deviation* hyperparameter, and a length-two vector giving the mean and standard deviation of the associated normal hyperprior (second element must be omitted if hyperparameter is fixed)
-#' @param fixedEffSDlist List with two elements: a starting value for the *uncorrelated fixed effects standard deviation* hyperparameter, and a length-two vector giving the mean and standard deviation of the associated normal hyperprior (second element must be omitted if hyperparameter is fixed)
-#' @param FEmuVec Vector with the mean value of the priors for the fixed effects. Its length must match the number of columns in covariateFrame
+#' @param spatialCoordMat A matrix or data.frame with two columns with the first corresponding to longitude, and the second to latitude; can also be x and y if the sinusoidal projection is used.
+#' @param timePOSIXorNumericVec A vector of time values, preferrably in POSIX* format. Can also be in numeric format.
+#' @param predCovariateFrame A data.frame containing covariate values for the prediction datasets.
+#' @param predSpatialCoordMat Like spatialCoordMat, but for the prediction data.
+#' @param predTimePOSIXorNumericVec Like timePOSIXorNumericVec, but for prediction data.
+#' @param sinusoidalProjection Logical value indicating whether the provided coordinates are in the sinusoidal projection.
+#' @param spatialRangeList List with two elements: a starting value for the spatial range log-hyperparameter, and a two element vector giving the mean and standard deviation of the normal hyperprior (second element must be omitted if hyperparameter is fixed).
+#' @param spatialSmoothnessList List with two elements: a starting value for the spatial smoothness log-hyperparameter, and a length-two vector giving the mean and standard deviation of the associated normal hyperprior (second element must be omitted if hyperparameter is fixed.
+#' @param timeRangeList List with two elements: a starting value for the temporal range log-hyperparameter, and a length-two vector giving the mean and standard deviation of the associated normal hyperprior (second element must be omitted if hyperparameter is fixed).
+#' @param timeSmoothnessList List with two elements: a starting value for the temporal smoothness log-hyperparameter, and a length-two vector giving the mean and standard deviation of the associated normal hyperprior (second element must be omitted if hyperparameter is fixed).
+#' @param scaleList List with two elements: a starting value for the scale log-hyperparameter, and a length-two vector giving the mean and standard deviation of the associated normal hyperprior (second element must be omitted if hyperparameter is fixed)
+#' @param errorSDlist List with two elements: a starting value for the uncorrelated error standard deviation log-hyperparameter, and a length-two vector giving the mean and standard deviation of the associated normal hyperprior (second element must be omitted if hyperparameter is fixed).
+#' @param fixedEffSDlist List with two elements: a starting value for the uncorrelated fixed effects standard deviation log-hyperparameter, and a length-two vector giving the mean and standard deviation of the associated normal hyperprior (second element must be omitted if hyperparameter is fixed).
+#' @param FEmuVec Vector with the mean value of the priors for the fixed effects. Its length must be equal to the number of columns in covariateFrame plus one (for the intercept).
 #' @param control List of control parameters. See ?INLAMRA.control.
 #'
-#' @details Some of the control parameters should be tuned to ensure better computational or predictive performance, or to make it possible to stop and resume model fitting. See INLAMRA.control.
+#' @details Spatial coordinates must use the longitude/latitude ("+proj=longlat +datum=WGS84 +no_defs +ellps=WGS84 +towgs84=0,0,0") or sinusoidal ("+proj=sinu +lon_0=0 +x_0=0 +y_0=0 +R=6371007.181 +units=m +no_defs") projection. In the latter case, they will be automatically converted to the lon./lat. projection.
+#'
+#' Some of the control parameters should be tuned to ensure better computational or predictive performance, or to make it possible to stop and resume model fitting. See INLAMRA.control.
 #'
 #'
 #' @return A list with three components:
 #' \itemize{
-#'  \item{hyperMarginalMoments} {A data.frame giving the mean, and standard deviation of the marginal hyperparameter posteriors, as well as the related 95\% credibility intervals. Note that the scaling of the time hyperparameters depends on the provided time values. If they are inputted as POSIX* objects, time hyperparameters will relate to time measured in days. If they are inputted as numeric, no assumption is made: the original scale is used.}
-#'  \item{FEmarginalMoments} {A data.frame giving the mean, and standard deviation of the marginal fixed effects posteriors, as well as 95\% credibility intervals.}
+#'  \item{hyperMarginalMoments} {A data.frame giving the mean, and standard deviation of the marginal log-hyperparameter posteriors, as well as their 95\% credible intervals. Note that the scaling of the time hyperparameters depends on the provided time values. If they are inputted as POSIX* objects, time hyperparameters will relate to time measured in days. If they are inputted as numeric, the original scale is used instead.}
+#'  \item{FEmarginalMoments} {A data.frame giving the mean and standard deviation of the marginal fixed effects posteriors, as well as their 95\% credibility intervals.}
 #'  \item{predMoments} {A data.frame with two columns, Mean and SD. The order of the predictions matches the one in predCovariateFrame.}
 #' }
 #'
 #' @examples
 #' \dontrun{
-#' INPUT_AN_EXAMPLE()
+#' # See example in vignette.
 #' }
 #' @export
 
@@ -156,34 +158,35 @@ INLAMRA <- function(responseVec, covariateFrame = NULL, spatialCoordMat, timePOS
 
 #' Control parameters for INLAMRA
 #'
-#' Some important and less important tuning parameters for the INLA-MRA algorithm. Use this function to modify control parameters.
+#' Tuning parameters for the INLA-MRA algorithm.
 #
 #' @param Mlon Number of longitude splits used to create the nested resolutions.
 #' @param Mlat Number of latitude splits used to create the nested resolutions.
 #' @param Mtime Number of time splits used to create the nested resolutions.
-#' @param numKnotsRes0 Number of knots at resolution 0 (the resolution encompassing the entire spatiotemporal domain). We would not recommend setting it under 8, as knots are first placed on the vertices of a rectangular prism nested within each subregion. Increasing this number also increases the program's memory footprint and running time.
-#' @param J Multiplier used to determine the number of knots at each resolution. The number of knots in each subregion at resolution i is ceiling(numKnotsRes0 * (J/2)^i). We do not recommend setting J under 2, as some regions might end up with only two knots when M is large enough.
 #' @param numValuesForIS The number of IS samples to be used for marginalisation.
-#' @param numIterOptim Number of iterations in the L-BFGS algorithm used to identify the maximum of the join marginal posterior distribution of the hyperparameters. Could be set somewhat lower, 20 say, to reduce running time, but setting it too low might create imbalance in the importance sampling weights.
-#' @param tipKnotsThinningRate Proportion of observation spatiotemporal locations that should be used as knots at the finest resolution, values should be in (0, 1]. Takes value 1 by default. A lower value for this parameter could reduce predictive performance, but greatly reduce the memory footprint. For very large datasets, lower values of this parameter are recommended, and can even be necessary.
-#' @param credIntervalPercs Quantile boundaries of the reported credibility intervals. By default, 0.025 and 0.975, for a 95\% credibility interval.
-#' @param fileToSaveOptOutput String indicating where the results of the optimisation, used to identify the maximum of the marginal joint hyperparameter posterior distribution, should be saved. If this is set, it becomes possible to resume the fitting after interruption. The function will restart after the optimisation step.
-#' @param folderToSaveISpoints String indicating the name of a folder where the results of each iteration of the IS algorithm should be saved. This allows the IS algorithm to be resumed after interruption. It also makes it possible to produce an output before all IS iterations have been processed, cf. control$IScompleted.
+#' @param numKnotsRes0 Number of knots at resolution 0 (the resolution encompassing the entire spatiotemporal domain).
+#' @param J Multiplier used to determine the number of knots at each resolution. The number of knots in each subregion at resolution i is ceiling(numKnotsRes0 * (J/2)^i). We do not recommend setting J under 2, as some regions might end up with only two knots when M is large enough.
+#' @param tipKnotsThinningRate Numeric value indicating the proportion of observation spatiotemporal locations that should be used as knots at the finest resolution. Should be between 0 and 1.
+#' @param numIterOptim Integer giving the number of iterations in the L-BFGS algorithm used to identify the maximum of the join marginal posterior distribution of the hyperparameters. Could be set somewhat lower, 20 say, to reduce running time, but setting it too low might create imbalance in the importance sampling weights.
+#' @param numOpenMPthreads Integer giving the number of threads used in the processing of predictions.
+#' @param fileToSaveOptOutput Character. An optional file name indicating where the optimiser's output should be saved. Specifying it ensures that INLAMRA can resume after the optimisation step if an interruption occurs.
+#' @param folderToSaveISpoints Character. An optional *folder* name indicating where the importance sampling weight values should be saved. Specifying it ensures that INLAMRA can properly resume at the IS iteration it had reached if an interruption occurs.
+#' @param IScompleted Logical value indicating whether all importance sampling weights have been obtained. If TRUE, an intermediate result (based on fewer IS iterations than had been originally planned) is produced. Note that control$fileToSaveOptOutput and control$folderToSaveISpoints must be specified for this feature to work.
+#' @param credIntervalPercs Numeric vector of size 2 indicating the quantile boundaries of the reported credibility intervals. Produces a standard 95\% credible interval by default.
+#' @param randomSeed Numeric value corresponding to the seed for the random number generator used for jittering and knot placement.
+#' @param nuggetSD Numeric value added to the diagonal of the covariance matrices to ensure that they are invertible.
 #' @param distMethod String indicating the method used to obtain distances in kilometers from longitude/latitude coordinates. Takes value "haversine" by default, for the Haversine distance formula. No alternative is implemented for now.
-#' @param randomSeed Seed for the random number generator used for jittering and knot placement. Takes value 24 by default.
-#' @param numISpropDistUpdates The number of importance sampling (IS) weight updates in the adaptive IS algorithm. Takes value 0 by default. We implemented an adaptive IS scheme in case a reasonable level of balance in IS weights was not reached. It is enabled by setting this pararameter to 1 or more.
-#' @param nuggetSD A small number added to the diagonal of the covariance matrices obtained by applying the Matern formula, to ensure that they are invertible. Takes value 1e-5 by default.
-#' @param normalHyperprior Should hyperparameters be modelled on the logarithmic scale and normal hyperpriors be used? Takes value TRUE by default. Modelling hyperparameters on the original scale, with gamma priors, is possible, but not recommended.
-#' @param IScompleted Logical value indicating whether all importance sampling weights have been obtained. Takes value FALSE by default. Set it to TRUE to produce intermediate results (based on fewer IS iterations than had been originally planned) when the run takes too long time to finish. Note that control$fileToSaveOptOutput and control$folderToSaveISpoints must be specified for this feature to work.
-#' @param spaceJitterMax The maximum jittering to apply to longitude/ latitude coordinates. Takes value 1e-5 by default. The method might run into numerical difficulties if longitude/latitude coordinates are replicated. The jittering ensures that it does not happen. Putting this value at 0 disables the spatial jittering, which is not recommended.
-#' @param timeJitterMaxInDecimalDays The maximum jittering to apply to time values, in days. Default value is 1/864000000 (1e-5 seconds). This is used to make it possible to evenly split the data into subregions at any depth. A balanced distribution of observations in the different regions makes it easier to control the method's computational performance. Putting this value at 0 disables the time jittering, which is not recommended.
-#' @param saveData Logical. Indicates whether data used to fit the model and prediction dataset (if applicable) should be bundled with the output, which is helpful for plotting. Can be disabled if provided datasets are huge and memory is limited.
-#' @param fileToSaveOptOutput Character. An optional file name indicating where the optimiser's output should be saved. Specifying it ensures that INLAMRA can resume after the optimisation step.
-#' @param folderToSaveISpoints Character. An optional *folder* name indicating where the importance sampling weight values should be saved. Specifying it ensures that INLAMRA can properly resume at the IS iteration it had reached before being interrupted.
+#' @param normalHyperprior Logical. Should hyperparameters be modelled on the logarithmic scale and normal hyperpriors be used? Modelling hyperparameters on the original scale, with gamma priors, is possible, but not recommended.
+#' @param spaceJitterMax Numeric value. The maximum jittering to apply to longitude/ latitude coordinates. Putting this value at 0 disables the spatial jittering, which is not recommended.
+#' @param timeJitterMaxInDecimalDays Numeric value. The maximum jittering to apply to time values, in days. Default value is 1/864000000 (1e-5 seconds). Used for splitting data into subregions. Putting this value at 0 disables the time jittering, which is not recommended.
+#' @param saveData Logical. Indicates whether the data used to fit the model and prediction dataset (if applicable) should be bundled with the output, which is essential for plotting. Can be disabled if memory is limited.
+#' @param numISpropDistUpdates The number of importance sampling (IS) weight updates in the adaptive IS algorithm. We will most likely remove the adaptive IS scheme in a future update, and so, we do not recommend touching this.
 #'
-#' @details Some of the control parameters should be tuned to ensure better computational or predictive performance: Mlon, Mlat, Mtime, numKnotsRes0, J, numValuesForIS, numIterOptim, tipKnotsThinningRate.
-#' Other control parameters make it possible to stop an INLAMRA run at any point and resume close to where the algorithm initially stopped, or produce an intermediate results based on an incomplete run: fileToSaveOptOutput, folderToSaveISpoints, IScompleted.
-#' There are other control parameters that users should not normally need to change: distMethod, nuggetSD, normalHyperprior, spaceJitterMax, timeJitterMaxInDecimalDays.
+#' @details Some of the control parameters should certainly be tuned to ensure better computational or predictive performance: Mlon, Mlat, Mtime, numKnotsRes0, J, numValuesForIS, numIterOptim, tipKnotsThinningRate.
+#' Although a lower value for tipKnotsThinningRate can reduce predictive performance, it can also greatly reduce the function's memory footprint. For very large datasets, lower values of this parameter are recommended, and can even be essential.
+#' Other control parameters make it possible to stop an INLAMRA run at any point and resume close to where the algorithm initially stopped: fileToSaveOptOutput, folderToSaveISpoints. Set IScompleted to TRUE if an intermediate result is needed once at least one importance sampling point has been processed. This will make the function summarise the results in folderToSaveISpoints, and output as though all points have already been processed.
+#' We do not recommend setting numKnotsRes0 under 8, as knots are first placed on the vertices of a rectangular prism nested within each subregion.
+#' The following control parameters should not normally need to be changed by the user: distMethod, normalHyperprior, nuggetSD, normalHyperprior, spaceJitterMax, timeJitterMaxInDecimalDays, randomSeed, saveData, numISpropDistUpdates.
 #'
 #'
 #' @return A list with all control parameters.
@@ -193,7 +196,7 @@ INLAMRA <- function(responseVec, covariateFrame = NULL, spatialCoordMat, timePOS
 #' INLAMRA.control(Mlon = 2, Mlat = 2, Mtime = 2)
 #' }
 #' @export
-INLAMRA.control <- function(Mlon = 1, Mlat = 1, Mtime = 1, randomSeed = 24, nuggetSD = 1e-5, numKnotsRes0 = 20L, J = 2L, numValuesForIS = 100, numIterOptim = 25L, distMethod = "haversine", normalHyperprior = TRUE, numISpropDistUpdates = 0, tipKnotsThinningRate = 1, credIntervalPercs = c(0.025, 0.975), timeJitterMaxInDecimalDays = 1/864000000, spaceJitterMax = 1e-6, numOpenMPthreads = 1L, saveData = TRUE, fileToSaveOptOutput = NULL, folderToSaveISpoints = NULL, IScompleted = FALSE) {
+INLAMRA.control <- function(Mlon = 1, Mlat = 1, Mtime = 1, numValuesForIS = 100, numKnotsRes0 = 20L, J = 2L, tipKnotsThinningRate = 1, numIterOptim = 25L, numOpenMPthreads = 1L, fileToSaveOptOutput = NULL, folderToSaveISpoints = NULL, IScompleted = FALSE, credIntervalPercs = c(0.025, 0.975), randomSeed = 24, nuggetSD = 1e-5,  distMethod = "haversine", normalHyperprior = TRUE, spaceJitterMax = 1e-6, timeJitterMaxInDecimalDays = 1/864000000, saveData = TRUE, numISpropDistUpdates = 0) {
   list(Mlon = Mlon, Mlat = Mlat, Mtime = Mtime, randomSeed = randomSeed, nuggetSD = nuggetSD, numKnotsRes0 = numKnotsRes0, J = J, numValuesForIS = numValuesForIS, numIterOptim = numIterOptim, distMethod = distMethod, normalHyperprior = normalHyperprior, numISpropDistUpdates = numISpropDistUpdates, tipKnotsThinningRate = tipKnotsThinningRate, credIntervalPercs = credIntervalPercs, timeJitterMaxInDecimalDays = timeJitterMaxInDecimalDays, spaceJitterMax = spaceJitterMax, numOpenMPthreads = numOpenMPthreads, saveData = saveData, fileToSaveOptOutput = fileToSaveOptOutput, folderToSaveISpoints = folderToSaveISpoints, IScompleted = IScompleted)
 }
 
