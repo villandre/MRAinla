@@ -158,15 +158,16 @@ INLAMRA <- function(responseVec, covariateFrame = NULL, spatialCoordMat, timePOS
 #'
 #' Some important and less important tuning parameters for the INLA-MRA algorithm. Use this function to modify control parameters.
 #
-#' @param {Mlon, Mlat, Mtime} Number of longitude, latitude, and time splits used to create the nested resolutions. We have M = Mlon + Mlat + Mtime. They should be set as low as possible,  keeping in mind time and memory constraints
+#' @param Mlon Number of longitude splits used to create the nested resolutions.
+#' @param Mlat Number of latitude splits used to create the nested resolutions.
+#' @param Mtime Number of time splits used to create the nested resolutions.
 #' @param numKnotsRes0 Number of knots at resolution 0 (the resolution encompassing the entire spatiotemporal domain). We would not recommend setting it under 8, as knots are first placed on the vertices of a rectangular prism nested within each subregion. Increasing this number also increases the program's memory footprint and running time.
 #' @param J Multiplier used to determine the number of knots at each resolution. The number of knots in each subregion at resolution i is ceiling(numKnotsRes0 * (J/2)^i). We do not recommend setting J under 2, as some regions might end up with only two knots when M is large enough.
 #' @param numValuesForIS The number of IS samples to be used for marginalisation.
 #' @param numIterOptim Number of iterations in the L-BFGS algorithm used to identify the maximum of the join marginal posterior distribution of the hyperparameters. Could be set somewhat lower, 20 say, to reduce running time, but setting it too low might create imbalance in the importance sampling weights.
-#' @param tipKnotsThinningRate Proportion of observation spatiotemporal locations that should be used as knots at the finest resolution, values should be in (0, 1]. Takes value 1 by default. A lower value for this parameter could reduce predictive performance, but greatly reduce the memory footprint. For very large datasets, lower values of this parameter are recommended, and can even be necessary.}
-#' @param credIntervalPercs Quantile boundaries of the reported credibility intervals. By default, 0.025 and 0.975, for a 95% credibility interval.
+#' @param tipKnotsThinningRate Proportion of observation spatiotemporal locations that should be used as knots at the finest resolution, values should be in (0, 1]. Takes value 1 by default. A lower value for this parameter could reduce predictive performance, but greatly reduce the memory footprint. For very large datasets, lower values of this parameter are recommended, and can even be necessary.
+#' @param credIntervalPercs Quantile boundaries of the reported credibility intervals. By default, 0.025 and 0.975, for a 95\% credibility interval.
 #' @param fileToSaveOptOutput String indicating where the results of the optimisation, used to identify the maximum of the marginal joint hyperparameter posterior distribution, should be saved. If this is set, it becomes possible to resume the fitting after interruption. The function will restart after the optimisation step.
-#' }
 #' @param folderToSaveISpoints String indicating the name of a folder where the results of each iteration of the IS algorithm should be saved. This allows the IS algorithm to be resumed after interruption. It also makes it possible to produce an output before all IS iterations have been processed, cf. control$IScompleted.
 #' @param distMethod String indicating the method used to obtain distances in kilometers from longitude/latitude coordinates. Takes value "haversine" by default, for the Haversine distance formula. No alternative is implemented for now.
 #' @param randomSeed Seed for the random number generator used for jittering and knot placement. Takes value 24 by default.
@@ -186,12 +187,12 @@ INLAMRA <- function(responseVec, covariateFrame = NULL, spatialCoordMat, timePOS
 #'
 #'
 #' @return A list with all control parameters.
+#'
 #' @examples
 #' \dontrun{
 #' INLAMRA.control(Mlon = 2, Mlat = 2, Mtime = 2)
 #' }
 #' @export
-
 INLAMRA.control <- function(Mlon = 1, Mlat = 1, Mtime = 1, randomSeed = 24, nuggetSD = 1e-5, numKnotsRes0 = 20L, J = 2L, numValuesForIS = 100, numIterOptim = 25L, distMethod = "haversine", normalHyperprior = TRUE, numISpropDistUpdates = 0, tipKnotsThinningRate = 1, credIntervalPercs = c(0.025, 0.975), timeJitterMaxInDecimalDays = 1/864000000, spaceJitterMax = 1e-6, numOpenMPthreads = 1L, saveData = TRUE, fileToSaveOptOutput = NULL, folderToSaveISpoints = NULL, IScompleted = FALSE) {
   list(Mlon = Mlon, Mlat = Mlat, Mtime = Mtime, randomSeed = randomSeed, nuggetSD = nuggetSD, numKnotsRes0 = numKnotsRes0, J = J, numValuesForIS = numValuesForIS, numIterOptim = numIterOptim, distMethod = distMethod, normalHyperprior = normalHyperprior, numISpropDistUpdates = numISpropDistUpdates, tipKnotsThinningRate = tipKnotsThinningRate, credIntervalPercs = credIntervalPercs, timeJitterMaxInDecimalDays = timeJitterMaxInDecimalDays, spaceJitterMax = spaceJitterMax, numOpenMPthreads = numOpenMPthreads, saveData = saveData, fileToSaveOptOutput = fileToSaveOptOutput, folderToSaveISpoints = folderToSaveISpoints, IScompleted = IScompleted)
 }
