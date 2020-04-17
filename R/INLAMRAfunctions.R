@@ -10,11 +10,11 @@
 #' @param predSpatialCoordMat Like spatialCoordMat, but for the prediction data
 #' @param predTimePOSIXorNumericVec Like timePOSIXorNumericVec, but for prediction data
 #' @param sinusoidalProjection Logical value indicating whether the provided coordinates are in the sinusoidal projection
-#' @param spatialRangeList List with two elements: a starting value for the *spatial range* hyperparameter, and a two element vector giving the mean and standard deviation of the normal hyperprior (second element must be omitted if hyperparameter is fixed)
-#' @param spatialSmoothnessList List with two elements: a starting value for the *spatial smoothness* hyperparameter, and a length-two vector giving the mean and standard deviation of the associated normal hyperprior (second element must be omitted if hyperparameter is fixed)
-#' @param timeRangeList List with two elements: a starting value for the *temporal range* hyperparameter, and a length-two vector giving the mean and standard deviation of the associated normal hyperprior (second element must be omitted if hyperparameter is fixed)
-#' @param timeSmoothnessList List with two elements: a starting value for the *temporal smoothness* hyperparameter, and a length-two vector giving the mean and standard deviation of the associated normal hyperprior (second element must be omitted if hyperparameter is fixed)
-#' @param scaleList List with two elements: a starting value for the *scale* hyperparameter, and a length-two vector giving the mean and standard deviation of the associated normal hyperprior (second element must be omitted if hyperparameter is fixed)
+#' @param spatialRangeList List with two elements: a starting value for the *spatial range* log-hyperparameter, and a two element vector giving the mean and standard deviation of the normal hyperprior (second element must be omitted if hyperparameter is fixed)
+#' @param spatialSmoothnessList List with two elements: a starting value for the *spatial smoothness* log-hyperparameter, and a length-two vector giving the mean and standard deviation of the associated normal hyperprior (second element must be omitted if hyperparameter is fixed)
+#' @param timeRangeList List with two elements: a starting value for the *temporal range* log-hyperparameter, and a length-two vector giving the mean and standard deviation of the associated normal hyperprior (second element must be omitted if hyperparameter is fixed)
+#' @param timeSmoothnessList List with two elements: a starting value for the *temporal smoothness* log-hyperparameter, and a length-two vector giving the mean and standard deviation of the associated normal hyperprior (second element must be omitted if hyperparameter is fixed)
+#' @param scaleList List with two elements: a starting value for the *scale* log-hyperparameter, and a length-two vector giving the mean and standard deviation of the associated normal hyperprior (second element must be omitted if hyperparameter is fixed)
 #' @param errorSDlist List with two elements: a starting value for the *uncorrelated error standard deviation* hyperparameter, and a length-two vector giving the mean and standard deviation of the associated normal hyperprior (second element must be omitted if hyperparameter is fixed)
 #' @param fixedEffSDlist List with two elements: a starting value for the *uncorrelated fixed effects standard deviation* hyperparameter, and a length-two vector giving the mean and standard deviation of the associated normal hyperprior (second element must be omitted if hyperparameter is fixed)
 #' @param FEmuVec Vector with the mean value of the priors for the fixed effects. Its length must match the number of columns in covariateFrame
@@ -134,9 +134,8 @@ INLAMRA <- function(responseVec, covariateFrame = NULL, spatialCoordMat, timePOS
 
   FEmarginalMoments <- .ComputeFEmarginalMoments(computedValues$output, covNames = colnames(covariateFrame), control = control)
 
-  keepHyperNames <- names(unlist(hyperStart))
   dropHyperNames <- names(unlist(fixedHyperValues))
-  outputList <- list(hyperMarginalMoments = hyperMarginalMoments$paraMoments[keepHyperNames, ], FEmarginalMoments = FEmarginalMoments$outputFrame, psiAndMargDistMatrix = hyperMarginalMoments$psiAndMargDistMatrix[ , !(colnames(hyperMarginalMoments$psiAndMargDistMatrix) %in% dropHyperNames)], FEmargDistValues = FEmarginalMoments$distValues)
+  outputList <- list(hyperMarginalMoments = hyperMarginalMoments$paraMoments, FEmarginalMoments = FEmarginalMoments$outputFrame, psiAndMargDistMatrix = hyperMarginalMoments$psiAndMargDistMatrix[ , !(colnames(hyperMarginalMoments$psiAndMargDistMatrix) %in% dropHyperNames)], FEmargDistValues = FEmarginalMoments$distValues)
 
   if (!noPredictionFlag) {
     cat("Computing prediction moments... \n")
@@ -377,7 +376,7 @@ INLAMRA.control <- function(Mlon = 1, Mlat = 1, Mtime = 1, randomSeed = 24, nugg
   iterCounter <- 0
   funForOptim <- function(xOnLogScale, namesXstartValues) {
     iterCounter <<- iterCounter + 1
-    cat("Performing optim. evaluation ", iterCounter, ".\n", sep = "")
+    # cat("Performing optim. evaluation ", iterCounter, ".\n", sep = "")
     names(xOnLogScale) <- namesXstartValues
     xTrans <- exp(xOnLogScale)
     unlistedFixedHyperValues <- unlist(fixedHyperValues)
@@ -409,17 +408,17 @@ INLAMRA.control <- function(Mlon = 1, Mlat = 1, Mtime = 1, randomSeed = 24, nugg
     upperBound <- unlist(control$upperBound)
   }
   names(upperBound) <- names(lowerBound) <- names(xStartValues)
-  cat("Optimising... \n")
+  cat("Finding the maximum of the joint marginal hyperparameter posterior distribution p(Psi | y)... \n")
   if (!tryCatch(file.exists(control$fileToSaveOptOutput), error = function(e) FALSE)) { # The tryCatch is necessary to ensure that an error does not occur if control$fileToSaveOptOutput is NULL. If it is undefined, we want the optimisation to take place.
     x0val <- xStartValues
     if (!control$normalHyperprior) {
       x0val <- log(xStartValues)
     }
-    opt <- nloptr::lbfgs(x0 = x0val, lower = lowerBound, upper = upperBound, fn = funForOptim, gr = gradForOptim, control = list(xtol_rel = 1e-3, maxeval = control$numIterOptim), namesXstartValues = names(xStartValues))
+    opt <- nloptr::nloptr(x0 = x0val, lb = lowerBound, ub = upperBound, eval_f = funForOptim, eval_grad_f = gradForOptim, opts = list(algorithm = "NLOPT_LD_LBFGS", xtol_rel = 1e-3, maxeval = control$numIterOptim, print_level = 1), namesXstartValues = names(xStartValues))
     cat("Optimisation complete. \n")
-    solution <- opt$par
+    solution <- opt$solution
     if (!control$normalHyperprior) {
-      solution <- exp(opt$par)
+      solution <- exp(opt$solution)
     }
     cat("Computing precision matrix at mode... \n")
     precisionMat <- numDeriv::hessian(func = funForOptim, x = solution, namesXstartValues = names(xStartValues))
@@ -443,9 +442,15 @@ INLAMRA.control <- function(Mlon = 1, Mlat = 1, Mtime = 1, randomSeed = 24, nugg
     # cat("Optimised values:", solution)
   } else {
     load(control$fileToSaveOptOutput)
-    solution <- opt$par
+    solution <- opt$solution
+    if (is.null(solution)) { # For backwards compatibility
+      solution <- opt$par
+    }
     if (!control$normalHyperprior) {
-      solution <- exp(opt$par)
+      solution <- exp(opt$solution)
+      if (is.null(solution)) { # For backwards compatibility
+        solution <- exp(opt$par)
+      }
     }
     varCovarFilename <- paste(substr(control$fileToSaveOptOutput, start = 1, stop = gregexpr(pattern = ".Rdata", text = control$fileToSaveOptOutput)[[1]] - 1), "_ISvarCovar.Rdata", sep = "")
     loadName <- load(varCovarFilename) # Restores covariance matrix
@@ -457,10 +462,13 @@ INLAMRA.control <- function(Mlon = 1, Mlat = 1, Mtime = 1, randomSeed = 24, nugg
     assign(x = "Hmat", value = GetHmat(nestedGridsPointer), envir = control$envirForTest)
   }
 
-  opt$value <- -opt$value # Correcting for the inversion used to maximise instead of minimise
-
+  # if ("value" %in% names(opt)) {
+  #   opt$value <- -opt$value # Correcting for the inversion used to maximise instead of minimise
+  # } else {
+  #   opt$objective <- -opt$objective
+  # }
   cat("Running IS algorithm... \n")
-  ISvaluesList <- .ISfct(distMode = solution, ISvarCovar = varCovar, nestedGridsPointer = nestedGridsPointer, namesXstartValues = names(xStartValues), fixedHyperValues = fixedHyperValues,  control = control)
+  ISvaluesList <- .ISfct(distMode = solution, ISvarCovar = varCovar, nestedGridsPointer = nestedGridsPointer, namesXstartValues = names(xStartValues), fixedHyperValues = fixedHyperValues, control = control)
   cat("IS algorithm completed. \n")
 
   keepIndices <- sapply(ISvaluesList$output, function(x) class(x$logJointValue) == "numeric")
@@ -626,24 +634,24 @@ INLAMRA.control <- function(Mlon = 1, Mlat = 1, Mtime = 1, randomSeed = 24, nugg
   hyperparaList <- hyperparaList[domainCheck]
   psiAndMargDistMatrix <- t(sapply(seq_along(hyperparaList), function(hyperparaIndex) c(unlist(hyperparaList[[hyperparaIndex]]$MaternHyperpars), fixedEffSD = hyperparaList[[hyperparaIndex]]$fixedEffSD, errorSD = hyperparaList[[hyperparaIndex]]$errorSD, logJointValue = hyperparaList[[hyperparaIndex]]$logJointValue, ISweight = exp(hyperparaList[[hyperparaIndex]]$logISweight))))
   adaptiveISphaseVector <- rep(1:(control$numISpropDistUpdates + 1), each = ceiling(control$numValuesForIS / (control$numISpropDistUpdates + 1)))[1:min(control$numValuesForIS, length(hyperparaList))]
-  funToGetParaMoments <- function(hyperparaIndex) {
+  funToGetParaMoments <- function(hyperparaName) {
     # meanValue <- sum(psiAndMargDistMatrix[, hyperparaIndex] * psiAndMargDistMatrix[, ncol(psiAndMargDistMatrix)])
     # sdValue <- sqrt(sum(psiAndMargDistMatrix[, hyperparaIndex]^2 * psiAndMargDistMatrix[, ncol(psiAndMargDistMatrix)]) - meanValue^2)
-    meanValue <- .adaptiveIS(x = psiAndMargDistMatrix[, hyperparaIndex], ISweights = psiAndMargDistMatrix[, "ISweight"], phaseVector = adaptiveISphaseVector)
+    meanValue <- .adaptiveIS(x = psiAndMargDistMatrix[, hyperparaName], ISweights = psiAndMargDistMatrix[, "ISweight"], phaseVector = adaptiveISphaseVector)
 
-    sdValue <- sqrt(.adaptiveIS(x = psiAndMargDistMatrix[, hyperparaIndex]^2, ISweights = psiAndMargDistMatrix[, "ISweight"], phaseVector = adaptiveISphaseVector) - meanValue^2)
+    sdValue <- sqrt(.adaptiveIS(x = psiAndMargDistMatrix[, hyperparaName]^2, ISweights = psiAndMargDistMatrix[, "ISweight"], phaseVector = adaptiveISphaseVector) - meanValue^2)
 
-    skewnessValue <- .adaptiveIS(x = (psiAndMargDistMatrix[, hyperparaIndex] - meanValue)^3/sdValue^2, ISweights = psiAndMargDistMatrix[, "ISweight"], phaseVector = adaptiveISphaseVector)
+    skewnessValue <- .adaptiveIS(x = (psiAndMargDistMatrix[, hyperparaName] - meanValue)^3/sdValue^2, ISweights = psiAndMargDistMatrix[, "ISweight"], phaseVector = adaptiveISphaseVector)
     credIntBounds <- list(bounds = c(NA, NA), alpha = NA, omega = NA , xi = NA, delta = NA)
     if (!((sdValue == 0) | is.na(sdValue))) {
       credIntBounds <- .ComputeCredIntervalSkewNorm(control$credIntervalPercs, meanValue = meanValue, sdValue = sdValue, skewnessValue = skewnessValue)
     }
     c(mean = meanValue, StdDev = sdValue, skewness = skewnessValue, credIntBounds$bounds)
   }
-  paraMoments <- t(sapply(1:(ncol(psiAndMargDistMatrix) - 2), FUN = funToGetParaMoments))
+  paraMoments <- t(sapply(names(hyperparaList[[1]]$x), FUN = funToGetParaMoments))
   CInames <- paste("CredInt_", round(control$credIntervalPercs, 3)*100, "%", sep = "")
   colnames(paraMoments) <- c("Mean", "StdDev", "Skewness", CInames)
-  rownames(paraMoments) <- head(colnames(psiAndMargDistMatrix), n = -2)
+  rownames(paraMoments) <- names(hyperparaList[[1]]$x)
   list(paraMoments = as.data.frame(paraMoments), psiAndMargDistMatrix = psiAndMargDistMatrix)
 }
 
