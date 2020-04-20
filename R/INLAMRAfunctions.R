@@ -168,8 +168,8 @@ INLAMRA <- function(responseVec, covariateFrame = NULL, spatialCoordMat, timePOS
 #' @param J Multiplier used to determine the number of knots at each resolution. The number of knots in each subregion at resolution i is ceiling(numKnotsRes0 * (J/2)^i). We do not recommend setting J under 2, as some regions might end up with only two knots when M is large enough.
 #' @param tipKnotsThinningRate Numeric value indicating the proportion of observation spatiotemporal locations that should be used as knots at the finest resolution. Should be between 0 and 1.
 #' @param numIterOptim Integer giving the number of iterations in the L-BFGS algorithm used to identify the maximum of the join marginal posterior distribution of the hyperparameters. Could be set somewhat lower, 20 say, to reduce running time, but setting it too low might create imbalance in the importance sampling weights.
-#' @param optimLowerBound List. Lower bound for the optimiser used to identify the maximum of the join marginal posterior distribution of the hyperparameters.
-#' @param optimUpperBound List. Upper bound for the optimiser used to identify the maximum of the join marginal posterior distribution of the hyperparameters.
+#' @param optimLowerBound Numeric. Lower bound for the optimiser used to identify the maximum of the join marginal posterior distribution of the hyperparameters.
+#' @param optimUpperBound Numeric. Upper bound for the optimiser used to identify the maximum of the join marginal posterior distribution of the hyperparameters. Default is the logarithm of the Earth's circumference (in kilometers).
 #' @param numOpenMPthreads Integer giving the number of threads used in the processing of predictions.
 #' @param fileToSaveOptOutput Character. An optional file name indicating where the optimiser's output should be saved. Specifying it ensures that INLAMRA can resume after the optimisation step if an interruption occurs.
 #' @param folderToSaveISpoints Character. An optional *folder* name indicating where the importance sampling weight values should be saved. Specifying it ensures that INLAMRA can properly resume at the IS iteration it had reached if an interruption occurs.
@@ -198,7 +198,7 @@ INLAMRA <- function(responseVec, covariateFrame = NULL, spatialCoordMat, timePOS
 #' \dontrun{
 #' }
 #' @export
-INLAMRA.control <- function(Mlon = 1, Mlat = 1, Mtime = 1, numValuesForIS = 100, numKnotsRes0 = 20L, J = 2L, tipKnotsThinningRate = 1, numIterOptim = 25L, optimLowerBound = NULL, optimUpperBound = NULL, numOpenMPthreads = 1L, fileToSaveOptOutput = NULL, folderToSaveISpoints = NULL, IScompleted = FALSE, credIntervalPercs = c(0.025, 0.975), randomSeed = 24, nuggetSD = 1e-5,  distMethod = "haversine", normalHyperprior = TRUE, spaceJitterMax = 1e-6, timeJitterMaxInDecimalDays = 1/864000000, saveData = TRUE, numISpropDistUpdates = 0) {
+INLAMRA.control <- function(Mlon = 1, Mlat = 1, Mtime = 1, numValuesForIS = 100, numKnotsRes0 = 20L, J = 2L, tipKnotsThinningRate = 1, numIterOptim = 25L, optimLowerBound = log(1e-6), optimUpperBound = log(40075), numOpenMPthreads = 1L, fileToSaveOptOutput = NULL, folderToSaveISpoints = NULL, IScompleted = FALSE, credIntervalPercs = c(0.025, 0.975), randomSeed = 24, nuggetSD = 1e-5,  distMethod = "haversine", normalHyperprior = TRUE, spaceJitterMax = 1e-6, timeJitterMaxInDecimalDays = 1/864000000, saveData = TRUE, numISpropDistUpdates = 0) {
   list(Mlon = Mlon, Mlat = Mlat, Mtime = Mtime, randomSeed = randomSeed, nuggetSD = nuggetSD, numKnotsRes0 = numKnotsRes0, J = J, numValuesForIS = numValuesForIS, numIterOptim = numIterOptim, lowerBound = optimLowerBound, upperBound = optimUpperBound, distMethod = distMethod, normalHyperprior = normalHyperprior, numISpropDistUpdates = numISpropDistUpdates, tipKnotsThinningRate = tipKnotsThinningRate, credIntervalPercs = credIntervalPercs, timeJitterMaxInDecimalDays = timeJitterMaxInDecimalDays, spaceJitterMax = spaceJitterMax, numOpenMPthreads = numOpenMPthreads, saveData = saveData, fileToSaveOptOutput = fileToSaveOptOutput, folderToSaveISpoints = folderToSaveISpoints, IScompleted = IScompleted)
 }
 
@@ -410,11 +410,11 @@ INLAMRA.control <- function(Mlon = 1, Mlat = 1, Mtime = 1, numValuesForIS = 100,
     lowerBound <- log(lowerBound)
   }
   if (!is.null(control$lowerBound)) {
-    lowerBound <- unlist(control$lowerBound)
+    lowerBound <- rep(control$lowerBound, length(xStartValues))
   }
   upperBound <- rep(Inf, length(xStartValues))
   if (!is.null(control$upperBound)) {
-    upperBound <- unlist(control$upperBound)
+    upperBound <- rep(control$upperBound, length(xStartValues))
   }
   names(upperBound) <- names(lowerBound) <- names(xStartValues)
   cat("Finding the maximum of the joint marginal hyperparameter posterior distribution p(Psi | y)... \n")
