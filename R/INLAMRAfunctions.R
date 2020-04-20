@@ -193,7 +193,6 @@ INLAMRA <- function(responseVec, covariateFrame = NULL, spatialCoordMat, timePOS
 #'
 #' @examples
 #' \dontrun{
-#' INLAMRA.control(Mlon = 2, Mlat = 2, Mtime = 2)
 #' }
 #' @export
 INLAMRA.control <- function(Mlon = 1, Mlat = 1, Mtime = 1, numValuesForIS = 100, numKnotsRes0 = 20L, J = 2L, tipKnotsThinningRate = 1, numIterOptim = 25L, numOpenMPthreads = 1L, fileToSaveOptOutput = NULL, folderToSaveISpoints = NULL, IScompleted = FALSE, credIntervalPercs = c(0.025, 0.975), randomSeed = 24, nuggetSD = 1e-5,  distMethod = "haversine", normalHyperprior = TRUE, spaceJitterMax = 1e-6, timeJitterMaxInDecimalDays = 1/864000000, saveData = TRUE, numISpropDistUpdates = 0) {
@@ -404,13 +403,12 @@ INLAMRA.control <- function(Mlon = 1, Mlat = 1, Mtime = 1, numValuesForIS = 100,
   xStartValues <- unlist(hyperStart)
 
   lowerBound <- rep(1e-10, length(xStartValues))
+
   if (control$normalHyperprior) {
     lowerBound <- log(lowerBound)
   }
   upperBound <- rep(Inf, length(xStartValues))
-  if (!is.null(control$upperBound)) {
-    upperBound <- unlist(control$upperBound)
-  }
+
   names(upperBound) <- names(lowerBound) <- names(xStartValues)
   cat("Finding the maximum of the joint marginal hyperparameter posterior distribution p(Psi | y)... \n")
   if (!tryCatch(file.exists(control$fileToSaveOptOutput), error = function(e) FALSE)) { # The tryCatch is necessary to ensure that an error does not occur if control$fileToSaveOptOutput is NULL. If it is undefined, we want the optimisation to take place.
