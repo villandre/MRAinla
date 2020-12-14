@@ -654,7 +654,7 @@ INLAMRA.control <- function(Mlon = 1, Mlat = 1, Mtime = 1, numValuesForIS = 100,
     skewnessValue <- .adaptiveIS(x = (psiAndMargDistMatrix[, hyperparaName] - meanValue)^3/sdValue^2, ISweights = psiAndMargDistMatrix[, "ISweight"], phaseVector = adaptiveISphaseVector)
     credIntBounds <- list(bounds = c(NA, NA), alpha = NA, omega = NA , xi = NA, delta = NA)
     if (!((sdValue == 0) | is.na(sdValue))) {
-      credIntBounds <- .ComputeCredIntervalSkewNorm(control$credIntervalPercs, meanValue = meanValue, sdValue = sdValue, skewnessValue = skewnessValue, values = psiAndMargDistMatrix[, hyperparaName], MLE = control$skewNormMLE)
+      credIntBounds <- .ComputeCredIntervalSkewNorm(meanValue = meanValue, sdValue = sdValue, skewnessValue = skewnessValue, values = psiAndMargDistMatrix[, hyperparaName], ISweights = psiAndMargDistMatrix[, "ISweight"], phaseVector = adaptiveISphaseVector, paraName = hyperparaName, control = control)
     }
     c(mean = meanValue, StdDev = sdValue, skewness = skewnessValue, credIntBounds$bounds)
   }
@@ -665,24 +665,34 @@ INLAMRA.control <- function(Mlon = 1, Mlat = 1, Mtime = 1, numValuesForIS = 100,
   list(paraMoments = as.data.frame(paraMoments), psiAndMargDistMatrix = psiAndMargDistMatrix)
 }
 
-.ComputeCredIntervalSkewNorm <- function(p = c(0.025, 0.975), meanValue, sdValue, skewnessValue, values, MLE = TRUE) {
+.ComputeCredIntervalSkewNorm <- function(meanValue, sdValue, skewnessValue, values, ISweights, phaseVector, paraName, control) {
   skewNormalAlpha <- skewNormalOmega <- skewNormalXi <- NULL
-  if (!MLE) {
+  if ((max(phaseVector) > 1) & control$skewNormMLE) {
+    stop("The adaptive IS integration scheme is experimental and does not mesh with MLE estimation of skew-normal parameters (for the approximation of (hyper)parameters credibility intervals). Switching to method of moments estimation.")
+  }
+  if (!control$skewNormMLE) {
     skewNormalDelta <- sign(skewnessValue) * sqrt(
       pi/2 * abs(skewnessValue)^(2/3) /
         (abs(skewnessValue)^(2/3) + ((4 - pi)/2)^(2/3))
     )
-    skewNormalAlpha <- skewNormalDelta/sqrt(1 - skewNormalDelta^2)
+    if (abs(skewNormalAlpha) < 1) {
+      skewNormalAlpha <- skewNormalDelta/sqrt(1 - skewNormalDelta^2)
+    } else {
+      warningMessage <- paste("Issue with the estimation of the credibility interval of hyperparameter ", paraName, "...\n Method of moments estimation should not be used if, like in this case, the absolute empirical skewness is above 1. Setting alpha to 10 (for delta = 0.99)..." , sep = "")
+      warning(warningMessage)
+      skewNormalAlpha <- 10
+    }
     skewNormalOmega <- sdValue / sqrt(1 - 2 * skewNormalDelta^2/pi)
     skewNormalXi <- meanValue - skewNormalOmega * skewNormalDelta * sqrt(2/pi)
   } else {
-    snMLE <- sn::selm(formula = response ~ 1, data = data.frame(response = values))
+    ISweightsStandard <- ISweights/sum(ISweights)
+    snMLE <- sn::selm(formula = response ~ 1, data = data.frame(response = values), weights = round(ISweightsStandard * 10^5)) # Weights must be integers
     skewNormalAlpha <- snMLE@param$dp[["alpha"]]
     skewNormalOmega <- snMLE@param$dp[["omega"]]
     skewNormalXi <- snMLE@param$dp[["xi"]]
   }
-  bounds <- sn::qsn(p = p, xi = skewNormalXi, omega = skewNormalOmega, alpha = skewNormalAlpha)
-  names(bounds) <- paste("CredInt_", round(p, 3)*100, "%", sep = "")
+  bounds <- sn::qsn(p = control$credIntervalPercs, xi = skewNormalXi, omega = skewNormalOmega, alpha = skewNormalAlpha)
+  names(bounds) <- paste("CredInt_", round(control$credIntervalPercs, 3)*100, "%", sep = "")
   list(bounds = bounds, alpha = skewNormalAlpha, omega = skewNormalOmega, xi = skewNormalXi, delta = skewNormalDelta)
 }
 
