@@ -183,6 +183,7 @@ INLAMRA <- function(responseVec, covariateFrame = NULL, spatialCoordMat, timePOS
 #' @param timeJitterMaxInDecimalDays Numeric value. The maximum jittering to apply to time values, in days. Default value is 1/864000000 (1e-5 seconds). Used for splitting data into subregions. Putting this value at 0 disables the time jittering, which is not recommended.
 #' @param saveData Logical. Indicates whether the data used to fit the model and prediction dataset (if applicable) should be bundled with the output, which is essential for plotting. Can be disabled if memory is limited.
 #' @param numISpropDistUpdates The number of importance sampling (IS) weight updates in the adaptive IS algorithm. We will most likely remove the adaptive IS scheme in a future update, and so, we do not recommend touching this.
+#' @param skewNormMLE Logical. Indicates whether MLE values of the skew normal parameters be used to approximate confidence intervals for fixed effect parameters and hyperparameters. If FALSE, method of moments are used instead.
 #'
 #' @details Some of the control parameters should certainly be tuned to ensure better computational or predictive performance: Mlon, Mlat, Mtime, numKnotsRes0, J, numValuesForIS, numIterOptim, tipKnotsThinningRate.
 #' Setting sensible lower and upper bounds for the optimisation step may help quicken the convergence of the L-BFGS algorithm. The algorithm should work without them though: hyperparameters  are expressed on the logarithmic scale, which makes their domains cover the entire real line.
@@ -198,8 +199,8 @@ INLAMRA <- function(responseVec, covariateFrame = NULL, spatialCoordMat, timePOS
 #' \dontrun{
 #' }
 #' @export
-INLAMRA.control <- function(Mlon = 1, Mlat = 1, Mtime = 1, numValuesForIS = 100, numKnotsRes0 = 20L, J = 2L, tipKnotsThinningRate = 1, numIterOptim = 25L, optimLowerBound = log(1e-6), optimUpperBound = log(40075), numOpenMPthreads = 1L, fileToSaveOptOutput = NULL, folderToSaveISpoints = NULL, IScompleted = FALSE, credIntervalPercs = c(0.025, 0.975), randomSeed = 24, nuggetSD = 1e-5,  distMethod = "haversine", normalHyperprior = TRUE, spaceJitterMax = 1e-6, timeJitterMaxInDecimalDays = 1/864000000, saveData = TRUE, numISpropDistUpdates = 0) {
-  list(Mlon = Mlon, Mlat = Mlat, Mtime = Mtime, randomSeed = randomSeed, nuggetSD = nuggetSD, numKnotsRes0 = numKnotsRes0, J = J, numValuesForIS = numValuesForIS, numIterOptim = numIterOptim, lowerBound = optimLowerBound, upperBound = optimUpperBound, distMethod = distMethod, normalHyperprior = normalHyperprior, numISpropDistUpdates = numISpropDistUpdates, tipKnotsThinningRate = tipKnotsThinningRate, credIntervalPercs = credIntervalPercs, timeJitterMaxInDecimalDays = timeJitterMaxInDecimalDays, spaceJitterMax = spaceJitterMax, numOpenMPthreads = numOpenMPthreads, saveData = saveData, fileToSaveOptOutput = fileToSaveOptOutput, folderToSaveISpoints = folderToSaveISpoints, IScompleted = IScompleted)
+INLAMRA.control <- function(Mlon = 1, Mlat = 1, Mtime = 1, numValuesForIS = 100, numKnotsRes0 = 20L, J = 2L, tipKnotsThinningRate = 1, numIterOptim = 25L, optimLowerBound = log(1e-6), optimUpperBound = log(40075), numOpenMPthreads = 1L, fileToSaveOptOutput = NULL, folderToSaveISpoints = NULL, IScompleted = FALSE, credIntervalPercs = c(0.025, 0.975), randomSeed = 24, nuggetSD = 1e-5,  distMethod = "haversine", normalHyperprior = TRUE, spaceJitterMax = 1e-6, timeJitterMaxInDecimalDays = 1/864000000, saveData = TRUE, numISpropDistUpdates = 0, skewNormMLE = TRUE) {
+  list(Mlon = Mlon, Mlat = Mlat, Mtime = Mtime, randomSeed = randomSeed, nuggetSD = nuggetSD, numKnotsRes0 = numKnotsRes0, J = J, numValuesForIS = numValuesForIS, numIterOptim = numIterOptim, lowerBound = optimLowerBound, upperBound = optimUpperBound, distMethod = distMethod, normalHyperprior = normalHyperprior, numISpropDistUpdates = numISpropDistUpdates, tipKnotsThinningRate = tipKnotsThinningRate, credIntervalPercs = credIntervalPercs, timeJitterMaxInDecimalDays = timeJitterMaxInDecimalDays, spaceJitterMax = spaceJitterMax, numOpenMPthreads = numOpenMPthreads, saveData = saveData, fileToSaveOptOutput = fileToSaveOptOutput, folderToSaveISpoints = folderToSaveISpoints, IScompleted = IScompleted, skewNormMLE = skewNormMLE)
 }
 
 .getNonMissingIndices <- function(responseVec = NULL, covariateFrame, spatialCoordMat, timePOSIXorNumericVec) {
@@ -653,7 +654,7 @@ INLAMRA.control <- function(Mlon = 1, Mlat = 1, Mtime = 1, numValuesForIS = 100,
     skewnessValue <- .adaptiveIS(x = (psiAndMargDistMatrix[, hyperparaName] - meanValue)^3/sdValue^2, ISweights = psiAndMargDistMatrix[, "ISweight"], phaseVector = adaptiveISphaseVector)
     credIntBounds <- list(bounds = c(NA, NA), alpha = NA, omega = NA , xi = NA, delta = NA)
     if (!((sdValue == 0) | is.na(sdValue))) {
-      credIntBounds <- .ComputeCredIntervalSkewNorm(control$credIntervalPercs, meanValue = meanValue, sdValue = sdValue, skewnessValue = skewnessValue)
+      credIntBounds <- .ComputeCredIntervalSkewNorm(control$credIntervalPercs, meanValue = meanValue, sdValue = sdValue, skewnessValue = skewnessValue, values = psiAndMargDistMatrix[, hyperparaName], MLE = control$skewNormMLE)
     }
     c(mean = meanValue, StdDev = sdValue, skewness = skewnessValue, credIntBounds$bounds)
   }
@@ -664,14 +665,22 @@ INLAMRA.control <- function(Mlon = 1, Mlat = 1, Mtime = 1, numValuesForIS = 100,
   list(paraMoments = as.data.frame(paraMoments), psiAndMargDistMatrix = psiAndMargDistMatrix)
 }
 
-.ComputeCredIntervalSkewNorm <- function(p = c(0.025, 0.975), meanValue, sdValue, skewnessValue) {
-  skewNormalDelta <- sign(skewnessValue) * sqrt(
-    pi/2 * abs(skewnessValue)^(2/3) /
-      (abs(skewnessValue)^(2/3) + ((4 - pi)/2)^(2/3))
-  )
-  skewNormalAlpha <- skewNormalDelta/sqrt(1 - skewNormalDelta^2)
-  skewNormalOmega <- sdValue / sqrt(1 - 2 * skewNormalDelta^2/pi)
-  skewNormalXi <- meanValue - skewNormalOmega * skewNormalDelta * sqrt(2/pi)
+.ComputeCredIntervalSkewNorm <- function(p = c(0.025, 0.975), meanValue, sdValue, skewnessValue, values, MLE = TRUE) {
+  skewNormalAlpha <- skewNormalOmega <- skewNormalXi <- NULL
+  if (!MLE) {
+    skewNormalDelta <- sign(skewnessValue) * sqrt(
+      pi/2 * abs(skewnessValue)^(2/3) /
+        (abs(skewnessValue)^(2/3) + ((4 - pi)/2)^(2/3))
+    )
+    skewNormalAlpha <- skewNormalDelta/sqrt(1 - skewNormalDelta^2)
+    skewNormalOmega <- sdValue / sqrt(1 - 2 * skewNormalDelta^2/pi)
+    skewNormalXi <- meanValue - skewNormalOmega * skewNormalDelta * sqrt(2/pi)
+  } else {
+    snMLE <- sn::selm(formula = response ~ 1, data = data.frame(response = values))
+    skewNormalAlpha <- snMLE@param$dp[["alpha"]]
+    skewNormalOmega <- snMLE@param$dp[["omega"]]
+    skewNormalXi <- snMLE@param$dp[["xi"]]
+  }
   bounds <- sn::qsn(p = p, xi = skewNormalXi, omega = skewNormalOmega, alpha = skewNormalAlpha)
   names(bounds) <- paste("CredInt_", round(p, 3)*100, "%", sep = "")
   list(bounds = bounds, alpha = skewNormalAlpha, omega = skewNormalOmega, xi = skewNormalXi, delta = skewNormalDelta)
