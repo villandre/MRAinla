@@ -652,7 +652,7 @@ INLAMRA.control <- function(Mlon = 1, Mlat = 1, Mtime = 1, numValuesForIS = 100,
     sdValue <- sqrt(.adaptiveIS(x = psiAndMargDistMatrix[, hyperparaName]^2, ISweights = psiAndMargDistMatrix[, "ISweight"], phaseVector = adaptiveISphaseVector) - meanValue^2)
 
     skewnessValue <- .adaptiveIS(x = (psiAndMargDistMatrix[, hyperparaName] - meanValue)^3/sdValue^2, ISweights = psiAndMargDistMatrix[, "ISweight"], phaseVector = adaptiveISphaseVector)
-    credIntBounds <- list(bounds = c(NA, NA), alpha = NA, omega = NA , xi = NA, delta = NA)
+    credIntBounds <- list(bounds = c(NA, NA), alpha = NA, omega = NA , xi = NA)
     if (!((sdValue == 0) | is.na(sdValue))) {
       credIntBounds <- .ComputeCredIntervalSkewNorm(meanValue = meanValue, sdValue = sdValue, skewnessValue = skewnessValue, values = psiAndMargDistMatrix[, hyperparaName], ISweights = psiAndMargDistMatrix[, "ISweight"], phaseVector = adaptiveISphaseVector, paraName = hyperparaName, control = control)
     }
@@ -693,7 +693,7 @@ INLAMRA.control <- function(Mlon = 1, Mlat = 1, Mtime = 1, numValuesForIS = 100,
   }
   bounds <- sn::qsn(p = control$credIntervalPercs, xi = skewNormalXi, omega = skewNormalOmega, alpha = skewNormalAlpha)
   names(bounds) <- paste("CredInt_", round(control$credIntervalPercs, 3)*100, "%", sep = "")
-  list(bounds = bounds, alpha = skewNormalAlpha, omega = skewNormalOmega, xi = skewNormalXi, delta = skewNormalDelta)
+  list(bounds = bounds, alpha = skewNormalAlpha, omega = skewNormalOmega, xi = skewNormalXi)
 }
 
 .ComputeFEmarginalMoments <- function(hyperparaList, covNames, control) {
