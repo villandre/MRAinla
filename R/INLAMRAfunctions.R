@@ -145,6 +145,10 @@ INLAMRA <- function(responseVec, covariateFrame = NULL, spatialCoordMat, timePOS
     # The following two lines add NAs in locations where incomplete information was provided. They also ensure that prediction outputs match inputs.
     outputList$predMoments$Mean <- replace(rep(NA, originalNumberPreds), nonMissingPredIndices, outputList$predMoments$Mean)
     outputList$predMoments$SD <- replace(rep(NA, originalNumberPreds), nonMissingPredIndices, outputList$predMoments$SD)
+    if (control$returnQmat) {
+      requireNamespace("Matrix") # Oddly, the namespace must be attached for GetQmat to work. It returns a dgCMatrix object, and will result in an error if Matrix is not attached.
+      outputList$Qmat <- GetQmat(nestedGridsPointer)
+    }
   }
   outputList$control <- control
   cat("Returning results... \n")
@@ -199,8 +203,8 @@ INLAMRA <- function(responseVec, covariateFrame = NULL, spatialCoordMat, timePOS
 #' \dontrun{
 #' }
 #' @export
-INLAMRA.control <- function(Mlon = 1, Mlat = 1, Mtime = 1, numValuesForIS = 100, numKnotsRes0 = 20L, J = 2L, tipKnotsThinningRate = 1, numIterOptim = 25L, optimLowerBound = log(1e-6), optimUpperBound = log(40075), numOpenMPthreads = 1L, fileToSaveOptOutput = NULL, folderToSaveISpoints = NULL, IScompleted = FALSE, credIntervalPercs = c(0.025, 0.975), randomSeed = 24, nuggetSD = 1e-5,  distMethod = "haversine", normalHyperprior = TRUE, spaceJitterMax = 1e-6, timeJitterMaxInDecimalDays = 1/864000000, saveData = TRUE, numISpropDistUpdates = 0, skewNormMLE = TRUE) {
-  list(Mlon = Mlon, Mlat = Mlat, Mtime = Mtime, randomSeed = randomSeed, nuggetSD = nuggetSD, numKnotsRes0 = numKnotsRes0, J = J, numValuesForIS = numValuesForIS, numIterOptim = numIterOptim, lowerBound = optimLowerBound, upperBound = optimUpperBound, distMethod = distMethod, normalHyperprior = normalHyperprior, numISpropDistUpdates = numISpropDistUpdates, tipKnotsThinningRate = tipKnotsThinningRate, credIntervalPercs = credIntervalPercs, timeJitterMaxInDecimalDays = timeJitterMaxInDecimalDays, spaceJitterMax = spaceJitterMax, numOpenMPthreads = numOpenMPthreads, saveData = saveData, fileToSaveOptOutput = fileToSaveOptOutput, folderToSaveISpoints = folderToSaveISpoints, IScompleted = IScompleted, skewNormMLE = skewNormMLE)
+INLAMRA.control <- function(Mlon = 1, Mlat = 1, Mtime = 1, numValuesForIS = 100, numKnotsRes0 = 20L, J = 2L, tipKnotsThinningRate = 1, numIterOptim = 25L, optimLowerBound = log(1e-6), optimUpperBound = log(40075), numOpenMPthreads = 1L, fileToSaveOptOutput = NULL, folderToSaveISpoints = NULL, IScompleted = FALSE, credIntervalPercs = c(0.025, 0.975), randomSeed = 24, nuggetSD = 1e-5,  distMethod = "haversine", normalHyperprior = TRUE, spaceJitterMax = 1e-6, timeJitterMaxInDecimalDays = 1/864000000, saveData = TRUE, numISpropDistUpdates = 0, skewNormMLE = TRUE, returnQmat = FALSE) {
+  list(Mlon = Mlon, Mlat = Mlat, Mtime = Mtime, randomSeed = randomSeed, nuggetSD = nuggetSD, numKnotsRes0 = numKnotsRes0, J = J, numValuesForIS = numValuesForIS, numIterOptim = numIterOptim, lowerBound = optimLowerBound, upperBound = optimUpperBound, distMethod = distMethod, normalHyperprior = normalHyperprior, numISpropDistUpdates = numISpropDistUpdates, tipKnotsThinningRate = tipKnotsThinningRate, credIntervalPercs = credIntervalPercs, timeJitterMaxInDecimalDays = timeJitterMaxInDecimalDays, spaceJitterMax = spaceJitterMax, numOpenMPthreads = numOpenMPthreads, saveData = saveData, fileToSaveOptOutput = fileToSaveOptOutput, folderToSaveISpoints = folderToSaveISpoints, IScompleted = IScompleted, skewNormMLE = skewNormMLE, returnQmat = returnQmat)
 }
 
 .getNonMissingIndices <- function(responseVec = NULL, covariateFrame, spatialCoordMat, timePOSIXorNumericVec) {
@@ -654,7 +658,8 @@ INLAMRA.control <- function(Mlon = 1, Mlat = 1, Mtime = 1, numValuesForIS = 100,
     skewnessValue <- .adaptiveIS(x = (psiAndMargDistMatrix[, hyperparaName] - meanValue)^3/sdValue^2, ISweights = psiAndMargDistMatrix[, "ISweight"], phaseVector = adaptiveISphaseVector)
     credIntBounds <- list(bounds = c(NA, NA), alpha = NA, omega = NA , xi = NA)
     if (!((sdValue == 0) | is.na(sdValue))) {
-      credIntBounds <- .ComputeCredIntervalSkewNorm(meanValue = meanValue, sdValue = sdValue, skewnessValue = skewnessValue, values = psiAndMargDistMatrix[, hyperparaName], ISweights = psiAndMargDistMatrix[, "ISweight"], phaseVector = adaptiveISphaseVector, paraName = hyperparaName, control = control)
+      # credIntBounds <- .ComputeCredIntervalSkewNorm(meanValue = meanValue, sdValue = sdValue, skewnessValue = skewnessValue, values = psiAndMargDistMatrix[, hyperparaName], ISweights = psiAndMargDistMatrix[, "ISweight"], phaseVector = adaptiveISphaseVector, paraName = hyperparaName, control = control)
+      credIntBounds <- .ComputeCredIntervalEmpirical(values = psiAndMargDistMatrix[, hyperparaName], ISweights = psiAndMargDistMatrix[, "ISweight"], control = control)
     }
     c(mean = meanValue, StdDev = sdValue, skewness = skewnessValue, credIntBounds$bounds)
   }
@@ -670,6 +675,7 @@ INLAMRA.control <- function(Mlon = 1, Mlat = 1, Mtime = 1, numValuesForIS = 100,
   if ((max(phaseVector) > 1) & control$skewNormMLE) {
     stop("The adaptive IS integration scheme is experimental and does not mesh with MLE estimation of skew-normal parameters (for the approximation of (hyper)parameters credibility intervals). Switching to method of moments estimation.")
   }
+  alphaOnBound <- FALSE
   if (!control$skewNormMLE) {
     skewNormalDelta <- sign(skewnessValue) * sqrt(
       pi/2 * abs(skewnessValue)^(2/3) /
@@ -687,13 +693,30 @@ INLAMRA.control <- function(Mlon = 1, Mlat = 1, Mtime = 1, numValuesForIS = 100,
   } else {
     ISweightsStandard <- ISweights/sum(ISweights)
     snMLE <- sn::selm(formula = response ~ 1, data = data.frame(response = values), weights = round(ISweightsStandard * 10^5)) # Weights must be integers
+    alphaOnBound <- snMLE@param$boundary
+    if (alphaOnBound) {
+      warningMessage <- paste("Estimates of skew-normal parameters for ", paraName, " are on a boundary. Confidence interval bounds should not be trusted.", sep = "")
+      warning(warningMessage)
+    }
     skewNormalAlpha <- snMLE@param$dp[["alpha"]]
     skewNormalOmega <- snMLE@param$dp[["omega"]]
     skewNormalXi <- snMLE@param$dp[["xi"]]
   }
-  bounds <- sn::qsn(p = control$credIntervalPercs, xi = skewNormalXi, omega = skewNormalOmega, alpha = skewNormalAlpha)
+
+  bounds <- sn::qsn(p = control$credIntervalPercs, xi = skewNormalXi, omega = skewNormalOmega, alpha = skewNormalAlpha, solver = "RFB")
   names(bounds) <- paste("CredInt_", round(control$credIntervalPercs, 3)*100, "%", sep = "")
   list(bounds = bounds, alpha = skewNormalAlpha, omega = skewNormalOmega, xi = skewNormalXi)
+}
+
+.ComputeCredIntervalEmpirical <- function(values, ISweights, paraName, control) {
+  orderVec <- order(values)
+  ISweightsStandard <- ISweights/sum(ISweights)
+  ISweightsStandard <- ISweightsStandard[orderVec]
+  expandedValues <- rep(values[orderVec], round(ISweightsStandard*100))
+  namesForBounds <- paste("CredInt_", round(control$credIntervalPercs, 3)*100, "%", sep = "")
+  empiricalBounds <- quantile(x = expandedValues, probs = control$credIntervalPercs)
+  names(empiricalBounds) <- namesForBounds
+  list(bounds = empiricalBounds)
 }
 
 .ComputeFEmarginalMoments <- function(hyperparaList, covNames, control) {

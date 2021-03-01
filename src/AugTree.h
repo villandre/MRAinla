@@ -140,6 +140,8 @@ public:
   void ComputeLogJointPsiMarginal() ;
   vec GetFullCondMean() { return m_FullCondMean ;}
   vec GetFullCondSDs() { return m_FullCondSDs ;}
+  sp_mat GetSigmaFEandEtaInv() { return m_SigmaFEandEtaInv ;}
+  double GetErrorSD() { return m_errorSD ;}
 
   void ComputeHpred() ;
   vec ComputeEvar() ;

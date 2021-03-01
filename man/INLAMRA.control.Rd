@@ -13,6 +13,8 @@ INLAMRA.control(
   J = 2L,
   tipKnotsThinningRate = 1,
   numIterOptim = 25L,
+  optimLowerBound = log(1e-06),
+  optimUpperBound = log(40075),
   numOpenMPthreads = 1L,
   fileToSaveOptOutput = NULL,
   folderToSaveISpoints = NULL,
@@ -25,7 +27,9 @@ INLAMRA.control(
   spaceJitterMax = 1e-06,
   timeJitterMaxInDecimalDays = 1/8.64e+08,
   saveData = TRUE,
-  numISpropDistUpdates = 0
+  numISpropDistUpdates = 0,
+  skewNormMLE = TRUE,
+  returnQmat = FALSE
 )
 }
 \arguments{
@@ -44,6 +48,10 @@ INLAMRA.control(
 \item{tipKnotsThinningRate}{Numeric value indicating the proportion of observation spatiotemporal locations that should be used as knots at the finest resolution. Should be between 0 and 1.}
 
 \item{numIterOptim}{Integer giving the number of iterations in the L-BFGS algorithm used to identify the maximum of the join marginal posterior distribution of the hyperparameters. Could be set somewhat lower, 20 say, to reduce running time, but setting it too low might create imbalance in the importance sampling weights.}
+
+\item{optimLowerBound}{Numeric. Lower bound for the optimiser used to identify the maximum of the join marginal posterior distribution of the hyperparameters.}
+
+\item{optimUpperBound}{Numeric. Upper bound for the optimiser used to identify the maximum of the join marginal posterior distribution of the hyperparameters. Default is the logarithm of the Earth's circumference (in kilometers).}
 
 \item{numOpenMPthreads}{Integer giving the number of threads used in the processing of predictions.}
 
@@ -70,6 +78,8 @@ INLAMRA.control(
 \item{saveData}{Logical. Indicates whether the data used to fit the model and prediction dataset (if applicable) should be bundled with the output, which is essential for plotting. Can be disabled if memory is limited.}
 
 \item{numISpropDistUpdates}{The number of importance sampling (IS) weight updates in the adaptive IS algorithm. We will most likely remove the adaptive IS scheme in a future update, and so, we do not recommend touching this.}
+
+\item{skewNormMLE}{Logical. Indicates whether MLE values of the skew normal parameters be used to approximate confidence intervals for fixed effect parameters and hyperparameters. If FALSE, method of moments are used instead.}
 }
 \value{
 A list with all control parameters.
@@ -79,6 +89,7 @@ Tuning parameters for the INLA-MRA algorithm.
 }
 \details{
 Some of the control parameters should certainly be tuned to ensure better computational or predictive performance: Mlon, Mlat, Mtime, numKnotsRes0, J, numValuesForIS, numIterOptim, tipKnotsThinningRate.
+Setting sensible lower and upper bounds for the optimisation step may help quicken the convergence of the L-BFGS algorithm. The algorithm should work without them though: hyperparameters  are expressed on the logarithmic scale, which makes their domains cover the entire real line.
 Although a lower value for tipKnotsThinningRate can reduce predictive performance, it can also greatly reduce the function's memory footprint. For very large datasets, lower values of this parameter are recommended, and can even be essential.
 Other control parameters make it possible to stop an INLAMRA run at any point and resume close to where the algorithm initially stopped: fileToSaveOptOutput, folderToSaveISpoints. Set IScompleted to TRUE if an intermediate result is needed once at least one importance sampling point has been processed. This will make the function summarise the results in folderToSaveISpoints, and output as though all points have already been processed.
 We do not recommend setting numKnotsRes0 under 8, as knots are first placed on the vertices of a rectangular prism nested within each subregion.
@@ -86,6 +97,5 @@ The following control parameters should not normally need to be changed by the u
 }
 \examples{
 \dontrun{
-INLAMRA.control(Mlon = 2, Mlat = 2, Mtime = 2)
 }
 }

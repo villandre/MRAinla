@@ -33,3 +33,7 @@ GetHmat <- function(treePointer) {
     .Call('_MRAinla_GetHmat', PACKAGE = 'MRAinla', treePointer)
 }
 
+GetQmat <- function(treePointer) {
+    .Call('_MRAinla_GetQmat', PACKAGE = 'MRAinla', treePointer)
+}
+

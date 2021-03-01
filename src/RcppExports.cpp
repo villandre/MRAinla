@@ -124,6 +124,17 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// GetQmat
+Eigen::SparseMatrix<double> GetQmat(SEXP treePointer);
+RcppExport SEXP _MRAinla_GetQmat(SEXP treePointerSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< SEXP >::type treePointer(treePointerSEXP);
+    rcpp_result_gen = Rcpp::wrap(GetQmat(treePointer));
+    return rcpp_result_gen;
+END_RCPP
+}
 
 static const R_CallMethodDef CallEntries[] = {
     {"_MRAinla_setupNestedGrids", (DL_FUNC) &_MRAinla_setupNestedGrids, 25},
@@ -134,6 +145,7 @@ static const R_CallMethodDef CallEntries[] = {
     {"_MRAinla_GetNumTips", (DL_FUNC) &_MRAinla_GetNumTips, 1},
     {"_MRAinla_GetPredObsOrder", (DL_FUNC) &_MRAinla_GetPredObsOrder, 1},
     {"_MRAinla_GetHmat", (DL_FUNC) &_MRAinla_GetHmat, 1},
+    {"_MRAinla_GetQmat", (DL_FUNC) &_MRAinla_GetQmat, 1},
     {NULL, NULL, 0}
 };
 

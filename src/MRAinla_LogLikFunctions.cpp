@@ -179,3 +179,13 @@ Eigen::SparseMatrix<double> GetHmat(SEXP treePointer) {
   Eigen::SparseMatrix<double> value = pointedTree->GetHmat() ;
   return value ;
 }
+
+// [[Rcpp::export]]
+
+Eigen::SparseMatrix<double> GetQmat(SEXP treePointer) {
+  XPtr<AugTree> pointedTree(treePointer) ; // Becomes a regular pointer again.
+  sp_mat SigmaFEandEtaInv = pointedTree->GetSigmaFEandEtaInv() ;
+    // + 1 / pow(pointedTree->GetErrorSD(), 2) *
+  sp_mat HmatSqWithScale = (1 / pow(pointedTree->GetErrorSD(), 2)) * pointedTree->GetHmat().transpose() * pointedTree->GetHmat() ;
+  return SigmaFEandEtaInv + HmatSqWithScale ;
+}
