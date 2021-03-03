@@ -70,9 +70,30 @@ maternCov <- function(d, rho, smoothness, scale) {
   if (any(d < 0))
     stop("distance argument must be nonnegative")
   d[d == 0] <- 1e-10
+  matrixInput <- is.matrix(d)
+  matNrow <- NULL
+  if (matrixInput) {
+    matNrow <- nrow(d)
+    d <- d[lower.tri(d)]
+  }
+  result <- NULL
+  if (smoothness == 1.5) {
+    commonTerm <- sqrt(3) * d / rho
+    result <- scale^2 * (1 + commonTerm) * exp(-commonTerm)
+  } else if (smoothness == 0.5) {
+    result <- scale^2 * exp(-d/rho)
+  } else {
+    dScaled <- sqrt(2 * smoothness) * d / rho
+    con <- scale^2 * 2^(1 - smoothness) / gamma(smoothness)
 
-  dScaled <- sqrt(2 * smoothness) * d / rho
-  con <- scale^2 * 2^(1 - smoothness) / gamma(smoothness)
-
-  con * dScaled^smoothness * besselK(dScaled, smoothness)
+    result <- con * dScaled^smoothness * besselK(dScaled, smoothness)
+  }
+  formattedOutput <- result
+  if (matrixInput) {
+    formattedOutput <- matrix(0, matNrow, matNrow)
+    formattedOutput[lower.tri(formattedOutput)] <- result
+    formattedOutput <- formattedOutput + t(formattedOutput)
+    diag(formattedOutput) <- scale^2
+  }
+  formattedOutput
 }
