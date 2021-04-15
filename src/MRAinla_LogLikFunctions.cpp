@@ -141,19 +141,19 @@ Eigen::VectorXd GetFullCondSDs(SEXP treePointer) {
 // [[Rcpp::export]]
 
 Rcpp::List ComputeCondPredStats(SEXP treePointer) {
-  vec Evar, Hmean ;
+  vec varE, Hmean ;
   if (!(treePointer == NULL))
   {
     XPtr<AugTree> pointedTree(treePointer) ; // Becomes a regular pointer again.
 
     Hmean = pointedTree->GetHmatPred() * pointedTree->GetFullCondMean() ;
-    Evar = pointedTree->ComputeEvar() ;
+    varE = pointedTree->ComputeVarE() ;
   }
   else
   {
     throw Rcpp::exception("Pointer to MRA grid is null.") ;
   }
-  return Rcpp::List::create(Named("Hmean") = Hmean, Named("Evar") = Evar) ;
+  return Rcpp::List::create(Named("Hmean") = Hmean, Named("varE") = varE) ;
 }
 
 // [[Rcpp::export]]
@@ -188,4 +188,11 @@ Eigen::SparseMatrix<double> GetQmat(SEXP treePointer) {
     // + 1 / pow(pointedTree->GetErrorSD(), 2) *
   sp_mat HmatSqWithScale = (1 / pow(pointedTree->GetErrorSD(), 2)) * pointedTree->GetHmat().transpose() * pointedTree->GetHmat() ;
   return SigmaFEandEtaInv + HmatSqWithScale ;
+}
+
+// [[Rcpp::export]]
+
+double GetErrorSD(SEXP treePointer) {
+  XPtr<AugTree> pointedTree(treePointer) ; // Becomes a regular pointer again.
+  return pointedTree->GetErrorSD() ;
 }

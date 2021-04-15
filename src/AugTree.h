@@ -144,7 +144,7 @@ public:
   double GetErrorSD() { return m_errorSD ;}
 
   void ComputeHpred() ;
-  vec ComputeEvar() ;
+  vec ComputeVarE() ;
 
   ~ AugTree() {
     deallocate_container(m_vertexVector) ;}

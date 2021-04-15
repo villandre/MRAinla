@@ -85,9 +85,9 @@ plot.INLAMRA <- function(x, filename = NULL, type = c("joint", "training", "pred
   for (i in seq_along(rastersToPlot)) {
     if (any(!is.na(raster::values(rastersToPlot[[i]])))) {
       if (!("main" %in% names(control$controlForRasterPlot))) {
-        do.call(raster::plot, args = c(list(x = rastersToPlot[[i]], col = ecol$col, breaks = colourBreaks, legend = FALSE, main = names(rastersToPlot)[[i]]), control$controlForRasterPlot)) # I'm not using the breaks set by colourScale because I want the breaks to be the exact same across all graphs, which are supposed to express similar quantities on the same scale.
+        do.call(raster::plot, args = c(list(x = rastersToPlot[[i]], col = ecol$col, breaks = ecol$breaks, legend = FALSE, main = names(rastersToPlot)[[i]]), control$controlForRasterPlot)) # I'm not using the breaks set by colourScale because I want the breaks to be the exact same across all graphs, which are supposed to express similar quantities on the same scale.
       } else {
-        do.call(raster::plot, args = c(list(x = rastersToPlot[[i]], col = ecol$col, breaks = colourBreaks, legend = FALSE), control$controlForRasterPlot))
+        do.call(raster::plot, args = c(list(x = rastersToPlot[[i]], col = ecol$col, breaks = ecol$breaks, legend = FALSE), control$controlForRasterPlot))
       }
       # do.call(raster::plot, args = c(list(x = rastersToPlot[[i]], legend.only = TRUE, zlim = colorRange), control$controlForRasterLegend))
 

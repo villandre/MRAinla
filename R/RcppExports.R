@@ -37,3 +37,7 @@ GetQmat <- function(treePointer) {
     .Call('_MRAinla_GetQmat', PACKAGE = 'MRAinla', treePointer)
 }
 
+GetErrorSD <- function(treePointer) {
+    .Call('_MRAinla_GetErrorSD', PACKAGE = 'MRAinla', treePointer)
+}
+

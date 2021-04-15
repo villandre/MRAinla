@@ -726,21 +726,21 @@ void AugTree::ComputeHpred() {
   }
 }
 
-vec AugTree::ComputeEvar() {
+vec AugTree::ComputeVarE() {
   omp_set_num_threads(m_numOpenMPthreads) ;
-  double errorVar = std::pow(m_errorSD, 2) ;
-  vec EvarValues = vec::Zero(m_HmatPred.rows()) ;
+  // double errorVar = std::pow(m_errorSD, 2) ;
+  vec varEvalues = vec::Zero(m_HmatPred.rows()) ;
   int obsIndex = 0 ;
 
-  vec invertedDsqrt = 1/m_FullCondPrecisionChol.vectorD().array().pow(0.5) ;
+  // vec invertedDsqrt = 1/m_FullCondPrecisionChol.vectorD().array().pow(0.5) ;
 
   #pragma omp parallel for
   for (uint i = 0; i < m_HmatPred.rows(); i++) {
     vec HmatPredRow = m_HmatPred.row(i) ;
     vec solution = HmatPredRow.transpose() * m_FullCondPrecisionChol.solve(HmatPredRow) ;
-    EvarValues(i) = solution(0) + errorVar ;
+    varEvalues(i) = solution(0) ;
   }
-  return EvarValues ;
+  return varEvalues ;
 }
 
 void AugTree::SetMaternPars(const Rcpp::List & MaternPars) {

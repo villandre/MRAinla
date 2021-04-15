@@ -779,14 +779,16 @@ INLAMRA.control <- function(Mlon = 1, Mlat = 1, Mtime = 1, numValuesForIS = 100,
   })
 
   varE <- sapply(1:length(hyperparaList[[1]]$CondPredStats$Hmean), function(predObsIndex) {
-    predVector <- sapply(hyperparaList, function(x) x$CondPredStats$Hmean[[predObsIndex]]^2)
-    .adaptiveIS(x = predVector, ISweights = exp(logISweightVector), phaseVector = adaptiveISphaseVector) - krigingMeans[[predObsIndex]]^2
+    predVector <- sapply(hyperparaList, function(x) x$CondPredStats$varE[[predObsIndex]])
+    .adaptiveIS(x = predVector, ISweights = exp(logISweightVector), phaseVector = adaptiveISphaseVector)
   })
 
-  Evar <- sapply(1:length(hyperparaList[[1]]$CondPredStats$Hmean), function(predObsIndex) {
-    EvarVector <- sapply(hyperparaList, function(x) x$CondPredStats$Evar[[predObsIndex]]^2)
-    .adaptiveIS(x = EvarVector, ISweights = exp(logISweightVector), phaseVector = adaptiveISphaseVector)
-  })
+  # Evar <- sapply(1:length(hyperparaList[[1]]$CondPredStats$Hmean), function(predObsIndex) {
+  #   EvarVector <- sapply(hyperparaList, function(x) x$CondPredStats$Evar[[predObsIndex]])
+  #   .adaptiveIS(x = EvarVector, ISweights = exp(logISweightVector), phaseVector = adaptiveISphaseVector)
+  # })
+  # This assumes that the uncorrelated error variance is fixed. This is only for testing purposes.
+  Evar <- rep(GetErrorSD(treePointer)^2, length(hyperparaList[[1]]$CondPredStats$Hmean))
 
   predObsOrder <- GetPredObsOrder(treePointer = treePointer)
   if (identical(control$IScompleted, TRUE)) {
